@@ -232,25 +232,6 @@ export function ProjetoDetalhes() {
           <div>
             <h2 className="text-2xl font-semibold">Sobre o Projeto</h2>
             <p className="mt-3 text-base text-gray-700">{projeto.descricaoCompleta}</p>
-
-            {/* Mantive o layout do seu print que mostra Objetivos/Resultados (em breve) */}
-            <h3 className="mt-10 text-2xl font-semibold">Objetivos</h3>
-            <div className="mt-4 flex items-center gap-3 text-gray-700">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-green-700 text-green-700">
-                ◎
-              </span>
-              <span>(Em breve)</span>
-            </div>
-
-            <h3 className="mt-10 text-2xl font-semibold">Resultados Alcançados</h3>
-            <div className="mt-4 rounded-xl bg-green-50 p-6">
-              <div className="flex items-center gap-3 text-gray-700">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-green-700 text-green-700">
-                  ✓
-                </span>
-                <span>(Em breve)</span>
-              </div>
-            </div>
           </div>
 
           {/* ✅ Coluna direita */}
