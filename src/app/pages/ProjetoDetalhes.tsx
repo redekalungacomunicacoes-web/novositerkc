@@ -94,7 +94,6 @@ export function ProjetoDetalhes() {
 
   const [loading, setLoading] = useState(true);
   const [projeto, setProjeto] = useState<ProjetoUI | null>(null);
-
   const [selected, setSelected] = useState<GaleriaItem | null>(null);
 
   useEffect(() => {
@@ -104,7 +103,6 @@ export function ProjetoDetalhes() {
       setLoading(true);
 
       const PUBLIC_FILTER = "publicado_transparencia.eq.true,publicado_transparencia.is.null";
-
       let found: any = null;
 
       const bySlug = await supabase
@@ -149,11 +147,8 @@ export function ProjetoDetalhes() {
         id: found.id,
         slug: found.slug,
         titulo: found.titulo || "",
-        // subtítulo (banner) — usa resumo
         descricao: found.resumo || "",
-        // texto do “Sobre o Projeto” — usa descricao completa
         descricaoCompleta: found.descricao || found.resumo || "",
-        // banner — usa capa_url, senão primeira imagem da galeria
         imagem: found.capa_url || fallbackCapa,
         tag: "Projeto",
         ano: "—",
@@ -194,8 +189,8 @@ export function ProjetoDetalhes() {
 
   return (
     <div className="w-full">
-      {/* ✅ BANNER (FIXO igual Home) */}
-      <section className="relative min-h-[70vh] md:min-h-[80vh] flex items-center overflow-hidden">
+      {/* ✅ BANNER GRANDE (mesmo tamanho do HERO da Home) */}
+      <section className="relative !h-[70vh] md:!h-[80vh] min-h-[520px] flex items-center overflow-hidden">
         {/* Fundo */}
         <div className="absolute inset-0">
           {projeto.imagem ? (
@@ -210,12 +205,12 @@ export function ProjetoDetalhes() {
             <div className="w-full h-full bg-black/20" />
           )}
 
-          {/* overlay */}
-          <div className="absolute inset-0 bg-black/55" />
+          {/* ✅ mesmo overlay da Home */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-transparent" />
         </div>
 
         {/* Conteúdo */}
-        <div className="relative z-10 mx-auto max-w-6xl px-4 py-20 w-full">
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 w-full">
           <div className="max-w-3xl">
             <Link to="/projetos" className="inline-flex items-center gap-2 text-sm text-white/85 hover:text-white">
               <ArrowLeft className="w-4 h-4" />
@@ -226,15 +221,20 @@ export function ProjetoDetalhes() {
               <RKCTag>{projeto.tag}</RKCTag>
             </div>
 
-            {/* ✅ Reserva de altura pro texto: mesmo sem conteúdo, não “encolhe” */}
-            <div className="mt-3 min-h-[160px] md:min-h-[190px]">
-              <h1 className="text-3xl md:text-4xl font-semibold text-white">{projeto.titulo || ""}</h1>
-              <p className="mt-3 text-base md:text-lg text-white/90">{projeto.descricao || ""}</p>
+            {/* ✅ reserva para não “encolher” quando apagar textos */}
+            <div className="mt-3 min-h-[180px] md:min-h-[220px]">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
+                {projeto.titulo || ""}
+              </h1>
+
+              <p className="text-lg sm:text-xl text-gray-200 mb-8 leading-relaxed">
+                {projeto.descricao || ""}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* ✅ Faixa orgânica inferior (igual Home) */}
+        {/* Faixa orgânica inferior (igual Home) */}
         <div
           className="absolute bottom-0 left-0 right-0 h-24 bg-white"
           style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }}
