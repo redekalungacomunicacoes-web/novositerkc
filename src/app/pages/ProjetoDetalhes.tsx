@@ -194,36 +194,51 @@ export function ProjetoDetalhes() {
 
   return (
     <div className="w-full">
-      {/* ✅ BANNER (não mexe em caminhos; só layout) */}
-      <section className="relative w-full overflow-hidden">
-        <div
-          className="absolute inset-0 bg-center bg-cover"
-          style={{ backgroundImage: projeto.imagem ? `url(${projeto.imagem})` : undefined }}
-        />
-        {!projeto.imagem ? <div className="absolute inset-0 bg-black/10" /> : null}
-        <div className="absolute inset-0 bg-black/55" />
+      {/* ✅ BANNER (FIXO igual Home) */}
+      <section className="relative min-h-[70vh] md:min-h-[80vh] flex items-center overflow-hidden">
+        {/* Fundo */}
+        <div className="absolute inset-0">
+          {projeto.imagem ? (
+            <img
+              src={projeto.imagem}
+              alt={projeto.titulo || "Projeto"}
+              className="w-full h-full object-cover"
+              fetchPriority="high"
+              decoding="async"
+            />
+          ) : (
+            <div className="w-full h-full bg-black/20" />
+          )}
 
-        <div className="relative">
-          <div className="max-w-6xl mx-auto px-4">
-            <div
-              className="min-h-[160px] md:min-h-[190px] flex flex-col justify-end pb-8"
-              style={{ paddingTop: "clamp(3.5rem, 8vh, 6rem)" }}
-            >
-              <Link to="/projetos" className="inline-flex items-center gap-2 text-sm text-white/85 hover:text-white">
-                <ArrowLeft className="w-4 h-4" />
-                Voltar para Projetos
-              </Link>
+          {/* overlay */}
+          <div className="absolute inset-0 bg-black/55" />
+        </div>
 
-              <div className="mt-6">
-                <RKCTag>{projeto.tag}</RKCTag>
-              </div>
+        {/* Conteúdo */}
+        <div className="relative z-10 mx-auto max-w-6xl px-4 py-20 w-full">
+          <div className="max-w-3xl">
+            <Link to="/projetos" className="inline-flex items-center gap-2 text-sm text-white/85 hover:text-white">
+              <ArrowLeft className="w-4 h-4" />
+              Voltar para Projetos
+            </Link>
 
-              <h1 className="mt-3 text-3xl md:text-4xl font-semibold text-white">{projeto.titulo}</h1>
+            <div className="mt-6">
+              <RKCTag>{projeto.tag}</RKCTag>
+            </div>
 
-              <p className="mt-3 max-w-3xl text-base md:text-lg text-white/90">{projeto.descricao}</p>
+            {/* ✅ Reserva de altura pro texto: mesmo sem conteúdo, não “encolhe” */}
+            <div className="mt-3 min-h-[160px] md:min-h-[190px]">
+              <h1 className="text-3xl md:text-4xl font-semibold text-white">{projeto.titulo || ""}</h1>
+              <p className="mt-3 text-base md:text-lg text-white/90">{projeto.descricao || ""}</p>
             </div>
           </div>
         </div>
+
+        {/* ✅ Faixa orgânica inferior (igual Home) */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-24 bg-white"
+          style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }}
+        />
       </section>
 
       {/* ✅ Conteúdo */}
@@ -259,7 +274,7 @@ export function ProjetoDetalhes() {
               </RKCCardContent>
             </RKCCard>
 
-            {/* ✅ Quer saber mais? — idêntico ao print */}
+            {/* ✅ Quer saber mais? */}
             <div className="rounded-2xl bg-gradient-to-b from-emerald-700 to-emerald-600 text-white shadow-lg px-8 py-8">
               <h3 className="text-center text-2xl font-semibold">Quer saber mais?</h3>
 
