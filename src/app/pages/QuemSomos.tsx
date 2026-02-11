@@ -25,9 +25,6 @@ export function QuemSomos() {
   const [loadingEquipe, setLoadingEquipe] = useState(true);
   const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
 
-  const aboutImageFallback =
-    "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?fit=crop&w=1400&q=80";
-
   useEffect(() => {
     // settings
     (async () => {
@@ -89,7 +86,10 @@ export function QuemSomos() {
           </p>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-white" style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }} />
+        <div
+          className="absolute bottom-0 left-0 right-0 h-16 bg-white"
+          style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }}
+        />
       </section>
 
       {/* Nossa História + Equipe (lado a lado) */}
@@ -125,11 +125,16 @@ export function QuemSomos() {
             <div className="space-y-4">
               <RKCCard className="overflow-hidden">
                 <div className="relative aspect-[16/9] w-full overflow-hidden">
-                  <img
-                    src={settings?.about_team_image_url || aboutImageFallback}
-                    alt="Equipe RKC"
-                    className="w-full h-full object-cover"
-                  />
+                  {/* ✅ SEM FALLBACK: só renderiza imagem se vier do banco */}
+                  {settings?.about_team_image_url ? (
+                    <img
+                      src={settings.about_team_image_url}
+                      alt="Equipe RKC"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-black/10" />
+                  )}
 
                   {/* ✅ “espelhar a equipe na foto”: avatares sobrepostos */}
                   {equipeAvatares.length > 0 && (
