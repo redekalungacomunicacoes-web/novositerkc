@@ -43,12 +43,6 @@ export function Home() {
 
   const [settings, setSettings] = useState<SiteSettings | null>(null);
 
-  const heroImageFallback =
-    "https://images.unsplash.com/photo-1623289784234-0670ebb4add4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxxdWlsb21ib2xhJTIwY29tbXVuaXR5JTIwYnJhemlsJTIwY3VsdHVyZXxlbnwxfHx8fDE3NzAwNzUyNjN8MA&ixlib=rb-4.1.0&q=80&w=1080";
-
-  const territoryImageFallback =
-    "https://images.unsplash.com/photo-1701890013861-a6ec62094c10?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxicmF6aWwlMjBsYW5kc2NhcGUlMjBuYXR1cmUlMjBjZXJyYWRvfGVufDF8fHx8MTc3MDA3NTI2OHww&ixlib=rb-4.1.0&q=80&w=1080";
-
   useEffect(() => {
     // Settings (Home)
     (async () => {
@@ -141,13 +135,19 @@ export function Home() {
     <div>
       {/* Hero Section */}
       <section className="relative min-h-[70vh] md:min-h-[80vh] flex items-center overflow-hidden">
-        {/* Imagem de fundo */}
+        {/* Imagem de fundo (SEM FALLBACK: só renderiza se vier do banco) */}
         <div className="absolute inset-0">
-          <img
-            src={settings?.home_banner_image_url || heroImageFallback}
-            alt="Comunidade Kalunga"
-            className="w-full h-full object-cover"
-          />
+          {settings?.home_banner_image_url ? (
+            <img
+              src={settings.home_banner_image_url}
+              alt="Comunidade Kalunga"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            // placeholder neutro (não usa imagem externa nem “preload”)
+            <div className="w-full h-full bg-black/20" />
+          )}
+
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-transparent" />
         </div>
 
@@ -378,7 +378,8 @@ export function Home() {
                   "A Rede Kalunga Comunicações (RKC) é uma iniciativa de mídia independente que surge das comunidades quilombolas da Chapada dos Veadeiros."}
               </p>
               <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-                Nossa missão é amplificar as vozes do território, promover o jornalismo comunitário e fortalecer a cultura e identidade quilombola através da comunicação popular.
+                Nossa missão é amplificar as vozes do território, promover o jornalismo comunitário e fortalecer a cultura
+                e identidade quilombola através da comunicação popular.
               </p>
               <Link to="/quem-somos">
                 <RKCButton>
@@ -387,14 +388,21 @@ export function Home() {
                 </RKCButton>
               </Link>
             </div>
+
+            {/* Imagem do território (SEM FALLBACK: só renderiza se vier do banco) */}
             <div className="relative">
               <div className="aspect-square rounded-2xl overflow-hidden">
-                <img
-                  src={settings?.home_territory_image_url || territoryImageFallback}
-                  alt="Território Kalunga"
-                  className="w-full h-full object-cover"
-                />
+                {settings?.home_territory_image_url ? (
+                  <img
+                    src={settings.home_territory_image_url}
+                    alt="Território Kalunga"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-black/10" />
+                )}
               </div>
+
               {/* Elementos decorativos */}
               <div className="absolute -top-4 -right-4 w-24 h-24 bg-[#F2B705] rounded-full opacity-80 blur-2xl" />
               <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-[#0F7A3E] rounded-full opacity-60 blur-2xl" />
