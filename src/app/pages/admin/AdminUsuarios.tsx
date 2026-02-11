@@ -69,7 +69,7 @@ export function AdminUsuarios() {
   }, [users, q]);
 
   const handleNewUser = async () => {
-    const userId = prompt("Cole o UUID do usuário (Supabase Auth user_id):");
+    const userId = prompt("cfb4dd08-47c5-4ae5-85cd-6e44ad367c11");
     if (!userId) return;
 
     const roleName = prompt(
