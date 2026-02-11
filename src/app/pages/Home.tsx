@@ -42,6 +42,7 @@ export function Home() {
   const [materias, setMaterias] = useState<MateriaHome[]>([]);
 
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const settingsReady = !!settings; // ✅ controla o “flash” do fallback
 
   useEffect(() => {
     let alive = true;
@@ -52,7 +53,6 @@ export function Home() {
 
       const settingsP = getSiteSettings();
 
-      // 🔽 Selects reduzidos (mantém o que é necessário pro UI + ordenação)
       const projetosP = supabase
         .from("projetos")
         .select("id, slug, titulo, resumo, descricao, capa_url, sort_order, publicado_transparencia, published_at, created_at")
@@ -74,9 +74,8 @@ export function Home() {
       if (!alive) return;
 
       // settings
-      if (settingsR.status === "fulfilled") {
-        setSettings(settingsR.value);
-      } else {
+      if (settingsR.status === "fulfilled") setSettings(settingsR.value);
+      else {
         console.warn("Erro ao carregar settings (Home):", (settingsR as any)?.reason?.message || settingsR);
         setSettings(null);
       }
@@ -89,22 +88,22 @@ export function Home() {
           console.warn("Erro ao carregar projetos (Home):", error.message);
           setProjetos([]);
         } else {
-          const mapped: ProjetoHome[] = (data || []).map((p: any) => ({
-            id: p.id,
-            slug: p.slug,
-            titulo: p.titulo || "",
-            descricao: p.resumo || p.descricao || "",
-            imagem: p.capa_url || "",
-            tag: "Projeto",
-          }));
-          setProjetos(mapped);
+          setProjetos(
+            (data || []).map((p: any) => ({
+              id: p.id,
+              slug: p.slug,
+              titulo: p.titulo || "",
+              descricao: p.resumo || p.descricao || "",
+              imagem: p.capa_url || "",
+              tag: "Projeto",
+            }))
+          );
         }
       } else {
-        console.warn("Erro ao carregar projetos (Home):", (projetosR as any)?.reason?.message || projetosR);
         setProjetos([]);
       }
 
-      // materias
+      // matérias
       setLoadingMaterias(false);
       if (materiasR.status === "fulfilled") {
         const { data, error } = materiasR.value as any;
@@ -112,20 +111,20 @@ export function Home() {
           console.warn("Erro ao carregar matérias (Home):", error.message);
           setMaterias([]);
         } else {
-          const mapped: MateriaHome[] = (data || []).map((m: any) => ({
-            id: m.id,
-            slug: m.slug,
-            titulo: m.titulo || "",
-            resumo: m.resumo || "",
-            imagem: m.capa_url || "",
-            autor: m.autor_nome || "",
-            data: formatDateBR(m.published_at || m.created_at),
-            categoria: m.tags && m.tags[0] ? m.tags[0] : "Geral",
-          }));
-          setMaterias(mapped);
+          setMaterias(
+            (data || []).map((m: any) => ({
+              id: m.id,
+              slug: m.slug,
+              titulo: m.titulo || "",
+              resumo: m.resumo || "",
+              imagem: m.capa_url || "",
+              autor: m.autor_nome || "",
+              data: formatDateBR(m.published_at || m.created_at),
+              categoria: m.tags && m.tags[0] ? m.tags[0] : "Geral",
+            }))
+          );
         }
       } else {
-        console.warn("Erro ao carregar matérias (Home):", (materiasR as any)?.reason?.message || materiasR);
         setMaterias([]);
       }
     })();
@@ -165,13 +164,28 @@ export function Home() {
             <RKCTag variant="yellow" className="mb-6">
               Comunicação Popular
             </RKCTag>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
-              {settings?.home_banner_title || "Amplificando as vozes do Território Kalunga"}
-            </h1>
-            <p className="text-lg sm:text-xl text-gray-200 mb-8 leading-relaxed">
-              {settings?.home_banner_subtitle ||
-                "Mídia independente quilombola na Chapada dos Veadeiros, promovendo jornalismo comunitário, cultura e pertencimento territorial."}
-            </p>
+
+            {/* ✅ SEM TEXTO FALLBACK: evita aparecer “Amplificando...” antes do banco */}
+            {settingsReady ? (
+              <>
+                <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
+                  {settings?.home_banner_title || ""}
+                </h1>
+
+                <p className="text-lg sm:text-xl text-gray-200 mb-8 leading-relaxed">
+                  {settings?.home_banner_subtitle || ""}
+                </p>
+              </>
+            ) : (
+              // Skeleton (mantém o layout e evita “flash”)
+              <>
+                <div className="h-12 sm:h-14 md:h-16 w-full max-w-[44rem] rounded-lg bg-white/20 animate-pulse mb-4" />
+                <div className="h-12 sm:h-14 md:h-16 w-4/5 max-w-[38rem] rounded-lg bg-white/20 animate-pulse mb-6" />
+                <div className="h-6 w-full max-w-[42rem] rounded-lg bg-white/15 animate-pulse mb-3" />
+                <div className="h-6 w-5/6 max-w-[36rem] rounded-lg bg-white/15 animate-pulse mb-8" />
+              </>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-4">
               <Link to="/quem-somos">
                 <RKCButton size="lg">
@@ -198,6 +212,8 @@ export function Home() {
           style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }}
         />
       </section>
+
+      {/* ... resto do seu componente permanece igual ... */}
 
       {/* Projetos Section */}
       <section className="pt-0 pb-14 md:pt-2 md:pb-20 bg-white">
@@ -262,9 +278,7 @@ export function Home() {
             <div className="text-sm text-gray-500 mb-8">Nenhuma matéria publicada ainda.</div>
           )}
 
-          {/* Grid Editorial: 1 destaque + 5 menores */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            {/* Matéria Destaque */}
             {materiaDestaque && (
               <Link to={`/materias/${materiaDestaque.slug}`} className="lg:col-span-2">
                 <RKCCard variant="featured" className="h-full hover:scale-[1.01] transition-transform">
@@ -296,7 +310,6 @@ export function Home() {
               </Link>
             )}
 
-            {/* Grid de 2 matérias menores (lado) */}
             <div className="space-y-6">
               {materiasSecundarias.slice(0, 2).map((materia) => (
                 <Link key={materia.id} to={`/materias/${materia.slug}`}>
@@ -323,7 +336,6 @@ export function Home() {
             </div>
           </div>
 
-          {/* 3 cards em linha */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {materiasSecundarias.slice(2, 5).map((materia) => (
               <Link key={materia.id} to={`/materias/${materia.slug}`}>
@@ -399,7 +411,6 @@ export function Home() {
               </Link>
             </div>
 
-            {/* Imagem do território (SEM FALLBACK: só renderiza se vier do banco) */}
             <div className="relative">
               <div className="aspect-square rounded-2xl overflow-hidden">
                 {settings?.home_territory_image_url ? (
@@ -415,7 +426,6 @@ export function Home() {
                 )}
               </div>
 
-              {/* Elementos decorativos */}
               <div className="absolute -top-4 -right-4 w-24 h-24 bg-[#F2B705] rounded-full opacity-80 blur-2xl" />
               <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-[#0F7A3E] rounded-full opacity-60 blur-2xl" />
             </div>
