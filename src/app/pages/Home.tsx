@@ -44,88 +44,95 @@ export function Home() {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
 
   useEffect(() => {
-    // Settings (Home)
-    (async () => {
-      try {
-        const s = await getSiteSettings();
-        setSettings(s);
-      } catch (e: any) {
-        console.warn("Erro ao carregar settings (Home):", e?.message || e);
-        setSettings(null);
-      }
-    })();
+    let alive = true;
 
-    // Projetos (Home)
     (async () => {
       setLoadingProjetos(true);
+      setLoadingMaterias(true);
 
-      const { data, error } = await supabase
+      const settingsP = getSiteSettings();
+
+      // 🔽 Selects reduzidos (mantém o que é necessário pro UI + ordenação)
+      const projetosP = supabase
         .from("projetos")
-        .select(
-          "id, slug, titulo, resumo, descricao, capa_url, sort_order, publicado_transparencia, published_at, created_at"
-        )
-        // Público vê: true OU null (legado). false não aparece.
+        .select("id, slug, titulo, resumo, descricao, capa_url, sort_order, publicado_transparencia, published_at, created_at")
         .or("publicado_transparencia.eq.true,publicado_transparencia.is.null")
-        // ✅ ordem manual primeiro (null vai pro fim)
         .order("sort_order", { ascending: true, nullsFirst: false })
-        // fallback para manter consistência quando não tem sort_order
         .order("published_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(4);
 
-      setLoadingProjetos(false);
-
-      if (error) {
-        console.warn("Erro ao carregar projetos (Home):", error.message);
-        setProjetos([]);
-        return;
-      }
-
-      const mapped: ProjetoHome[] = (data || []).map((p: any) => ({
-        id: p.id,
-        slug: p.slug,
-        titulo: p.titulo || "",
-        descricao: p.resumo || p.descricao || "",
-        imagem: p.capa_url || "",
-        tag: "Projeto",
-      }));
-
-      setProjetos(mapped);
-    })();
-
-    // Matérias (Home)
-    (async () => {
-      setLoadingMaterias(true);
-
-      const { data, error } = await supabase
+      const materiasP = supabase
         .from("materias")
-        .select("id, slug, titulo, resumo, capa_url, autor_nome, tags, status, published_at, created_at")
+        .select("id, slug, titulo, resumo, capa_url, autor_nome, tags, published_at, created_at")
         .eq("status", "published")
         .order("published_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(6);
 
-      setLoadingMaterias(false);
+      const [settingsR, projetosR, materiasR] = await Promise.allSettled([settingsP, projetosP, materiasP]);
+      if (!alive) return;
 
-      if (error) {
-        console.warn("Erro ao carregar matérias (Home):", error.message);
-        setMaterias([]);
-        return;
+      // settings
+      if (settingsR.status === "fulfilled") {
+        setSettings(settingsR.value);
+      } else {
+        console.warn("Erro ao carregar settings (Home):", (settingsR as any)?.reason?.message || settingsR);
+        setSettings(null);
       }
 
-      const mapped: MateriaHome[] = (data || []).map((m: any) => ({
-        id: m.id,
-        slug: m.slug,
-        titulo: m.titulo || "",
-        resumo: m.resumo || "",
-        imagem: m.capa_url || "",
-        autor: m.autor_nome || "",
-        data: formatDateBR(m.published_at || m.created_at),
-        categoria: m.tags && m.tags[0] ? m.tags[0] : "Geral",
-      }));
+      // projetos
+      setLoadingProjetos(false);
+      if (projetosR.status === "fulfilled") {
+        const { data, error } = projetosR.value as any;
+        if (error) {
+          console.warn("Erro ao carregar projetos (Home):", error.message);
+          setProjetos([]);
+        } else {
+          const mapped: ProjetoHome[] = (data || []).map((p: any) => ({
+            id: p.id,
+            slug: p.slug,
+            titulo: p.titulo || "",
+            descricao: p.resumo || p.descricao || "",
+            imagem: p.capa_url || "",
+            tag: "Projeto",
+          }));
+          setProjetos(mapped);
+        }
+      } else {
+        console.warn("Erro ao carregar projetos (Home):", (projetosR as any)?.reason?.message || projetosR);
+        setProjetos([]);
+      }
 
-      setMaterias(mapped);
+      // materias
+      setLoadingMaterias(false);
+      if (materiasR.status === "fulfilled") {
+        const { data, error } = materiasR.value as any;
+        if (error) {
+          console.warn("Erro ao carregar matérias (Home):", error.message);
+          setMaterias([]);
+        } else {
+          const mapped: MateriaHome[] = (data || []).map((m: any) => ({
+            id: m.id,
+            slug: m.slug,
+            titulo: m.titulo || "",
+            resumo: m.resumo || "",
+            imagem: m.capa_url || "",
+            autor: m.autor_nome || "",
+            data: formatDateBR(m.published_at || m.created_at),
+            categoria: m.tags && m.tags[0] ? m.tags[0] : "Geral",
+          }));
+          setMaterias(mapped);
+        }
+      } else {
+        console.warn("Erro ao carregar matérias (Home):", (materiasR as any)?.reason?.message || materiasR);
+        setMaterias([]);
+      }
     })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const materiaDestaque = useMemo(() => materias[0], [materias]);
@@ -142,9 +149,10 @@ export function Home() {
               src={settings.home_banner_image_url}
               alt="Comunidade Kalunga"
               className="w-full h-full object-cover"
+              fetchPriority="high"
+              decoding="async"
             />
           ) : (
-            // placeholder neutro (não usa imagem externa nem “preload”)
             <div className="w-full h-full bg-black/20" />
           )}
 
@@ -298,6 +306,8 @@ export function Home() {
                         src={materia.imagem}
                         alt={materia.titulo}
                         className="w-24 h-24 object-cover rounded-lg flex-shrink-0"
+                        loading="lazy"
+                        decoding="async"
                       />
                       <div className="flex-1 min-w-0">
                         <RKCTag variant="green" className="mb-2 text-xs">
@@ -397,6 +407,8 @@ export function Home() {
                     src={settings.home_territory_image_url}
                     alt="Território Kalunga"
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                 ) : (
                   <div className="w-full h-full bg-black/10" />
