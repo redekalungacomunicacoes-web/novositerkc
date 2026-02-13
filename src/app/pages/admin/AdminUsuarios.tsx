@@ -69,7 +69,7 @@ export function AdminUsuarios() {
   }, [users, q]);
 
   const handleNewUser = async () => {
-    const userId = prompt("cfb4dd08-47c5-4ae5-85cd-6e44ad367c11");
+    const userId = prompt("025ff445-197c-41ea-8c08-b4f7e2e79c38");
     if (!userId) return;
 
     const roleName = prompt(
