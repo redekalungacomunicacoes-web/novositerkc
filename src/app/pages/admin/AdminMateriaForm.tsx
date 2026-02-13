@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Save, ArrowLeft, Image as ImageIcon } from "lucide-react";
@@ -17,11 +17,14 @@ type EquipeOption = {
 type MateriaFormData = {
   title: string;
   subtitle: string;
-  authorId: string; // ✅ agora é ID da equipe
+  authorId: string; // ✅ ID da equipe
   category: string;
   date: string;
   content: string;
-  coverImage: string;
+
+  coverImage: string;  // capa_url
+  bannerImage: string; // banner_url
+
   status: "published" | "draft" | "archived";
 };
 
@@ -48,6 +51,59 @@ async function ensureUniqueMateriaSlug(baseSlug: string, currentId?: string) {
   }
 }
 
+function safeFilename(name: string) {
+  const clean = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9.\-_]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+  return clean || `arquivo-${Date.now()}`;
+}
+
+async function getImageDimensions(url: string): Promise<{ w: number; h: number } | null> {
+  if (!url) return null;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+/**
+ * Upload genérico pro Storage do Supabase.
+ * Ajuste bucket/folders caso seu projeto use outros nomes.
+ */
+async function uploadToStorage(params: {
+  bucket: string;
+  folder: string;
+  file: File;
+  upsert?: boolean;
+}) {
+  const { bucket, folder, file, upsert = true } = params;
+
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const base = safeFilename(file.name.replace(/\.[^/.]+$/, ""));
+  const path = `${folder}/${Date.now()}-${base}.${ext}`;
+
+  const { error: upError } = await supabase
+    .storage
+    .from(bucket)
+    .upload(path, file, { upsert, contentType: file.type });
+
+  if (upError) throw upError;
+
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  const publicUrl = data?.publicUrl;
+
+  if (!publicUrl) throw new Error("Não foi possível obter a URL pública do upload.");
+
+  return { publicUrl, path };
+}
+
 export function AdminMateriaForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -55,7 +111,14 @@ export function AdminMateriaForm() {
 
   const today = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<MateriaFormData>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    setValue,
+    watch
+  } = useForm<MateriaFormData>({
     defaultValues: {
       status: "draft",
       date: today,
@@ -65,12 +128,27 @@ export function AdminMateriaForm() {
       category: "",
       content: "",
       coverImage: "",
+      bannerImage: "",
     }
   });
 
   const [loading, setLoading] = useState(false);
   const [equipe, setEquipe] = useState<EquipeOption[]>([]);
   const selectedAuthorId = watch("authorId");
+
+  // Upload UI states
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+
+  // Dimensões
+  const coverUrl = watch("coverImage");
+  const bannerUrl = watch("bannerImage");
+
+  const [coverDim, setCoverDim] = useState<{ w: number; h: number } | null>(null);
+  const [bannerDim, setBannerDim] = useState<{ w: number; h: number } | null>(null);
 
   // Carrega equipe ativa (para dropdown)
   useEffect(() => {
@@ -109,11 +187,12 @@ export function AdminMateriaForm() {
       reset({
         title: d.titulo || "",
         subtitle: d.resumo || "",
-        authorId: d.autor_id || "", // ✅
+        authorId: d.autor_id || "",
         category: (d.tags && d.tags[0]) ? d.tags[0] : "",
         date: (d.published_at ? new Date(d.published_at) : new Date(d.created_at)).toISOString().split("T")[0],
         content: d.conteudo || "",
         coverImage: d.capa_url || "",
+        bannerImage: d.banner_url || d.capa_url || "", // se não tiver banner_url, usa capa
         status: d.status || "draft",
       });
 
@@ -125,6 +204,71 @@ export function AdminMateriaForm() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, reset]);
+
+  // Dimensão capa
+  useEffect(() => {
+    (async () => {
+      if (!coverUrl) { setCoverDim(null); return; }
+      const dim = await getImageDimensions(coverUrl);
+      setCoverDim(dim);
+    })();
+  }, [coverUrl]);
+
+  // Dimensão banner
+  useEffect(() => {
+    (async () => {
+      if (!bannerUrl) { setBannerDim(null); return; }
+      const dim = await getImageDimensions(bannerUrl);
+      setBannerDim(dim);
+    })();
+  }, [bannerUrl]);
+
+  const handleCoverUpload = async (file?: File) => {
+    if (!file) return;
+
+    setUploadingCover(true);
+    try {
+      // ajuste aqui se o bucket tiver outro nome
+      const { publicUrl } = await uploadToStorage({
+        bucket: "materias",
+        folder: "capas",
+        file,
+        upsert: true,
+      });
+
+      // ✅ capa
+      setValue("coverImage", publicUrl, { shouldDirty: true, shouldValidate: true });
+
+      // ✅ regra pedida: ao subir CAPA, já vira o BANNER
+      setValue("bannerImage", publicUrl, { shouldDirty: true, shouldValidate: true });
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar imagem de capa.");
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
+    }
+  };
+
+  const handleBannerUpload = async (file?: File) => {
+    if (!file) return;
+
+    setUploadingBanner(true);
+    try {
+      const { publicUrl } = await uploadToStorage({
+        bucket: "materias",
+        folder: "banners",
+        file,
+        upsert: true,
+      });
+
+      setValue("bannerImage", publicUrl, { shouldDirty: true, shouldValidate: true });
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar imagem de banner.");
+    } finally {
+      setUploadingBanner(false);
+      if (bannerInputRef.current) bannerInputRef.current.value = "";
+    }
+  };
 
   const onSubmit = async (data: MateriaFormData) => {
     setLoading(true);
@@ -144,13 +288,13 @@ export function AdminMateriaForm() {
         resumo: data.subtitle || null,
         conteudo: data.content || null,
         capa_url: data.coverImage || null,
+        banner_url: data.bannerImage || data.coverImage || null, // ✅ banner
         tags,
         status: data.status,
         published_at: data.status === "published" ? new Date(data.date).toISOString() : null,
 
-        // ✅ autor ligado à equipe
         autor_id: data.authorId || null,
-        autor_nome, // mantém compatível com o público
+        autor_nome,
       };
 
       const res = isEditing && id
@@ -232,7 +376,6 @@ export function AdminMateriaForm() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* ✅ Autor dropdown */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Autor</label>
                 <select
@@ -313,15 +456,54 @@ export function AdminMateriaForm() {
             </div>
           </div>
 
+          {/* CAPA */}
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Imagem de Capa</h3>
 
-            {/* mantém seu bloco de upload visual (o upload já está funcionando no seu projeto) */}
-            <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer bg-muted/10">
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleCoverUpload(e.target.files?.[0])}
+            />
+
+            <div
+              className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer bg-muted/10"
+              onClick={() => coverInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") coverInputRef.current?.click();
+              }}
+            >
               <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium">Clique para fazer upload</p>
+              <p className="text-sm font-medium">
+                {uploadingCover ? "Enviando capa..." : "Clique para fazer upload"}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">PNG, JPG até 5MB</p>
+              {coverDim && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Dimensão: <b>{coverDim.w}x{coverDim.h}px</b>
+                </p>
+              )}
+              {!coverDim && coverUrl && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Dimensão: <b>carregando...</b>
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Ao subir a <b>capa</b>, ela também vira o <b>banner</b> automaticamente.
+              </p>
             </div>
+
+            {coverUrl ? (
+              <img
+                src={coverUrl}
+                alt="Capa"
+                className="w-full h-44 object-cover rounded-lg border"
+              />
+            ) : null}
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Ou URL da imagem</label>
@@ -332,7 +514,6 @@ export function AdminMateriaForm() {
               />
             </div>
 
-            {/* (opcional) info rápida do autor escolhido */}
             {selectedAuthorId && (
               <p className="text-xs text-muted-foreground">
                 Autor selecionado:{" "}
@@ -340,6 +521,67 @@ export function AdminMateriaForm() {
               </p>
             )}
           </div>
+
+          {/* BANNER */}
+          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Banner da Matéria</h3>
+
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleBannerUpload(e.target.files?.[0])}
+            />
+
+            <div
+              className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer bg-muted/10"
+              onClick={() => bannerInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") bannerInputRef.current?.click();
+              }}
+            >
+              <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium">
+                {uploadingBanner ? "Enviando banner..." : "Clique para fazer upload do banner"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">PNG, JPG até 5MB</p>
+              {bannerDim && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Dimensão: <b>{bannerDim.w}x{bannerDim.h}px</b>
+                </p>
+              )}
+              {!bannerDim && bannerUrl && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Dimensão: <b>carregando...</b>
+                </p>
+              )}
+            </div>
+
+            {bannerUrl ? (
+              <img
+                src={bannerUrl}
+                alt="Banner"
+                className="w-full h-44 object-cover rounded-lg border"
+              />
+            ) : null}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Ou URL do banner</label>
+              <input
+                {...register("bannerImage")}
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                placeholder="https://..."
+              />
+            </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              Dica: banner ideal em <b>16:9</b> (ex: <b>1920x1080</b> ou <b>1600x900</b>).
+            </p>
+          </div>
+
         </div>
       </div>
     </div>
