@@ -272,6 +272,14 @@ export function AdminMateriaForm() {
 
   const onSubmit = async (data: MateriaFormData) => {
     setLoading(true);
+    try {
+      // ...
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || "Erro ao salvar.");
+    } finally {
+      setLoading(false);
+    }
 
     try {
       const tags = data.category ? [data.category] : [];
