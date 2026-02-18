@@ -11,14 +11,14 @@ type MembroEquipe = {
   nome: string;
   cargo: string;
   foto_url: string;
-  instagram?: string;
-  bio?: string;
+  bio?: string | null;
+  instagram?: string | null;
 };
 
 export function QuemSomos() {
   const valores = [
     { icon: Heart, titulo: "Pertencimento", descricao: "Enraizamento territorial e valorização da identidade quilombola" },
-    { icon: Users, titulo: "Comunidade", descricao: "Comunicação feita pela e para as comunidades do território" },
+    { icon: Users, titulo: "Comunidade", descricao: "Comunicação feita pela e para as comunidades do território quilombola" },
     { icon: Target, titulo: "Autonomia", descricao: "Jornalismo independente e livre de interesses comerciais" },
     { icon: Megaphone, titulo: "Amplificação", descricao: "Dar voz e visibilidade às narrativas do território quilombola" },
   ];
@@ -44,10 +44,10 @@ export function QuemSomos() {
     (async () => {
       setLoadingEquipe(true);
 
-      // ⚠️ Se seus campos tiverem outro nome, me diga o nome exato da coluna no Supabase.
+      // ✅ Agora puxa bio e instagram (igual ao AdminEquipeForm salva)
       const { data, error } = await supabase
         .from("equipe")
-        .select("id, nome, cargo, foto_url, instagram, bio, ordem, ativo")
+        .select("id, nome, cargo, foto_url, bio, instagram, ordem, ativo")
         .or("ativo.eq.true,ativo.is.null")
         .order("ordem", { ascending: true })
         .order("nome", { ascending: true });
@@ -65,8 +65,8 @@ export function QuemSomos() {
         nome: m.nome || "",
         cargo: m.cargo || m.funcao || "",
         foto_url: m.foto_url || "",
-        instagram: (m.instagram || "").replace(/^@/, ""),
-        bio: m.bio || "",
+        bio: m.bio ?? null,
+        instagram: (m.instagram ?? "").toString().replace(/^@/, "") || null,
       }));
 
       setEquipe(mapped);
@@ -87,72 +87,61 @@ export function QuemSomos() {
         <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">Quem Somos</h1>
           <p className="text-xl text-white/90 leading-relaxed">
-            Comunicação feita pela e para as comunidades do território.
+            Comunicação popular que nasce do coração do Território Kalunga
           </p>
-
-          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-            <RKCButton asChild size="lg" className="bg-[#F2B705] text-black hover:bg-[#F2B705]/90">
-              <Link to="/contato">
-                Fale com a gente <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </RKCButton>
-            <RKCButton asChild size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
-              <Link to="/projetos">Ver Projetos</Link>
-            </RKCButton>
-          </div>
         </div>
+
+        <div
+          className="absolute bottom-0 left-0 right-0 h-16 bg-white"
+          style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }}
+        />
       </section>
 
-      {/* Exemplo de bloco existente que usa avatares (mantive) */}
-      <section className="py-16 bg-white">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <RKCCard className="relative overflow-hidden">
-            <RKCCardContent className="p-8 md:p-10">
-              <h2 className="text-3xl font-bold text-gray-900 mb-3">
-                {settings?.site_title || "Nossa História"}
-              </h2>
-              <p className="text-gray-600 max-w-3xl">
-                {settings?.site_description || "Um projeto de comunicação com identidade e território."}
-              </p>
-
-              {equipeAvatares.length > 0 && (
-                <div className="mt-6 flex items-center">
-                  {equipeAvatares.map((m, idx) => (
-                    <div
-                      key={m.id}
-                      className="w-10 h-10 rounded-full overflow-hidden border-2 border-white bg-gray-100"
-                      style={{ marginLeft: idx === 0 ? 0 : -10 }}
-                      title={m.nome}
-                    >
-                      <img src={m.foto_url} alt={m.nome} className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                  <span className="ml-3 text-sm text-gray-500">Equipe</span>
-                </div>
-              )}
-            </RKCCardContent>
-          </RKCCard>
-        </div>
-      </section>
-
-      {/* Team block dentro do seu card (layout preservado) */}
+      {/* Nossa História + Equipe (lado a lado) */}
       <section className="py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-10 text-center">Nossa História</h2>
+
           <div className="grid lg:grid-cols-2 gap-10 items-start">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-4">
-                {settings?.about_title || "Sobre Nós"}
-              </h2>
-              <p className="text-gray-600 leading-relaxed">
-                {settings?.about_text || "Conteúdo institucional editável no Admin."}
+            {/* Texto */}
+            <div className="prose prose-lg max-w-none">
+              <p className="text-lg text-gray-700 leading-relaxed mb-6">
+                A Rede Kalunga Comunicações (RKC) nasceu em 2020 como uma resposta à necessidade
+                de dar voz e visibilidade às histórias, saberes e lutas das comunidades quilombolas
+                da Chapada dos Veadeiros e do Território Kalunga.
+              </p>
+
+              <p className="text-lg text-gray-700 leading-relaxed mb-6">
+                Somos uma mídia independente, criada e gerida por comunicadores populares,
+                jornalistas comunitários e lideranças territoriais comprometidas com a valorização
+                da cultura quilombola, a defesa dos direitos das comunidades tradicionais e a
+                promoção do jornalismo ético e independente.
+              </p>
+
+              <p className="text-lg text-gray-700 leading-relaxed mb-0">
+                Nosso trabalho se fundamenta na comunicação popular, entendendo que as próprias
+                comunidades devem ser protagonistas de suas narrativas. Através de matérias,
+                reportagens, projetos culturais e formativos, buscamos amplificar as vozes que
+                historicamente foram silenciadas ou distorcidas pela mídia tradicional.
               </p>
             </div>
 
+            {/* Card Equipe */}
             <div className="space-y-4">
               <RKCCard className="overflow-hidden">
-                <div className="relative h-40 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866]">
+                <div className="relative aspect-[16/9] w-full overflow-hidden">
+                  {settings?.about_team_image_url ? (
+                    <img
+                      src={settings.about_team_image_url}
+                      alt="Equipe RKC"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-black/10" />
+                  )}
+
                   {equipeAvatares.length > 0 && (
-                    <div className="absolute bottom-4 left-6 flex items-center">
+                    <div className="absolute bottom-4 left-4 flex items-center">
                       {equipeAvatares.map((m, idx) => (
                         <div
                           key={m.id}
@@ -163,6 +152,14 @@ export function QuemSomos() {
                           <img src={m.foto_url} alt={m.nome} className="w-full h-full object-cover" />
                         </div>
                       ))}
+                      {equipe.length > equipeAvatares.length && (
+                        <div
+                          className="w-10 h-10 rounded-full border-2 border-white bg-black/60 text-white text-xs flex items-center justify-center"
+                          style={{ marginLeft: -10 }}
+                        >
+                          +{equipe.length - equipeAvatares.length}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -186,13 +183,18 @@ export function QuemSomos() {
                   {!loadingEquipe && equipe.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {equipe.map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => setMembroModal(m)}
-                          className="flex items-center gap-3 text-left group"
-                        >
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
+                        <div key={m.id} className="flex items-center gap-3">
+                          {/* ✅ FOTO clicável (sem alterar estrutura do layout) */}
+                          <div
+                            className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setMembroModal(m)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") setMembroModal(m);
+                            }}
+                            title="Ver detalhes"
+                          >
                             {m.foto_url ? (
                               <img src={m.foto_url} alt={m.nome} className="w-full h-full object-cover" />
                             ) : (
@@ -201,13 +203,24 @@ export function QuemSomos() {
                               </div>
                             )}
                           </div>
+
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm text-[#2E2E2E] truncate group-hover:underline">
+                            {/* ✅ NOME clicável (já funcionava) */}
+                            <p
+                              className="font-semibold text-sm text-[#2E2E2E] truncate cursor-pointer hover:underline"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setMembroModal(m)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") setMembroModal(m);
+                              }}
+                              title="Ver detalhes"
+                            >
                               {m.nome}
                             </p>
                             <p className="text-xs text-gray-600 truncate">{m.cargo}</p>
                           </div>
-                        </button>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -225,21 +238,19 @@ export function QuemSomos() {
       {/* Valores */}
       <section className="py-16 md:py-24 bg-gray-50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] text-center mb-12">
-            Nossos valores
-          </h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-12 text-center">Nossos Valores</h2>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {valores.map((v, i) => {
-              const Icon = v.icon;
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {valores.map((valor, index) => {
+              const Icon = valor.icon;
               return (
-                <RKCCard key={i} className="h-full">
-                  <RKCCardContent className="p-6">
-                    <div className="w-12 h-12 rounded-xl bg-[#0F7A3E]/10 flex items-center justify-center mb-4">
-                      <Icon className="h-6 w-6 text-[#0F7A3E]" />
+                <RKCCard key={index} className="text-center">
+                  <RKCCardContent className="p-8">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center">
+                      <Icon className="w-8 h-8 text-white" />
                     </div>
-                    <h3 className="font-semibold text-gray-900">{v.titulo}</h3>
-                    <p className="mt-2 text-sm text-gray-600">{v.descricao}</p>
+                    <h3 className="font-bold text-xl text-[#2E2E2E] mb-3">{valor.titulo}</h3>
+                    <p className="text-gray-600 leading-relaxed">{valor.descricao}</p>
                   </RKCCardContent>
                 </RKCCard>
               );
@@ -248,7 +259,31 @@ export function QuemSomos() {
         </div>
       </section>
 
-      {/* Modal Integrante (janela pop-up) */}
+      {/* CTA */}
+      <section className="py-16 md:py-20 bg-white">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-6">Faça parte dessa história</h2>
+          <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
+            Conheça nossos projetos, leia nossas matérias e entre em contato para colaborar
+            com a comunicação popular quilombola.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/projetos">
+              <RKCButton size="lg">
+                Ver Projetos
+                <ArrowRight className="w-5 h-5" />
+              </RKCButton>
+            </Link>
+            <Link to="/contato">
+              <RKCButton variant="outline" size="lg">
+                Entre em Contato
+              </RKCButton>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ✅ MODAL POP-UP (janela) */}
       {membroModal && (
         <div
           className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
@@ -283,19 +318,19 @@ export function QuemSomos() {
                 <h3 className="text-2xl font-bold text-[#2E2E2E]">{membroModal.nome}</h3>
                 <p className="mt-1 text-sm text-gray-600">{membroModal.cargo}</p>
 
-                {membroModal.instagram && (
+                {!!membroModal.instagram && (
                   <a
                     className="mt-3 inline-flex items-center gap-2 text-sm text-pink-600 hover:underline"
-                    href={`https://instagram.com/${membroModal.instagram}`}
+                    href={`https://instagram.com/${String(membroModal.instagram).replace(/^@/, "")}`}
                     target="_blank"
                     rel="noreferrer"
                   >
                     <Instagram className="h-4 w-4" />
-                    @{membroModal.instagram}
+                    @{String(membroModal.instagram).replace(/^@/, "")}
                   </a>
                 )}
 
-                {membroModal.bio && (
+                {!!membroModal.bio && (
                   <p className="mt-5 text-gray-600 leading-relaxed">{membroModal.bio}</p>
                 )}
               </div>
