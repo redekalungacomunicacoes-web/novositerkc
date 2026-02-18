@@ -44,21 +44,27 @@ export function AdminEquipeForm() {
   const isEditing = !!id && id !== "novo";
   const navigate = useNavigate();
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } =
-    useForm<FormData>({
-      defaultValues: {
-        nome: "",
-        cargo: "",
-        bio: "",
-        instagram: "",
-        ativo: true,
-        ordem: 0,
-        foto_url: "",
-        email_login: "",
-        senha_login: "",
-        permissoes: { admin: false, editor: true, autor: true },
-      },
-    });
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<FormData>({
+    defaultValues: {
+      nome: "",
+      cargo: "",
+      bio: "",
+      instagram: "",
+      ativo: true,
+      ordem: 0,
+      foto_url: "",
+      email_login: "",
+      senha_login: "",
+      permissoes: { admin: false, editor: true, autor: true },
+    },
+  });
 
   const foto_url = watch("foto_url");
   const [loading, setLoading] = useState(false);
@@ -119,7 +125,8 @@ export function AdminEquipeForm() {
         nome: v.nome,
         cargo: v.cargo || null,
         bio: v.bio || null,
-        instagram: v.instagram || null,
+        // ✅ TRIM: aceita link completo, @user ou user, mas salva sem espaços
+        instagram: (v.instagram || "").trim() || null,
         ativo: !!v.ativo,
         ordem: Number(v.ordem || 0),
         foto_url: v.foto_url || null,
@@ -140,12 +147,12 @@ export function AdminEquipeForm() {
 
       // 2) se admin_alfa preencheu email/senha, cria/atualiza usuário no Auth + roles
       const email = (v.email_login || "").trim();
-const pass = (v.senha_login || "").trim();
-const hasLogin = !!email && !!pass;
+      const pass = (v.senha_login || "").trim();
+      const hasLogin = !!email && !!pass;
 
-if (pass && pass.length > 0 && pass.length < 6) {
-  throw new Error("A senha precisa ter no mínimo 6 caracteres.");
-}
+      if (pass && pass.length > 0 && pass.length < 6) {
+        throw new Error("A senha precisa ter no mínimo 6 caracteres.");
+      }
 
       if (hasLogin) {
         const roles: string[] = [];
@@ -153,10 +160,8 @@ if (pass && pass.length > 0 && pass.length < 6) {
         if (v.permissoes.editor) roles.push("editor");
         if (v.permissoes.autor) roles.push("autor");
 
-        // fallback mínimo
         if (!roles.length) roles.push("autor");
 
-        // IMPORTANTE: isso só funciona se a Edge Function estiver DEPLOYADA
         try {
           const { data, error } = await supabase.functions.invoke("admin-upsert-user", {
             body: {
@@ -170,7 +175,6 @@ if (pass && pass.length > 0 && pass.length < 6) {
           if (error) throw error;
           if (data?.ok === false) throw new Error(data?.error || "Falha ao criar usuário.");
         } catch (err: any) {
-          // mensagem bem mais clara que “Failed to send…”
           throw new Error(
             err?.message ||
               "Falha ao chamar Edge Function. Verifique se a função 'admin-upsert-user' está deployada e com CORS liberado."
@@ -258,7 +262,7 @@ if (pass && pass.length > 0 && pass.length < 6) {
               <label className="text-sm font-medium">Instagram</label>
               <input
                 {...register("instagram")}
-                placeholder="https://instagram.com/..."
+                placeholder="https://instagram.com/... ou @usuario"
                 className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
