@@ -18,24 +18,23 @@ export function Footer() {
                 <span className="text-white font-bold text-xl">RKC</span>
               </div>
               <div>
-                <div className="font-bold text-lg">Rede Kalunga Comunicações</div>
-                <div className="text-sm text-gray-400">Comunicação Popular e Território</div>
+                <h3 className="font-bold text-lg">Rede Kalunga Comunicações</h3>
+                <p className="text-sm text-gray-300">Comunicação Popular e Território</p>
               </div>
             </div>
-            <p className="text-sm text-gray-300 max-w-md leading-relaxed">
-              Mídia independente quilombola com atuação territorial na Chapada dos Veadeiros 
-              e no Território Kalunga, promovendo comunicação popular e jornalismo independente.
+            <p className="text-gray-300 mb-6 max-w-md">
+              Mídia independente quilombola com atuação territorial na Chapada dos Veadeiros e no Território Kalunga, promovendo comunicação popular e jornalismo independente.
             </p>
             
             {/* Redes sociais */}
-            <div className="flex gap-4 mt-6">
-              <a href="#" className="w-10 h-10 rounded-full bg-white/10 hover:bg-[#0F7A3E] transition-colors flex items-center justify-center">
+            <div className="flex gap-4">
+              <a href="#" className="w-10 h-10 rounded-full bg-gray-700 hover:bg-[#0F7A3E] flex items-center justify-center transition-colors">
                 <Instagram className="w-5 h-5" />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/10 hover:bg-[#0F7A3E] transition-colors flex items-center justify-center">
+              <a href="#" className="w-10 h-10 rounded-full bg-gray-700 hover:bg-[#0F7A3E] flex items-center justify-center transition-colors">
                 <Facebook className="w-5 h-5" />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-white/10 hover:bg-[#0F7A3E] transition-colors flex items-center justify-center">
+              <a href="#" className="w-10 h-10 rounded-full bg-gray-700 hover:bg-[#0F7A3E] flex items-center justify-center transition-colors">
                 <Mail className="w-5 h-5" />
               </a>
             </div>
@@ -50,7 +49,6 @@ export function Footer() {
               <li><Link to="/projetos" className="text-gray-300 hover:text-[#F2B705] transition-colors">Projetos</Link></li>
               <li><Link to="/materias" className="text-gray-300 hover:text-[#F2B705] transition-colors">Matérias</Link></li>
               <li><Link to="/newsletter" className="text-gray-300 hover:text-[#F2B705] transition-colors">Newsletter</Link></li>
-              <li><Link to="/contato" className="text-gray-300 hover:text-[#F2B705] transition-colors">Contato</Link></li>
             </ul>
           </div>
           
@@ -70,10 +68,14 @@ export function Footer() {
           </div>
         </div>
         
-        {/* Linha de copyright */}
-        <div className="mt-12 pt-8 border-t border-white/10 text-center text-sm text-gray-400">
-          <p>&copy; {currentYear} Rede Kalunga Comunicações. Todos os direitos reservados.</p>
-          <p className="mt-2">Comunicação popular, jornalismo independente e pertencimento territorial.</p>
+        {/* Copyright */}
+        <div className="mt-12 pt-8 border-t border-gray-700 text-center">
+          <p className="text-gray-400 text-sm">
+            © {currentYear} Rede Kalunga Comunicações. Todos os direitos reservados.
+          </p>
+          <p className="text-gray-500 text-xs mt-2">
+            Comunicação popular, jornalismo independente e pertencimento territorial.
+          </p>
         </div>
       </div>
     </footer>
