@@ -15,6 +15,32 @@ type MembroEquipe = {
   instagram?: string | null;
 };
 
+// ✅ aceita: @user | user | instagram.com/user | https://instagram.com/user
+function parseInstagram(raw?: string | null) {
+  const v = (raw || "").trim();
+  if (!v) return null;
+
+  // URL completa ou "instagram.com/..."
+  if (v.includes("instagram.com")) {
+    try {
+      const url = new URL(v.startsWith("http") ? v : `https://${v}`);
+      const parts = url.pathname.split("/").filter(Boolean);
+      const handle = (parts[0] || "").replace(/^@/, "");
+      if (!handle) return { label: "@instagram", href: url.toString() };
+      return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
+    } catch {
+      const handle = v.split("/").filter(Boolean).pop()?.replace(/^@/, "") || "";
+      if (!handle) return { label: "@instagram", href: v };
+      return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
+    }
+  }
+
+  // @handle ou handle puro
+  const handle = v.replace(/^@/, "").split("/").filter(Boolean).pop() || "";
+  if (!handle) return null;
+  return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
+}
+
 export function QuemSomos() {
   const valores = [
     { icon: Heart, titulo: "Pertencimento", descricao: "Enraizamento territorial e valorização da identidade quilombola" },
@@ -44,7 +70,6 @@ export function QuemSomos() {
     (async () => {
       setLoadingEquipe(true);
 
-      // ✅ Agora puxa bio e instagram (igual ao AdminEquipeForm salva)
       const { data, error } = await supabase
         .from("equipe")
         .select("id, nome, cargo, foto_url, bio, instagram, ordem, ativo")
@@ -66,7 +91,7 @@ export function QuemSomos() {
         cargo: m.cargo || m.funcao || "",
         foto_url: m.foto_url || "",
         bio: m.bio ?? null,
-        instagram: (m.instagram ?? "").toString().replace(/^@/, "") || null,
+        instagram: (m.instagram ?? "").toString() || null,
       }));
 
       setEquipe(mapped);
@@ -184,7 +209,7 @@ export function QuemSomos() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {equipe.map((m) => (
                         <div key={m.id} className="flex items-center gap-3">
-                          {/* ✅ FOTO clicável (sem alterar estrutura do layout) */}
+                          {/* ✅ FOTO clicável (layout intacto) */}
                           <div
                             className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer"
                             role="button"
@@ -205,7 +230,7 @@ export function QuemSomos() {
                           </div>
 
                           <div className="min-w-0">
-                            {/* ✅ NOME clicável (já funcionava) */}
+                            {/* ✅ NOME clicável */}
                             <p
                               className="font-semibold text-sm text-[#2E2E2E] truncate cursor-pointer hover:underline"
                               role="button"
@@ -283,7 +308,7 @@ export function QuemSomos() {
         </div>
       </section>
 
-      {/* ✅ MODAL POP-UP (janela) */}
+      {/* ✅ MODAL POP-UP */}
       {membroModal && (
         <div
           className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
@@ -318,17 +343,21 @@ export function QuemSomos() {
                 <h3 className="text-2xl font-bold text-[#2E2E2E]">{membroModal.nome}</h3>
                 <p className="mt-1 text-sm text-gray-600">{membroModal.cargo}</p>
 
-                {!!membroModal.instagram && (
-                  <a
-                    className="mt-3 inline-flex items-center gap-2 text-sm text-pink-600 hover:underline"
-                    href={`https://instagram.com/${String(membroModal.instagram).replace(/^@/, "")}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <Instagram className="h-4 w-4" />
-                    @{String(membroModal.instagram).replace(/^@/, "")}
-                  </a>
-                )}
+                {(() => {
+                  const ig = parseInstagram(membroModal.instagram);
+                  if (!ig) return null;
+                  return (
+                    <a
+                      className="mt-3 inline-flex items-center gap-2 text-sm text-pink-600 hover:underline"
+                      href={ig.href}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <Instagram className="h-4 w-4" />
+                      {ig.label}
+                    </a>
+                  );
+                })()}
 
                 {!!membroModal.bio && (
                   <p className="mt-5 text-gray-600 leading-relaxed">{membroModal.bio}</p>
