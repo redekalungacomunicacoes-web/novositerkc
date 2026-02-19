@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { RKCButton } from "@/app/components/RKCButton";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
-import { Mail, MapPin, Send, CheckCircle2, Facebook, Instagram, AlertCircle, Loader2 } from "lucide-react";
+import { Mail, MapPin, Send, CheckCircle2, Facebook, Instagram } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 export function Contato() {
@@ -11,51 +11,55 @@ export function Contato() {
     assunto: "",
     mensagem: "",
   });
-  const [sent, setSent] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading) return;
-
     setErrorMsg(null);
-    setLoading(true);
-
-    const payload = {
-      name: formData.nome.trim(),
-      email: formData.email.trim(),
-      subject: formData.assunto.trim(),
-      message: formData.mensagem.trim(),
-      source: "site_contact_page",
-    };
+    setSending(true);
 
     try {
-      const { error } = await supabase.functions.invoke("contact-submit", {
+      const payload = {
+        name: formData.nome,
+        email: formData.email,
+        subject: formData.assunto,
+        message: formData.mensagem,
+      };
+
+      const { data, error } = await supabase.functions.invoke("contact-submit", {
         body: payload,
       });
 
       if (error) {
-        setErrorMsg("Não foi possível enviar sua mensagem agora. Tente novamente em instantes.");
-        setLoading(false);
+        // erro do Supabase Functions (404/401/500 etc.)
+        setErrorMsg(error.message || "Falha ao enviar. Tente novamente.");
+        setSending(false);
+        return;
+      }
+
+      // Se sua function retornar { ok: true }:
+      if (data?.ok !== true) {
+        setErrorMsg("Não foi possível enviar sua mensagem agora. Tente novamente.");
+        setSending(false);
         return;
       }
 
       setSent(true);
       setFormData({ nome: "", email: "", assunto: "", mensagem: "" });
-      setLoading(false);
-    } catch {
-      setErrorMsg("Erro inesperado ao enviar. Verifique sua conexão e tente novamente.");
-      setLoading(false);
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Não foi possível enviar sua mensagem agora. Tente novamente.");
+    } finally {
+      setSending(false);
     }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
   };
 
   const contatos = [
@@ -83,9 +87,12 @@ export function Contato() {
         </div>
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">Entre em Contato</h1>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">
+            Entre em Contato
+          </h1>
           <p className="text-xl text-white/90 leading-relaxed">
-            Quer colaborar, sugerir pautas ou conhecer nosso trabalho? Estamos aqui para conversar!
+            Quer colaborar, sugerir pautas ou conhecer nosso trabalho?
+            Estamos aqui para conversar!
           </p>
         </div>
 
@@ -104,13 +111,13 @@ export function Contato() {
               {!sent ? (
                 <div>
                   <h2 className="text-3xl font-bold text-[#2E2E2E] mb-4">Envie uma mensagem</h2>
-                  <p className="text-gray-600 mb-8">Preencha o formulário abaixo e entraremos em contato em breve.</p>
+                  <p className="text-gray-600 mb-8">
+                    Preencha o formulário abaixo e entraremos em contato em breve.
+                  </p>
 
-                  {/* Erro (sem quebrar layout) */}
                   {errorMsg && (
-                    <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
-                      <AlertCircle className="h-5 w-5 mt-0.5" />
-                      <div>{errorMsg}</div>
+                    <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {errorMsg}
                     </div>
                   )}
 
@@ -127,8 +134,7 @@ export function Contato() {
                           value={formData.nome}
                           onChange={handleChange}
                           required
-                          disabled={loading}
-                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent disabled:opacity-70"
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent"
                           placeholder="Digite seu nome"
                         />
                       </div>
@@ -144,8 +150,7 @@ export function Contato() {
                           value={formData.email}
                           onChange={handleChange}
                           required
-                          disabled={loading}
-                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent disabled:opacity-70"
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent"
                           placeholder="seuemail@exemplo.com"
                         />
                       </div>
@@ -161,14 +166,13 @@ export function Contato() {
                         value={formData.assunto}
                         onChange={handleChange}
                         required
-                        disabled={loading}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent disabled:opacity-70"
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent"
                       >
                         <option value="">Selecione um assunto</option>
-                        <option value="parceria">Parcerias e Colaborações</option>
-                        <option value="pauta">Sugestão de Pauta</option>
-                        <option value="duvida">Dúvidas</option>
-                        <option value="outros">Outros</option>
+                        <option value="Parcerias e Colaborações">Parcerias e Colaborações</option>
+                        <option value="Sugestão de Pauta">Sugestão de Pauta</option>
+                        <option value="Dúvidas">Dúvidas</option>
+                        <option value="Outros">Outros</option>
                       </select>
                     </div>
 
@@ -182,25 +186,15 @@ export function Contato() {
                         value={formData.mensagem}
                         onChange={handleChange}
                         required
-                        disabled={loading}
                         rows={6}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent resize-none disabled:opacity-70"
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent resize-none"
                         placeholder="Digite sua mensagem..."
                       />
                     </div>
 
-                    <RKCButton type="submit" size="lg" disabled={loading}>
-                      {loading ? (
-                        <>
-                          Enviando...
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        </>
-                      ) : (
-                        <>
-                          Enviar Mensagem
-                          <Send className="w-5 h-5" />
-                        </>
-                      )}
+                    <RKCButton type="submit" size="lg" disabled={sending}>
+                      {sending ? "Enviando..." : "Enviar Mensagem"}
+                      <Send className="w-5 h-5" />
                     </RKCButton>
                   </form>
                 </div>
@@ -214,13 +208,7 @@ export function Contato() {
                     <p className="text-lg text-gray-600 mb-6">
                       Obrigado por entrar em contato. Retornaremos em breve!
                     </p>
-                    <RKCButton
-                      onClick={() => {
-                        setSent(false);
-                        setErrorMsg(null);
-                      }}
-                      variant="outline"
-                    >
+                    <RKCButton onClick={() => setSent(false)} variant="outline">
                       Enviar nova mensagem
                     </RKCButton>
                   </RKCCardContent>
