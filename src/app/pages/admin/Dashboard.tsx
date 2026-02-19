@@ -1,8 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
-import { FileText, FolderOpen, Users, TrendingUp } from "lucide-react";
-// I'm assuming Card component exists in @/app/components/ui/card, if not I will use standard div.
-// To be safe, I'll use standard divs with Tailwind classes if I'm not sure about the UI library presence.
-// I'll check first.
+import { FileText, FolderOpen, Users, TrendingUp, Mail } from "lucide-react";
 
 export function Dashboard() {
   const stats = [
@@ -10,13 +6,18 @@ export function Dashboard() {
     { title: "Projetos Ativos", value: "8", icon: FolderOpen, change: "2 novos" },
     { title: "Usuários Cadastrados", value: "1,203", icon: Users, change: "+5% essa semana" },
     { title: "Visitas (30 dias)", value: "45.2k", icon: TrendingUp, change: "+18%" },
+
+    // ✅ NOVO (mantendo padrão visual do grid)
+    { title: "Newsletter (ativos)", value: "—", icon: Mail, change: "Pronto para disparos" },
   ];
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">Bem-vindo ao painel administrativo da Rede Kalunga Comunicações.</p>
+        <p className="text-muted-foreground mt-2">
+          Bem-vindo ao painel administrativo da Rede Kalunga Comunicações.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -54,9 +55,9 @@ export function Dashboard() {
             </div>
           </div>
         </div>
-        
+
         <div className="col-span-3 rounded-xl border bg-card text-card-foreground shadow-sm">
-           <div className="p-6">
+          <div className="p-6">
             <h3 className="font-semibold text-lg">Status do Sistema</h3>
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -71,6 +72,17 @@ export function Dashboard() {
                 <span>Versão</span>
                 <span className="text-muted-foreground">v1.0.0</span>
               </div>
+            </div>
+
+            {/* ✅ Bloco extra (sem quebrar layout) */}
+            <div className="mt-6 pt-6 border-t">
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Newsletter
+              </h4>
+              <p className="text-xs text-muted-foreground mt-2">
+                Gestão de inscritos e disparos disponível em <b>/admin/newsletter</b>.
+              </p>
             </div>
           </div>
         </div>
