@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, FolderOpen, LogOut, Settings, Users } from "lucide-react";
+import { LayoutDashboard, FileText, FolderOpen, LogOut, Settings, Users, Mail } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 import logoRKC from "../../../assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png";
@@ -44,13 +44,41 @@ export function AdminSidebar() {
   const [loadingRoles, setLoadingRoles] = useState(true);
 
   const links: LinkItem[] = [
-    { href: "/admin", label: "Dashboard", icon: LayoutDashboard, allow: ["admin_alfa", "admin", "editor", "autor"] },
+    {
+      href: "/admin",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      allow: ["admin_alfa", "admin", "editor", "autor"],
+    },
 
-    { href: "/admin/materias", label: "Matérias", icon: FileText, allow: ["admin_alfa", "admin", "editor", "autor"] },
+    {
+      href: "/admin/materias",
+      label: "Matérias",
+      icon: FileText,
+      allow: ["admin_alfa", "admin", "editor", "autor"],
+    },
 
-    { href: "/admin/projetos", label: "Projetos", icon: FolderOpen, allow: ["admin_alfa", "admin", "editor"] },
+    {
+      href: "/admin/projetos",
+      label: "Projetos",
+      icon: FolderOpen,
+      allow: ["admin_alfa", "admin", "editor"],
+    },
 
-    { href: "/admin/equipe", label: "Equipe", icon: Users, allow: ["admin_alfa", "admin", "editor"] },
+    {
+      href: "/admin/equipe",
+      label: "Equipe",
+      icon: Users,
+      allow: ["admin_alfa", "admin", "editor"],
+    },
+
+    // ✅ NOVO: Newsletter (listagem + disparos)
+    {
+      href: "/admin/newsletter",
+      label: "Newsletter",
+      icon: Mail,
+      allow: ["admin_alfa", "admin", "editor"],
+    },
 
     // RBAC/usuários só super
     { href: "/admin/usuarios", label: "Usuários", icon: Users, allow: ["admin_alfa"] },
