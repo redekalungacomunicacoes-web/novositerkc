@@ -11,18 +11,12 @@ type AdminSettingsForm = {
   home_territory_image_url: string;
   home_territory_title: string;
   home_territory_subtitle: string;
-
-  // Quem Somos
-  about_team_image_url: string;
-  about_team_title: string;
-  about_team_subtitle: string;
 };
 
-type UploadKind = "banner" | "territory" | "about_team";
+type UploadKind = "banner" | "territory";
 
 const BUCKET = "site";
 
-// 🔥 evita cache quando você sobrescreve a mesma url/path
 function withCacheBuster(url: string) {
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}v=${Date.now()}`;
@@ -35,7 +29,6 @@ export function AdminConfiguracoes() {
 
   const bannerFileRef = useRef<HTMLInputElement | null>(null);
   const territoryFileRef = useRef<HTMLInputElement | null>(null);
-  const aboutTeamFileRef = useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState<AdminSettingsForm>({
     home_banner_image_url: "",
@@ -45,10 +38,6 @@ export function AdminConfiguracoes() {
     home_territory_image_url: "",
     home_territory_title: "",
     home_territory_subtitle: "",
-
-    about_team_image_url: "",
-    about_team_title: "",
-    about_team_subtitle: "",
   });
 
   function setField<K extends keyof AdminSettingsForm>(key: K, value: AdminSettingsForm[K]) {
@@ -70,10 +59,6 @@ export function AdminConfiguracoes() {
           home_territory_image_url: s.home_territory_image_url ?? "",
           home_territory_title: s.home_territory_title ?? "",
           home_territory_subtitle: s.home_territory_subtitle ?? "",
-
-          about_team_image_url: s.about_team_image_url ?? "",
-          about_team_title: s.about_team_title ?? "",
-          about_team_subtitle: s.about_team_subtitle ?? "",
         }));
       } catch (e: any) {
         console.warn("Erro ao carregar settings (Admin Configurações):", e?.message || e);
@@ -93,23 +78,18 @@ export function AdminConfiguracoes() {
       const url =
         kind === "banner"
           ? await uploadPublicImage({ bucket: BUCKET, path: "home/banner/banner", file })
-          : kind === "territory"
-          ? await uploadPublicImage({ bucket: BUCKET, path: "home/territory/territory", file })
-          : await uploadPublicImage({ bucket: BUCKET, path: "about/team/team", file });
+          : await uploadPublicImage({ bucket: BUCKET, path: "home/territory/territory", file });
 
-      // ⚠️ Se você sobrescreve sempre o mesmo path, o browser pode cachear.
       const busted = withCacheBuster(url);
 
       if (kind === "banner") setField("home_banner_image_url", busted);
       if (kind === "territory") setField("home_territory_image_url", busted);
-      if (kind === "about_team") setField("about_team_image_url", busted);
     } catch (e: any) {
       alert(e?.message || "Erro ao enviar imagem.");
     } finally {
       setUploading(null);
       if (kind === "banner" && bannerFileRef.current) bannerFileRef.current.value = "";
       if (kind === "territory" && territoryFileRef.current) territoryFileRef.current.value = "";
-      if (kind === "about_team" && aboutTeamFileRef.current) aboutTeamFileRef.current.value = "";
     }
   }
 
@@ -125,10 +105,6 @@ export function AdminConfiguracoes() {
         home_territory_image_url: form.home_territory_image_url || null,
         home_territory_title: form.home_territory_title || null,
         home_territory_subtitle: form.home_territory_subtitle || null,
-
-        about_team_image_url: form.about_team_image_url || null,
-        about_team_title: form.about_team_title || null,
-        about_team_subtitle: form.about_team_subtitle || null,
       });
 
       alert("Configurações salvas!");
@@ -147,7 +123,7 @@ export function AdminConfiguracoes() {
       </div>
 
       <div className="grid gap-6">
-        {/* General Info (mock) */}
+        {/* Informações Gerais */}
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
           <h3 className="font-semibold text-lg border-b pb-4 mb-4">Informações Gerais</h3>
           <div className="grid gap-4 md:grid-cols-2">
@@ -182,7 +158,7 @@ export function AdminConfiguracoes() {
           </div>
         </div>
 
-        {/* Social Media (mock) */}
+        {/* Redes Sociais */}
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
           <h3 className="font-semibold text-lg border-b pb-4 mb-4">Redes Sociais</h3>
           <div className="grid gap-4 md:grid-cols-2">
@@ -362,87 +338,6 @@ export function AdminConfiguracoes() {
               />
             </div>
           </div>
-        </div>
-
-        {/* Quem Somos */}
-        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-          <h3 className="font-semibold text-lg border-b pb-4 mb-4">Quem Somos</h3>
-
-          <input
-            ref={aboutTeamFileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => handleUpload("about_team", e.target.files?.[0])}
-          />
-
-          <div
-            className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer bg-muted/10"
-            onClick={() => {
-              if (uploading === "about_team") return;
-              aboutTeamFileRef.current?.click();
-            }}
-          >
-            {form.about_team_image_url ? (
-              <div className="w-full">
-                <img
-                  src={form.about_team_image_url}
-                  alt="Imagem da Equipe (Quem Somos)"
-                  className="w-full h-40 object-cover rounded-md border bg-white"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Clique para {uploading === "about_team" ? "enviar..." : "trocar a imagem"}
-                </p>
-              </div>
-            ) : (
-              <>
-                <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm font-medium">
-                  {uploading === "about_team" ? "Enviando..." : "Enviar imagem da equipe"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {uploading === "about_team" ? "Aguarde" : "Clique para fazer upload"}
-                </p>
-              </>
-            )}
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">Título</label>
-              <input
-                value={form.about_team_title}
-                onChange={(e) => setField("about_team_title", e.target.value)}
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">Subtítulo</label>
-              <input
-                value={form.about_team_subtitle}
-                onChange={(e) => setField("about_team_subtitle", e.target.value)}
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">URL da imagem (opcional)</label>
-              <input
-                value={form.about_team_image_url}
-                onChange={(e) => setField("about_team_image_url", e.target.value)}
-                placeholder="https://..."
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            *A imagem é configurável, e os avatares/listagem vão espelhar automaticamente a equipe cadastrada.
-          </p>
         </div>
 
         {/* Save */}
