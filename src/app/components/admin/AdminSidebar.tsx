@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, FolderOpen, LogOut, Settings, Users, Mail, BookOpen } from "lucide-react";
+import { LayoutDashboard, FileText, FolderOpen, LogOut, Settings, Users, Mail, Info } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 import logoRKC from "../../../assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png";
@@ -11,7 +11,7 @@ type LinkItem = {
   href: string;
   label: string;
   icon: any;
-  allow: RoleName[];
+  allow: RoleName[]; // roles que podem ver
 };
 
 async function loadMyRoles(): Promise<RoleName[]> {
@@ -31,7 +31,7 @@ async function loadMyRoles(): Promise<RoleName[]> {
 }
 
 function canSee(userRoles: RoleName[], allow: RoleName[]) {
-  if (userRoles.includes("admin_alfa")) return true;
+  if (userRoles.includes("admin_alfa")) return true; // super
   return allow.some((r) => userRoles.includes(r));
 }
 
@@ -50,49 +50,48 @@ export function AdminSidebar() {
       icon: LayoutDashboard,
       allow: ["admin_alfa", "admin", "editor", "autor"],
     },
+
     {
       href: "/admin/materias",
       label: "Matérias",
       icon: FileText,
       allow: ["admin_alfa", "admin", "editor", "autor"],
     },
+
     {
       href: "/admin/projetos",
       label: "Projetos",
       icon: FolderOpen,
       allow: ["admin_alfa", "admin", "editor"],
     },
+
     {
       href: "/admin/equipe",
       label: "Equipe",
       icon: Users,
       allow: ["admin_alfa", "admin", "editor"],
     },
+
     {
       href: "/admin/newsletter",
       label: "Newsletter",
       icon: Mail,
       allow: ["admin_alfa", "admin", "editor"],
     },
-    {
-      href: "/admin/usuarios",
-      label: "Usuários",
-      icon: Users,
-      allow: ["admin_alfa"],
-    },
+
+    // RBAC/usuários só super
+    { href: "/admin/usuarios", label: "Usuários", icon: Users, allow: ["admin_alfa"] },
+
     // ✅ NOVO: Quem Somos
     {
-      href: "/admin/quem-somos",
+      href: "/admin/quemsomos",
       label: "Quem Somos",
-      icon: BookOpen,
+      icon: Info,
       allow: ["admin_alfa"],
     },
-    {
-      href: "/admin/configuracoes",
-      label: "Configurações",
-      icon: Settings,
-      allow: ["admin_alfa"],
-    },
+
+    // Config só super
+    { href: "/admin/configuracoes", label: "Configurações", icon: Settings, allow: ["admin_alfa"] },
   ];
 
   useEffect(() => {
@@ -106,6 +105,7 @@ export function AdminSidebar() {
       setLoadingRoles(false);
     })();
 
+    // Atualiza roles se o auth mudar
     const { data: sub } = supabase.auth.onAuthStateChange(async () => {
       const r = await loadMyRoles();
       if (!mounted) return;
@@ -144,9 +144,7 @@ export function AdminSidebar() {
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">
         {visibleLinks.map((link) => {
           const Icon = link.icon;
-          const isActive =
-            pathname === link.href ||
-            (link.href !== "/admin" && pathname.startsWith(link.href));
+          const isActive = pathname === link.href || (link.href !== "/admin" && pathname.startsWith(link.href));
 
           return (
             <Link
