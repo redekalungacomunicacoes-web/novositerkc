@@ -364,7 +364,426 @@ export function QuemSomos() {
                 )}
               </div>
             </div>
+          </div>import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { RKCButton } from "@/app/components/RKCButton";
+import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
+import { Heart, Users, Target, Megaphone, ArrowRight, Instagram, X } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { getSiteSettings, SiteSettings } from "@/lib/siteSettings";
+
+// ---------------------------------------------------------------------------
+// Tipagem
+// ---------------------------------------------------------------------------
+
+type MembroEquipe = {
+  id: string;
+  nome: string;
+  cargo: string;
+  foto_url: string;
+  bio?: string | null;
+  instagram?: string | null;
+};
+
+// ---------------------------------------------------------------------------
+// Helper: parse do Instagram
+// Aceita: @user | user | instagram.com/user | https://instagram.com/user
+// ---------------------------------------------------------------------------
+
+function parseInstagram(raw?: string | null) {
+  const v = (raw || "").trim();
+  if (!v) return null;
+
+  if (v.includes("instagram.com")) {
+    try {
+      const url = new URL(v.startsWith("http") ? v : `https://${v}`);
+      const parts = url.pathname.split("/").filter(Boolean);
+      const handle = (parts[0] || "").replace(/^@/, "");
+      if (!handle) return { label: "@instagram", href: url.toString() };
+      return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
+    } catch {
+      const handle = v.split("/").filter(Boolean).pop()?.replace(/^@/, "") || "";
+      if (!handle) return { label: "@instagram", href: v };
+      return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
+    }
+  }
+
+  const handle = v.replace(/^@/, "").split("/").filter(Boolean).pop() || "";
+  if (!handle) return null;
+  return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
+}
+
+// ---------------------------------------------------------------------------
+// Sub-componente: Card do membro (grid)
+// ---------------------------------------------------------------------------
+
+interface MemberCardProps {
+  membro: MembroEquipe;
+  onClick: (m: MembroEquipe) => void;
+}
+
+function MemberCard({ membro, onClick }: MemberCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(membro)}
+      className="group w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
+    >
+      {/* Foto */}
+      <div className="relative overflow-hidden aspect-square bg-gray-100">
+        {membro.foto_url ? (
+          <img
+            src={membro.foto_url}
+            alt={membro.nome}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
+            Sem foto
           </div>
+        )}
+        <div className="absolute inset-0 bg-[#0F7A3E]/0 group-hover:bg-[#0F7A3E]/10 transition-colors duration-200" />
+      </div>
+
+      {/* Info */}
+      <div className="p-3">
+        <p className="font-bold text-[#2E2E2E] text-sm leading-tight truncate">{membro.nome}</p>
+        <p className="text-xs text-gray-500 mt-0.5 truncate">{membro.cargo}</p>
+        <span className="mt-2 inline-block text-xs font-medium text-[#0F7A3E] group-hover:underline">
+          Ver perfil →
+        </span>
+      </div>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-componente: Modal de detalhes
+// ---------------------------------------------------------------------------
+
+interface ModalProps {
+  membro: MembroEquipe | null;
+  onClose: () => void;
+}
+
+function MembroModal({ membro, onClose }: ModalProps) {
+  if (!membro) return null;
+
+  const ig = parseInstagram(membro.instagram);
+
+  return (
+    <div
+      className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Perfil de ${membro.nome}`}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white shadow-2xl relative overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Faixa verde no topo */}
+        <div className="h-24 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866]" />
+
+        {/* Botão fechar */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+          aria-label="Fechar"
+        >
+          <X className="h-5 w-5 text-white" />
+        </button>
+
+        {/* Conteúdo */}
+        <div className="px-8 pb-8">
+          {/* Avatar sobreposto à faixa */}
+          <div className="-mt-14 mb-4 flex justify-center">
+            <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100">
+              {membro.foto_url ? (
+                <img src={membro.foto_url} alt={membro.nome} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                  Sem foto
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="text-center">
+            <h3 className="text-2xl font-bold text-[#2E2E2E]">{membro.nome}</h3>
+            <p className="mt-1 text-sm text-gray-500 font-medium">{membro.cargo}</p>
+
+            {ig && (
+              <a
+                href={ig.href}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm text-pink-600 hover:underline"
+              >
+                <Instagram className="h-4 w-4" />
+                {ig.label}
+              </a>
+            )}
+
+            {!!membro.bio && (
+              <p className="mt-5 text-gray-600 text-sm leading-relaxed text-left">{membro.bio}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Componente principal
+// ---------------------------------------------------------------------------
+
+export function QuemSomos() {
+  const valores = [
+    { icon: Heart, titulo: "Pertencimento", descricao: "Enraizamento territorial e valorização da identidade quilombola" },
+    { icon: Users, titulo: "Comunidade", descricao: "Comunicação feita pela e para as comunidades do território quilombola" },
+    { icon: Target, titulo: "Autonomia", descricao: "Jornalismo independente e livre de interesses comerciais" },
+    { icon: Megaphone, titulo: "Amplificação", descricao: "Dar voz e visibilidade às narrativas do território quilombola" },
+  ];
+
+  const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const [loadingEquipe, setLoadingEquipe] = useState(true);
+  const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
+  const [membroModal, setMembroModal] = useState<MembroEquipe | null>(null);
+
+  useEffect(() => {
+    // settings
+    (async () => {
+      try {
+        const s = await getSiteSettings();
+        setSettings(s);
+      } catch (e: any) {
+        console.warn("Erro ao carregar settings (QuemSomos):", e?.message || e);
+        setSettings(null);
+      }
+    })();
+
+    // equipe
+    (async () => {
+      setLoadingEquipe(true);
+
+      const { data, error } = await supabase
+        .from("equipe")
+        .select("id, nome, cargo, foto_url, bio, instagram, ordem, ativo")
+        .or("ativo.eq.true,ativo.is.null")
+        .order("ordem", { ascending: true })
+        .order("nome", { ascending: true });
+
+      setLoadingEquipe(false);
+
+      if (error) {
+        console.warn("Erro ao carregar equipe:", error.message);
+        setEquipe([]);
+        return;
+      }
+
+      const mapped: MembroEquipe[] = (data || []).map((m: any) => ({
+        id: String(m.id),
+        nome: m.nome || "",
+        cargo: m.cargo || m.funcao || "",
+        foto_url: m.foto_url || "",
+        bio: m.bio ?? null,
+        instagram: (m.instagram ?? "").toString() || null,
+      }));
+
+      setEquipe(mapped);
+    })();
+  }, []);
+
+  return (
+    <div>
+      {/* ------------------------------------------------------------------ */}
+      {/* Hero / Banner                                                         */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="relative py-20 md:py-32 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-20 left-20 w-96 h-96 rounded-full bg-white blur-3xl" />
+          <div className="absolute bottom-20 right-20 w-96 h-96 rounded-full bg-[#F2B705] blur-3xl" />
+        </div>
+
+        <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">Quem Somos</h1>
+          <p className="text-xl text-white/90 leading-relaxed">
+            Comunicação popular que nasce do coração do Território Kalunga
+          </p>
+        </div>
+
+        <div
+          className="absolute bottom-0 left-0 right-0 h-16 bg-white"
+          style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }}
+        />
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Nossa História — texto à esquerda | imagem da equipe à direita       */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="py-16 md:py-24 bg-white">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-3 text-center">
+            Nossa História
+          </h2>
+          <p className="text-center text-gray-500 mb-12 max-w-2xl mx-auto">
+            {settings?.about_team_subtitle ||
+              "Uma mídia independente construída coletivamente para amplificar as vozes do território."}
+          </p>
+
+          {/* Duas colunas: texto | foto da equipe */}
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
+            {/* Coluna esquerda — texto */}
+            <div className="prose prose-lg max-w-none">
+              <p className="text-lg text-gray-700 leading-relaxed mb-6">
+                A Rede Kalunga Comunicações (RKC) nasceu em 2020 como uma resposta à necessidade
+                de dar voz e visibilidade às histórias, saberes e lutas das comunidades quilombolas
+                da Chapada dos Veadeiros e do Território Kalunga.
+              </p>
+
+              <p className="text-lg text-gray-700 leading-relaxed mb-6">
+                Somos uma mídia independente, criada e gerida por comunicadores populares,
+                jornalistas comunitários e lideranças territoriais comprometidas com a valorização
+                da cultura quilombola, a defesa dos direitos das comunidades tradicionais e a
+                promoção do jornalismo ético e independente.
+              </p>
+
+              <p className="text-lg text-gray-700 leading-relaxed mb-0">
+                Nosso trabalho se fundamenta na comunicação popular, entendendo que as próprias
+                comunidades devem ser protagonistas de suas narrativas. Através de matérias,
+                reportagens, projetos culturais e formativos, buscamos amplificar as vozes que
+                historicamente foram silenciadas ou distorcidas pela mídia tradicional.
+              </p>
+            </div>
+
+            {/* Coluna direita — foto da equipe toda */}
+            <div className="relative">
+              <RKCCard className="overflow-hidden">
+                <div className="relative aspect-[16/9] w-full overflow-hidden">
+                  {settings?.about_team_image_url ? (
+                    <img
+                      src={settings.about_team_image_url}
+                      alt="Equipe RKC"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-[#0F7A3E]/10 flex items-center justify-center text-sm text-gray-400">
+                      Foto da equipe (configurar em Admin → Configurações)
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                </div>
+
+                <RKCCardContent className="p-5">
+                  <h3 className="font-bold text-base text-[#2E2E2E]">
+                    {settings?.about_team_title || "Nossa Equipe"}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {settings?.about_team_subtitle ||
+                      "Conheça as pessoas que constroem a RKC no dia a dia."}
+                  </p>
+                </RKCCardContent>
+              </RKCCard>
+            </div>
+          </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* Grid de membros — abaixo do bloco de duas colunas                 */}
+          {/* ---------------------------------------------------------------- */}
+          <div className="mt-16">
+            <h3 className="text-2xl font-bold text-[#2E2E2E] mb-2 text-center">
+              Conheça cada integrante
+            </h3>
+            <p className="text-center text-sm text-gray-500 mb-10">
+              Clique no card para ver o perfil completo.
+            </p>
+
+            {loadingEquipe && (
+              <p className="text-center text-sm text-gray-400">Carregando equipe...</p>
+            )}
+
+            {!loadingEquipe && equipe.length === 0 && (
+              <p className="text-center text-sm text-gray-400">Nenhum membro cadastrado ainda.</p>
+            )}
+
+            {!loadingEquipe && equipe.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+                {equipe.map((m) => (
+                  <MemberCard key={m.id} membro={m} onClick={setMembroModal} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Nossos Valores                                                        */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="py-16 md:py-24 bg-gray-50">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-12 text-center">
+            Nossos Valores
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {valores.map((valor, index) => {
+              const Icon = valor.icon;
+              return (
+                <RKCCard key={index} className="text-center">
+                  <RKCCardContent className="p-8">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center">
+                      <Icon className="w-8 h-8 text-white" />
+                    </div>
+                    <h3 className="font-bold text-xl text-[#2E2E2E] mb-3">{valor.titulo}</h3>
+                    <p className="text-gray-600 leading-relaxed">{valor.descricao}</p>
+                  </RKCCardContent>
+                </RKCCard>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* CTA                                                                   */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="py-16 md:py-20 bg-white">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-6">
+            Faça parte dessa história
+          </h2>
+          <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
+            Conheça nossos projetos, leia nossas matérias e entre em contato para colaborar
+            com a comunicação popular quilombola.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/projetos">
+              <RKCButton size="lg">
+                Ver Projetos
+                <ArrowRight className="w-5 h-5" />
+              </RKCButton>
+            </Link>
+            <Link to="/contato">
+              <RKCButton variant="outline" size="lg">
+                Entre em Contato
+              </RKCButton>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Modal de membro                                                       */}
+      {/* ------------------------------------------------------------------ */}
+      <MembroModal membro={membroModal} onClose={() => setMembroModal(null)} />
+    </div>
+  );
+}
         </div>
       )}
     </div>
