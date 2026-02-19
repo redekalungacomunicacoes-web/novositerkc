@@ -43,7 +43,7 @@ export function AdminLayout() {
 
 // Temporary internal component for mobile sidebar reuse
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, FolderOpen, LogOut, Settings, Users, Users2 } from "lucide-react";
+import { LayoutDashboard, FileText, FolderOpen, LogOut, Settings, Users, Users2, Mail } from "lucide-react";
 
 function AdminSidebarMobile({ onClose }: { onClose: () => void }) {
   const location = useLocation();
@@ -54,8 +54,11 @@ function AdminSidebarMobile({ onClose }: { onClose: () => void }) {
     { href: "/admin/materias", label: "Matérias", icon: FileText },
     { href: "/admin/projetos", label: "Projetos", icon: FolderOpen },
 
-    // ✅ NOVO: Equipe
+    // ✅ Equipe
     { href: "/admin/equipe", label: "Equipe", icon: Users2 },
+
+    // ✅ NOVO: Newsletter
+    { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
 
     { href: "/admin/usuarios", label: "Usuários", icon: Users },
     { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
