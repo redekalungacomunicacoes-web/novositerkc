@@ -17,7 +17,6 @@ import { NotFound } from "@/app/pages/NotFound";
 
 // Admin
 import { Dashboard } from "@/app/pages/admin/Dashboard";
-import { AdminMaterias } from "@/app/pages/admin/AdminMaterias";
 import { AdminMaterias as AdminMateriasAlias } from "@/app/pages/admin/AdminMaterias";
 import { AdminProjetos } from "@/app/pages/admin/AdminProjetos";
 import { AdminLogin } from "@/app/pages/admin/AdminLogin";
@@ -27,9 +26,10 @@ import { AdminUsuarios } from "@/app/pages/admin/AdminUsuarios";
 import { AdminConfiguracoes } from "@/app/pages/admin/AdminConfiguracoes";
 import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
 import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
+import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
 
 // ✅ NOVO
-import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
+import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
 
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
 
@@ -38,53 +38,37 @@ async function getMyRoles(): Promise<RoleName[]> {
   const session = sessionRes.session;
   if (!session) return [];
 
-  // Join: user_roles -> roles
   const { data, error } = await supabase
     .from("user_roles")
     .select("role:roles(name)")
     .eq("user_id", session.user.id);
 
   if (error) return [];
-  const roles =
-    (data || [])
-      .map((r: any) => r?.role?.name)
-      .filter(Boolean) as RoleName[];
-
-  return roles;
+  return (data || []).map((r: any) => r?.role?.name).filter(Boolean) as RoleName[];
 }
 
 function hasAnyRole(userRoles: RoleName[], required: RoleName[]) {
-  if (userRoles.includes("admin_alfa")) return true; // super
+  if (userRoles.includes("admin_alfa")) return true;
   return required.some((r) => userRoles.includes(r));
 }
 
-/**
- * Loader base do /admin:
- * - exige sessão
- * - retorna roles pra UI usar (sidebar / etc)
- */
 async function adminRootLoader() {
   const { data } = await supabase.auth.getSession();
   if (!data.session) throw redirect("/admin/login");
 
   const roles = await getMyRoles();
-
-  // Se a pessoa logou mas não tem role nenhuma, manda pro login (ou página de "sem acesso")
   if (!roles.length) throw redirect("/admin/login");
 
   return { roles };
 }
 
-/**
- * Loader por rota (protege URL + sidebar esconde menu)
- */
 function requireRoles(required: RoleName[]) {
   return async () => {
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw redirect("/admin/login");
 
     const roles = await getMyRoles();
-    if (!hasAnyRole(roles, required)) throw redirect("/admin"); // sem permissão → volta dashboard
+    if (!hasAnyRole(roles, required)) throw redirect("/admin");
 
     return { roles };
   };
@@ -101,31 +85,27 @@ export const router = createBrowserRouter([
         loader: adminRootLoader,
         Component: AdminLayout,
         children: [
-          // dashboard: qualquer role logada
           { index: true, Component: Dashboard },
 
-          // matérias: admin/editor/autor
           { path: "materias", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriasAlias },
           { path: "materias/nova", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriaForm },
           { path: "materias/editar/:id", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriaForm },
 
-          // projetos: admin/editor
           { path: "projetos", loader: requireRoles(["admin", "editor"]), Component: AdminProjetos },
           { path: "projetos/novo", loader: requireRoles(["admin", "editor"]), Component: AdminProjetoForm },
           { path: "projetos/editar/:id", loader: requireRoles(["admin", "editor"]), Component: AdminProjetoForm },
 
-          // equipe: admin/editor
           { path: "equipe", loader: requireRoles(["admin", "editor"]), Component: AdminEquipe },
           { path: "equipe/novo", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
           { path: "equipe/editar/:id", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
 
-          // ✅ NOVO: newsletter: admin/editor
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
 
-          // usuários (RBAC): só admin_alfa
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
 
-          // configurações: só admin_alfa (ou admin se quiser)
+          // ✅ NOVO: Quem Somos — só admin_alfa
+          { path: "quem-somos", loader: requireRoles(["admin_alfa"]), Component: AdminQuemSomos },
+
           { path: "configuracoes", loader: requireRoles(["admin_alfa"]), Component: AdminConfiguracoes },
         ],
       },
