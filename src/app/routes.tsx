@@ -28,8 +28,6 @@ import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
 import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
 import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
 
-// ✅ NOVO
-import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
 
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
 
@@ -102,9 +100,6 @@ export const router = createBrowserRouter([
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
 
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
-
-          // ✅ NOVO: Quem Somos — só admin_alfa
-          { path: "quem-somos", loader: requireRoles(["admin_alfa"]), Component: AdminQuemSomos },
 
           { path: "configuracoes", loader: requireRoles(["admin_alfa"]), Component: AdminConfiguracoes },
         ],
