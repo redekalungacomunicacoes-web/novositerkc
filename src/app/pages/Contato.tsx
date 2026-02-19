@@ -39,12 +39,7 @@ export function Contato() {
       info: 'Chapada dos Veadeiros, Território Kalunga, GO',
       link: null,
     },
-    {
-      icon: Phone,
-      titulo: 'Telefone',
-      info: '(62) 9 8765-4321',
-      link: 'tel:+5562987654321',
-    },
+
   ];
 
   return (
