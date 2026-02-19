@@ -30,8 +30,8 @@ export function Contato() {
     {
       icon: Mail,
       titulo: 'Email',
-      info: 'contato@redekalunga.org.br',
-      link: 'mailto:contato@redekalunga.org.br',
+      info: 'email@kalungacomunicacoes.org',
+      link: 'mailto:email@kalungacomunicacoes.org',
     },
     {
       icon: MapPin,
