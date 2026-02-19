@@ -28,6 +28,9 @@ import { AdminConfiguracoes } from "@/app/pages/admin/AdminConfiguracoes";
 import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
 import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
 
+// ✅ NOVO
+import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
+
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
 
 async function getMyRoles(): Promise<RoleName[]> {
@@ -115,6 +118,9 @@ export const router = createBrowserRouter([
           { path: "equipe", loader: requireRoles(["admin", "editor"]), Component: AdminEquipe },
           { path: "equipe/novo", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
           { path: "equipe/editar/:id", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
+
+          // ✅ NOVO: newsletter: admin/editor
+          { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
 
           // usuários (RBAC): só admin_alfa
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
