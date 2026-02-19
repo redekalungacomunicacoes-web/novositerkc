@@ -1,22 +1,54 @@
-import { useState } from 'react';
-import { RKCButton } from '@/app/components/RKCButton';
-import { RKCCard, RKCCardContent } from '@/app/components/RKCCard';
-import { Mail, MapPin, Phone, Send, CheckCircle2, Facebook, Instagram } from 'lucide-react';
+import { useState } from "react";
+import { RKCButton } from "@/app/components/RKCButton";
+import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
+import { Mail, MapPin, Send, CheckCircle2, Facebook, Instagram, AlertCircle, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export function Contato() {
   const [formData, setFormData] = useState({
-    nome: '',
-    email: '',
-    assunto: '',
-    mensagem: '',
+    nome: "",
+    email: "",
+    assunto: "",
+    mensagem: "",
   });
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulação de envio
-    setSent(true);
-    setFormData({ nome: '', email: '', assunto: '', mensagem: '' });
+    if (loading) return;
+
+    setErrorMsg(null);
+    setLoading(true);
+
+    const payload = {
+      name: formData.nome.trim(),
+      email: formData.email.trim(),
+      subject: formData.assunto.trim(),
+      message: formData.mensagem.trim(),
+      source: "site_contact_page",
+    };
+
+    try {
+      const { error } = await supabase.functions.invoke("contact-submit", {
+        body: payload,
+      });
+
+      if (error) {
+        setErrorMsg("Não foi possível enviar sua mensagem agora. Tente novamente em instantes.");
+        setLoading(false);
+        return;
+      }
+
+      setSent(true);
+      setFormData({ nome: "", email: "", assunto: "", mensagem: "" });
+      setLoading(false);
+    } catch {
+      setErrorMsg("Erro inesperado ao enviar. Verifique sua conexão e tente novamente.");
+      setLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -29,17 +61,16 @@ export function Contato() {
   const contatos = [
     {
       icon: Mail,
-      titulo: 'Email',
-      info: 'email@kalungacomunicacoes.org',
-      link: 'mailto:email@kalungacomunicacoes.org',
+      titulo: "Email",
+      info: "email@kalungacomunicacoes.org",
+      link: "mailto:email@kalungacomunicacoes.org",
     },
     {
       icon: MapPin,
-      titulo: 'Localização',
-      info: 'Chapada dos Veadeiros, Território Kalunga, GO',
+      titulo: "Localização",
+      info: "Chapada dos Veadeiros, Território Kalunga, GO",
       link: null,
     },
-
   ];
 
   return (
@@ -50,18 +81,18 @@ export function Contato() {
           <div className="absolute top-20 left-20 w-96 h-96 rounded-full bg-white blur-3xl" />
           <div className="absolute bottom-20 right-20 w-96 h-96 rounded-full bg-[#F2B705] blur-3xl" />
         </div>
-        
+
         <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">
-            Entre em Contato
-          </h1>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">Entre em Contato</h1>
           <p className="text-xl text-white/90 leading-relaxed">
-            Quer colaborar, sugerir pautas ou conhecer nosso trabalho? 
-            Estamos aqui para conversar!
+            Quer colaborar, sugerir pautas ou conhecer nosso trabalho? Estamos aqui para conversar!
           </p>
         </div>
-        
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-white" style={{ clipPath: 'ellipse(100% 100% at 50% 100%)' }} />
+
+        <div
+          className="absolute bottom-0 left-0 right-0 h-16 bg-white"
+          style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }}
+        />
       </section>
 
       {/* Formulário e Informações */}
@@ -72,13 +103,17 @@ export function Contato() {
             <div className="lg:col-span-2">
               {!sent ? (
                 <div>
-                  <h2 className="text-3xl font-bold text-[#2E2E2E] mb-4">
-                    Envie uma mensagem
-                  </h2>
-                  <p className="text-gray-600 mb-8">
-                    Preencha o formulário abaixo e entraremos em contato em breve.
-                  </p>
-                  
+                  <h2 className="text-3xl font-bold text-[#2E2E2E] mb-4">Envie uma mensagem</h2>
+                  <p className="text-gray-600 mb-8">Preencha o formulário abaixo e entraremos em contato em breve.</p>
+
+                  {/* Erro (sem quebrar layout) */}
+                  {errorMsg && (
+                    <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
+                      <AlertCircle className="h-5 w-5 mt-0.5" />
+                      <div>{errorMsg}</div>
+                    </div>
+                  )}
+
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-6">
                       <div>
@@ -92,11 +127,12 @@ export function Contato() {
                           value={formData.nome}
                           onChange={handleChange}
                           required
-                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent"
+                          disabled={loading}
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent disabled:opacity-70"
                           placeholder="Digite seu nome"
                         />
                       </div>
-                      
+
                       <div>
                         <label htmlFor="email" className="block text-sm font-medium text-[#2E2E2E] mb-2">
                           Seu email *
@@ -108,12 +144,13 @@ export function Contato() {
                           value={formData.email}
                           onChange={handleChange}
                           required
-                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent"
+                          disabled={loading}
+                          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent disabled:opacity-70"
                           placeholder="seuemail@exemplo.com"
                         />
                       </div>
                     </div>
-                    
+
                     <div>
                       <label htmlFor="assunto" className="block text-sm font-medium text-[#2E2E2E] mb-2">
                         Assunto *
@@ -124,7 +161,8 @@ export function Contato() {
                         value={formData.assunto}
                         onChange={handleChange}
                         required
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent"
+                        disabled={loading}
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent disabled:opacity-70"
                       >
                         <option value="">Selecione um assunto</option>
                         <option value="parceria">Parcerias e Colaborações</option>
@@ -133,7 +171,7 @@ export function Contato() {
                         <option value="outros">Outros</option>
                       </select>
                     </div>
-                    
+
                     <div>
                       <label htmlFor="mensagem" className="block text-sm font-medium text-[#2E2E2E] mb-2">
                         Mensagem *
@@ -144,15 +182,25 @@ export function Contato() {
                         value={formData.mensagem}
                         onChange={handleChange}
                         required
+                        disabled={loading}
                         rows={6}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent resize-none"
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0F7A3E] focus:border-transparent resize-none disabled:opacity-70"
                         placeholder="Digite sua mensagem..."
                       />
                     </div>
-                    
-                    <RKCButton type="submit" size="lg">
-                      Enviar Mensagem
-                      <Send className="w-5 h-5" />
+
+                    <RKCButton type="submit" size="lg" disabled={loading}>
+                      {loading ? (
+                        <>
+                          Enviando...
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        </>
+                      ) : (
+                        <>
+                          Enviar Mensagem
+                          <Send className="w-5 h-5" />
+                        </>
+                      )}
                     </RKCButton>
                   </form>
                 </div>
@@ -162,27 +210,29 @@ export function Contato() {
                     <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[#0F7A3E]/10 flex items-center justify-center">
                       <CheckCircle2 className="w-10 h-10 text-[#0F7A3E]" />
                     </div>
-                    <h2 className="text-3xl font-bold text-[#2E2E2E] mb-4">
-                      Mensagem enviada!
-                    </h2>
+                    <h2 className="text-3xl font-bold text-[#2E2E2E] mb-4">Mensagem enviada!</h2>
                     <p className="text-lg text-gray-600 mb-6">
                       Obrigado por entrar em contato. Retornaremos em breve!
                     </p>
-                    <RKCButton onClick={() => setSent(false)} variant="outline">
+                    <RKCButton
+                      onClick={() => {
+                        setSent(false);
+                        setErrorMsg(null);
+                      }}
+                      variant="outline"
+                    >
                       Enviar nova mensagem
                     </RKCButton>
                   </RKCCardContent>
                 </RKCCard>
               )}
             </div>
-            
+
             {/* Informações de Contato */}
             <div className="space-y-6">
               <div>
-                <h3 className="text-2xl font-bold text-[#2E2E2E] mb-6">
-                  Informações de Contato
-                </h3>
-                
+                <h3 className="text-2xl font-bold text-[#2E2E2E] mb-6">Informações de Contato</h3>
+
                 <div className="space-y-4">
                   {contatos.map((contato, index) => {
                     const Icon = contato.icon;
@@ -194,32 +244,28 @@ export function Contato() {
                               <Icon className="w-6 h-6 text-[#0F7A3E]" />
                             </div>
                             <div>
-                              <h4 className="font-bold text-[#2E2E2E] mb-1">
-                                {contato.titulo}
-                              </h4>
-                              <p className="text-gray-600 text-sm">
-                                {contato.info}
-                              </p>
+                              <h4 className="font-bold text-[#2E2E2E] mb-1">{contato.titulo}</h4>
+                              <p className="text-gray-600 text-sm">{contato.info}</p>
                             </div>
                           </div>
                         </RKCCardContent>
                       </RKCCard>
                     );
-                    
+
                     return contato.link ? (
                       <a key={index} href={contato.link} target="_blank" rel="noopener noreferrer">
                         {content}
                       </a>
-                    ) : content;
+                    ) : (
+                      content
+                    );
                   })}
                 </div>
               </div>
-              
+
               {/* Redes Sociais */}
               <div>
-                <h3 className="text-xl font-bold text-[#2E2E2E] mb-4">
-                  Redes Sociais
-                </h3>
+                <h3 className="text-xl font-bold text-[#2E2E2E] mb-4">Redes Sociais</h3>
                 <div className="flex gap-3">
                   <a
                     href="#"
@@ -235,15 +281,14 @@ export function Contato() {
                   </a>
                 </div>
               </div>
-              
+
               {/* Horário de Atendimento */}
               <RKCCard className="bg-gradient-to-br from-[#0F7A3E]/5 to-[#2FA866]/5">
                 <RKCCardContent className="p-6">
-                  <h4 className="font-bold text-[#2E2E2E] mb-3">
-                    Horário de Atendimento
-                  </h4>
+                  <h4 className="font-bold text-[#2E2E2E] mb-3">Horário de Atendimento</h4>
                   <p className="text-sm text-gray-600 leading-relaxed">
-                    Segunda a Sexta<br />
+                    Segunda a Sexta
+                    <br />
                     09:00 - 18:00
                   </p>
                 </RKCCardContent>
