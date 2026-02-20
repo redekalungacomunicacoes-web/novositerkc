@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
-import { Heart, Users, Target, Megaphone, ArrowRight, Instagram, X, Sparkles } from "lucide-react";
+import {
+  Heart,
+  Users,
+  Target,
+  Megaphone,
+  ArrowRight,
+  Instagram,
+  X,
+  Sparkles,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getSiteSettings, SiteSettings } from "@/lib/siteSettings";
 
@@ -21,6 +30,8 @@ type MembroEquipe = {
 
 type QuemSomosData = {
   historia: string | null;
+  missao?: string | null;
+  visao?: string | null;
   imagem_url: string | null;
 };
 
@@ -31,8 +42,8 @@ type ValorDB = {
   ordem: number | null;
 };
 
-// ID fixo (igual no Admin)
-const QUEM_SOMOS_ID = "00000000-0000-0000-0000-000000000001";
+// ✅ IMPORTANTE: no seu banco o id de quem_somos é INTEGER
+const QUEM_SOMOS_ID = 1;
 
 // ---------------------------------------------------------------------------
 // Helper: parse do Instagram
@@ -152,7 +163,12 @@ function MembroModal({ membro, onClose }: ModalProps) {
           <div className="-mt-14 mb-4 flex justify-center">
             <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100">
               {membro.foto_url ? (
-                <img src={membro.foto_url} alt={membro.nome} className="w-full h-full object-cover" loading="lazy" />
+                <img
+                  src={membro.foto_url}
+                  alt={membro.nome}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
                   Sem foto
@@ -238,17 +254,13 @@ export function QuemSomos() {
         setLoadingEquipe(true);
 
         // Carrega tudo em paralelo (otimização)
-        const [
-          settingsRes,
-          quemSomosRes,
-          valoresRes,
-          equipeRes,
-        ] = await Promise.all([
+        const [settingsRes, quemSomosRes, valoresRes, equipeRes] = await Promise.all([
           getSiteSettings().catch(() => null),
 
+          // ✅ agora também puxa missao/visao
           supabase
             .from("quem_somos")
-            .select("historia, imagem_url")
+            .select("historia, missao, visao, imagem_url")
             .eq("id", QUEM_SOMOS_ID)
             .maybeSingle(),
 
@@ -326,6 +338,9 @@ export function QuemSomos() {
       .filter(Boolean);
   }, [historiaText]);
 
+  const missaoText = (quemSomos?.missao || "").trim();
+  const visaoText = (quemSomos?.visao || "").trim();
+
   return (
     <div>
       {/* ------------------------------------------------------------------ */}
@@ -369,13 +384,18 @@ export function QuemSomos() {
             {/* Coluna esquerda — texto (do banco) */}
             <div className="prose prose-lg max-w-none">
               {historiaParagrafos.map((p, idx) => (
-                <p key={idx} className={`text-lg text-gray-700 leading-relaxed ${idx === historiaParagrafos.length - 1 ? "mb-0" : "mb-6"}`}>
+                <p
+                  key={idx}
+                  className={`text-lg text-gray-700 leading-relaxed ${
+                    idx === historiaParagrafos.length - 1 ? "mb-0" : "mb-6"
+                  }`}
+                >
                   {p}
                 </p>
               ))}
             </div>
 
-            {/* Coluna direita — imagem principal (do banco) */}
+            {/* Coluna direita — imagem principal (limpa, sem descrição abaixo) */}
             <div className="relative">
               <RKCCard className="overflow-hidden">
                 <div className="relative aspect-[16/9] w-full overflow-hidden">
@@ -391,55 +411,43 @@ export function QuemSomos() {
                       Imagem principal (configurar em Admin → Quem Somos)
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
                 </div>
-
-                <RKCCardContent className="p-5">
-                  <h3 className="font-bold text-base text-[#2E2E2E]">
-                    Nossa História em imagem
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Conteúdo editável em Admin → Quem Somos
-                  </p>
-                </RKCCardContent>
               </RKCCard>
             </div>
-          </div>
-
-          {/* ✅ Mantém a imagem e info da equipe vindo do SETTINGS (não mexe) */}
-          <div className="mt-12">
-            <RKCCard className="overflow-hidden">
-              <div className="relative aspect-[16/9] w-full overflow-hidden">
-                {settings?.about_team_image_url ? (
-                  <img
-                    src={settings.about_team_image_url}
-                    alt="Equipe RKC"
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-[#0F7A3E]/10 flex items-center justify-center text-sm text-gray-400">
-                    Foto da equipe (configurar em Admin → Configurações)
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-              </div>
-
-              <RKCCardContent className="p-5">
-                <h3 className="font-bold text-base text-[#2E2E2E]">
-                  {settings?.about_team_title || "Nossa Equipe"}
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  {settings?.about_team_subtitle || "Conheça as pessoas que constroem a RKC no dia a dia."}
-                </p>
-              </RKCCardContent>
-            </RKCCard>
           </div>
         </div>
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Integrantes da Equipe — seção própria, separada                      */}
+      {/* Missão e Visão (do Admin → Quem Somos)                               */}
+      {/* ------------------------------------------------------------------ */}
+      {(missaoText || visaoText) && (
+        <section className="py-12 bg-white border-t border-gray-100">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-6">
+            {missaoText && (
+              <RKCCard>
+                <RKCCardContent className="p-8">
+                  <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">Missão</h3>
+                  <p className="text-gray-600 leading-relaxed">{missaoText}</p>
+                </RKCCardContent>
+              </RKCCard>
+            )}
+
+            {visaoText && (
+              <RKCCard>
+                <RKCCardContent className="p-8">
+                  <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">Visão</h3>
+                  <p className="text-gray-600 leading-relaxed">{visaoText}</p>
+                </RKCCardContent>
+              </RKCCard>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Integrantes da Equipe — seção própria (SEM imagem grande acima)       */}
       {/* ------------------------------------------------------------------ */}
       <section className="py-16 md:py-20 bg-[#f8faf9] border-t border-gray-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -496,7 +504,6 @@ export function QuemSomos() {
             })}
           </div>
 
-          {/* opcional: feedback de carregamento da parte dinâmica */}
           {loading && (
             <p className="text-center text-xs text-gray-400 mt-6">Carregando conteúdo...</p>
           )}
