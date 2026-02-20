@@ -12,8 +12,8 @@ type Valor = {
 
 const BUCKET = "site";
 
-// 1 registro fixo pra página (evita duplicar)
-const QUEM_SOMOS_ID = "00000000-0000-0000-0000-000000000001";
+// ✅ seu id é INTEGER no banco
+const QUEM_SOMOS_ID = 1;
 
 function withCacheBuster(url: string) {
   const sep = url.includes("?") ? "&" : "?";
@@ -28,6 +28,8 @@ export function AdminQuemSomos() {
   const imageFileRef = useRef<HTMLInputElement | null>(null);
 
   const [historia, setHistoria] = useState("");
+  const [missao, setMissao] = useState("");
+  const [visao, setVisao] = useState("");
   const [imagemUrl, setImagemUrl] = useState("");
 
   const [valores, setValores] = useState<Valor[]>([]);
@@ -42,15 +44,19 @@ export function AdminQuemSomos() {
     try {
       setLoading(true);
 
+      // ✅ pega sempre id=1
       const { data: qs, error: qsErr } = await supabase
         .from("quem_somos")
-        .select("id, historia, imagem_url")
+        .select("id, historia, missao, visao, imagem_url")
         .eq("id", QUEM_SOMOS_ID)
         .maybeSingle();
 
-      // se não existe ainda, tudo bem
-      if (!qsErr && qs) {
+      if (qsErr) throw qsErr;
+
+      if (qs) {
         setHistoria(qs.historia || "");
+        setMissao(qs.missao || "");
+        setVisao(qs.visao || "");
         setImagemUrl(qs.imagem_url || "");
       }
 
@@ -102,8 +108,9 @@ export function AdminQuemSomos() {
       const { error } = await supabase.from("quem_somos").upsert({
         id: QUEM_SOMOS_ID,
         historia: historia || null,
+        missao: missao || null,
+        visao: visao || null,
         imagem_url: imagemUrl || null,
-        updated_at: new Date().toISOString(),
       });
 
       if (error) throw error;
@@ -160,16 +167,14 @@ export function AdminQuemSomos() {
     }
   }
 
-  if (loading) {
-    return <div className="p-6">Carregando...</div>;
-  }
+  if (loading) return <div className="p-6">Carregando...</div>;
 
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Quem Somos</h1>
         <p className="text-muted-foreground mt-1">
-          Configure o texto principal, a imagem e os valores da página.
+          Configure a história, imagem principal, missão, visão e valores.
         </p>
       </div>
 
@@ -177,20 +182,43 @@ export function AdminQuemSomos() {
         {/* História */}
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
           <h3 className="font-semibold text-lg border-b pb-4 mb-4">Nossa História</h3>
+          <textarea
+            value={historia}
+            onChange={(e) => setHistoria(e.target.value)}
+            rows={10}
+            className="w-full px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+            placeholder="Digite aqui a história..."
+          />
+        </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Texto principal</label>
-            <textarea
-              value={historia}
-              onChange={(e) => setHistoria(e.target.value)}
-              rows={10}
-              className="w-full px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              placeholder="Digite aqui a história da Rede Kalunga Comunicações..."
-            />
+        {/* Missão e Visão */}
+        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+          <h3 className="font-semibold text-lg border-b pb-4 mb-4">Missão e Visão</h3>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Missão</label>
+              <textarea
+                value={missao}
+                onChange={(e) => setMissao(e.target.value)}
+                rows={5}
+                className="w-full px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                placeholder="Digite a missão..."
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Visão</label>
+              <textarea
+                value={visao}
+                onChange={(e) => setVisao(e.target.value)}
+                rows={5}
+                className="w-full px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                placeholder="Digite a visão..."
+              />
+            </div>
           </div>
         </div>
 
-        {/* Imagem */}
+        {/* Imagem principal */}
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
           <h3 className="font-semibold text-lg border-b pb-4 mb-4">Imagem Principal</h3>
 
