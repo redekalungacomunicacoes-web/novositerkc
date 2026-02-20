@@ -62,7 +62,8 @@ function parseInstagram(raw?: string | null) {
       if (!handle) return { label: "@instagram", href: url.toString() };
       return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
     } catch {
-      const handle = v.split("/").filter(Boolean).pop()?.replace(/^@/, "") || "";
+      const handle =
+        v.split("/").filter(Boolean).pop()?.replace(/^@/, "") || "";
       if (!handle) return { label: "@instagram", href: v };
       return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
     }
@@ -108,7 +109,9 @@ function MemberCard({ membro, onClick }: MemberCardProps) {
 
       {/* Info */}
       <div className="p-3">
-        <p className="font-bold text-[#2E2E2E] text-sm leading-tight truncate">{membro.nome}</p>
+        <p className="font-bold text-[#2E2E2E] text-sm leading-tight truncate">
+          {membro.nome}
+        </p>
         <p className="text-xs text-gray-500 mt-0.5 truncate">{membro.cargo}</p>
         <span className="mt-2 inline-block text-xs font-medium text-[#0F7A3E] group-hover:underline">
           Ver perfil →
@@ -194,7 +197,9 @@ function MembroModal({ membro, onClose }: ModalProps) {
             )}
 
             {!!membro.bio && (
-              <p className="mt-5 text-gray-600 text-sm leading-relaxed text-left">{membro.bio}</p>
+              <p className="mt-5 text-gray-600 text-sm leading-relaxed text-left">
+                {membro.bio}
+              </p>
             )}
           </div>
         </div>
@@ -209,7 +214,6 @@ function MembroModal({ membro, onClose }: ModalProps) {
 
 export function QuemSomos() {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
-
   const [loading, setLoading] = useState(true);
 
   const [quemSomos, setQuemSomos] = useState<QuemSomosData | null>(null);
@@ -222,10 +226,29 @@ export function QuemSomos() {
   // Fallback (se ainda não cadastrou valores no banco)
   const valoresFallback = useMemo(
     () => [
-      { icon: Heart, titulo: "Pertencimento", descricao: "Enraizamento territorial e valorização da identidade quilombola" },
-      { icon: Users, titulo: "Comunidade", descricao: "Comunicação feita pela e para as comunidades do território quilombola" },
-      { icon: Target, titulo: "Autonomia", descricao: "Jornalismo independente e livre de interesses comerciais" },
-      { icon: Megaphone, titulo: "Amplificação", descricao: "Dar voz e visibilidade às narrativas do território quilombola" },
+      {
+        icon: Heart,
+        titulo: "Pertencimento",
+        descricao:
+          "Enraizamento territorial e valorização da identidade quilombola",
+      },
+      {
+        icon: Users,
+        titulo: "Comunidade",
+        descricao:
+          "Comunicação feita pela e para as comunidades do território quilombola",
+      },
+      {
+        icon: Target,
+        titulo: "Autonomia",
+        descricao: "Jornalismo independente e livre de interesses comerciais",
+      },
+      {
+        icon: Megaphone,
+        titulo: "Amplificação",
+        descricao:
+          "Dar voz e visibilidade às narrativas do território quilombola",
+      },
     ],
     []
   );
@@ -254,28 +277,28 @@ export function QuemSomos() {
         setLoadingEquipe(true);
 
         // Carrega tudo em paralelo (otimização)
-        const [settingsRes, quemSomosRes, valoresRes, equipeRes] = await Promise.all([
-          getSiteSettings().catch(() => null),
+        const [settingsRes, quemSomosRes, valoresRes, equipeRes] =
+          await Promise.all([
+            getSiteSettings().catch(() => null),
 
-          // ✅ agora também puxa missao/visao
-          supabase
-            .from("quem_somos")
-            .select("historia, missao, visao, imagem_url")
-            .eq("id", QUEM_SOMOS_ID)
-            .maybeSingle(),
+            supabase
+              .from("quem_somos")
+              .select("historia, missao, visao, imagem_url")
+              .eq("id", QUEM_SOMOS_ID)
+              .maybeSingle(),
 
-          supabase
-            .from("valores")
-            .select("id, titulo, descricao, ordem")
-            .order("ordem", { ascending: true }),
+            supabase
+              .from("valores")
+              .select("id, titulo, descricao, ordem")
+              .order("ordem", { ascending: true }),
 
-          supabase
-            .from("equipe")
-            .select("id, nome, cargo, foto_url, bio, instagram, ordem, ativo")
-            .or("ativo.eq.true,ativo.is.null")
-            .order("ordem", { ascending: true })
-            .order("nome", { ascending: true }),
-        ]);
+            supabase
+              .from("equipe")
+              .select("id, nome, cargo, foto_url, bio, instagram, ordem, ativo")
+              .or("ativo.eq.true,ativo.is.null")
+              .order("ordem", { ascending: true })
+              .order("nome", { ascending: true }),
+          ]);
 
         if (!mounted) return;
 
@@ -331,7 +354,6 @@ export function QuemSomos() {
     "A Rede Kalunga Comunicações (RKC) é uma mídia independente construída coletivamente para amplificar as vozes do território quilombola.";
 
   const historiaParagrafos = useMemo(() => {
-    // divide por linhas em branco (ou quebra de linha)
     return historiaText
       .split(/\n{2,}|\r\n\r\n+/)
       .map((p) => p.trim())
@@ -343,9 +365,7 @@ export function QuemSomos() {
 
   return (
     <div>
-      {/* ------------------------------------------------------------------ */}
-      {/* Hero / Banner                                                       */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Hero / Banner */}
       <section className="relative py-20 md:py-32 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-20 w-96 h-96 rounded-full bg-white blur-3xl" />
@@ -353,7 +373,9 @@ export function QuemSomos() {
         </div>
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">Quem Somos</h1>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">
+            Quem Somos
+          </h1>
           <p className="text-xl text-white/90 leading-relaxed">
             Comunicação popular que nasce do coração do Território Kalunga
           </p>
@@ -365,10 +387,7 @@ export function QuemSomos() {
         />
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Nossa História — texto à esquerda | imagem principal à direita       */}
-      {/* (Agora vem do Admin: quem_somos.historia + quem_somos.imagem_url)    */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Nossa História */}
       <section className="py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-3 text-center">
@@ -381,7 +400,7 @@ export function QuemSomos() {
 
           {/* Duas colunas: texto | imagem principal */}
           <div className="grid lg:grid-cols-2 gap-10 items-center">
-            {/* Coluna esquerda — texto (do banco) */}
+            {/* Texto */}
             <div className="prose prose-lg max-w-none">
               {historiaParagrafos.map((p, idx) => (
                 <p
@@ -395,7 +414,7 @@ export function QuemSomos() {
               ))}
             </div>
 
-            {/* Coluna direita — imagem principal (limpa, sem descrição abaixo) */}
+            {/* Imagem principal (16:9) - limpa */}
             <div className="relative">
               <RKCCard className="overflow-hidden">
                 <div className="relative aspect-[16/9] w-full overflow-hidden">
@@ -419,16 +438,16 @@ export function QuemSomos() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Missão e Visão (do Admin → Quem Somos)                               */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Missão e Visão */}
       {(missaoText || visaoText) && (
         <section className="py-12 bg-white border-t border-gray-100">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-6">
             {missaoText && (
               <RKCCard>
                 <RKCCardContent className="p-8">
-                  <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">Missão</h3>
+                  <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">
+                    Missão
+                  </h3>
                   <p className="text-gray-600 leading-relaxed">{missaoText}</p>
                 </RKCCardContent>
               </RKCCard>
@@ -437,7 +456,9 @@ export function QuemSomos() {
             {visaoText && (
               <RKCCard>
                 <RKCCardContent className="p-8">
-                  <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">Visão</h3>
+                  <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">
+                    Visão
+                  </h3>
                   <p className="text-gray-600 leading-relaxed">{visaoText}</p>
                 </RKCCardContent>
               </RKCCard>
@@ -446,9 +467,7 @@ export function QuemSomos() {
         </section>
       )}
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Integrantes da Equipe — seção própria (SEM imagem grande acima)       */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Integrantes */}
       <section className="py-16 md:py-20 bg-[#f8faf9] border-t border-gray-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
@@ -461,11 +480,15 @@ export function QuemSomos() {
           </div>
 
           {loadingEquipe && (
-            <p className="text-center text-sm text-gray-400">Carregando equipe...</p>
+            <p className="text-center text-sm text-gray-400">
+              Carregando equipe...
+            </p>
           )}
 
           {!loadingEquipe && equipe.length === 0 && (
-            <p className="text-center text-sm text-gray-400">Nenhum membro cadastrado ainda.</p>
+            <p className="text-center text-sm text-gray-400">
+              Nenhum membro cadastrado ainda.
+            </p>
           )}
 
           {!loadingEquipe && equipe.length > 0 && (
@@ -478,9 +501,7 @@ export function QuemSomos() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Nossos Valores — agora do banco (Admin → Quem Somos)                  */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Valores */}
       <section className="py-16 md:py-24 bg-gray-50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-12 text-center">
@@ -496,7 +517,9 @@ export function QuemSomos() {
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center">
                       <Icon className="w-8 h-8 text-white" />
                     </div>
-                    <h3 className="font-bold text-xl text-[#2E2E2E] mb-3">{valor.titulo}</h3>
+                    <h3 className="font-bold text-xl text-[#2E2E2E] mb-3">
+                      {valor.titulo}
+                    </h3>
                     <p className="text-gray-600 leading-relaxed">{valor.descricao}</p>
                   </RKCCardContent>
                 </RKCCard>
@@ -505,22 +528,22 @@ export function QuemSomos() {
           </div>
 
           {loading && (
-            <p className="text-center text-xs text-gray-400 mt-6">Carregando conteúdo...</p>
+            <p className="text-center text-xs text-gray-400 mt-6">
+              Carregando conteúdo...
+            </p>
           )}
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* CTA                                                                   */}
-      {/* ------------------------------------------------------------------ */}
+      {/* CTA */}
       <section className="py-16 md:py-20 bg-white">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-6">
             Faça parte dessa história
           </h2>
           <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
-            Conheça nossos projetos, leia nossas matérias e entre em contato para colaborar
-            com a comunicação popular quilombola.
+            Conheça nossos projetos, leia nossas matérias e entre em contato para
+            colaborar com a comunicação popular quilombola.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/projetos">
@@ -538,9 +561,7 @@ export function QuemSomos() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Modal de membro                                                       */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Modal */}
       <MembroModal membro={membroModal} onClose={() => setMembroModal(null)} />
     </div>
   );
