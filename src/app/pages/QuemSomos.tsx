@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
-import { Heart, Users, Target, Megaphone, ArrowRight, Instagram, X } from "lucide-react";
+import { Heart, Users, Target, Megaphone, ArrowRight, Instagram, X, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getSiteSettings, SiteSettings } from "@/lib/siteSettings";
 
@@ -18,6 +18,21 @@ type MembroEquipe = {
   bio?: string | null;
   instagram?: string | null;
 };
+
+type QuemSomosData = {
+  historia: string | null;
+  imagem_url: string | null;
+};
+
+type ValorDB = {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  ordem: number | null;
+};
+
+// ID fixo (igual no Admin)
+const QUEM_SOMOS_ID = "00000000-0000-0000-0000-000000000001";
 
 // ---------------------------------------------------------------------------
 // Helper: parse do Instagram
@@ -70,6 +85,7 @@ function MemberCard({ membro, onClick }: MemberCardProps) {
             src={membro.foto_url}
             alt={membro.nome}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
@@ -136,7 +152,7 @@ function MembroModal({ membro, onClose }: ModalProps) {
           <div className="-mt-14 mb-4 flex justify-center">
             <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100">
               {membro.foto_url ? (
-                <img src={membro.foto_url} alt={membro.nome} className="w-full h-full object-cover" />
+                <img src={membro.foto_url} alt={membro.nome} className="w-full h-full object-cover" loading="lazy" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
                   Sem foto
@@ -176,66 +192,144 @@ function MembroModal({ membro, onClose }: ModalProps) {
 // ---------------------------------------------------------------------------
 
 export function QuemSomos() {
-  const valores = [
-    { icon: Heart, titulo: "Pertencimento", descricao: "Enraizamento territorial e valorização da identidade quilombola" },
-    { icon: Users, titulo: "Comunidade", descricao: "Comunicação feita pela e para as comunidades do território quilombola" },
-    { icon: Target, titulo: "Autonomia", descricao: "Jornalismo independente e livre de interesses comerciais" },
-    { icon: Megaphone, titulo: "Amplificação", descricao: "Dar voz e visibilidade às narrativas do território quilombola" },
-  ];
-
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const [quemSomos, setQuemSomos] = useState<QuemSomosData | null>(null);
+  const [valoresDB, setValoresDB] = useState<ValorDB[]>([]);
+
   const [loadingEquipe, setLoadingEquipe] = useState(true);
   const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
   const [membroModal, setMembroModal] = useState<MembroEquipe | null>(null);
 
+  // Fallback (se ainda não cadastrou valores no banco)
+  const valoresFallback = useMemo(
+    () => [
+      { icon: Heart, titulo: "Pertencimento", descricao: "Enraizamento territorial e valorização da identidade quilombola" },
+      { icon: Users, titulo: "Comunidade", descricao: "Comunicação feita pela e para as comunidades do território quilombola" },
+      { icon: Target, titulo: "Autonomia", descricao: "Jornalismo independente e livre de interesses comerciais" },
+      { icon: Megaphone, titulo: "Amplificação", descricao: "Dar voz e visibilidade às narrativas do território quilombola" },
+    ],
+    []
+  );
+
+  // Valores do banco (com ícone padrão)
+  const valoresParaRender = useMemo(() => {
+    if (valoresDB.length) {
+      return valoresDB
+        .slice()
+        .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+        .map((v) => ({
+          icon: Sparkles,
+          titulo: v.titulo,
+          descricao: v.descricao || "",
+        }));
+    }
+    return valoresFallback;
+  }, [valoresDB, valoresFallback]);
+
   useEffect(() => {
-    // settings
+    let mounted = true;
+
     (async () => {
       try {
-        const s = await getSiteSettings();
-        setSettings(s);
-      } catch (e: any) {
-        console.warn("Erro ao carregar settings (QuemSomos):", e?.message || e);
-        setSettings(null);
+        setLoading(true);
+        setLoadingEquipe(true);
+
+        // Carrega tudo em paralelo (otimização)
+        const [
+          settingsRes,
+          quemSomosRes,
+          valoresRes,
+          equipeRes,
+        ] = await Promise.all([
+          getSiteSettings().catch(() => null),
+
+          supabase
+            .from("quem_somos")
+            .select("historia, imagem_url")
+            .eq("id", QUEM_SOMOS_ID)
+            .maybeSingle(),
+
+          supabase
+            .from("valores")
+            .select("id, titulo, descricao, ordem")
+            .order("ordem", { ascending: true }),
+
+          supabase
+            .from("equipe")
+            .select("id, nome, cargo, foto_url, bio, instagram, ordem, ativo")
+            .or("ativo.eq.true,ativo.is.null")
+            .order("ordem", { ascending: true })
+            .order("nome", { ascending: true }),
+        ]);
+
+        if (!mounted) return;
+
+        // settings
+        setSettings(settingsRes);
+
+        // quem_somos
+        if (!quemSomosRes.error) {
+          setQuemSomos((quemSomosRes.data as QuemSomosData) || null);
+        } else {
+          console.warn("Erro ao carregar quem_somos:", quemSomosRes.error.message);
+          setQuemSomos(null);
+        }
+
+        // valores
+        if (!valoresRes.error) {
+          setValoresDB((valoresRes.data as ValorDB[]) || []);
+        } else {
+          console.warn("Erro ao carregar valores:", valoresRes.error.message);
+          setValoresDB([]);
+        }
+
+        // equipe
+        setLoadingEquipe(false);
+
+        if (equipeRes.error) {
+          console.warn("Erro ao carregar equipe:", equipeRes.error.message);
+          setEquipe([]);
+        } else {
+          const mapped: MembroEquipe[] = (equipeRes.data || []).map((m: any) => ({
+            id: String(m.id),
+            nome: m.nome || "",
+            cargo: m.cargo || m.funcao || "",
+            foto_url: m.foto_url || "",
+            bio: m.bio ?? null,
+            instagram: (m.instagram ?? "").toString() || null,
+          }));
+          setEquipe(mapped);
+        }
+      } finally {
+        if (mounted) setLoading(false);
       }
     })();
 
-    // equipe
-    (async () => {
-      setLoadingEquipe(true);
-
-      const { data, error } = await supabase
-        .from("equipe")
-        .select("id, nome, cargo, foto_url, bio, instagram, ordem, ativo")
-        .or("ativo.eq.true,ativo.is.null")
-        .order("ordem", { ascending: true })
-        .order("nome", { ascending: true });
-
-      setLoadingEquipe(false);
-
-      if (error) {
-        console.warn("Erro ao carregar equipe:", error.message);
-        setEquipe([]);
-        return;
-      }
-
-      const mapped: MembroEquipe[] = (data || []).map((m: any) => ({
-        id: String(m.id),
-        nome: m.nome || "",
-        cargo: m.cargo || m.funcao || "",
-        foto_url: m.foto_url || "",
-        bio: m.bio ?? null,
-        instagram: (m.instagram ?? "").toString() || null,
-      }));
-
-      setEquipe(mapped);
-    })();
+    return () => {
+      mounted = false;
+    };
   }, []);
+
+  // História vinda do banco (com fallback pra não quebrar layout)
+  const historiaText =
+    (quemSomos?.historia || "").trim() ||
+    "A Rede Kalunga Comunicações (RKC) é uma mídia independente construída coletivamente para amplificar as vozes do território quilombola.";
+
+  const historiaParagrafos = useMemo(() => {
+    // divide por linhas em branco (ou quebra de linha)
+    return historiaText
+      .split(/\n{2,}|\r\n\r\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+  }, [historiaText]);
 
   return (
     <div>
       {/* ------------------------------------------------------------------ */}
-      {/* Hero / Banner                                                         */}
+      {/* Hero / Banner                                                       */}
       {/* ------------------------------------------------------------------ */}
       <section className="relative py-20 md:py-32 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] overflow-hidden">
         <div className="absolute inset-0 opacity-10">
@@ -257,7 +351,8 @@ export function QuemSomos() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Nossa História — texto à esquerda | imagem da equipe à direita       */}
+      {/* Nossa História — texto à esquerda | imagem principal à direita       */}
+      {/* (Agora vem do Admin: quem_somos.historia + quem_somos.imagem_url)    */}
       {/* ------------------------------------------------------------------ */}
       <section className="py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -269,44 +364,31 @@ export function QuemSomos() {
               "Uma mídia independente construída coletivamente para amplificar as vozes do território."}
           </p>
 
-          {/* Duas colunas: texto | foto da equipe */}
+          {/* Duas colunas: texto | imagem principal */}
           <div className="grid lg:grid-cols-2 gap-10 items-center">
-            {/* Coluna esquerda — texto */}
+            {/* Coluna esquerda — texto (do banco) */}
             <div className="prose prose-lg max-w-none">
-              <p className="text-lg text-gray-700 leading-relaxed mb-6">
-                A Rede Kalunga Comunicações (RKC) nasceu em 2020 como uma resposta à necessidade
-                de dar voz e visibilidade às histórias, saberes e lutas das comunidades quilombolas
-                da Chapada dos Veadeiros e do Território Kalunga.
-              </p>
-
-              <p className="text-lg text-gray-700 leading-relaxed mb-6">
-                Somos uma mídia independente, criada e gerida por comunicadores populares,
-                jornalistas comunitários e lideranças territoriais comprometidas com a valorização
-                da cultura quilombola, a defesa dos direitos das comunidades tradicionais e a
-                promoção do jornalismo ético e independente.
-              </p>
-
-              <p className="text-lg text-gray-700 leading-relaxed mb-0">
-                Nosso trabalho se fundamenta na comunicação popular, entendendo que as próprias
-                comunidades devem ser protagonistas de suas narrativas. Através de matérias,
-                reportagens, projetos culturais e formativos, buscamos amplificar as vozes que
-                historicamente foram silenciadas ou distorcidas pela mídia tradicional.
-              </p>
+              {historiaParagrafos.map((p, idx) => (
+                <p key={idx} className={`text-lg text-gray-700 leading-relaxed ${idx === historiaParagrafos.length - 1 ? "mb-0" : "mb-6"}`}>
+                  {p}
+                </p>
+              ))}
             </div>
 
-            {/* Coluna direita — foto da equipe toda */}
+            {/* Coluna direita — imagem principal (do banco) */}
             <div className="relative">
               <RKCCard className="overflow-hidden">
                 <div className="relative aspect-[16/9] w-full overflow-hidden">
-                  {settings?.about_team_image_url ? (
+                  {quemSomos?.imagem_url ? (
                     <img
-                      src={settings.about_team_image_url}
-                      alt="Equipe RKC"
+                      src={quemSomos.imagem_url}
+                      alt="Imagem principal - Quem Somos"
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="w-full h-full bg-[#0F7A3E]/10 flex items-center justify-center text-sm text-gray-400">
-                      Foto da equipe (configurar em Admin → Configurações)
+                      Imagem principal (configurar em Admin → Quem Somos)
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
@@ -314,17 +396,45 @@ export function QuemSomos() {
 
                 <RKCCardContent className="p-5">
                   <h3 className="font-bold text-base text-[#2E2E2E]">
-                    {settings?.about_team_title || "Nossa Equipe"}
+                    Nossa História em imagem
                   </h3>
                   <p className="text-sm text-gray-500 mt-1">
-                    {settings?.about_team_subtitle ||
-                      "Conheça as pessoas que constroem a RKC no dia a dia."}
+                    Conteúdo editável em Admin → Quem Somos
                   </p>
                 </RKCCardContent>
               </RKCCard>
             </div>
           </div>
 
+          {/* ✅ Mantém a imagem e info da equipe vindo do SETTINGS (não mexe) */}
+          <div className="mt-12">
+            <RKCCard className="overflow-hidden">
+              <div className="relative aspect-[16/9] w-full overflow-hidden">
+                {settings?.about_team_image_url ? (
+                  <img
+                    src={settings.about_team_image_url}
+                    alt="Equipe RKC"
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-[#0F7A3E]/10 flex items-center justify-center text-sm text-gray-400">
+                    Foto da equipe (configurar em Admin → Configurações)
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+              </div>
+
+              <RKCCardContent className="p-5">
+                <h3 className="font-bold text-base text-[#2E2E2E]">
+                  {settings?.about_team_title || "Nossa Equipe"}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {settings?.about_team_subtitle || "Conheça as pessoas que constroem a RKC no dia a dia."}
+                </p>
+              </RKCCardContent>
+            </RKCCard>
+          </div>
         </div>
       </section>
 
@@ -361,7 +471,7 @@ export function QuemSomos() {
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Nossos Valores                                                        */}
+      {/* Nossos Valores — agora do banco (Admin → Quem Somos)                  */}
       {/* ------------------------------------------------------------------ */}
       <section className="py-16 md:py-24 bg-gray-50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -370,7 +480,7 @@ export function QuemSomos() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {valores.map((valor, index) => {
+            {valoresParaRender.map((valor, index) => {
               const Icon = valor.icon;
               return (
                 <RKCCard key={index} className="text-center">
@@ -385,6 +495,11 @@ export function QuemSomos() {
               );
             })}
           </div>
+
+          {/* opcional: feedback de carregamento da parte dinâmica */}
+          {loading && (
+            <p className="text-center text-xs text-gray-400 mt-6">Carregando conteúdo...</p>
+          )}
         </div>
       </section>
 
