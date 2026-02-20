@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, FolderOpen, LogOut, Settings, Users, Mail } from "lucide-react";
+import {
+  LayoutDashboard,
+  FileText,
+  FolderOpen,
+  LogOut,
+  Settings,
+  Users,
+  Mail,
+  Info,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 import logoRKC from "../../../assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png";
@@ -47,6 +56,9 @@ export function AdminSidebar() {
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard, allow: ["admin_alfa", "admin", "editor", "autor"] },
     { href: "/admin/materias", label: "Matérias", icon: FileText, allow: ["admin_alfa", "admin", "editor", "autor"] },
     { href: "/admin/projetos", label: "Projetos", icon: FolderOpen, allow: ["admin_alfa", "admin", "editor"] },
+
+    // ✅ Quem Somos (configuração de página institucional)
+    { href: "/admin/quem-somos", label: "Quem Somos", icon: Info, allow: ["admin_alfa", "admin", "editor"] },
 
     // ✅ Newsletter (admin/editor)
     { href: "/admin/newsletter", label: "Newsletter", icon: Mail, allow: ["admin_alfa", "admin", "editor"] },
