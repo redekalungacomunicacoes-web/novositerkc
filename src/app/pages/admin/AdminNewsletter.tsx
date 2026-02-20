@@ -1,242 +1,313 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Download, Send, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { listMaterias, MateriaRow } from "@/lib/cms";
+import { Plus, Send, Mail, Users, RefreshCw, Trash2, Eye } from "lucide-react";
 
-type SubscriberRow = {
+type Subscriber = {
   id: string;
   email: string;
   name: string | null;
   status: "active" | "unsubscribed" | "bounced";
   created_at: string;
-  unsubscribed_at: string | null;
 };
 
-function statusLabel(status: SubscriberRow["status"]) {
-  if (status === "active") return "Ativo";
-  if (status === "unsubscribed") return "Descadastrado";
-  return "Bounce";
-}
+type Campaign = {
+  id: string;
+  title: string;
+  subject: string;
+  mode: "custom" | "materia";
+  materia_id: string | null;
+  content_html: string;
+  status: "draft" | "sending" | "sent" | "paused";
+  sent_count: number | null;
+  fail_count: number | null;
+  created_at: string;
+};
 
-function toPtDate(d?: string | null) {
+type MateriaLite = {
+  id: string;
+  titulo: string;
+  resumo?: string | null;
+  slug?: string | null;
+};
+
+function toBR(d?: string | null) {
   if (!d) return "—";
   try {
-    return new Date(d).toLocaleDateString("pt-BR");
+    return new Date(d).toLocaleString("pt-BR");
   } catch {
-    return "—";
+    return d;
   }
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function buildMateriaHtml(m: MateriaRow, baseUrl: string) {
-  const title = escapeHtml(m.titulo || "");
-  const resumo = escapeHtml(m.resumo || "");
-  // você usa /materias/{id} no admin preview; no público pode ser slug.
-  // Aqui vou usar id (padrão garantido). Se preferir slug depois, a gente troca.
-  const url = `${baseUrl}/materias/${m.id}`;
-
-  const image = (m as any).imagem || (m as any).capa || (m as any).banner || "";
-
-  return `
-  <div style="font-family: Arial, sans-serif; color:#111; line-height:1.5; max-width: 640px; margin: 0 auto;">
-    <div style="padding: 24px 16px;">
-      <h1 style="font-size: 22px; margin: 0 0 12px;">${title}</h1>
-      ${
-        image
-          ? `<img src="${image}" alt="${title}" style="width:100%; border-radius: 12px; margin: 12px 0 16px;" />`
-          : ""
-      }
-      <p style="margin:0 0 16px; color:#333;">${resumo}</p>
-      <a href="${url}" style="display:inline-block; background:#0f3d2e; color:#fff; text-decoration:none; padding: 10px 14px; border-radius: 10px; font-weight: 700;">
-        Ler matéria completa
-      </a>
-      <p style="margin:18px 0 0; font-size: 12px; color:#666;">
-        Você está recebendo este email porque se cadastrou na newsletter da Rede Kalunga Comunicações.
-      </p>
-    </div>
-  </div>
-  `;
 }
 
 export function AdminNewsletter() {
-  const [subs, setSubs] = useState<SubscriberRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
+  const [tab, setTab] = useState<"campaigns" | "subscribers">("campaigns");
+
+  // subscribers
+  const [subs, setSubs] = useState<Subscriber[]>([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [subsQ, setSubsQ] = useState("");
+
+  // campaigns
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campLoading, setCampLoading] = useState(false);
+
+  // materias (para escolher)
+  const [materias, setMaterias] = useState<MateriaLite[]>([]);
+  const [materiasLoading, setMateriasLoading] = useState(false);
 
   // modal campanha
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"materia" | "custom">("materia");
+  const [saving, setSaving] = useState(false);
 
-  // matérias
-  const [materias, setMaterias] = useState<MateriaRow[]>([]);
-  const [loadingMaterias, setLoadingMaterias] = useState(false);
-  const [materiaId, setMateriaId] = useState<string>("");
+  const [form, setForm] = useState({
+    title: "",
+    subject: "",
+    mode: "custom" as "custom" | "materia",
+    materia_id: "" as string,
+    site_url: "https://kalungacomunicacoes.org",
+    content_html: "",
+  });
 
-  // custom
-  const [subject, setSubject] = useState("");
-  const [html, setHtml] = useState("");
-
-  // geral
-  const [baseUrl, setBaseUrl] = useState(() => window.location.origin);
-  const [sending, setSending] = useState(false);
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [sendingTest, setSendingTest] = useState(false);
   const [testEmail, setTestEmail] = useState("");
+  const [sendingBatch, setSendingBatch] = useState(false);
+  const [sendLog, setSendLog] = useState<string | null>(null);
 
   async function loadSubscribers() {
-    setLoading(true);
+    setSubsLoading(true);
     const { data, error } = await supabase
       .from("newsletter_subscribers")
-      .select("id,email,name,status,created_at,unsubscribed_at")
-      .order("created_at", { ascending: false });
+      .select("id,email,name,status,created_at")
+      .order("created_at", { ascending: false })
+      .limit(1000);
 
     if (!error && data) setSubs(data as any);
-    setLoading(false);
+    setSubsLoading(false);
   }
 
-  async function loadMateriasForPick() {
-    setLoadingMaterias(true);
-    const { data, error } = await listMaterias();
-    if (!error && data) setMaterias(data as MateriaRow[]);
-    setLoadingMaterias(false);
+  async function loadCampaigns() {
+    setCampLoading(true);
+    const { data, error } = await supabase
+      .from("newsletter_campaigns")
+      .select("id,title,subject,mode,materia_id,content_html,status,sent_count,fail_count,created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (!error && data) setCampaigns(data as any);
+    setCampLoading(false);
+  }
+
+  async function loadMateriasLite() {
+    setMateriasLoading(true);
+
+    // tenta buscar do seu CMS (ajuste se sua tabela tiver outro nome)
+    // aqui uso "materias" com campos id/titulo/resumo/slug (comum no seu projeto)
+    const { data, error } = await supabase
+      .from("materias")
+      .select("id,titulo,resumo,slug")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (!error && data) setMaterias(data as any);
+    setMateriasLoading(false);
   }
 
   useEffect(() => {
+    loadCampaigns();
     loadSubscribers();
+    loadMateriasLite();
   }, []);
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+  const filteredSubs = useMemo(() => {
+    const needle = subsQ.trim().toLowerCase();
     if (!needle) return subs;
-    return subs.filter((s) => {
-      const a = (s.email || "").toLowerCase();
-      const b = (s.name || "").toLowerCase();
-      return a.includes(needle) || b.includes(needle) || statusLabel(s.status).toLowerCase().includes(needle);
+    return subs.filter((s) => (s.email || "").toLowerCase().includes(needle) || (s.name || "").toLowerCase().includes(needle));
+  }, [subs, subsQ]);
+
+  function openNewCampaign() {
+    setSelectedCampaign(null);
+    setSendLog(null);
+    setForm({
+      title: "",
+      subject: "",
+      mode: "custom",
+      materia_id: "",
+      site_url: "https://kalungacomunicacoes.org",
+      content_html: "",
     });
-  }, [subs, q]);
-
-  const activeCount = useMemo(() => subs.filter((s) => s.status === "active").length, [subs]);
-
-  function exportCsv() {
-    const rows = subs.map((s) => ({
-      email: s.email,
-      name: s.name || "",
-      status: s.status,
-      created_at: s.created_at,
-    }));
-
-    const header = ["email", "name", "status", "created_at"];
-    const csv = [
-      header.join(","),
-      ...rows.map((r) =>
-        header
-          .map((k) => {
-            const v = (r as any)[k] ?? "";
-            const str = String(v).replaceAll('"', '""');
-            return `"${str}"`;
-          })
-          .join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "newsletter_subscribers.csv";
-    a.click();
-
-    URL.revokeObjectURL(url);
-  }
-
-  function resetCampaign() {
-    setTab("materia");
-    setMateriaId("");
-    setSubject("");
-    setHtml("");
-    setTestEmail("");
-    setSending(false);
-    setBaseUrl(window.location.origin);
-  }
-
-  async function openCampaignModal() {
-    resetCampaign();
     setOpen(true);
-    // carrega matérias só quando abrir
-    if (!materias.length) await loadMateriasForPick();
   }
 
-  async function sendCampaign(mode: "test" | "all") {
-    if (sending) return;
-
-    let finalSubject = subject.trim();
-    let finalHtml = html.trim();
-
-    if (tab === "materia") {
-      const m = materias.find((x) => x.id === materiaId);
-      if (!m) {
-        alert("Selecione uma matéria.");
-        return;
-      }
-      if (!finalSubject) finalSubject = m.titulo || "Nova matéria • Rede Kalunga Comunicações";
-      finalHtml = buildMateriaHtml(m, baseUrl);
-    } else {
-      if (!finalSubject) {
-        alert("Informe o assunto.");
-        return;
-      }
-      if (!finalHtml) {
-        alert("Informe o HTML do email.");
-        return;
-      }
-    }
-
-    if (mode === "test") {
-      if (!testEmail.trim()) {
-        alert("Informe um email para teste.");
-        return;
-      }
-    }
-
-    setSending(true);
-
-    const payload: any = {
-      type: tab === "materia" ? "materia" : "custom",
-      subject: finalSubject,
-      html: finalHtml,
-      baseUrl,
-      // opcional
-      materia_id: tab === "materia" ? materiaId : null,
-      mode,
-      test_email: mode === "test" ? testEmail.trim() : null,
-    };
-
-    const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
-      body: payload,
+  function openEditCampaign(c: Campaign) {
+    setSelectedCampaign(c);
+    setSendLog(null);
+    setForm({
+      title: c.title || "",
+      subject: c.subject || "",
+      mode: c.mode || "custom",
+      materia_id: c.materia_id || "",
+      site_url: "https://kalungacomunicacoes.org",
+      content_html: c.content_html || "",
     });
+    setOpen(true);
+  }
 
-    setSending(false);
-
-    if (error) {
-      alert(error.message || "Erro ao enviar campanha.");
+  async function saveCampaign() {
+    if (!form.title.trim() || !form.subject.trim()) {
+      alert("Preencha o título e o assunto.");
       return;
     }
 
-    alert(
-      mode === "test"
-        ? "Teste enviado com sucesso."
-        : "Disparo iniciado/enviado. Verifique o histórico no Supabase (newsletter_campaigns)."
-    );
+    if (form.mode === "materia" && !form.materia_id) {
+      alert("Selecione uma matéria.");
+      return;
+    }
 
+    setSaving(true);
+
+    let finalHtml = form.content_html;
+
+    // Se for matéria: gera um HTML básico com título/resumo/link
+    if (form.mode === "materia") {
+      const m = materias.find((x) => x.id === form.materia_id);
+      if (!m) {
+        setSaving(false);
+        alert("Matéria não encontrada na lista.");
+        return;
+      }
+
+      const link = m.slug ? `${form.site_url}/materias/${m.slug}` : `${form.site_url}/materias/${m.id}`;
+      finalHtml = `
+        <h3 style="margin:0 0 8px;">${m.titulo}</h3>
+        ${m.resumo ? `<p style="margin:0 0 14px; color:#333;">${m.resumo}</p>` : ""}
+        <p style="margin:0;">
+          <a href="${link}" target="_blank" rel="noopener noreferrer"
+             style="display:inline-block; padding:10px 14px; background:#0F7A3E; color:#fff; text-decoration:none; border-radius:10px;">
+            Ler matéria
+          </a>
+        </p>
+      `;
+    } else {
+      if (!finalHtml.trim()) {
+        setSaving(false);
+        alert("No modo personalizado, preencha o HTML do email.");
+        return;
+      }
+    }
+
+    const payload = {
+      title: form.title.trim(),
+      subject: form.subject.trim(),
+      mode: form.mode,
+      materia_id: form.mode === "materia" ? form.materia_id : null,
+      content_html: finalHtml,
+      status: selectedCampaign ? selectedCampaign.status : "draft",
+    };
+
+    if (selectedCampaign) {
+      const { error } = await supabase.from("newsletter_campaigns").update(payload).eq("id", selectedCampaign.id);
+      if (error) alert(error.message);
+    } else {
+      const { error } = await supabase.from("newsletter_campaigns").insert(payload);
+      if (error) alert(error.message);
+    }
+
+    setSaving(false);
     setOpen(false);
-    await loadSubscribers();
+    await loadCampaigns();
+  }
+
+  async function deleteCampaign(id: string) {
+    if (!confirm("Excluir esta campanha? Isso apaga também os logs de envio.")) return;
+    const { error } = await supabase.from("newsletter_campaigns").delete().eq("id", id);
+    if (error) alert(error.message);
+    await loadCampaigns();
+  }
+
+  async function sendTest() {
+    if (!selectedCampaign) {
+      alert("Salve a campanha antes de enviar teste.");
+      return;
+    }
+    if (!testEmail.trim() || !testEmail.includes("@")) {
+      alert("Digite um email de teste válido.");
+      return;
+    }
+
+    setSendingTest(true);
+    setSendLog(null);
+
+    const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
+      body: {
+        mode: "test",
+        campaign_id: selectedCampaign.id,
+        test_email: testEmail.trim().toLowerCase(),
+        site_url: form.site_url || "https://kalungacomunicacoes.org",
+      },
+    });
+
+    if (error) {
+      setSendLog(error.message);
+    } else {
+      setSendLog(`✅ Teste enviado para ${data?.sentTo || testEmail}`);
+    }
+
+    setSendingTest(false);
+  }
+
+  // envio em lotes (evita timeout)
+  async function sendCampaignBatched() {
+    if (!selectedCampaign) {
+      alert("Selecione uma campanha.");
+      return;
+    }
+    if (selectedCampaign.status === "sent") {
+      alert("Essa campanha já está marcada como enviada.");
+      return;
+    }
+
+    setSendingBatch(true);
+    setSendLog("Iniciando envio em lotes...");
+
+    let offset = 0;
+    let totalSent = 0;
+    let totalFailed = 0;
+
+    // loop até terminar (quando a função retornar done=true)
+    for (let i = 0; i < 9999; i++) {
+      const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
+        body: {
+          mode: "send",
+          campaign_id: selectedCampaign.id,
+          site_url: form.site_url || "https://kalungacomunicacoes.org",
+          limit: 50,
+          offset,
+        },
+      });
+
+      if (error) {
+        setSendLog(`❌ Erro: ${error.message}`);
+        break;
+      }
+
+      totalSent += Number(data?.sent || 0);
+      totalFailed += Number(data?.failed || 0);
+
+      if (data?.done) {
+        setSendLog(`✅ Concluído. Enviados: ${totalSent} | Falhas: ${totalFailed}`);
+        break;
+      }
+
+      offset = Number(data?.nextOffset ?? 0);
+      setSendLog(`Enviando... +${data?.sent || 0} enviados, +${data?.failed || 0} falhas. Próximo lote offset=${offset}`);
+
+      // pequena pausa pra não saturar
+      await new Promise((r) => setTimeout(r, 400));
+    }
+
+    setSendingBatch(false);
+    await loadCampaigns();
   }
 
   return (
@@ -245,218 +316,342 @@ export function AdminNewsletter() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Newsletter</h1>
           <p className="text-muted-foreground mt-1">
-            Inscritos: <b>{subs.length}</b> • Ativos: <b>{activeCount}</b>
+            Campanhas, inscritos e disparos de email marketing.
           </p>
         </div>
 
         <div className="flex gap-2">
           <button
-            onClick={exportCsv}
-            className="inline-flex items-center justify-center rounded-md border bg-card px-4 py-2 text-sm font-medium shadow-sm hover:bg-muted"
-            title="Exportar CSV"
+            onClick={() => {
+              loadCampaigns();
+              loadSubscribers();
+            }}
+            className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
           >
-            <Download className="mr-2 h-4 w-4" />
-            Exportar
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
           </button>
 
           <button
-            onClick={openCampaignModal}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
+            onClick={openNewCampaign}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Novo disparo
+            <Plus className="h-4 w-4" />
+            Nova Campanha
           </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 bg-card p-4 rounded-lg border shadow-sm">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <input
-            type="search"
-            placeholder="Buscar inscritos (email, nome, status)..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="w-full rounded-md border border-input bg-background pl-9 pr-4 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setTab("campaigns")}
+          className={`px-4 py-2 rounded-md text-sm font-medium border ${
+            tab === "campaigns" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"
+          }`}
+        >
+          Campanhas
+        </button>
+        <button
+          onClick={() => setTab("subscribers")}
+          className={`px-4 py-2 rounded-md text-sm font-medium border ${
+            tab === "subscribers" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"
+          }`}
+        >
+          Inscritos
+        </button>
       </div>
 
-      <div className="rounded-md border bg-card shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-muted/50 text-muted-foreground">
-              <tr>
-                <th className="px-6 py-3 font-medium">Email</th>
-                <th className="px-6 py-3 font-medium">Nome</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium">Data</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
+      {/* Campaigns */}
+      {tab === "campaigns" && (
+        <div className="rounded-md border bg-card shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-muted/50 text-muted-foreground">
                 <tr>
-                  <td className="px-6 py-4 text-muted-foreground" colSpan={4}>
-                    Carregando...
-                  </td>
+                  <th className="px-6 py-3 font-medium">Título</th>
+                  <th className="px-6 py-3 font-medium">Assunto</th>
+                  <th className="px-6 py-3 font-medium">Tipo</th>
+                  <th className="px-6 py-3 font-medium">Status</th>
+                  <th className="px-6 py-3 font-medium">Enviados</th>
+                  <th className="px-6 py-3 font-medium">Falhas</th>
+                  <th className="px-6 py-3 font-medium">Criada</th>
+                  <th className="px-6 py-3 font-medium text-right">Ações</th>
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td className="px-6 py-4 text-muted-foreground" colSpan={4}>
-                    Nenhum inscrito encontrado.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((s) => (
-                  <tr key={s.id} className="hover:bg-muted/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-foreground">{s.email}</td>
-                    <td className="px-6 py-4">{s.name || "—"}</td>
-                    <td className="px-6 py-4">{statusLabel(s.status)}</td>
-                    <td className="px-6 py-4">{toPtDate(s.created_at)}</td>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {campLoading ? (
+                  <tr>
+                    <td className="px-6 py-4 text-muted-foreground" colSpan={8}>
+                      Carregando...
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                ) : campaigns.length === 0 ? (
+                  <tr>
+                    <td className="px-6 py-4 text-muted-foreground" colSpan={8}>
+                      Nenhuma campanha criada ainda.
+                    </td>
+                  </tr>
+                ) : (
+                  campaigns.map((c) => (
+                    <tr key={c.id} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-6 py-4 font-medium">{c.title}</td>
+                      <td className="px-6 py-4">{c.subject}</td>
+                      <td className="px-6 py-4">{c.mode === "materia" ? "Matéria" : "Personalizado"}</td>
+                      <td className="px-6 py-4">{c.status}</td>
+                      <td className="px-6 py-4">{c.sent_count ?? 0}</td>
+                      <td className="px-6 py-4">{c.fail_count ?? 0}</td>
+                      <td className="px-6 py-4">{toBR(c.created_at)}</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => openEditCampaign(c)}
+                            className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                            title="Abrir"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
 
-      {/* Modal - Novo Disparo */}
+                          <button
+                            onClick={() => deleteCampaign(c.id)}
+                            className="p-2 hover:bg-muted rounded-full text-red-600 hover:text-red-700 transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Subscribers */}
+      {tab === "subscribers" && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 bg-card p-4 rounded-lg border shadow-sm">
+            <div className="relative flex-1">
+              <input
+                type="search"
+                placeholder="Buscar inscritos por nome/email..."
+                value={subsQ}
+                onChange={(e) => setSubsQ(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-4 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              {subs.length} inscritos
+            </div>
+          </div>
+
+          <div className="rounded-md border bg-card shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-muted/50 text-muted-foreground">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Email</th>
+                    <th className="px-6 py-3 font-medium">Nome</th>
+                    <th className="px-6 py-3 font-medium">Status</th>
+                    <th className="px-6 py-3 font-medium">Inscrito em</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {subsLoading ? (
+                    <tr>
+                      <td className="px-6 py-4 text-muted-foreground" colSpan={4}>
+                        Carregando...
+                      </td>
+                    </tr>
+                  ) : filteredSubs.length === 0 ? (
+                    <tr>
+                      <td className="px-6 py-4 text-muted-foreground" colSpan={4}>
+                        Nenhum inscrito encontrado.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSubs.map((s) => (
+                      <tr key={s.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="px-6 py-4 font-medium">{s.email}</td>
+                        <td className="px-6 py-4">{s.name || "—"}</td>
+                        <td className="px-6 py-4">{s.status}</td>
+                        <td className="px-6 py-4">{toBR(s.created_at)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal criar/editar campanha */}
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl rounded-lg bg-background border shadow-lg overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl rounded-xl bg-background border shadow-lg overflow-hidden">
+            <div className="p-5 border-b flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold">Novo disparo</h2>
-                <p className="text-sm text-muted-foreground">Escolha uma matéria ou faça um email personalizado.</p>
+                <h2 className="text-lg font-bold">
+                  {selectedCampaign ? "Editar Campanha" : "Nova Campanha"}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Crie uma campanha por matéria ou com HTML personalizado.
+                </p>
               </div>
+
               <button
+                className="px-3 py-1 rounded-md border hover:bg-muted text-sm"
                 onClick={() => setOpen(false)}
-                className="p-2 rounded-md hover:bg-muted"
-                title="Fechar"
               >
-                <X className="h-4 w-4" />
+                Fechar
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setTab("materia")}
-                  className={`px-3 py-2 rounded-md text-sm font-medium border ${
-                    tab === "materia" ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
-                  }`}
-                >
-                  Disparo por Matéria
-                </button>
-                <button
-                  onClick={() => setTab("custom")}
-                  className={`px-3 py-2 rounded-md text-sm font-medium border ${
-                    tab === "custom" ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
-                  }`}
-                >
-                  Personalizado (HTML)
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* base url */}
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">URL do site (para links)</label>
+            <div className="p-5 space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Título interno</label>
                   <input
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="https://kalungacomunicacoes.org"
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    placeholder="Ex: Fevereiro/2026 - Edição 01"
                   />
                 </div>
 
-                {/* assunto */}
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Assunto</label>
+                <div>
+                  <label className="text-sm font-medium">Assunto do email</label>
                   <input
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder={tab === "materia" ? "Deixe vazio para usar o título da matéria" : "Assunto do email"}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={form.subject}
+                    onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    placeholder="Ex: Novidades do Território Kalunga"
                   />
                 </div>
               </div>
 
-              {tab === "materia" ? (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Selecione a matéria</label>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Tipo</label>
                   <select
-                    value={materiaId}
-                    onChange={(e) => setMateriaId(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={form.mode}
+                    onChange={(e) => setForm({ ...form, mode: e.target.value as any })}
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
                   >
-                    <option value="">{loadingMaterias ? "Carregando..." : "— Selecione —"}</option>
+                    <option value="custom">Personalizado (HTML)</option>
+                    <option value="materia">Disparo por Matéria</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">URL do site</label>
+                  <input
+                    value={form.site_url}
+                    onChange={(e) => setForm({ ...form, site_url: e.target.value })}
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    placeholder="https://kalungacomunicacoes.org"
+                  />
+                </div>
+              </div>
+
+              {form.mode === "materia" ? (
+                <div>
+                  <label className="text-sm font-medium">Escolha uma matéria</label>
+                  <select
+                    value={form.materia_id}
+                    onChange={(e) => setForm({ ...form, materia_id: e.target.value })}
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">{materiasLoading ? "Carregando..." : "Selecione..."}</option>
                     {materias.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.titulo}
                       </option>
                     ))}
                   </select>
-
-                  <p className="text-xs text-muted-foreground">
-                    O email será montado automaticamente com resumo e botão “Ler matéria completa”.
+                  <p className="text-xs text-muted-foreground mt-1">
+                    O HTML será gerado automaticamente com título/resumo/botão.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div>
                   <label className="text-sm font-medium">HTML do email</label>
                   <textarea
-                    value={html}
-                    onChange={(e) => setHtml(e.target.value)}
-                    placeholder="<h1>Olá!</h1><p>Seu conteúdo aqui...</p>"
-                    className="w-full min-h-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={form.content_html}
+                    onChange={(e) => setForm({ ...form, content_html: e.target.value })}
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[180px]"
+                    placeholder="<h3>Olá...</h3><p>Conteúdo...</p>"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Dica: use HTML simples. O envio real é feito pela Edge Function via SMTP (Hostinger).
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Dica: use HTML simples. O template final é montado na Edge Function.
                   </p>
                 </div>
               )}
 
-              <div className="rounded-md border bg-card p-4 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">Enviar teste para</label>
-                    <input
-                      value={testEmail}
-                      onChange={(e) => setTestEmail(e.target.value)}
-                      placeholder="seuemail@dominio.com"
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    />
-                  </div>
+              {sendLog && (
+                <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm">
+                  {sendLog}
+                </div>
+              )}
 
-                  <div className="flex items-end gap-2">
+              {/* Ações */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2 border-t">
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveCampaign}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                  >
+                    {saving ? "Salvando..." : "Salvar campanha"}
+                  </button>
+
+                  {selectedCampaign && (
                     <button
-                      disabled={sending}
-                      onClick={() => sendCampaign("test")}
-                      className="inline-flex w-full items-center justify-center rounded-md border bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-muted disabled:opacity-60"
-                      title="Enviar teste"
+                      onClick={sendCampaignBatched}
+                      disabled={sendingBatch}
+                      className="inline-flex items-center gap-2 rounded-md bg-[#0F7A3E] px-4 py-2 text-sm font-medium text-white hover:bg-[#0d6633] disabled:opacity-60"
+                      title="Envia para todos inscritos (em lotes)"
                     >
-                      <Send className="mr-2 h-4 w-4" />
-                      Enviar teste
+                      <Send className="h-4 w-4" />
+                      {sendingBatch ? "Enviando..." : "Enviar campanha"}
                     </button>
-                  </div>
+                  )}
                 </div>
 
-                <button
-                  disabled={sending}
-                  onClick={() => sendCampaign("all")}
-                  className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-60"
-                  title="Enviar para inscritos ativos"
-                >
-                  <Send className="mr-2 h-4 w-4" />
-                  Enviar para inscritos ativos
-                </button>
-
-                <p className="text-xs text-muted-foreground">
-                  Esse botão dispara para <b>todos com status “active”</b>.
-                </p>
+                {selectedCampaign && (
+                  <div className="flex flex-col md:flex-row gap-2 md:items-center">
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <input
+                        value={testEmail}
+                        onChange={(e) => setTestEmail(e.target.value)}
+                        className="w-full md:w-[260px] rounded-md border bg-background pl-9 pr-3 py-2 text-sm"
+                        placeholder="email de teste"
+                      />
+                    </div>
+                    <button
+                      onClick={sendTest}
+                      disabled={sendingTest}
+                      className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                      title="Envia apenas para o email de teste"
+                    >
+                      {sendingTest ? "Enviando..." : "Enviar teste"}
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {selectedCampaign && (
+                <div className="text-xs text-muted-foreground">
+                  Status atual: <b>{selectedCampaign.status}</b> • Enviados: <b>{selectedCampaign.sent_count ?? 0}</b> • Falhas: <b>{selectedCampaign.fail_count ?? 0}</b>
+                </div>
+              )}
             </div>
           </div>
         </div>
