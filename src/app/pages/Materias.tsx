@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 
 type MateriaRow = {
   id: string;
+  slug: string;
   titulo: string;
   resumo: string | null;
   capa_url: string | null;
@@ -34,7 +35,7 @@ export function Materias() {
 
       const { data, error } = await supabase
         .from('materias')
-        .select('id, titulo, resumo, capa_url, autor_nome, tags, published_at, created_at, status')
+        .select('id, slug, titulo, resumo, capa_url, autor_nome, tags, published_at, created_at, status')
         .eq('status', 'published')
         .order('published_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
@@ -56,6 +57,7 @@ export function Materias() {
       const categoria = (m.tags && m.tags[0]) ? m.tags[0] : 'Geral';
       return {
         id: m.id,
+        slug: m.slug,
         titulo: m.titulo,
         resumo: m.resumo || '',
         imagem: m.capa_url || 'https://images.unsplash.com/photo-1579308343343-6557a756d515?auto=format&fit=crop&w=1200&q=80',
@@ -134,7 +136,7 @@ export function Materias() {
               {/* Matéria Destaque */}
               {materiaDestaque && (
                 <div className="mb-12">
-                  <Link to={`/materias/${materiaDestaque.id}`}>
+                  <Link to={`/materias/${materiaDestaque.slug || materiaDestaque.id}`}>
                     <RKCCard variant="featured" className="hover:scale-[1.01] transition-transform">
                       <div className="grid lg:grid-cols-2 gap-0">
                         <RKCCardImage
@@ -174,7 +176,7 @@ export function Materias() {
               {/* Grid de Matérias */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {materiasSecundarias.map((materia) => (
-                  <Link key={materia.id} to={`/materias/${materia.id}`}>
+                  <Link key={materia.id} to={`/materias/${materia.slug || materia.id}`}>
                     <RKCCard className="h-full hover:scale-[1.02] transition-transform">
                       <RKCCardImage src={materia.imagem} alt={materia.titulo} />
                       <RKCCardContent>
