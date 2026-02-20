@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Save, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { uploadPublicImage } from "@/lib/siteUpload";
 
 type Valor = {
   id: string;
@@ -8,9 +10,22 @@ type Valor = {
   ordem: number | null;
 };
 
+const BUCKET = "site";
+
+// 1 registro fixo pra página (evita duplicar)
+const QUEM_SOMOS_ID = "00000000-0000-0000-0000-000000000001";
+
+function withCacheBuster(url: string) {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}v=${Date.now()}`;
+}
+
 export function AdminQuemSomos() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [uploading, setUploading] = useState(false);
+  const imageFileRef = useRef<HTMLInputElement | null>(null);
 
   const [historia, setHistoria] = useState("");
   const [imagemUrl, setImagemUrl] = useState("");
@@ -19,175 +34,283 @@ export function AdminQuemSomos() {
   const [novoTitulo, setNovoTitulo] = useState("");
   const [novaDescricao, setNovaDescricao] = useState("");
 
+  const valoresOrdenados = useMemo(() => {
+    return [...valores].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  }, [valores]);
+
   async function carregar() {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const { data: qs } = await supabase
-      .from("quem_somos")
-      .select("historia, imagem_url")
-      .limit(1)
-      .maybeSingle();
+      const { data: qs, error: qsErr } = await supabase
+        .from("quem_somos")
+        .select("id, historia, imagem_url")
+        .eq("id", QUEM_SOMOS_ID)
+        .maybeSingle();
 
-    if (qs) {
-      setHistoria(qs.historia || "");
-      setImagemUrl(qs.imagem_url || "");
+      // se não existe ainda, tudo bem
+      if (!qsErr && qs) {
+        setHistoria(qs.historia || "");
+        setImagemUrl(qs.imagem_url || "");
+      }
+
+      const { data: vs, error: vsErr } = await supabase
+        .from("valores")
+        .select("*")
+        .order("ordem", { ascending: true });
+
+      if (vsErr) throw vsErr;
+
+      setValores((vs || []) as Valor[]);
+    } catch (e: any) {
+      console.warn("Erro ao carregar Quem Somos:", e?.message || e);
+      alert(e?.message || "Erro ao carregar Quem Somos.");
+    } finally {
+      setLoading(false);
     }
-
-    const { data: vs } = await supabase
-      .from("valores")
-      .select("*")
-      .order("ordem", { ascending: true });
-
-    setValores((vs || []) as Valor[]);
-    setLoading(false);
-  }
-
-  async function salvarQuemSomos() {
-    setSaving(true);
-
-    // garante 1 registro: upsert por id fixo
-    const ID_FIXO = "00000000-0000-0000-0000-000000000001";
-
-    await supabase.from("quem_somos").upsert({
-      id: ID_FIXO,
-      historia,
-      imagem_url: imagemUrl,
-      updated_at: new Date().toISOString(),
-    });
-
-    setSaving(false);
-    alert("Quem Somos salvo!");
-  }
-
-  async function adicionarValor() {
-    if (!novoTitulo.trim()) return;
-
-    const nextOrder = (valores[valores.length - 1]?.ordem ?? valores.length) + 1;
-
-    const { data, error } = await supabase
-      .from("valores")
-      .insert({
-        titulo: novoTitulo.trim(),
-        descricao: novaDescricao.trim() || null,
-        ordem: nextOrder,
-      })
-      .select("*")
-      .single();
-
-    if (error) {
-      alert("Erro ao adicionar valor");
-      return;
-    }
-
-    setValores((prev) => [...prev, data as Valor]);
-    setNovoTitulo("");
-    setNovaDescricao("");
-  }
-
-  async function removerValor(id: string) {
-    const ok = confirm("Remover este valor?");
-    if (!ok) return;
-
-    await supabase.from("valores").delete().eq("id", id);
-    setValores((prev) => prev.filter((v) => v.id !== id));
   }
 
   useEffect(() => {
     carregar();
   }, []);
 
+  async function handleUpload(file?: File) {
+    if (!file) return;
+
+    try {
+      setUploading(true);
+
+      const url = await uploadPublicImage({
+        bucket: BUCKET,
+        path: "quem-somos/imagem-principal/imagem",
+        file,
+      });
+
+      setImagemUrl(withCacheBuster(url));
+    } catch (e: any) {
+      alert(e?.message || "Erro ao enviar imagem.");
+    } finally {
+      setUploading(false);
+      if (imageFileRef.current) imageFileRef.current.value = "";
+    }
+  }
+
+  async function salvarQuemSomos() {
+    try {
+      setSaving(true);
+
+      const { error } = await supabase.from("quem_somos").upsert({
+        id: QUEM_SOMOS_ID,
+        historia: historia || null,
+        imagem_url: imagemUrl || null,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (error) throw error;
+
+      alert("Quem Somos salvo!");
+    } catch (e: any) {
+      alert(e?.message || "Erro ao salvar Quem Somos.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function adicionarValor() {
+    const titulo = novoTitulo.trim();
+    const descricao = novaDescricao.trim();
+
+    if (!titulo) return alert("Informe o título do valor.");
+
+    try {
+      const nextOrder =
+        (valoresOrdenados[valoresOrdenados.length - 1]?.ordem ?? valoresOrdenados.length) + 1;
+
+      const { data, error } = await supabase
+        .from("valores")
+        .insert({
+          titulo,
+          descricao: descricao || null,
+          ordem: nextOrder,
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setValores((prev) => [...prev, data as Valor]);
+      setNovoTitulo("");
+      setNovaDescricao("");
+    } catch (e: any) {
+      alert(e?.message || "Erro ao adicionar valor.");
+    }
+  }
+
+  async function removerValor(id: string) {
+    const ok = confirm("Remover este valor?");
+    if (!ok) return;
+
+    try {
+      const { error } = await supabase.from("valores").delete().eq("id", id);
+      if (error) throw error;
+
+      setValores((prev) => prev.filter((v) => v.id !== id));
+    } catch (e: any) {
+      alert(e?.message || "Erro ao remover valor.");
+    }
+  }
+
   if (loading) {
     return <div className="p-6">Carregando...</div>;
   }
 
   return (
-    <div className="p-6 space-y-8">
-      <header>
-        <h1 className="text-2xl font-extrabold">Quem Somos</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure a história, imagem principal e os valores.
-        </p>
-      </header>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-bold">Nossa História</h2>
-        <textarea
-          value={historia}
-          onChange={(e) => setHistoria(e.target.value)}
-          rows={10}
-          className="w-full rounded-md border p-3 bg-background"
-          placeholder="Digite aqui o texto principal da nossa história..."
-        />
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-bold">Imagem Principal (URL)</h2>
-        <input
-          value={imagemUrl}
-          onChange={(e) => setImagemUrl(e.target.value)}
-          className="w-full rounded-md border p-3 bg-background"
-          placeholder="Cole a URL da imagem do Supabase Storage ou externa"
-        />
-        {imagemUrl ? (
-          <img src={imagemUrl} alt="Preview" className="max-w-xl rounded-md border" />
-        ) : null}
-      </section>
-
+    <div className="space-y-6 max-w-4xl">
       <div>
-        <button
-          onClick={salvarQuemSomos}
-          disabled={saving}
-          className="px-4 py-2 rounded-md bg-primary text-primary-foreground disabled:opacity-60"
-        >
-          {saving ? "Salvando..." : "Salvar Quem Somos"}
-        </button>
+        <h1 className="text-3xl font-bold tracking-tight">Quem Somos</h1>
+        <p className="text-muted-foreground mt-1">
+          Configure o texto principal, a imagem e os valores da página.
+        </p>
       </div>
 
-      <hr className="border-border" />
+      <div className="grid gap-6">
+        {/* História */}
+        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+          <h3 className="font-semibold text-lg border-b pb-4 mb-4">Nossa História</h3>
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-bold">Nossos Valores</h2>
-
-        <div className="grid md:grid-cols-2 gap-3">
-          <input
-            value={novoTitulo}
-            onChange={(e) => setNovoTitulo(e.target.value)}
-            className="w-full rounded-md border p-3 bg-background"
-            placeholder="Título do valor (ex: Respeito)"
-          />
-          <input
-            value={novaDescricao}
-            onChange={(e) => setNovaDescricao(e.target.value)}
-            className="w-full rounded-md border p-3 bg-background"
-            placeholder="Descrição (opcional)"
-          />
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Texto principal</label>
+            <textarea
+              value={historia}
+              onChange={(e) => setHistoria(e.target.value)}
+              rows={10}
+              className="w-full px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              placeholder="Digite aqui a história da Rede Kalunga Comunicações..."
+            />
+          </div>
         </div>
 
-        <button
-          onClick={adicionarValor}
-          className="px-4 py-2 rounded-md border hover:bg-muted"
-        >
-          Adicionar valor
-        </button>
+        {/* Imagem */}
+        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+          <h3 className="font-semibold text-lg border-b pb-4 mb-4">Imagem Principal</h3>
 
-        <div className="space-y-2">
-          {valores.map((v) => (
-            <div key={v.id} className="flex items-start justify-between gap-4 rounded-md border p-4">
-              <div>
-                <div className="font-semibold">{v.titulo}</div>
-                {v.descricao ? <div className="text-sm text-muted-foreground">{v.descricao}</div> : null}
+          <input
+            ref={imageFileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleUpload(e.target.files?.[0])}
+          />
+
+          <div
+            className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer bg-muted/10"
+            onClick={() => {
+              if (uploading) return;
+              imageFileRef.current?.click();
+            }}
+          >
+            {imagemUrl ? (
+              <div className="w-full">
+                <img
+                  src={imagemUrl}
+                  alt="Imagem principal"
+                  className="w-full h-52 object-cover rounded-md border bg-white"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Clique para {uploading ? "enviar..." : "trocar a imagem"}
+                </p>
               </div>
+            ) : (
+              <>
+                <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-sm font-medium">{uploading ? "Enviando..." : "Enviar imagem principal"}</p>
+                <p className="text-xs text-muted-foreground mt-1">{uploading ? "Aguarde" : "Clique para fazer upload"}</p>
+              </>
+            )}
+          </div>
 
-              <button
-                onClick={() => removerValor(v.id)}
-                className="text-sm text-destructive hover:underline"
-              >
-                Remover
-              </button>
-            </div>
-          ))}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">URL da imagem (opcional)</label>
+            <input
+              value={imagemUrl}
+              onChange={(e) => setImagemUrl(e.target.value)}
+              placeholder="https://..."
+              className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              disabled={uploading}
+            />
+          </div>
         </div>
-      </section>
+
+        {/* Valores */}
+        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+          <h3 className="font-semibold text-lg border-b pb-4 mb-4">Nossos Valores</h3>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Título</label>
+              <input
+                value={novoTitulo}
+                onChange={(e) => setNovoTitulo(e.target.value)}
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                placeholder="Ex: Respeito"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Descrição</label>
+              <input
+                value={novaDescricao}
+                onChange={(e) => setNovaDescricao(e.target.value)}
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                placeholder="Opcional"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={adicionarValor}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md border hover:bg-muted transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar valor
+          </button>
+
+          <div className="space-y-2">
+            {valoresOrdenados.length ? (
+              valoresOrdenados.map((v) => (
+                <div key={v.id} className="flex items-start justify-between gap-4 rounded-md border p-4">
+                  <div>
+                    <div className="font-semibold">{v.titulo}</div>
+                    {v.descricao ? <div className="text-sm text-muted-foreground">{v.descricao}</div> : null}
+                  </div>
+
+                  <button
+                    onClick={() => removerValor(v.id)}
+                    className="inline-flex items-center gap-2 text-sm text-destructive hover:bg-destructive/10 px-3 py-2 rounded-md transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remover
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">Nenhum valor cadastrado ainda.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Save */}
+        <div className="flex justify-end">
+          <button
+            onClick={salvarQuemSomos}
+            disabled={saving || uploading}
+            className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {saving ? "Salvando..." : uploading ? "Enviando..." : "Salvar Alterações"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
