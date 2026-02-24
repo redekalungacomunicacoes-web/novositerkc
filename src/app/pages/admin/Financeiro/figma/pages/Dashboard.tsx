@@ -77,7 +77,10 @@ export function Dashboard() {
             Nova Movimentação
           </button>
         </div>
-        <p className="text-gray-600">Visão geral das finanças e projetos</p>
+        <div className="flex items-center gap-3">
+          <p className="text-gray-600">Visão geral das finanças e projetos</p>
+          <Link to="/admin/financeiro/fundos" className="text-sm text-[#0f3d2e] hover:underline font-medium">Ver Fundos</Link>
+        </div>
       </div>
 
       {/* KPIs */}
