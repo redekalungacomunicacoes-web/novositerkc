@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Download, FileText, CheckCircle2, AlertCircle, Plus } from 'lucide-react';
 import * as Tabs from '@radix-ui/react-tabs';
@@ -6,28 +6,36 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { StatusBadge } from '../components/StatusBadge';
 import { ModalMovimentacao } from '../components/ModalMovimentacao';
 import { ModalUploadComprovante } from '../components/ModalUploadComprovante';
-import { MOVIMENTACOES, formatCurrency, formatDate } from '../data/financeiro-data';
+import { formatCurrency, formatDate } from '../data/financeiro-data';
+import { useFinanceSupabase } from '../../hooks/useFinanceSupabase';
 
 export function ProjetoDetalhes() {
   const { id } = useParams();
   const [modalMovOpen, setModalMovOpen] = useState(false);
   const [modalUploadOpen, setModalUploadOpen] = useState(false);
+  const [projeto, setProjeto] = useState<any>(null);
+  const [movimentacoesProjeto, setMovimentacoesProjeto] = useState<any[]>([]);
+  const [fundos, setFundos] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [editing, setEditing] = useState<any>(null);
+  const { getProject, listMovementsByProject, listFunds, listProjects, createMovement, updateMovement, deleteMovement, uploadAttachment, listAttachments, deleteAttachment } = useFinanceSupabase();
 
-  const projeto = {
-    id: 'proj-001',
-    nome: 'Rede Integra 2025',
-    fundo: 'Unibanco 2025',
-    fundoId: 'unibanco-2025',
-    saldo: 45420.00,
-    totalOrcado: 68500.00,
-    totalReal: 23080.00,
-    diferenca: -45420.00,
-    percentualExecucao: 34,
-    status: 'em_andamento' as const,
-  };
 
-  const movimentacoesProjeto = MOVIMENTACOES.filter(mov => mov.projetoId === id);
 
+
+
+  useEffect(() => {
+    const load = async () => {
+      if (!id) return;
+      const [projRes, movRes, fundsRes] = await Promise.all([getProject(id), listMovementsByProject(id), listFunds()]);
+      setProjeto(projRes.data);
+      setMovimentacoesProjeto(movRes.data || []);
+      setFundos(fundsRes.data || []);
+    };
+    void load();
+  }, [id]);
+
+  const fundoNome = fundos.find((f) => f.id === projeto?.fund_id)?.name || '-';
   // Dados para gráficos
   const categoriaData = [
     { categoria: 'PESSOAL', orcado: 30000, real: 12000 },
@@ -58,10 +66,10 @@ export function ProjetoDetalhes() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-semibold text-gray-900">{projeto.nome}</h1>
-              <StatusBadge status={projeto.status} size="md" />
+              <h1 className="text-3xl font-semibold text-gray-900">{projeto?.name || '-'}</h1>
+              <StatusBadge status={projeto?.status || 'em_andamento'} size="md" />
             </div>
-            <p className="text-gray-600">Fundo: {projeto.fundo}</p>
+            <p className="text-gray-600">Fundo: {fundoNome}</p>
           </div>
           <button
             onClick={() => setModalMovOpen(true)}
@@ -77,19 +85,19 @@ export function ProjetoDetalhes() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl border-2 border-[#0f3d2e] p-6 shadow-sm">
           <p className="text-sm text-gray-600 mb-1">Saldo Disponível</p>
-          <p className="text-2xl font-semibold text-[#0f3d2e]">{formatCurrency(projeto.saldo)}</p>
+          <p className="text-2xl font-semibold text-[#0f3d2e]">{formatCurrency(Number(projeto?.current_balance || 0))}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-sm">
           <p className="text-sm text-gray-600 mb-1">Orçado</p>
-          <p className="text-2xl font-semibold text-gray-900">{formatCurrency(projeto.totalOrcado)}</p>
+          <p className="text-2xl font-semibold text-gray-900">{formatCurrency(Number(projeto?.initial_amount || 0))}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-sm">
           <p className="text-sm text-gray-600 mb-1">Gasto Real</p>
-          <p className="text-2xl font-semibold text-gray-900">{formatCurrency(projeto.totalReal)}</p>
+          <p className="text-2xl font-semibold text-gray-900">{formatCurrency(movimentacoesProjeto.reduce((a,m)=>a+Number(m.total_value||0),0))}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-[#ffdd9a] p-6 shadow-sm">
           <p className="text-sm text-gray-600 mb-1">Execução</p>
-          <p className="text-2xl font-semibold text-gray-900">{projeto.percentualExecucao}%</p>
+          <p className="text-2xl font-semibold text-gray-900">{Number(projeto?.initial_amount||0) ? ((movimentacoesProjeto.reduce((a,m)=>a+Number(m.total_value||0),0)/Number(projeto?.initial_amount||1))*100).toFixed(1) : '0'}%</p>
         </div>
       </div>
 
@@ -233,26 +241,26 @@ export function ProjetoDetalhes() {
                     {movimentacoesProjeto.map((mov) => (
                       <tr key={mov.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(mov.data)}
+                          {formatDate(mov.date)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{mov.descricao}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{mov.description}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
-                            {mov.categoria}
+                            {mov.category || '-'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <span className={`text-sm font-medium ${
-                            mov.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'
+                            mov.type === 'entrada' ? 'text-green-600' : 'text-red-600'
                           }`}>
-                            {mov.tipo === 'entrada' ? '+' : '-'} {formatCurrency(mov.valorTotal)}
+                            {mov.type === 'entrada' ? '+' : '-'} {formatCurrency(Number(mov.total_value || 0))}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <StatusBadge status={mov.status} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="text-sm text-gray-600">{mov.comprovantes.length}</span>
+                          <span className="text-sm text-gray-600">{(mov.attachments || []).length}</span>
                         </td>
                       </tr>
                     ))}
@@ -307,13 +315,13 @@ export function ProjetoDetalhes() {
                   <div key={mov.id} className="p-6 hover:bg-gray-50">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 mb-1">{mov.descricao}</h4>
+                        <h4 className="font-medium text-gray-900 mb-1">{mov.description}</h4>
                         <div className="flex items-center gap-3 text-sm text-gray-600">
-                          <span>{formatDate(mov.data)}</span>
+                          <span>{formatDate(mov.date)}</span>
                           <span>•</span>
-                          <span>{mov.favorecido}</span>
+                          <span>{mov.cost_center || '-'}</span>
                           <span>•</span>
-                          <span className="font-medium">{formatCurrency(mov.valorTotal)}</span>
+                          <span className="font-medium">{formatCurrency(Number(mov.total_value || 0))}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -322,7 +330,7 @@ export function ProjetoDetalhes() {
                           onClick={() => setModalUploadOpen(true)}
                           className="px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20] transition-colors"
                         >
-                          Anexar ({mov.comprovantes.length})
+                          Anexar ({(mov.attachments || []).length})
                         </button>
                       </div>
                     </div>
