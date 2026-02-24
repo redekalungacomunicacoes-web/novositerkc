@@ -9,6 +9,7 @@ import {
   Users,
   Mail,
   Info,
+  Wallet,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -62,6 +63,8 @@ export function AdminSidebar() {
 
     // ✅ Newsletter (admin/editor)
     { href: "/admin/newsletter", label: "Newsletter", icon: Mail, allow: ["admin_alfa", "admin", "editor"] },
+
+    { href: "/admin/financeiro", label: "Financeiro", icon: Wallet, allow: ["admin_alfa", "admin", "editor"] },
 
     // RBAC/usuários só super
     { href: "/admin/usuarios", label: "Usuários", icon: Users, allow: ["admin_alfa"] },
