@@ -1,16 +1,30 @@
-import { Outlet } from "react-router-dom";
-import { AdminSidebar } from "@/app/components/admin/AdminSidebar";
-import { Menu } from "lucide-react";
+import { Outlet, Link, useLocation } from "react-router-dom";
 import { useState } from "react";
+import { AdminSidebar } from "@/app/components/admin/AdminSidebar";
+
+import {
+  Menu,
+  LayoutDashboard,
+  FileText,
+  FolderOpen,
+  Users,
+  Users2,
+  Mail,
+  Info,
+  Settings,
+  LogOut,
+  Wallet,
+} from "lucide-react";
 
 export function AdminLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background font-sans">
+      {/* Sidebar Desktop */}
       <AdminSidebar />
 
-      {/* Mobile Header */}
+      {/* Header Mobile */}
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-sidebar text-sidebar-foreground">
         <span className="font-bold text-lg">RKC Admin</span>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">
@@ -18,7 +32,7 @@ export function AdminLayout() {
         </button>
       </div>
 
-      {/* Mobile Menu (Simple overlay for now) */}
+      {/* Sidebar Mobile */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-background md:hidden p-4">
           <div className="flex justify-end">
@@ -26,12 +40,14 @@ export function AdminLayout() {
               ✕
             </button>
           </div>
+
           <div className="mt-8">
             <AdminSidebarMobile onClose={() => setIsMobileMenuOpen(false)} />
           </div>
         </div>
       )}
 
+      {/* Conteúdo */}
       <main className="md:pl-64 min-h-screen transition-all duration-300 ease-in-out">
         <div className="container mx-auto p-6 md:p-8 max-w-7xl">
           <Outlet />
@@ -41,9 +57,7 @@ export function AdminLayout() {
   );
 }
 
-// Temporary internal component for mobile sidebar reuse
-import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, FolderOpen, LogOut, Settings, Users, Users2, Mail, Info } from "lucide-react";
+/* ================= MOBILE SIDEBAR ================= */
 
 function AdminSidebarMobile({ onClose }: { onClose: () => void }) {
   const location = useLocation();
@@ -53,12 +67,14 @@ function AdminSidebarMobile({ onClose }: { onClose: () => void }) {
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/materias", label: "Matérias", icon: FileText },
     { href: "/admin/projetos", label: "Projetos", icon: FolderOpen },
+
+    // ✅ EQUIPE (GARANTIDO)
     { href: "/admin/equipe", label: "Equipe", icon: Users2 },
-    { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
-    { href: "/admin/usuarios", label: "Usuários", icon: Users },
-    // ✅ NOVO: Quem Somos
+
     { href: "/admin/quem-somos", label: "Quem Somos", icon: Info },
+    { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
     { href: "/admin/financeiro", label: "Financeiro", icon: Wallet },
+    { href: "/admin/usuarios", label: "Usuários", icon: Users },
     { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
   ];
 
@@ -67,8 +83,10 @@ function AdminSidebarMobile({ onClose }: { onClose: () => void }) {
       <nav className="flex-1 space-y-2">
         {links.map((link) => {
           const Icon = link.icon;
+
           const isActive =
-            pathname === link.href || (link.href !== "/admin" && pathname.startsWith(link.href));
+            pathname === link.href ||
+            (link.href !== "/admin" && pathname.startsWith(link.href));
 
           return (
             <Link
@@ -76,7 +94,9 @@ function AdminSidebarMobile({ onClose }: { onClose: () => void }) {
               to={link.href}
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-3 rounded-md text-base font-medium transition-colors ${
-                isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+                isActive
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted"
               }`}
             >
               <Icon className="h-5 w-5" />
