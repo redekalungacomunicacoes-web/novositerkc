@@ -10,6 +10,12 @@ import { FundFormDialog } from '../../components/FundFormDialog';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, AlertDescription } from '../components/ui/alert';
 
+const FRIENDLY_RLS = "Seu usuário não é admin no Supabase. Verifique tabela profiles.role='admin'.";
+const normalizeError = (error: unknown) => {
+  const message = (error as Error)?.message || 'Erro inesperado.';
+  return message.toLowerCase().includes('row-level security') ? FRIENDLY_RLS : message;
+};
+
 export function Fundos() {
   const { listFunds, createFund, updateFund, deleteFund } = useFinanceSupabase();
   const [fundos, setFundos] = useState<any[]>([]);
@@ -24,7 +30,7 @@ export function Fundos() {
       setFundos(data || []);
     } catch (error) {
       if (import.meta.env.DEV) console.error(error);
-      setFeedback((error as Error).message);
+      setFeedback(normalizeError(error));
     }
   };
 
@@ -109,7 +115,7 @@ export function Fundos() {
             await loadFunds();
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
-            setFeedback((error as Error).message);
+            setFeedback(normalizeError(error));
           }
         }}
       />
@@ -127,7 +133,7 @@ export function Fundos() {
             await loadFunds();
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
-            setFeedback((error as Error).message);
+            setFeedback(normalizeError(error));
           }
         }}
       />

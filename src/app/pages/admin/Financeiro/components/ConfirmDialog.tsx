@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Button } from "../figma/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../figma/components/ui/dialog";
 
 interface ConfirmDialogProps {
@@ -9,6 +11,17 @@ interface ConfirmDialogProps {
 }
 
 export function ConfirmDialog({ open, title, description, onCancel, onConfirm }: ConfirmDialogProps) {
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      await onConfirm();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onCancel()}>
       <DialogContent>
@@ -17,8 +30,8 @@ export function ConfirmDialog({ open, title, description, onCancel, onConfirm }:
         </DialogHeader>
         <p className="text-sm text-gray-600">{description}</p>
         <DialogFooter>
-          <button type="button" onClick={onCancel} className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancelar</button>
-          <button type="button" onClick={() => void onConfirm()} className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">Excluir</button>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>Cancelar</Button>
+          <Button type="button" onClick={() => void handleConfirm()} disabled={loading} className="bg-red-600 hover:bg-red-700">{loading ? "Excluindo..." : "Excluir"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
