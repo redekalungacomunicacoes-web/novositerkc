@@ -20,9 +20,8 @@ const mapMovementToReportRow = (movement: any, fundName: string, projectName: st
   Favorecido: movement.payee || '',
   'Doc Tipo': movement.document_type || '',
   'Doc Nº': movement.document_number || '',
-  'Centro Custo': movement.cost_center || '',
   'Observações': movement.notes || '',
-  Comprovantes: attachmentCount,
+  'Qtd Comprovantes': attachmentCount,
 });
 
 export function FinanceiroRelatorios() {

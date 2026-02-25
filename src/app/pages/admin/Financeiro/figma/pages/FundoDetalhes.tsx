@@ -29,7 +29,7 @@ export function FundoDetalhes() {
   const [deleting, setDeleting] = useState<any | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const { getFund, listMovementsByFund, listProjects, listFunds, createMovement, updateMovement, deleteMovement, uploadAttachment, listAttachments, deleteAttachment } = useFinanceSupabase();
+  const { getFund, listMovementsByFund, listProjects, listFunds, createMovement, updateMovement, deleteMovementCascade, uploadAttachment, listAttachments, deleteAttachment } = useFinanceSupabase();
 
   const load = async () => {
     if (!id) return;
@@ -131,7 +131,7 @@ export function FundoDetalhes() {
         }}
         onDelete={async (movementId) => {
           try {
-            await deleteMovement(movementId);
+            await deleteMovementCascade({ id: movementId });
             await load();
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
@@ -169,7 +169,7 @@ export function FundoDetalhes() {
         onConfirm={async () => {
           if (!deleting?.id) return;
           try {
-            await deleteMovement(deleting.id);
+            await deleteMovementCascade(deleting);
             setDeleting(null);
             await load();
           } catch (error) {
