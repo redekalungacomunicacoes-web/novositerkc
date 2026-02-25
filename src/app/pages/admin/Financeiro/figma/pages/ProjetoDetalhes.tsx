@@ -498,9 +498,8 @@ export function ProjetoDetalhes() {
         attachments={attachments}
         onSubmit={async (payload) => {
           try {
-            if (editing?.id) await updateMovement(editing.id, payload);
-            else await createMovement({ ...payload, project_id: id, fund_id: payload.fund_id || projeto?.fund_id });
-            await refetchMovements();
+            if (editing?.id) return updateMovement(editing.id, payload);
+            return createMovement({ ...payload, project_id: id, fund_id: payload.fund_id || projeto?.fund_id });
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
           }
