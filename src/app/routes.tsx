@@ -27,13 +27,7 @@ import { AdminConfiguracoes } from "@/app/pages/admin/AdminConfiguracoes";
 import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
 import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
 import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
-import { FinanceiroHome } from "@/app/pages/admin/Financeiro/FinanceiroHome";
-import { FinanceiroNovoProjeto } from "@/app/pages/admin/Financeiro/FinanceiroNovoProjeto";
-import { FinanceiroProjeto } from "@/app/pages/admin/Financeiro/FinanceiroProjeto";
-import { FinanceiroProjetos } from "@/app/pages/admin/Financeiro/FinanceiroProjetos";
-import { FinanceiroFundos } from "@/app/pages/admin/Financeiro/FinanceiroFundos";
-import { FinanceiroFundoDetalhes } from "@/app/pages/admin/Financeiro/FinanceiroFundoDetalhes";
-import { FinanceiroMovimentacoes } from "@/app/pages/admin/Financeiro/FinanceiroMovimentacoes";
+import { Dashboard as FinanceiroDashboard, Fundos as FinanceiroFundos, FundoDetalhes as FinanceiroFundoDetalhes, Projetos as FinanceiroProjetos, ProjetoDetalhes as FinanceiroProjetoDetalhes } from "@/app/pages/admin/Financeiro";
 
 // ✅ NOVO: Admin Quem Somos
 import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
@@ -112,19 +106,11 @@ export const router = createBrowserRouter([
           // ✅ Newsletter (admin/editor)
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
 
-          { path: "financeiro", loader: requireRoles(["admin", "editor"]), Component: FinanceiroHome },
-          { path: "financeiro/movimentacoes", loader: requireRoles(["admin", "editor"]), Component: FinanceiroMovimentacoes },
-          { path: "financeiro/movimentacoes/entrada", loader: requireRoles(["admin", "editor"]), Component: FinanceiroMovimentacoes },
-          { path: "financeiro/movimentacoes/saida", loader: requireRoles(["admin", "editor"]), Component: FinanceiroMovimentacoes },
-          { path: "financeiro/movimentacoes/pendencias", loader: requireRoles(["admin", "editor"]), Component: FinanceiroMovimentacoes },
-          { path: "financeiro/entrada", loader: requireRoles(["admin", "editor"]), Component: () => <Navigate to="/admin/financeiro/movimentacoes/entrada" replace /> },
-          { path: "financeiro/saida", loader: requireRoles(["admin", "editor"]), Component: () => <Navigate to="/admin/financeiro/movimentacoes/saida" replace /> },
-          { path: "financeiro/pendencias", loader: requireRoles(["admin", "editor"]), Component: () => <Navigate to="/admin/financeiro/movimentacoes/pendencias" replace /> },
-          { path: "financeiro/novo", loader: requireRoles(["admin", "editor"]), Component: FinanceiroNovoProjeto },
-          { path: "financeiro/projetos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjeto },
-          { path: "financeiro/projetos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetos },
+          { path: "financeiro", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
           { path: "financeiro/fundos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroFundos },
-          { path: "financeiro/fundos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroFundoDetalhes },
+          { path: "financeiro/fundo/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroFundoDetalhes },
+          { path: "financeiro/projetos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetos },
+          { path: "financeiro/projeto/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetoDetalhes },
 
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
           { path: "configuracoes", loader: requireRoles(["admin_alfa"]), Component: AdminConfiguracoes },
