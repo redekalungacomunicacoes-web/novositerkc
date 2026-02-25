@@ -7,10 +7,10 @@ export const router = createBrowserRouter([
     path: '/',
     Component: MainLayout,
     children: [
-      { index: true, Component: Dashboard },
       {
         path: 'admin/financeiro',
         children: [
+          { path: 'dashboard', Component: Dashboard },
           { index: true, Component: Dashboard },
           { path: 'fundos', Component: Fundos },
           { path: 'fundos/:id', Component: FundoDetalhes },
