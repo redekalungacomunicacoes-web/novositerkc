@@ -282,6 +282,16 @@ export function useFinance() {
       .limit(limit);
   };
 
+
+
+  const listAttachments = async (movementId: string) => {
+    return supabase
+      .from("finance_attachments")
+      .select("*")
+      .eq("movement_id", movementId)
+      .order("created_at", { ascending: false });
+  };
+
   const listAttachmentsForMovementIds = async (movementIds: string[]) => {
     if (!movementIds.length) return { data: [], error: null as any };
     return supabase
@@ -451,6 +461,7 @@ export function useFinance() {
     // dashboard
     listPendingTop,
     listLatestMovements,
+    listAttachments,
     listAttachmentsForMovementIds,
     getDashboardAggregates,
 

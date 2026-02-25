@@ -29,13 +29,41 @@ import { Link } from "react-router-dom";
 import { KPICard } from "../components/KPICard";
 import { ModalMovimentacao } from "../components/ModalMovimentacao";
 import { formatCurrency, formatDate } from "../data/financeiro-data";
-import { useFinanceSupabase } from "../../hooks/useFinanceSupabase";
+import { useFinance } from "../../hooks/useFinance";
 import { SupabaseHealth } from "../../components/SupabaseHealth";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { StatusBadge } from "../components/StatusBadge";
 import { AttachmentViewerDialog } from "../../components/AttachmentViewerDialog";
 
 const PIE_COLORS = ["#0f3d2e", "#ffdd9a", "#6b7280", "#93c5fd", "#d1d5db"];
+
+const parseDateSafe = (value: unknown): Date | null => {
+  if (!value || typeof value !== "string") return null;
+  const asIso = value.includes("T") ? value : `${value}T00:00:00`;
+  const parsed = Date.parse(asIso);
+  return Number.isNaN(parsed) ? null : new Date(parsed);
+};
+
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.debug("[finance-dashboard]", ...args);
+};
+
+const normalizeMovementType = (type: unknown): "entrada" | "saida" | "" => {
+  const normalized = `${type ?? ""}`
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+  if (normalized === "entrada") return "entrada";
+  if (normalized === "saida") return "saida";
+  return "";
+};
+
+const normalizeRows = <T,>(response: any): T[] => {
+  if (Array.isArray(response)) return response as T[];
+  if (Array.isArray(response?.data)) return response.data as T[];
+  return [];
+};
 
 export function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -65,6 +93,7 @@ export function Dashboard() {
     listFunds,
     listProjects,
     listLatestMovements,
+    listMovementsAll,
     getDashboardAggregates,
     createMovement,
     updateMovement,
@@ -73,24 +102,31 @@ export function Dashboard() {
     uploadAttachment,
     deleteAttachment,
     listAttachmentsForMovementIds,
-  } = useFinanceSupabase();
+  } = useFinance();
 
   const load = async () => {
     try {
-      const [fundsData, projectData, latestRows] = await Promise.all([
+      const [fundsRes, projectRes, latestRowsRes, movementRes] = await Promise.all([
         listFunds(),
         listProjects(),
         listLatestMovements(10),
+        listMovementsAll(),
       ]);
+
+      const fundsData = normalizeRows<any>(fundsRes);
+      const projectData = normalizeRows<any>(projectRes);
+      const latestRows = normalizeRows<any>(latestRowsRes);
+      const movementRows = normalizeRows<any>(movementRes);
 
       setFunds(fundsData || []);
       setProjects(projectData || []);
       setLatestMovements(latestRows || []);
 
       // contagem de anexos para cada movimentação (tabela)
-      const rows = await listAttachmentsForMovementIds(
+      const rowsRes = await listAttachmentsForMovementIds(
         (latestRows || []).map((row: any) => row.id)
       );
+      const rows = normalizeRows<any>(rowsRes);
       const counts = rows.reduce<Record<string, number>>((acc, row: any) => {
         acc[row.movement_id] = (acc[row.movement_id] || 0) + 1;
         return acc;
@@ -99,8 +135,83 @@ export function Dashboard() {
 
       // agrega dashboard (gráficos + KPIs)
       try {
-        const aggregate = await getDashboardAggregates({ months: 6 });
-        setDashboardData(aggregate);
+        await getDashboardAggregates({ months: 6 });
+
+        const paidMovements = movementRows.filter(
+          (row: any) => `${row.status ?? ""}`.toLowerCase() === "pago"
+        );
+
+        const totalIn = paidMovements
+          .filter((row: any) => normalizeMovementType(row.type) === "entrada")
+          .reduce((acc: number, row: any) => acc + (Number(row.total_value) || 0), 0);
+
+        const totalOut = paidMovements
+          .filter((row: any) => normalizeMovementType(row.type) === "saida")
+          .reduce((acc: number, row: any) => acc + (Number(row.total_value) || 0), 0);
+
+        const monthlyFlowMap = new Map<string, { mes: string; entradas: number; saidas: number }>();
+        paidMovements.forEach((row: any) => {
+          const parsed = parseDateSafe(row.date || row.created_at);
+          if (!parsed) return;
+          const key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
+          const current = monthlyFlowMap.get(key) || {
+            mes: parsed.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+            entradas: 0,
+            saidas: 0,
+          };
+
+          if (normalizeMovementType(row.type) === "entrada") current.entradas += Number(row.total_value) || 0;
+          if (normalizeMovementType(row.type) === "saida") current.saidas += Number(row.total_value) || 0;
+          monthlyFlowMap.set(key, current);
+        });
+
+        const projectSummary = projectData.map((project: any) => {
+          const matchingMovements = paidMovements.filter((mov: any) => mov.project_id === project.id);
+          const totalSpent = matchingMovements
+            .filter((mov: any) => normalizeMovementType(mov.type) === "saida")
+            .reduce((acc: number, mov: any) => acc + (Number(mov.total_value) || 0), 0);
+          const planned = Number(project.initial_amount ?? project.budget ?? 0) || 0;
+          const balance = Number(project.current_balance ?? planned - totalSpent) || 0;
+          return {
+            mes: project.name || "Projeto",
+            orcado: planned,
+            real: totalSpent,
+            saldo: balance,
+          };
+        });
+
+        const fundBalances = fundsData.map((fund: any) => ({
+          name: fund.name || "Fundo",
+          value: Number(fund.current_balance) || 0,
+        }));
+
+        const fundsBalance = fundsData.reduce(
+          (acc: number, fund: any) => acc + (Number(fund.current_balance) || 0),
+          0
+        );
+
+        setDashboardData({
+          kpis: {
+            totalMovements: movementRows.length,
+            totalPending: movementRows.filter(
+              (row: any) => `${row.status ?? ""}`.toLowerCase() === "pendente"
+            ).length,
+            totalIn,
+            totalOut,
+            currentBalance: fundsBalance,
+          },
+          cashflowLine: Array.from(monthlyFlowMap.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([, value]) => value),
+          budgetVsReal: projectSummary,
+          categoryPie: fundBalances,
+        });
+
+        devLog("dashboard carregado", {
+          funds: fundsData.length,
+          projects: projectData.length,
+          movements: movementRows.length,
+        });
       } catch (err) {
         if (import.meta.env.DEV) console.error(err);
         // fallback mínimo
@@ -140,8 +251,8 @@ export function Dashboard() {
         setAttachments([]);
         return;
       }
-      const list = await listAttachments(editing.id);
-      setAttachments(list || []);
+      const listRes = await listAttachments(editing.id);
+      setAttachments(normalizeRows<any>(listRes));
     };
     void loadMovementAttachments();
   }, [editing?.id]);
@@ -162,7 +273,7 @@ export function Dashboard() {
   }, [latestMovements]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-8">
+    <div className="bg-gray-50 p-2 md:p-4">
       <SupabaseHealth />
 
       {feedback ? (
@@ -245,61 +356,81 @@ export function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Fluxo de Caixa</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={dashboardData.cashflowLine}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="mes" stroke="#6b7280" />
-              <YAxis stroke="#6b7280" />
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              <Legend />
-              <Line type="monotone" dataKey="entradas" stroke="#10b981" strokeWidth={2} name="Entradas" />
-              <Line type="monotone" dataKey="saidas" stroke="#ef4444" strokeWidth={2} name="Saídas" />
-            </LineChart>
-          </ResponsiveContainer>
+          {dashboardData.cashflowLine?.length ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={dashboardData.cashflowLine}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="mes" stroke="#6b7280" />
+                <YAxis stroke="#6b7280" />
+                <Tooltip formatter={(value: number) => formatCurrency(Number(value) || 0)} />
+                <Legend />
+                <Line type="monotone" dataKey="entradas" stroke="#10b981" strokeWidth={2} name="Entradas" />
+                <Line type="monotone" dataKey="saidas" stroke="#ef4444" strokeWidth={2} name="Saídas" />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-sm text-gray-500">
+              Sem dados no período.
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Orçado vs Real</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={dashboardData.budgetVsReal}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="mes" stroke="#6b7280" />
-              <YAxis stroke="#6b7280" />
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              <Legend />
-              <Bar dataKey="orcado" fill="#ffdd9a" name="Orçado" />
-              <Bar dataKey="real" fill="#0f3d2e" name="Real" />
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Projetos: Orçado x Gasto x Saldo</h3>
+          {dashboardData.budgetVsReal?.length ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={dashboardData.budgetVsReal}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="mes" stroke="#6b7280" />
+                <YAxis stroke="#6b7280" />
+                <Tooltip formatter={(value: number) => formatCurrency(Number(value) || 0)} />
+                <Legend />
+                <Bar dataKey="orcado" fill="#ffdd9a" name="Orçado" />
+                <Bar dataKey="real" fill="#0f3d2e" name="Gasto" />
+                <Bar dataKey="saldo" fill="#93c5fd" name="Saldo" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-sm text-gray-500">
+              Sem dados no período.
+            </div>
+          )}
         </div>
       </div>
 
       {/* Pizza */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">Distribuição por Categoria</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={dashboardData.categoryPie || []}
-              cx="50%"
-              cy="50%"
-              innerRadius={60}
-              outerRadius={100}
-              paddingAngle={2}
-              dataKey="value"
-            >
-              {(dashboardData.categoryPie || []).map((_: any, index: number) => (
-                <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value: number) => formatCurrency(value)} />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
+        <h3 className="text-lg font-semibold text-gray-900 mb-6">Saldo por Fundo</h3>
+        {dashboardData.categoryPie?.length ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={dashboardData.categoryPie || []}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={2}
+                dataKey="value"
+              >
+                {(dashboardData.categoryPie || []).map((_: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value: number) => formatCurrency(Number(value) || 0)} />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[300px] flex items-center justify-center text-sm text-gray-500">
+            Sem dados no período.
+          </div>
+        )}
       </div>
 
-      {/* Últimas movimentações */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Últimas movimentações */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-8 xl:mb-0 xl:col-span-2">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">Últimas movimentações</h3>
           <Link
@@ -310,7 +441,7 @@ export function Dashboard() {
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto xl:max-h-[540px] xl:overflow-y-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -376,7 +507,8 @@ export function Dashboard() {
                       {(attachmentCounts[mov.id] || 0) > 0 ? (
                         <button
                           onClick={async () => {
-                            const rows = await listAttachments(mov.id);
+                            const rowsRes = await listAttachments(mov.id);
+                            const rows = normalizeRows<any>(rowsRes);
                             if (rows?.length) setPreviewAttachment(rows[0]);
                           }}
                           className="p-2 text-[#0f3d2e] hover:bg-[#e8f2ef] rounded-lg"
@@ -400,10 +532,10 @@ export function Dashboard() {
             </tbody>
           </table>
         </div>
-      </div>
+        </div>
 
-      {/* Pendências rápidas (usando as pendentes da lista) */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Pendências rápidas (usando as pendentes da lista) */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
             Pendências recentes ({pendingList.length})
@@ -455,6 +587,7 @@ export function Dashboard() {
             <div className="p-6 text-sm text-gray-500">Nenhuma pendência recente.</div>
           )}
         </div>
+        </div>
       </div>
 
       {/* Modal */}
@@ -466,31 +599,34 @@ export function Dashboard() {
         funds={funds.map((f: any) => ({ id: f.id, name: f.name }))}
         attachments={attachments}
         onSubmit={async (payload: any) =>
-          editing?.id ? updateMovement(editing.id, payload) : createMovement(payload)
+          editing?.id
+            ? updateMovement(editing.id, payload)
+            : createMovement(payload.project_id, payload)
         }
         onDelete={async () => {
-          if (editing?.id) await deleteMovementCascade(editing);
+          if (editing?.id) await deleteMovementCascade(editing.id);
           await load();
         }}
         onChanged={load}
         onUploadAttachment={async (file, movementId, payload) => {
           if (!movementId) return;
-          await uploadAttachment(file, {
-            movementId,
-            fundId: payload?.fund_id || editing?.fund_id || null,
-            projectId: payload?.project_id || editing?.project_id || null,
-          });
+          const projectId = payload?.project_id || editing?.project_id;
+          if (!projectId) return;
+          await uploadAttachment(file, projectId, movementId);
 
-          const list = await listAttachments(movementId);
-          setAttachments(list || []);
+          const listRes = await listAttachments(movementId);
+          setAttachments(normalizeRows<any>(listRes));
           await load();
         }}
         onDeleteAttachment={async (attachmentId) => {
           const target = attachments.find((a: any) => a.id === attachmentId);
           if (!target) return;
-          await deleteAttachment(target);
+          await deleteAttachment(target.id);
 
-          if (editing?.id) setAttachments(await listAttachments(editing.id));
+          if (editing?.id) {
+            const listRes = await listAttachments(editing.id);
+            setAttachments(normalizeRows<any>(listRes));
+          }
           await load();
         }}
       />
@@ -503,7 +639,7 @@ export function Dashboard() {
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (!deleting?.id) return;
-          await deleteMovementCascade(deleting);
+          await deleteMovementCascade(deleting.id);
           setDeleting(null);
           await load();
         }}

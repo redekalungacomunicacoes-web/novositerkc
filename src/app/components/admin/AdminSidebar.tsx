@@ -96,8 +96,18 @@ export function AdminSidebar() {
 
   const visibleLinks = useMemo(() => {
     if (!roles.length) return [];
-    if (roles.includes("admin_alfa")) return links;
-    return links.filter((link) => link.allow.some((role) => roles.includes(role)));
+
+    const filtered = roles.includes("admin_alfa")
+      ? links
+      : links.filter((link) => link.allow.some((role) => roles.includes(role)));
+
+    const canViewTeam = roles.some((role) => ["admin_alfa", "admin", "editor"].includes(role));
+    if (canViewTeam && !filtered.some((link) => link.href === "/admin/equipe")) {
+      const teamLink = links.find((link) => link.href === "/admin/equipe");
+      if (teamLink) return [...filtered, teamLink];
+    }
+
+    return filtered;
   }, [roles]);
 
   const pathname = location.pathname;
@@ -111,10 +121,6 @@ export function AdminSidebar() {
     <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border hidden md:flex flex-col h-screen fixed left-0 top-0 z-40">
       <div className="p-6 border-b border-sidebar-border flex items-center gap-3">
         <img src={logoRKC} alt="Rede Kalunga Comunicações" className="h-12 w-auto" />
-      </div>
-
-      <div className="px-6 py-2 text-[10px] text-muted-foreground border-b border-sidebar-border">
-        SIDEBAR DESKTOP: v2026-02-25 (com Equipe)
       </div>
 
       <div className="px-6 py-3 border-b border-sidebar-border text-xs text-muted-foreground">
