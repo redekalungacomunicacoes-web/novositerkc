@@ -13,7 +13,7 @@ import {
   Info,
   Settings,
   LogOut,
-  Wallet,
+  Landmark,
 } from "lucide-react";
 
 export function AdminLayout() {
@@ -73,7 +73,7 @@ function AdminSidebarMobile({ onClose }: { onClose: () => void }) {
 
     { href: "/admin/quem-somos", label: "Quem Somos", icon: Info },
     { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
-    { href: "/admin/financeiro", label: "Financeiro", icon: Wallet },
+    { href: "/admin/financeiro", label: "Financeiro", icon: Landmark },
     { href: "/admin/usuarios", label: "Usuários", icon: Users },
     { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
   ];

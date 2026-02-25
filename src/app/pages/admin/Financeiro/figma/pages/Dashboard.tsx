@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Wallet,
+  Landmark,
   TrendingUp,
   TrendingDown,
   AlertCircle,
@@ -44,6 +44,14 @@ const parseDateSafe = (value: unknown): Date | null => {
   return Number.isNaN(parsed) ? null : new Date(parsed);
 };
 
+const parseAmount = (value: unknown): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value !== "string") return 0;
+  const normalized = value.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const devLog = (...args: unknown[]) => {
   if (import.meta.env.DEV) console.debug("[finance-dashboard]", ...args);
 };
@@ -58,6 +66,13 @@ const normalizeMovementType = (type: unknown): "entrada" | "saida" | "" => {
   if (normalized === "saida") return "saida";
   return "";
 };
+
+const normalizeStatus = (status: unknown) =>
+  `${status ?? ""}`
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
 
 const normalizeRows = <T,>(response: any): T[] => {
   if (Array.isArray(response)) return response as T[];
@@ -137,31 +152,36 @@ export function Dashboard() {
       try {
         await getDashboardAggregates({ months: 6 });
 
-        const paidMovements = movementRows.filter(
-          (row: any) => `${row.status ?? ""}`.toLowerCase() === "pago"
-        );
+        const paidMovements = movementRows.filter((row: any) => {
+          const status = normalizeStatus(row.status);
+          return status === "pago" || status === "paid" || status === "concluido";
+        });
+        const movementsForCharts = paidMovements.length ? paidMovements : movementRows;
 
         const totalIn = paidMovements
           .filter((row: any) => normalizeMovementType(row.type) === "entrada")
-          .reduce((acc: number, row: any) => acc + (Number(row.total_value) || 0), 0);
+          .reduce((acc: number, row: any) => acc + parseAmount(row.total_value), 0);
 
         const totalOut = paidMovements
           .filter((row: any) => normalizeMovementType(row.type) === "saida")
-          .reduce((acc: number, row: any) => acc + (Number(row.total_value) || 0), 0);
+          .reduce((acc: number, row: any) => acc + parseAmount(row.total_value), 0);
 
         const monthlyFlowMap = new Map<string, { mes: string; entradas: number; saidas: number }>();
-        paidMovements.forEach((row: any) => {
+        movementsForCharts.forEach((row: any) => {
           const parsed = parseDateSafe(row.date || row.created_at);
           if (!parsed) return;
           const key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
+          const value = parseAmount(row.total_value);
           const current = monthlyFlowMap.get(key) || {
+            key,
+            label: key,
             mes: parsed.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
             entradas: 0,
             saidas: 0,
           };
 
-          if (normalizeMovementType(row.type) === "entrada") current.entradas += Number(row.total_value) || 0;
-          if (normalizeMovementType(row.type) === "saida") current.saidas += Number(row.total_value) || 0;
+          if (normalizeMovementType(row.type) === "entrada") current.entradas += value;
+          if (normalizeMovementType(row.type) === "saida") current.saidas += value;
           monthlyFlowMap.set(key, current);
         });
 
@@ -169,7 +189,7 @@ export function Dashboard() {
           const matchingMovements = paidMovements.filter((mov: any) => mov.project_id === project.id);
           const totalSpent = matchingMovements
             .filter((mov: any) => normalizeMovementType(mov.type) === "saida")
-            .reduce((acc: number, mov: any) => acc + (Number(mov.total_value) || 0), 0);
+            .reduce((acc: number, mov: any) => acc + parseAmount(mov.total_value), 0);
           const planned = Number(project.initial_amount ?? project.budget ?? 0) || 0;
           const balance = Number(project.current_balance ?? planned - totalSpent) || 0;
           return {
@@ -182,11 +202,11 @@ export function Dashboard() {
 
         const fundBalances = fundsData.map((fund: any) => ({
           name: fund.name || "Fundo",
-          value: Number(fund.current_balance) || 0,
+          value: parseAmount(fund.current_balance),
         }));
 
         const fundsBalance = fundsData.reduce(
-          (acc: number, fund: any) => acc + (Number(fund.current_balance) || 0),
+          (acc: number, fund: any) => acc + parseAmount(fund.current_balance),
           0
         );
 
@@ -194,7 +214,7 @@ export function Dashboard() {
           kpis: {
             totalMovements: movementRows.length,
             totalPending: movementRows.filter(
-              (row: any) => `${row.status ?? ""}`.toLowerCase() === "pendente"
+              (row: any) => normalizeStatus(row.status) === "pendente"
             ).length,
             totalIn,
             totalOut,
@@ -265,7 +285,7 @@ export function Dashboard() {
 
   // saldo atual: preferimos somatório de fundos (mais real)
   const totalCash = useMemo(() => {
-    return funds.reduce((acc, fund) => acc + Number(fund.current_balance || 0), 0);
+    return funds.reduce((acc, fund) => acc + parseAmount(fund.current_balance), 0);
   }, [funds]);
 
   const pendingList = useMemo(() => {
@@ -326,7 +346,7 @@ export function Dashboard() {
           title="Saldo Atual"
           value={formatCurrency(Number(totalCash || dashboardData.kpis.currentBalance || 0))}
           subtitle={`${totalFunds} fundos • ${totalProjects} projetos`}
-          icon={Wallet}
+          icon={Landmark}
           color="primary"
         />
         <KPICard

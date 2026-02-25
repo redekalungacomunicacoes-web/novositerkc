@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Wallet, TrendingUp, AlertCircle, Plus, Eye } from 'lucide-react';
+import { Landmark, TrendingUp, AlertCircle, Plus, Eye } from 'lucide-react';
 import { KPICard } from '../components/KPICard';
 import { StatusBadge } from '../components/StatusBadge';
 import { formatCurrency } from '../data/financeiro-data';
@@ -25,7 +25,7 @@ export function Fundos() {
         <KPICard
           title="Total em Fundos"
           value={formatCurrency(175000)}
-          icon={Wallet}
+          icon={Landmark}
           variant="success"
         />
         <KPICard

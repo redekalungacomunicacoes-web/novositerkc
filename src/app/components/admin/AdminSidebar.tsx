@@ -10,7 +10,7 @@ import {
   Info,
   Settings,
   LogOut,
-  Wallet,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,7 +39,7 @@ const links: SidebarLink[] = [
   { href: "/admin/equipe", label: "Equipe", icon: Users2, allow: ["admin_alfa", "admin", "editor"] },
   { href: "/admin/quem-somos", label: "Quem Somos", icon: Info, allow: ["admin_alfa", "admin", "editor"] },
   { href: "/admin/newsletter", label: "Newsletter", icon: Mail, allow: ["admin_alfa", "admin", "editor"] },
-  { href: "/admin/financeiro", label: "Financeiro", icon: Wallet, allow: ["admin_alfa", "admin", "editor"] },
+  { href: "/admin/financeiro", label: "Financeiro", icon: Landmark, allow: ["admin_alfa", "admin", "editor"] },
   { href: "/admin/usuarios", label: "Usuários", icon: Users, allow: ["admin_alfa"] },
   { href: "/admin/configuracoes", label: "Configurações", icon: Settings, allow: ["admin_alfa"] },
 ];
