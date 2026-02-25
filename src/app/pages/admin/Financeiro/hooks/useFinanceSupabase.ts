@@ -36,6 +36,16 @@ type MovementPayload = {
   notes?: string | null;
 };
 
+type MovementFilters = {
+  status?: string;
+  type?: "entrada" | "saida";
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  fundId?: string;
+  projectId?: string;
+};
+
 type AttachmentRow = { id: string; storage_path: string };
 type UploadAttachmentArgs = { movementId: string; fundId?: string | null; projectId?: string | null };
 
@@ -117,6 +127,36 @@ export function useFinanceSupabase() {
     return ensure(res.data ?? [], res.error);
   };
 
+  const listMovements = async (filters: MovementFilters = {}) => {
+    let query = supabase
+      .from("finance_movements")
+      .select("id, date, type, description, total_value, status, fund_id, project_id, category, unit_value, quantity, payment_method, payee, document_type, document_number, cost_center, notes, created_at")
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (filters.status) query = query.eq("status", filters.status);
+    if (filters.type) query = query.eq("type", filters.type);
+    if (filters.fundId) query = query.eq("fund_id", filters.fundId);
+    if (filters.projectId) query = query.eq("project_id", filters.projectId);
+    if (filters.dateFrom) query = query.gte("date", filters.dateFrom);
+    if (filters.dateTo) query = query.lte("date", filters.dateTo);
+    if (filters.search) query = query.ilike("description", `%${filters.search}%`);
+
+    const res = await query;
+    return ensure(res.data ?? [], res.error);
+  };
+
+  const listLatestMovements = async (limit = 10) => {
+    const res = await supabase
+      .from("finance_movements")
+      .select("id, date, type, description, total_value, status, fund_id, project_id, category_id, created_at")
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    return ensure(res.data ?? [], res.error);
+  };
+
   const createMovement = async (payload: MovementPayload) => {
     const res = await supabase.from("finance_movements").insert(payload).select("*").single();
     return ensure(res.data, res.error);
@@ -162,6 +202,17 @@ export function useFinanceSupabase() {
     }, {});
   };
 
+  const listAttachmentsForMovements = async (movementIds: string[]) => {
+    if (!movementIds.length) return [] as Array<{ movement_id: string }>;
+
+    const res = await supabase
+      .from("finance_attachments")
+      .select("movement_id")
+      .in("movement_id", movementIds);
+
+    return ensure(res.data ?? [], res.error) as Array<{ movement_id: string }>;
+  };
+
   const uploadAttachment = async (file: File, { movementId, fundId, projectId }: UploadAttachmentArgs) => {
     const path = `${fundId ?? "no-fund"}/${projectId ?? "no-project"}/${movementId}/${Date.now()}-${file.name}`;
     const upload = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
@@ -202,6 +253,8 @@ export function useFinanceSupabase() {
     deleteProject,
     listMovementsByFund,
     listMovementsByProject,
+    listMovements,
+    listLatestMovements,
     createMovement,
     updateMovement,
     deleteMovement,
@@ -209,6 +262,7 @@ export function useFinanceSupabase() {
     listTags,
     listAttachments,
     listAttachmentCounts,
+    listAttachmentsForMovements,
     uploadAttachment,
     deleteAttachment,
   };

@@ -122,9 +122,8 @@ export function FundoDetalhes() {
         onChanged={() => void load()}
         onSubmit={async (payload) => {
           try {
-            if (editing?.id) await updateMovement(editing.id, payload);
-            else await createMovement({ ...payload, fund_id: id });
-            await load();
+            if (editing?.id) return updateMovement(editing.id, payload);
+            return createMovement({ ...payload, fund_id: id });
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
             setFeedback(normalizeError(error));

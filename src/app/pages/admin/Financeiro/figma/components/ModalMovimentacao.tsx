@@ -8,15 +8,16 @@ interface ModalMovimentacaoProps {
   projects?: Array<{ id: string; name: string }>;
   funds?: Array<{ id: string; name: string }>;
   attachments?: any[];
-  onSubmit?: (payload: any) => Promise<void> | void;
+  onSubmit?: (payload: any) => Promise<any> | any;
   onDelete?: (movementId: string) => Promise<void> | void;
   onChanged?: () => Promise<void> | void;
-  onUploadAttachment?: (file: File, movementId?: string) => Promise<void> | void;
+  onUploadAttachment?: (file: File, movementId?: string, payload?: any) => Promise<void> | void;
   onDeleteAttachment?: (attachmentId: string) => Promise<void> | void;
 }
 
 export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], funds = [], attachments = [], onSubmit, onDelete, onChanged, onUploadAttachment, onDeleteAttachment }: ModalMovimentacaoProps) {
   const [formData, setFormData] = useState<any>({});
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   useEffect(() => {
     setFormData({
@@ -31,6 +32,7 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
       status: editData?.status || 'pendente',
       notes: editData?.notes || editData?.observacoes || '',
     });
+    setPendingFiles([]);
   }, [editData, isOpen]);
 
   if (!isOpen) return null;
@@ -43,7 +45,16 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
       project_id: formData.project_id || null,
       fund_id: formData.fund_id || null,
     };
-    await onSubmit?.(nextPayload);
+    const movement = await onSubmit?.(nextPayload);
+    const movementId = editData?.id || movement?.id;
+
+    if (pendingFiles.length && movementId) {
+      for (const file of pendingFiles) {
+        await onUploadAttachment?.(file, movementId, nextPayload);
+      }
+      setPendingFiles([]);
+    }
+
     await onChanged?.();
     onClose();
   };
@@ -57,11 +68,23 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files?.length || !editData?.id) return;
-    for (const file of Array.from(files)) {
-      await onUploadAttachment?.(file, editData.id);
+    if (!files?.length) return;
+    const fileList = Array.from(files);
+
+    if (!editData?.id) {
+      setPendingFiles((current) => [...current, ...fileList]);
+      e.target.value = '';
+      return;
+    }
+
+    for (const file of fileList) {
+      await onUploadAttachment?.(file, editData.id, formData);
     }
     e.target.value = '';
+  };
+
+  const removePending = (index: number) => {
+    setPendingFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
   };
 
   return (
@@ -87,10 +110,12 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
           </div>
 
           <div className="mt-6 p-4 border border-gray-200 rounded-xl">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Comprovantes: {attachments.length}</h3>
-            <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#0f3d2e] text-white rounded-lg hover:bg-[#0a2b20] transition-colors cursor-pointer"><Upload className="w-4 h-4" />Upload<input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!editData?.id} /></label>
-            {!editData?.id ? <p className="text-xs text-gray-500 mt-2">Salve a movimentação para habilitar uploads.</p> : null}
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Comprovantes: {attachments.length + pendingFiles.length}</h3>
+            <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#0f3d2e] text-white rounded-lg hover:bg-[#0a2b20] transition-colors cursor-pointer"><Upload className="w-4 h-4" />Upload<input type="file" multiple className="hidden" onChange={handleFileUpload} /></label>
             <div className="mt-3 space-y-2">
+              {pendingFiles.map((file, index) => (
+                <div key={`${file.name}-${index}`} className="flex items-center justify-between p-2 bg-amber-50 rounded-lg"><div className="flex items-center gap-2"><FileText className="w-4 h-4 text-amber-600" /><span className="text-sm text-amber-700">{file.name} <span className="text-xs">(pendente)</span></span></div><button type="button" onClick={() => removePending(index)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div>
+              ))}
               {attachments.map((a) => (
                 <div key={a.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"><div className="flex items-center gap-2"><FileText className="w-4 h-4 text-gray-500" /><span className="text-sm text-gray-700">{a.file_name}</span></div><button type="button" onClick={() => void onDeleteAttachment?.(a.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div>
               ))}
