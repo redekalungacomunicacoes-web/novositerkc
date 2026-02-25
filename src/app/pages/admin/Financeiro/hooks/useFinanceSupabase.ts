@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { normalizeEntityStatus } from "../utils/statusMap";
 
 const BUCKET = "finance-attachments";
 
@@ -72,12 +73,20 @@ export function useFinanceSupabase() {
   };
 
   const createFund = async (payload: FundPayload) => {
-    const res = await supabase.from("finance_funds").insert(payload).select("*").single();
+    const nextPayload = {
+      ...payload,
+      status: payload.status ? normalizeEntityStatus(payload.status) : payload.status,
+    };
+    const res = await supabase.from("finance_funds").insert(nextPayload).select("*").single();
     return ensure(res.data, res.error);
   };
 
   const updateFund = async (id: string, payload: Partial<FundPayload>) => {
-    const res = await supabase.from("finance_funds").update(payload).eq("id", id).select("*").single();
+    const nextPayload = {
+      ...payload,
+      status: payload.status ? normalizeEntityStatus(payload.status) : payload.status,
+    };
+    const res = await supabase.from("finance_funds").update(nextPayload).eq("id", id).select("*").single();
     return ensure(res.data, res.error);
   };
 
@@ -104,6 +113,7 @@ export function useFinanceSupabase() {
     const nextPayload = {
       ...payload,
       description: payload.description ?? null,
+      status: payload.status ? normalizeEntityStatus(payload.status) : payload.status,
     };
     const res = await supabase.from("finance_projects").insert(nextPayload).select("*").single();
     return ensure(res.data, res.error);
@@ -113,6 +123,7 @@ export function useFinanceSupabase() {
     const nextPayload = {
       ...payload,
       description: payload.description ?? null,
+      status: payload.status ? normalizeEntityStatus(payload.status) : payload.status,
     };
     const res = await supabase.from("finance_projects").update(nextPayload).eq("id", id).select("*").single();
     return ensure(res.data, res.error);
