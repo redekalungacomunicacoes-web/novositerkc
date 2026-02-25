@@ -1,37 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Plus, TrendingUp, TrendingDown, CircleDollarSign, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router';
 import { KPICard } from './components/KPICard';
 import { StatusBadge } from './components/StatusBadge';
-import { formatCurrency, formatDate, getDashboardData, listLatestMovements, type DashboardData, type FinanceiroMovimentacao } from './data/financeiro.repo';
+import { formatCurrency, formatDate } from './data/financeiro.repo';
+import { useFinanceSupabase } from './hooks/useFinanceSupabase';
 
 const CHART_COLORS = ['#0f3d2e', '#ffdd9a', '#6b7280', '#10b981', '#ef4444'];
 
 export function Dashboard() {
-  const [dashboard, setDashboard] = useState<DashboardData>({
-    entradas: 0,
-    saidas: 0,
-    saldoAtual: 0,
-    pendencias: 0,
-    fluxoCaixa: [],
-    distribuicaoCategoria: [],
-    orcadoVsReal: [],
-  });
-  const [movimentacoes, setMovimentacoes] = useState<FinanceiroMovimentacao[]>([]);
-
-  useEffect(() => {
-    async function load() {
-      const [dashboardData, latestMovements] = await Promise.all([
-        getDashboardData(),
-        listLatestMovements(8),
-      ]);
-      setDashboard(dashboardData);
-      setMovimentacoes(latestMovements);
-    }
-
-    void load();
-  }, []);
+  const { dashboard, movements: movimentacoes } = useFinanceSupabase();
 
   const fluxoCaixaData = useMemo(
     () => (dashboard.fluxoCaixa || []).map((item) => ({ periodo: item.periodo, entradas: Number(item.entradas) || 0, saidas: Number(item.saidas) || 0 })),
