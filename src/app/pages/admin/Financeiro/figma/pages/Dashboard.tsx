@@ -8,7 +8,6 @@ import {
   Pencil,
   Trash2,
   FileText,
-  List,
   Eye,
 } from "lucide-react";
 import {
