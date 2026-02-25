@@ -7,7 +7,7 @@ type Props = {
   open: boolean;
   movement: FinanceiroMovimentacao | null;
   saving?: boolean;
-  onUpload: (movementId: string, file: File) => Promise<unknown>;
+  onUpload: (movementId: string, file: File, context?: { fundId?: string; projectId?: string }) => Promise<unknown>;
   onDelete: (attachment: FinanceAttachment) => Promise<unknown>;
   onClose: () => void;
 };
@@ -27,7 +27,7 @@ export function ComprovantesDialog({ open, movement, saving = false, onUpload, o
       return;
     }
     setFileError(null);
-    await onUpload(movement.id, file);
+    await onUpload(movement.id, file, { fundId: movement.fundoId, projectId: movement.projetoId });
   };
 
   return (
