@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import type { FinanceiroFundo, FinanceiroProjeto } from '../data/financeiro.repo';
+import type { FinanceCategory } from '../hooks/useFinanceSupabase';
 
 export type MovementFormValues = {
   date: string;
@@ -12,6 +13,7 @@ export type MovementFormValues = {
   quantity: number;
   status: string;
   category: string;
+  category_id?: string;
   payment_method: string;
   payee: string;
   notes: string;
@@ -24,14 +26,18 @@ type Props = {
   form: MovementFormValues;
   funds: FinanceiroFundo[];
   projects: FinanceiroProjeto[];
+  categories: FinanceCategory[];
   onChange: (next: MovementFormValues) => void;
   onClose: () => void;
   onSubmit: () => void;
 };
 
-export function ModalMovimentacao({ open, title, saving = false, form, funds, projects, onChange, onClose, onSubmit }: Props) {
+const paymentMethods = ['Pix', 'Transferência', 'Cartão', 'Dinheiro'];
+
+export function ModalMovimentacao({ open, title, saving = false, form, funds, projects, categories, onChange, onClose, onSubmit }: Props) {
   if (!open) return null;
   const total = (Number(form.unit_value) || 0) * (Number(form.quantity) || 0);
+  const fundProjects = projects.filter((project) => !form.fund_id || project.fundoId === form.fund_id);
 
   return (
     <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4">
@@ -41,8 +47,8 @@ export function ModalMovimentacao({ open, title, saving = false, form, funds, pr
           <input required type="date" value={form.date} onChange={(e) => onChange({ ...form, date: e.target.value })} className="rounded border px-3 py-2 text-sm" />
           <select value={form.type} onChange={(e) => onChange({ ...form, type: e.target.value as 'entrada' | 'saida' })} className="rounded border px-3 py-2 text-sm"><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
 
-          <select required value={form.fund_id} onChange={(e) => onChange({ ...form, fund_id: e.target.value })} className="rounded border px-3 py-2 text-sm"><option value="">Fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.nome}</option>)}</select>
-          <select value={form.project_id} onChange={(e) => onChange({ ...form, project_id: e.target.value })} className="rounded border px-3 py-2 text-sm"><option value="">Projeto (opcional)</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.nome}</option>)}</select>
+          <select required value={form.fund_id} onChange={(e) => onChange({ ...form, fund_id: e.target.value, project_id: '' })} className="rounded border px-3 py-2 text-sm"><option value="">Fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.nome}</option>)}</select>
+          <select value={form.project_id} onChange={(e) => onChange({ ...form, project_id: e.target.value })} className="rounded border px-3 py-2 text-sm"><option value="">Projeto (opcional)</option>{fundProjects.map((project) => <option key={project.id} value={project.id}>{project.nome}</option>)}</select>
 
           <input required value={form.title} onChange={(e) => onChange({ ...form, title: e.target.value })} placeholder="Título" className="rounded border px-3 py-2 text-sm" />
           <input value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} placeholder="Descrição" className="rounded border px-3 py-2 text-sm" />
@@ -53,8 +59,14 @@ export function ModalMovimentacao({ open, title, saving = false, form, funds, pr
           <div className="rounded border px-3 py-2 text-sm bg-gray-50">Total: <strong>{total.toFixed(2)}</strong></div>
           <select value={form.status} onChange={(e) => onChange({ ...form, status: e.target.value })} className="rounded border px-3 py-2 text-sm"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option></select>
 
-          <input value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value })} placeholder="Categoria" className="rounded border px-3 py-2 text-sm" />
-          <input value={form.payment_method} onChange={(e) => onChange({ ...form, payment_method: e.target.value })} placeholder="Forma de pagamento" className="rounded border px-3 py-2 text-sm" />
+          <select value={form.category_id || ''} onChange={(e) => {
+            const category = categories.find((item) => item.id === e.target.value);
+            onChange({ ...form, category_id: e.target.value || undefined, category: category?.name ?? '' });
+          }} className="rounded border px-3 py-2 text-sm">
+            <option value="">Categoria</option>
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+          <select value={form.payment_method} onChange={(e) => onChange({ ...form, payment_method: e.target.value })} className="rounded border px-3 py-2 text-sm"><option value="">Forma de pagamento</option>{paymentMethods.map((item) => <option key={item} value={item}>{item}</option>)}</select>
           <input value={form.payee} onChange={(e) => onChange({ ...form, payee: e.target.value })} placeholder="Favorecido" className="rounded border px-3 py-2 text-sm" />
           <textarea value={form.notes} onChange={(e) => onChange({ ...form, notes: e.target.value })} placeholder="Observações" className="col-span-2 rounded border px-3 py-2 text-sm" />
 

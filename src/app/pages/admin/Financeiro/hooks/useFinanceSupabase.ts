@@ -33,9 +33,15 @@ export type MovementPayload = {
   total_value: number;
   status: FinanceStatus;
   category: string;
+  category_id?: string;
   payment_method: string;
   payee: string;
   notes: string;
+};
+
+export type FinanceCategory = {
+  id: string;
+  name: string;
 };
 
 const toNumber = (value: unknown) => Number(value) || 0;
@@ -139,11 +145,31 @@ const mapMovement = (row: AnyRow): FinanceiroMovimentacao => ({
   comprovantes: Array.isArray(row.attachments) ? row.attachments.map(mapAttachment) : [],
 });
 
+const MOVEMENTS_SELECT_WITH_CATEGORY_ID = '*, project:finance_projects(id,name,funder), category:finance_categories(id,name), fund:finance_funds(id,name), attachments:finance_attachments(*)';
+const MOVEMENTS_SELECT_WITHOUT_CATEGORY_ID = '*, project:finance_projects(id,name,funder), fund:finance_funds(id,name), attachments:finance_attachments(*)';
+
+async function listMovementsRobust() {
+  const withCategoryId = await supabase
+    .from('finance_movements')
+    .select(MOVEMENTS_SELECT_WITH_CATEGORY_ID)
+    .order('date', { ascending: false });
+
+  if (!withCategoryId.error) return withCategoryId;
+
+  const withoutCategoryId = await supabase
+    .from('finance_movements')
+    .select(MOVEMENTS_SELECT_WITHOUT_CATEGORY_ID)
+    .order('date', { ascending: false });
+
+  return withoutCategoryId;
+}
+
 export function useFinanceSupabase() {
   const [funds, setFunds] = useState<FinanceiroFundo[]>([]);
   const [projects, setProjects] = useState<FinanceiroProjeto[]>([]);
   const [movements, setMovements] = useState<FinanceiroMovimentacao[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData>({ entradas: 0, saidas: 0, saldoAtual: 0, pendencias: 0, fluxoCaixa: [], distribuicaoCategoria: [], orcadoVsReal: [] });
+  const [categories, setCategories] = useState<FinanceCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,10 +178,11 @@ export function useFinanceSupabase() {
     setLoading(true);
     setError(null);
 
-    const [fundsRes, projectsRes, movementsRes, dashboardData] = await Promise.all([
+    const [fundsRes, projectsRes, movementsRes, categoriesRes, dashboardData] = await Promise.all([
       supabase.from('finance_funds').select('*').order('year', { ascending: false }),
       supabase.from('finance_projects').select('*').order('created_at', { ascending: false }),
-      supabase.from('finance_movements').select('*, project:finance_projects(id,name,funder), category:finance_categories(name), fund:finance_funds(id,name), attachments:finance_attachments(*)').order('date', { ascending: false }),
+      listMovementsRobust(),
+      supabase.from('finance_categories').select('id,name').order('name', { ascending: true }),
       getDashboardData(),
     ]);
 
@@ -172,6 +199,7 @@ export function useFinanceSupabase() {
     setFunds(fundsMapped);
     setProjects((projectsRes.data || []).map((row) => mapProject(row, fundNameMap)));
     setMovements((movementsRes.data || []).map(mapMovement));
+    setCategories((categoriesRes.data || []).map((item) => ({ id: String(item.id), name: String(item.name) })));
     setDashboard(dashboardData);
     setLoading(false);
   }, []);
@@ -224,7 +252,7 @@ export function useFinanceSupabase() {
 
   const createMovement = useCallback(async (payload: Omit<MovementPayload, 'total_value' | 'status'> & { status: string }) => runWithReload(async () => {
     const normalized = normalizeMovementPayload(payload);
-    const { error } = await supabase.from('finance_movements').insert({
+    const basePayload = {
       date: normalized.date,
       type: normalized.type,
       project_id: normalized.project_id || null,
@@ -235,17 +263,31 @@ export function useFinanceSupabase() {
       quantity: normalized.quantity,
       total_value: normalized.total_value,
       status: normalized.status,
-      category: normalized.category,
       payment_method: normalized.payment_method,
       payee: normalized.payee,
       notes: normalized.notes,
+    };
+
+    const withCategoryId = await supabase.from('finance_movements').insert({
+      ...basePayload,
+      category_id: normalized.category_id || null,
+      category: normalized.category,
+    }).select('id').single();
+
+    if (!withCategoryId.error) return { error: null };
+
+    const fallback = await supabase.from('finance_movements').insert({
+      ...basePayload,
+      category: normalized.category,
     });
+
+    const error = fallback.error;
     return { error };
   }), [runWithReload]);
 
   const updateMovement = useCallback(async (id: string, payload: Omit<MovementPayload, 'total_value' | 'status'> & { status: string }) => runWithReload(async () => {
     const normalized = normalizeMovementPayload(payload);
-    const { error } = await supabase.from('finance_movements').update({
+    const basePayload = {
       date: normalized.date,
       type: normalized.type,
       project_id: normalized.project_id || null,
@@ -256,16 +298,30 @@ export function useFinanceSupabase() {
       quantity: normalized.quantity,
       total_value: normalized.total_value,
       status: normalized.status,
-      category: normalized.category,
       payment_method: normalized.payment_method,
       payee: normalized.payee,
       notes: normalized.notes,
+    };
+
+    const withCategoryId = await supabase.from('finance_movements').update({
+      ...basePayload,
+      category_id: normalized.category_id || null,
+      category: normalized.category,
     }).eq('id', id);
+
+    if (!withCategoryId.error) return { error: null };
+
+    const fallback = await supabase.from('finance_movements').update({
+      ...basePayload,
+      category: normalized.category,
+    }).eq('id', id);
+
+    const error = fallback.error;
     return { error };
   }), [runWithReload]);
 
-  const uploadAttachment = useCallback(async (movementId: string, file: File) => runWithReload(async () => {
-    const storagePath = `${movementId}/${Date.now()}-${file.name}`;
+  const uploadAttachment = useCallback(async (movementId: string, file: File, context?: { fundId?: string; projectId?: string }) => runWithReload(async () => {
+    const storagePath = `${context?.fundId || 'sem-fundo'}/${context?.projectId || 'sem-projeto'}/${movementId}/${Date.now()}-${file.name}`;
     const uploadRes = await supabase.storage.from('finance-attachments').upload(storagePath, file, { upsert: false });
     if (uploadRes.error) return { error: uploadRes.error };
 
@@ -317,6 +373,7 @@ export function useFinanceSupabase() {
     projects,
     movements,
     dashboard,
+    categories,
     loading,
     saving,
     error,

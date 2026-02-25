@@ -121,26 +121,31 @@ export const formatDate = (dateLike: string) => {
  * - tenta trazer relações (project/category) quando possível
  */
 async function getMovementsRaw() {
-  const selectWithRelations =
-    '*, project:finance_projects(id,name,funder), category:finance_categories(name)';
+  const selectWithCategoryId =
+    '*, project:finance_projects(id,name,funder), category:finance_categories(id,name), fund:finance_funds(id,name), attachments:finance_attachments(*)';
+  const selectWithoutCategoryId =
+    '*, project:finance_projects(id,name,funder), fund:finance_funds(id,name), attachments:finance_attachments(*)';
 
-  const byDate = await supabase
+  const byDateWithCategory = await supabase
     .from('finance_movements')
-    .select(selectWithRelations)
+    .select(selectWithCategoryId)
     .order('date', { ascending: false });
 
-  if (!byDate.error) {
-    return byDate.data || [];
-  }
+  if (!byDateWithCategory.error) return byDateWithCategory.data || [];
 
-  const byData = await supabase
+  const byDateWithoutCategory = await supabase
+    .from('finance_movements')
+    .select(selectWithoutCategoryId)
+    .order('date', { ascending: false });
+
+  if (!byDateWithoutCategory.error) return byDateWithoutCategory.data || [];
+
+  const byDataLegacy = await supabase
     .from('finance_movements')
     .select('*')
     .order('data', { ascending: false });
 
-  if (!byData.error) {
-    return byData.data || [];
-  }
+  if (!byDataLegacy.error) return byDataLegacy.data || [];
 
   return [];
 }
