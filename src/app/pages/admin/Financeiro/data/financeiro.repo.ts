@@ -40,7 +40,11 @@ export type FinanceiroProjeto = {
 export type FinanceiroMovimentacao = {
   id: string;
   data: string;
+  tipo: 'entrada' | 'saida';
+  titulo: string;
   descricao: string;
+  valorUnitario: number;
+  quantidade: number;
   valorTotal: number;
   status: FinanceStatus;
   projetoNome: string;
@@ -48,7 +52,20 @@ export type FinanceiroMovimentacao = {
   fundo: string;
   fundoId: string;
   categoria: string;
-  comprovantes: unknown[];
+  paymentMethod: string;
+  payee: string;
+  notes: string;
+  comprovantes: FinanceAttachment[];
+};
+
+export type FinanceAttachment = {
+  id: string;
+  movement_id: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  storage_path: string;
+  created_at: string;
 };
 
 export type DashboardData = {
@@ -236,7 +253,11 @@ export async function listLatestMovements(limit = 10): Promise<FinanceiroMovimen
   return rows.slice(0, limit).map((row: AnyRow) => ({
     id: String(row.id ?? crypto.randomUUID()),
     data: asDateIso(row.date ?? row.data ?? row.created_at),
+    tipo: String(row.type ?? row.tipo ?? 'saida') === 'entrada' ? 'entrada' : 'saida',
+    titulo: String(row.title ?? row.titulo ?? row.description ?? row.descricao ?? 'Sem título'),
     descricao: String(row.description ?? row.descricao ?? 'Sem descrição'),
+    valorUnitario: asNumber(row.unit_value ?? row.valor_unitario),
+    quantidade: asNumber(row.quantity ?? row.quantidade ?? 1),
     valorTotal: asNumber(row.total_value ?? row.valor_total ?? row.valorTotal ?? row.valor),
     status: asStatus(row.status, 'pendente'),
     projetoNome: String(row.project?.name ?? row.projeto_nome ?? row.projeto ?? '—'),
@@ -244,7 +265,10 @@ export async function listLatestMovements(limit = 10): Promise<FinanceiroMovimen
     fundo: String(row.project?.funder ?? row.fundo_nome ?? row.fundo ?? '—'),
     fundoId: String(row.fund_id ?? row.fundo_id ?? row.fundoId ?? ''),
     categoria: String(row.category?.name ?? row.categoria ?? row.category ?? 'Sem categoria'),
-    comprovantes: Array.isArray(row.comprovantes) ? row.comprovantes : [],
+    paymentMethod: String(row.payment_method ?? row.forma_pagamento ?? ''),
+    payee: String(row.payee ?? row.favorecido ?? ''),
+    notes: String(row.notes ?? row.observacoes ?? ''),
+    comprovantes: [],
   }));
 }
 
