@@ -111,6 +111,8 @@ export const router = createBrowserRouter([
           { path: "financeiro/fundos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroFundoDetalhes },
           { path: "financeiro/projetos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetos },
           { path: "financeiro/projetos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetoDetalhes },
+          { path: "financeiro/movimentacoes", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
+          { path: "financeiro/relatorios", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
 
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
           { path: "configuracoes", loader: requireRoles(["admin_alfa"]), Component: AdminConfiguracoes },

@@ -16,6 +16,8 @@ export const router = createBrowserRouter([
           { path: 'fundos/:id', Component: FundoDetalhes },
           { path: 'projetos', Component: Projetos },
           { path: 'projetos/:id', Component: ProjetoDetalhes },
+          { path: 'movimentacoes', Component: Dashboard },
+          { path: 'relatorios', Component: Dashboard },
         ],
       },
     ],
