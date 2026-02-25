@@ -58,7 +58,11 @@ const ensure = <T>(data: T, error: { message: string } | null) => {
 
 export function useFinanceSupabase() {
   const listFunds = async () => {
-    const res = await supabase.from("finance_funds").select("*").order("year", { ascending: false, nullsFirst: false }).order("name", { ascending: true });
+    const res = await supabase
+      .from("finance_funds")
+      .select("id, name, year, current_balance, opening_balance, status, description")
+      .order("year", { ascending: false, nullsFirst: false })
+      .order("name", { ascending: true });
     return ensure(res.data ?? [], res.error);
   };
 
@@ -83,7 +87,11 @@ export function useFinanceSupabase() {
   };
 
   const listProjects = async () => {
-    const res = await supabase.from("finance_projects").select("*").order("year", { ascending: false }).order("name", { ascending: true });
+    const res = await supabase
+      .from("finance_projects")
+      .select("id, name, year, fund_id, description, initial_amount, current_balance, status")
+      .order("year", { ascending: false })
+      .order("name", { ascending: true });
     return ensure(res.data ?? [], res.error);
   };
 
@@ -93,12 +101,20 @@ export function useFinanceSupabase() {
   };
 
   const createProject = async (payload: ProjectPayload) => {
-    const res = await supabase.from("finance_projects").insert(payload).select("*").single();
+    const nextPayload = {
+      ...payload,
+      description: payload.description ?? null,
+    };
+    const res = await supabase.from("finance_projects").insert(nextPayload).select("*").single();
     return ensure(res.data, res.error);
   };
 
   const updateProject = async (id: string, payload: Partial<ProjectPayload>) => {
-    const res = await supabase.from("finance_projects").update(payload).eq("id", id).select("*").single();
+    const nextPayload = {
+      ...payload,
+      description: payload.description ?? null,
+    };
+    const res = await supabase.from("finance_projects").update(nextPayload).eq("id", id).select("*").single();
     return ensure(res.data, res.error);
   };
 

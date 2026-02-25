@@ -8,6 +8,7 @@ import { SupabaseHealth } from '../../components/SupabaseHealth';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { toast } from 'sonner';
 
 const FRIENDLY_RLS = "Acesso negado (RLS). Verifique profiles.role = 'admin'.";
 const normalizeError = (error: unknown) => {
@@ -151,12 +152,13 @@ export function Projetos() {
               onClick={async () => {
                 try {
                   if (editing?.id) {
-                    await updateProject(editing.id, { ...form, fund_id: form.fund_id || null });
+                    await updateProject(editing.id, { ...form, description: form.description || null, fund_id: form.fund_id || null });
                   } else {
-                    await createProject({ ...form, fund_id: form.fund_id || null, current_balance: Number(form.current_balance || form.initial_amount || 0) });
+                    await createProject({ ...form, description: form.description || null, fund_id: form.fund_id || null, current_balance: Number(form.current_balance || form.initial_amount || 0) });
                   }
                   setOpenForm(false);
                   await load();
+                  toast.success(editing?.id ? 'Projeto atualizado com sucesso.' : 'Projeto criado com sucesso.');
                 } catch (error) {
                   if (import.meta.env.DEV) console.error(error);
                   setFeedback(normalizeError(error));

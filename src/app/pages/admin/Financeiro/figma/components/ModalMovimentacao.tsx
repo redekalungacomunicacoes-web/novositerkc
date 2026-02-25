@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, Upload, FileText, Trash2 } from 'lucide-react';
+import { useFinanceSupabase } from '../../hooks/useFinanceSupabase';
+import { formatCurrency } from '../data/financeiro-data';
 
 interface ModalMovimentacaoProps {
   isOpen: boolean;
   onClose: () => void;
   editData?: any;
-  projects?: Array<{ id: string; name: string }>;
+  projects?: Array<{ id: string; name: string; fund_id?: string | null }>;
   funds?: Array<{ id: string; name: string }>;
   attachments?: any[];
   onSubmit?: (payload: any) => Promise<any> | any;
@@ -18,6 +20,9 @@ interface ModalMovimentacaoProps {
 export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], funds = [], attachments = [], onSubmit, onDelete, onChanged, onUploadAttachment, onDeleteAttachment }: ModalMovimentacaoProps) {
   const [formData, setFormData] = useState<any>({});
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [loadedFunds, setLoadedFunds] = useState<any[]>([]);
+  const [loadedProjects, setLoadedProjects] = useState<any[]>([]);
+  const { listFunds, listProjects } = useFinanceSupabase();
 
   useEffect(() => {
     setFormData({
@@ -26,14 +31,29 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
       project_id: editData?.project_id || editData?.projetoId || '',
       fund_id: editData?.fund_id || editData?.fundoId || '',
       description: editData?.description || editData?.descricao || '',
-      unit_value: editData?.unit_value || editData?.valorUnitario || 0,
-      quantity: editData?.quantity || editData?.quantidade || 1,
-      total_value: editData?.total_value || 0,
+      unit_value: Number(editData?.unit_value || editData?.valorUnitario || 0),
+      quantity: Number(editData?.quantity || editData?.quantidade || 1),
       status: editData?.status || 'pendente',
       notes: editData?.notes || editData?.observacoes || '',
     });
     setPendingFiles([]);
   }, [editData, isOpen]);
+
+  useEffect(() => {
+    const loadSelects = async () => {
+      if (!isOpen) return;
+      const [fundRows, projectRows] = await Promise.all([listFunds(), listProjects()]);
+      setLoadedFunds(fundRows || []);
+      setLoadedProjects(projectRows || []);
+    };
+
+    void loadSelects();
+  }, [isOpen]);
+
+  const fundOptions = loadedFunds.length ? loadedFunds : funds;
+  const projectOptions = loadedProjects.length ? loadedProjects : projects;
+
+  const totalValue = useMemo(() => Number(formData.unit_value || 0) * Number(formData.quantity || 0), [formData.unit_value, formData.quantity]);
 
   if (!isOpen) return null;
 
@@ -41,7 +61,9 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
     e.preventDefault();
     const nextPayload = {
       ...formData,
-      total_value: Number(formData.total_value || Number(formData.unit_value || 0) * Number(formData.quantity || 0)),
+      unit_value: Number(formData.unit_value || 0),
+      quantity: Number(formData.quantity || 0),
+      total_value: totalValue,
       project_id: formData.project_id || null,
       fund_id: formData.fund_id || null,
     };
@@ -87,6 +109,15 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
     setPendingFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
   };
 
+  const handleProjectChange = (projectId: string) => {
+    const project = projectOptions.find((proj) => proj.id === projectId);
+    setFormData({
+      ...formData,
+      project_id: projectId,
+      fund_id: project?.fund_id || formData.fund_id,
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -99,12 +130,12 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div><label className="block text-sm font-medium text-gray-700 mb-2">Data</label><input type="date" required value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label><select required value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent"><option value="entrada">Entrada</option><option value="saida">Saída</option></select></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-2">Projeto</label><select value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent"><option value="">Selecione um projeto</option>{projects.map((proj) => (<option key={proj.id} value={proj.id}>{proj.name}</option>))}</select></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-2">Fundo</label><select value={formData.fund_id} onChange={(e) => setFormData({ ...formData, fund_id: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent"><option value="">Selecione um fundo</option>{funds.map((fundo) => (<option key={fundo.id} value={fundo.id}>{fundo.name}</option>))}</select></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-2">Projeto</label><select value={formData.project_id} onChange={(e) => handleProjectChange(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent"><option value="">Selecione um projeto</option>{projectOptions.length ? projectOptions.map((proj) => (<option key={proj.id} value={proj.id}>{proj.name}</option>)) : <option value="" disabled>Sem projetos cadastrados</option>}</select></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-2">Fundo</label><select value={formData.fund_id} onChange={(e) => setFormData({ ...formData, fund_id: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent"><option value="">Selecione um fundo</option>{fundOptions.length ? fundOptions.map((fundo) => (<option key={fundo.id} value={fundo.id}>{fundo.name}</option>)) : <option value="" disabled>Sem fundos cadastrados</option>}</select></div>
             <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label><input required value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-2">Valor unitário</label><input type="number" step="0.01" value={formData.unit_value} onChange={(e) => setFormData({ ...formData, unit_value: Number(e.target.value) })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-2">Quantidade</label><input type="number" step="0.01" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-2">Valor total</label><input type="number" step="0.01" value={formData.total_value} onChange={(e) => setFormData({ ...formData, total_value: Number(e.target.value) })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-2">Valor total</label><input type="text" readOnly value={formatCurrency(totalValue)} className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-2">Status</label><select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option></select></div>
             <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-2">Observações</label><textarea rows={3} value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent resize-none" /></div>
           </div>
