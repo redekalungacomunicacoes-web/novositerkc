@@ -186,10 +186,20 @@ export function useFinanceSupabase() {
   const getDashboardAggregates = async ({ months = 6 }: DashboardAggregateArgs = {}) => {
     const start = new Date();
     start.setMonth(start.getMonth() - months);
-    const res = await supabase
+    const fromDate = start.toISOString().slice(0, 10);
+
+    let res = await supabase
       .from("finance_movements")
-      .select("id,date,type,status,total_value,created_at,category")
-      .gte("date", start.toISOString().slice(0, 10));
+      .select("id,date,type,status,total_value,created_at,category,category_id")
+      .gte("date", fromDate);
+
+    if (res.error?.message?.toLowerCase().includes("category_id")) {
+      res = await supabase
+        .from("finance_movements")
+        .select("id,date,type,status,total_value,created_at,category")
+        .gte("date", fromDate);
+    }
+
     const rows = ensure(res.data ?? [], res.error);
 
     const paid = rows.filter((row) => row.status === "pago");

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Wallet, TrendingUp, TrendingDown, AlertCircle, Plus, Pencil, Trash2, FileText, List, Eye } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, AlertCircle, Plus, Pencil, Trash2, FileText, Eye } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
 import { KPICard } from '../components/KPICard';
