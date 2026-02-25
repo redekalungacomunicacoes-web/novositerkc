@@ -42,6 +42,7 @@ export type FinanceAttachment = {
   mime_type: string;
   file_size: number;
   storage_path: string;
+  public_url?: string;
   created_at: string;
 };
 
@@ -64,6 +65,9 @@ export type FinanceiroMovimentacao = {
   payMethod: 'pix' | 'transferencia' | 'dinheiro';
   beneficiary: string;
   notes: string;
+  docType?: string;
+  docNumber?: string;
+  costCenter?: string;
   attachmentsCount: number;
   comprovantes: FinanceAttachment[];
 };

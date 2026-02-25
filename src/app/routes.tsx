@@ -107,6 +107,7 @@ export const router = createBrowserRouter([
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
 
           { path: "financeiro", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
+          { path: "financeiro/dashboard", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
           { path: "financeiro/fundos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroFundos },
           { path: "financeiro/fundos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroFundoDetalhes },
           { path: "financeiro/projetos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetos },

@@ -1,27 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Eye, Paperclip, Trash2, Upload, X } from 'lucide-react';
-import type { FinanceAttachment, FinanceiroFundo, FinanceiroProjeto } from '../data/financeiro.repo';
+import type { FinanceAttachment, FinanceiroMovimentacao } from '../data/financeiro.repo';
 import type { FinanceCategory, MovementPayload } from '../hooks/useFinanceSupabase';
 import { AttachmentViewerDialog } from './AttachmentViewerDialog';
 
-export type MovementFormValues = MovementPayload;
+type SimpleItem = { id: string; name: string };
 
 type Props = {
-  open: boolean;
-  title: string;
-  movementId?: string;
-  saving?: boolean;
-  form: MovementFormValues;
-  funds: FinanceiroFundo[];
-  projects: FinanceiroProjeto[];
-  categories: FinanceCategory[];
-  onChange: (next: MovementFormValues) => void;
+  isOpen: boolean;
   onClose: () => void;
-  onSubmit: (files: File[]) => void;
-  listAttachments: (movementId: string) => Promise<FinanceAttachment[]>;
-  onUploadAttachment: (movementId: string, file: File, context?: { fundId?: string; projectId?: string }) => Promise<void>;
-  onDeleteAttachment: (attachment: FinanceAttachment) => Promise<unknown>;
-  getSignedUrl: (storagePath: string) => Promise<string>;
+  editData?: FinanceiroMovimentacao | null;
+  projects: SimpleItem[];
+  funds: SimpleItem[];
+  categories: FinanceCategory[];
+  attachments: FinanceAttachment[];
+  onSubmit: (payload: MovementPayload) => Promise<{ id?: string } | void>;
+  onDelete?: () => Promise<void>;
+  onUploadAttachment: (file: File, movementId: string, payload: MovementPayload) => Promise<void>;
+  onDeleteAttachment: (attachmentId: string) => Promise<void>;
+  onChanged: () => Promise<void>;
 };
 
 const payMethods: { value: MovementPayload['pay_method']; label: string }[] = [
@@ -30,110 +27,149 @@ const payMethods: { value: MovementPayload['pay_method']; label: string }[] = [
   { value: 'dinheiro', label: 'Dinheiro' },
 ];
 
-export function ModalMovimentacao({ open, title, movementId, saving = false, form, funds, projects, categories, onChange, onClose, onSubmit, listAttachments, onUploadAttachment, onDeleteAttachment, getSignedUrl }: Props) {
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [attachments, setAttachments] = useState<FinanceAttachment[]>([]);
-  const [selectedAttachment, setSelectedAttachment] = useState<FinanceAttachment | null>(null);
+const makeInitial = (movement?: FinanceiroMovimentacao | null): MovementPayload => ({
+  date: movement?.data?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+  type: movement?.tipo || 'saida',
+  project_id: movement?.projetoId || '',
+  fund_id: movement?.fundoId || '',
+  title: movement?.titulo || '',
+  description: movement?.descricao || '',
+  unit_value: movement?.valorUnitario || 0,
+  quantity: movement?.quantidade || 1,
+  total_value: movement?.valorTotal || 0,
+  status: movement?.status || 'pendente',
+  category_id: movement?.categoriaId || undefined,
+  pay_method: movement?.payMethod || 'pix',
+  beneficiary: movement?.beneficiary || '',
+  notes: movement?.notes || '',
+  doc_type: movement?.docType || '',
+  doc_number: movement?.docNumber || '',
+  cost_center: movement?.costCenter || '',
+});
 
-  const fundProjects = useMemo(
-    () => projects.filter((project) => !form.fund_id || project.fundoId === form.fund_id),
-    [projects, form.fund_id],
-  );
+export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, categories, attachments, onSubmit, onDelete, onUploadAttachment, onDeleteAttachment, onChanged }: Props) {
+  const [form, setForm] = useState<MovementPayload>(makeInitial(editData));
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [viewerAttachment, setViewerAttachment] = useState<FinanceAttachment | null>(null);
 
   useEffect(() => {
-    if (!open || !movementId) {
-      setAttachments([]);
-      return;
+    if (isOpen) {
+      setForm(makeInitial(editData));
+      setErrorMsg(null);
+      setSelectedFile(null);
     }
-    void listAttachments(movementId).then(setAttachments);
-  }, [open, movementId, listAttachments]);
+  }, [isOpen, editData]);
 
-  if (!open) return null;
+  const fundProjects = useMemo(() => projects, [projects]);
 
-  const total = (Number(form.unit_value) || 0) * (Number(form.quantity) || 0);
+  const totalValue = (Number(form.unit_value) || 0) * (Number(form.quantity) || 0);
 
-  const refreshAttachments = async () => {
-    if (!movementId) return;
-    const list = await listAttachments(movementId);
-    setAttachments(list);
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setErrorMsg(null);
+
+    try {
+      const payload: MovementPayload = { ...form, total_value: totalValue };
+      const result = await onSubmit(payload);
+      const movementId = editData?.id || result?.id;
+
+      if (selectedFile && movementId) {
+        await onUploadAttachment(selectedFile, movementId, payload);
+      }
+
+      await onChanged();
+      onClose();
+    } catch (error) {
+      setErrorMsg((error as Error).message || 'Erro ao salvar movimentação.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await onDeleteAttachment(attachmentId);
+      await onChanged();
+    } catch (error) {
+      setErrorMsg((error as Error).message || 'Erro ao excluir comprovante.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
 
   return (
     <>
       <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
         <div className="max-h-[95vh] w-full max-w-4xl overflow-auto rounded-xl bg-white p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{title}</h2>
-            <button onClick={onClose} className="rounded p-1 hover:bg-gray-100"><X className="h-4 w-4" /></button>
+            <h2 className="text-lg font-semibold">{editData ? 'Editar movimentação' : 'Nova movimentação'}</h2>
+            <button type="button" onClick={onClose} className="rounded p-1 hover:bg-gray-100"><X className="h-4 w-4" /></button>
           </div>
 
-          <form className="grid grid-cols-2 gap-3" onSubmit={(e) => { e.preventDefault(); onSubmit(pendingFiles); }}>
-            <input required type="date" value={form.date} onChange={(e) => onChange({ ...form, date: e.target.value })} className="rounded border px-3 py-2 text-sm" />
-            <select required value={form.type} onChange={(e) => onChange({ ...form, type: e.target.value as MovementPayload['type'] })} className="rounded border px-3 py-2 text-sm"><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
+          {errorMsg && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{errorMsg}</div>}
 
-            <select required value={form.fund_id} onChange={(e) => onChange({ ...form, fund_id: e.target.value, project_id: '' })} className="rounded border px-3 py-2 text-sm"><option value="">Fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.nome}</option>)}</select>
-            <select required value={form.project_id || ''} onChange={(e) => onChange({ ...form, project_id: e.target.value })} className="rounded border px-3 py-2 text-sm"><option value="">Projeto</option>{fundProjects.map((project) => <option key={project.id} value={project.id}>{project.nome}</option>)}</select>
+          <form className="grid grid-cols-2 gap-3" onSubmit={handleSubmit}>
+            <input required type="date" value={form.date} onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))} className="rounded border px-3 py-2 text-sm" />
+            <select required value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value as MovementPayload['type'] }))} className="rounded border px-3 py-2 text-sm"><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
 
-            <input required value={form.title} onChange={(e) => onChange({ ...form, title: e.target.value })} placeholder="Título" className="rounded border px-3 py-2 text-sm" />
-            <input required value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} placeholder="Descrição" className="rounded border px-3 py-2 text-sm" />
+            <select value={form.fund_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, fund_id: e.target.value }))} className="rounded border px-3 py-2 text-sm"><option value="">Fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.name}</option>)}</select>
+            <select value={form.project_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, project_id: e.target.value }))} className="rounded border px-3 py-2 text-sm"><option value="">Projeto</option>{fundProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
 
-            <input required min={0} type="number" value={form.unit_value} onChange={(e) => onChange({ ...form, unit_value: Number(e.target.value) })} placeholder="Valor unitário" className="rounded border px-3 py-2 text-sm" />
-            <input required min={1} type="number" value={form.quantity} onChange={(e) => onChange({ ...form, quantity: Number(e.target.value) })} placeholder="Quantidade" className="rounded border px-3 py-2 text-sm" />
+            <input value={form.title || ''} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Título" className="rounded border px-3 py-2 text-sm" />
+            <input required value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Descrição" className="rounded border px-3 py-2 text-sm" />
 
-            <div className="rounded border bg-gray-50 px-3 py-2 text-sm">Total: <strong>{total.toFixed(2)}</strong></div>
-            <select required value={form.status} onChange={(e) => onChange({ ...form, status: e.target.value as MovementPayload['status'] })} className="rounded border px-3 py-2 text-sm"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option></select>
+            <input required min={0} type="number" value={form.unit_value} onChange={(e) => setForm((prev) => ({ ...prev, unit_value: Number(e.target.value) }))} placeholder="Valor unitário" className="rounded border px-3 py-2 text-sm" />
+            <input required min={1} type="number" value={form.quantity} onChange={(e) => setForm((prev) => ({ ...prev, quantity: Number(e.target.value) }))} placeholder="Quantidade" className="rounded border px-3 py-2 text-sm" />
 
-            <select value={form.category_id || ''} onChange={(e) => onChange({ ...form, category_id: e.target.value || undefined })} className="rounded border px-3 py-2 text-sm"><option value="">Sem categoria</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
-            <select required value={form.pay_method} onChange={(e) => onChange({ ...form, pay_method: e.target.value as MovementPayload['pay_method'] })} className="rounded border px-3 py-2 text-sm"><option value="">Forma de pagamento</option>{payMethods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+            <div className="rounded border bg-gray-50 px-3 py-2 text-sm">Total: <strong>{totalValue.toFixed(2)}</strong></div>
+            <select required value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value as MovementPayload['status'] }))} className="rounded border px-3 py-2 text-sm"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option></select>
 
-            <input value={form.beneficiary} onChange={(e) => onChange({ ...form, beneficiary: e.target.value })} placeholder="Favorecido" className="rounded border px-3 py-2 text-sm" />
-            <textarea value={form.notes} onChange={(e) => onChange({ ...form, notes: e.target.value })} placeholder="Observações" className="rounded border px-3 py-2 text-sm" />
+            <select value={form.category_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, category_id: e.target.value || undefined }))} className="rounded border px-3 py-2 text-sm"><option value="">Sem categoria</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+            <select required value={form.pay_method} onChange={(e) => setForm((prev) => ({ ...prev, pay_method: e.target.value as MovementPayload['pay_method'] }))} className="rounded border px-3 py-2 text-sm">{payMethods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+
+            <input value={form.beneficiary || ''} onChange={(e) => setForm((prev) => ({ ...prev, beneficiary: e.target.value }))} placeholder="Favorecido" className="rounded border px-3 py-2 text-sm" />
+            <input value={form.cost_center || ''} onChange={(e) => setForm((prev) => ({ ...prev, cost_center: e.target.value }))} placeholder="Centro de custo" className="rounded border px-3 py-2 text-sm" />
+            <input value={form.doc_type || ''} onChange={(e) => setForm((prev) => ({ ...prev, doc_type: e.target.value }))} placeholder="Tipo de documento" className="rounded border px-3 py-2 text-sm" />
+            <input value={form.doc_number || ''} onChange={(e) => setForm((prev) => ({ ...prev, doc_number: e.target.value }))} placeholder="Número do documento" className="rounded border px-3 py-2 text-sm" />
+            <textarea value={form.notes || ''} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Observações" className="col-span-2 rounded border px-3 py-2 text-sm" />
 
             <div className="col-span-2 space-y-3 rounded border p-3">
               <p className="text-sm font-medium">Comprovantes</p>
               <label className="inline-flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm">
-                <Upload className="h-4 w-4" /> Selecionar arquivos
-                <input
-                  className="hidden"
-                  type="file"
-                  multiple
-                  accept="application/pdf,image/png,image/jpeg"
-                  onChange={(e) => setPendingFiles(Array.from(e.target.files || []))}
-                />
+                <Upload className="h-4 w-4" /> Selecionar arquivo
+                <input className="hidden" type="file" accept="application/pdf,image/png,image/jpeg,image/jpg" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
               </label>
-              {pendingFiles.length > 0 && <p className="text-xs text-gray-500">{pendingFiles.length} arquivo(s) serão enviados no salvar.</p>}
+              {selectedFile && <p className="text-xs text-gray-500">Arquivo selecionado: {selectedFile.name}</p>}
 
-              {movementId && (
-                <div className="space-y-2">
-                  {attachments.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between rounded border p-2 text-sm">
-                      <span className="inline-flex items-center gap-2"><Paperclip className="h-4 w-4" />{item.file_name}</span>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => setSelectedAttachment(item)} className="rounded p-1 hover:bg-gray-100"><Eye className="h-4 w-4" /></button>
-                        <button type="button" onClick={() => void getSignedUrl(item.storage_path).then((url) => window.open(url, '_blank'))} className="rounded border px-2 py-1 text-xs">Baixar</button>
-                        <button type="button" onClick={() => void onDeleteAttachment(item).then(refreshAttachments)} className="rounded p-1 hover:bg-gray-100"><Trash2 className="h-4 w-4" /></button>
-                      </div>
+              <div className="space-y-2">
+                {attachments.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                    <span className="inline-flex items-center gap-2"><Paperclip className="h-4 w-4" />{item.file_name}</span>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setViewerAttachment(item)} className="rounded p-1 hover:bg-gray-100"><Eye className="h-4 w-4" /></button>
+                      <button type="button" onClick={() => void handleDeleteAttachment(item.id)} className="rounded p-1 hover:bg-gray-100"><Trash2 className="h-4 w-4" /></button>
                     </div>
-                  ))}
-                  {attachments.length === 0 && <p className="text-xs text-gray-500">Sem comprovantes anexados.</p>}
-
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-xs">
-                    <Upload className="h-3 w-3" /> Upload imediato
-                    <input className="hidden" type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file || !movementId) return;
-                      void onUploadAttachment(movementId, file, { fundId: form.fund_id, projectId: form.project_id }).then(refreshAttachments);
-                    }} />
-                  </label>
-                </div>
-              )}
+                  </div>
+                ))}
+                {attachments.length === 0 && <p className="text-xs text-gray-500">Sem comprovantes anexados.</p>}
+              </div>
             </div>
 
-            <div className="col-span-2 flex justify-end gap-2 pt-2"><button type="button" onClick={onClose} className="rounded border px-4 py-2 text-sm">Cancelar</button><button disabled={saving} type="submit" className="rounded bg-[#0f3d2e] px-4 py-2 text-sm text-white disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></div>
+            <div className="col-span-2 flex justify-between gap-2 pt-2">
+              <div>{onDelete && editData && <button type="button" onClick={() => { void onDelete(); }} className="rounded border border-red-300 px-4 py-2 text-sm text-red-700"><Trash2 className="mr-1 inline h-4 w-4" />Excluir</button>}</div>
+              <div className="flex gap-2"><button type="button" onClick={onClose} className="rounded border px-4 py-2 text-sm">Cancelar</button><button disabled={saving} type="submit" className="rounded bg-[#0f3d2e] px-4 py-2 text-sm text-white disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></div>
+            </div>
           </form>
         </div>
       </div>
-      <AttachmentViewerDialog open={Boolean(selectedAttachment)} attachment={selectedAttachment} onClose={() => setSelectedAttachment(null)} getSignedUrl={getSignedUrl} />
+      <AttachmentViewerDialog open={Boolean(viewerAttachment)} attachment={viewerAttachment} onClose={() => setViewerAttachment(null)} />
     </>
   );
 }

@@ -47,10 +47,12 @@ export function Projetos() {
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const ok = editingProject ? await updateProject(editingProject.id, form) : await createProject(form);
-    if (ok) {
+    try {
+      await (editingProject ? updateProject(editingProject.id, form) : createProject(form));
       setOpenModal(false);
       setEditingProject(null);
+    } catch {
+      // erro já exibido via hook
     }
   };
 
@@ -89,7 +91,7 @@ export function Projetos() {
               <div className="mb-6"><div className="flex items-center justify-between mb-2"><span className="text-sm text-gray-600">Execução</span><span className="text-sm font-medium text-gray-900">{Number(projeto.execucao) || 0}%</span></div><div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden"><div className="absolute top-0 left-0 h-full bg-[#0f3d2e] rounded-full transition-all" style={{ width: `${Number(projeto.execucao) || 0}%` }} /></div></div>
               <div className="grid grid-cols-3 gap-3 mb-6"><div><p className="text-xs text-gray-500 mb-1">Orçado</p><p className="text-sm font-semibold text-gray-900">{formatCurrency(Number(projeto.totalOrcado) || 0)}</p></div><div><p className="text-xs text-gray-500 mb-1">Real</p><p className="text-sm font-semibold text-gray-900">{formatCurrency(Number(projeto.gastoReal) || 0)}</p></div><div><p className="text-xs text-gray-500 mb-1">Diferença</p><p className="text-sm font-semibold text-red-600">{formatCurrency(Number(projeto.diferenca) || 0)}</p></div></div>
               <div className="flex gap-3"><Link to={`/admin/financeiro/projetos/${projeto.id}`} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0f3d2e] text-white rounded-lg hover:bg-[#0a2b20] transition-colors text-sm font-medium"><Eye className="w-4 h-4" />Ver Detalhes</Link></div>
-              <div className="flex gap-3 mt-3"><button onClick={() => openEdit(projeto)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"><Edit className="w-4 h-4" />Editar</button><button onClick={() => void deleteProject(projeto.id)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"><Trash2 className="w-4 h-4" />Excluir</button></div>
+              <div className="flex gap-3 mt-3"><button onClick={() => openEdit(projeto)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"><Edit className="w-4 h-4" />Editar</button><button onClick={() => { void deleteProject(projeto.id).catch(() => undefined); }} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"><Trash2 className="w-4 h-4" />Excluir</button></div>
             </div>
           </div>
         ))}
