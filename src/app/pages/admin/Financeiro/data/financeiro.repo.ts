@@ -1,6 +1,12 @@
 import { supabase } from '@/lib/supabase';
 
-export type FinanceStatus = 'pago' | 'pendente' | 'cancelado' | 'ativo' | 'em_andamento' | 'concluido';
+export type FinanceStatus =
+  | 'pago'
+  | 'pendente'
+  | 'cancelado'
+  | 'ativo'
+  | 'em_andamento'
+  | 'concluido';
 
 type AnyRow = Record<string, any>;
 
@@ -63,7 +69,14 @@ const asDateIso = (value: unknown) => {
 };
 
 const asStatus = (value: unknown, fallback: FinanceStatus = 'pendente'): FinanceStatus => {
-  if (value === 'pago' || value === 'pendente' || value === 'cancelado' || value === 'ativo' || value === 'em_andamento' || value === 'concluido') {
+  if (
+    value === 'pago' ||
+    value === 'pendente' ||
+    value === 'cancelado' ||
+    value === 'ativo' ||
+    value === 'em_andamento' ||
+    value === 'concluido'
+  ) {
     return value;
   }
   return fallback;
@@ -84,8 +97,15 @@ export const formatDate = (dateLike: string) => {
   return date.toLocaleDateString('pt-BR');
 };
 
+/**
+ * Movimentações com robustez:
+ * - tenta coluna nova: date / type / description / total_value
+ * - se falhar (ambiente legado): data / tipo / descricao / valor_total
+ * - tenta trazer relações (project/category) quando possível
+ */
 async function getMovementsRaw() {
-  const selectWithRelations = '*, project:finance_projects(id,name,funder), category:finance_categories(name)';
+  const selectWithRelations =
+    '*, project:finance_projects(id,name,funder), category:finance_categories(name)';
 
   const byDate = await supabase
     .from('finance_movements')
@@ -109,8 +129,11 @@ async function getMovementsRaw() {
 }
 
 export async function listFunds(): Promise<FinanceiroFundo[]> {
-  const { data: fundsData, error: fundsError } = await supabase.from('finance_funds').select('*');
+  const { data: fundsData, error: fundsError } = await supabase
+    .from('finance_funds')
+    .select('*');
 
+  // Modelo “fundos” existe
   if (!fundsError && fundsData?.length) {
     return fundsData.map((row: AnyRow) => {
       const totalOrcado = asNumber(row.total_orcado ?? row.totalOrcado ?? row.orcado);
@@ -137,7 +160,11 @@ export async function listFunds(): Promise<FinanceiroFundo[]> {
     });
   }
 
-  const { data: projectsData, error: projectsError } = await supabase.from('finance_projects').select('*');
+  // Fallback: se não existir tabela de fundos, tenta derivar via projects
+  const { data: projectsData, error: projectsError } = await supabase
+    .from('finance_projects')
+    .select('*');
+
   if (projectsError || !projectsData) return [];
 
   return projectsData.map((row: AnyRow) => {
@@ -162,15 +189,22 @@ export async function listFunds(): Promise<FinanceiroFundo[]> {
 }
 
 export async function listProjects(): Promise<FinanceiroProjeto[]> {
-  const [projectsRes, funds] = await Promise.all([supabase.from('finance_projects').select('*'), listFunds()]);
+  const [projectsRes, funds] = await Promise.all([
+    supabase.from('finance_projects').select('*'),
+    listFunds(),
+  ]);
+
   if (projectsRes.error || !projectsRes.data) return [];
 
   return projectsRes.data.map((row: AnyRow) => {
     const totalOrcado = asNumber(row.initial_amount ?? row.total_orcado ?? row.totalOrcado ?? row.orcado);
     const saldoDisponivel = asNumber(row.current_balance ?? row.saldo_disponivel ?? row.saldoDisponivel);
     const gastoReal = Math.max(0, totalOrcado - saldoDisponivel);
-    const fundoId = String(row.fund_id ?? row.fundo_id ?? row.fundoId ?? row.id ?? '');
-    const fundoNome = funds.find((f) => f.id === fundoId)?.nome ?? String(row.funder ?? row.fundo_nome ?? row.fundo ?? '—');
+
+    const fundoId = String(row.fund_id ?? row.fundo_id ?? row.fundoId ?? '');
+    const fundoNome =
+      funds.find((f) => f.id === fundoId)?.nome ??
+      String(row.funder ?? row.fundo_nome ?? row.fundo ?? '—');
 
     return {
       id: String(row.id ?? crypto.randomUUID()),
@@ -181,7 +215,10 @@ export async function listProjects(): Promise<FinanceiroProjeto[]> {
       totalOrcado,
       gastoReal,
       diferenca: asNumber(row.diferenca ?? gastoReal - totalOrcado),
-      execucao: Math.max(0, Math.min(100, asNumber(row.execucao ?? (totalOrcado > 0 ? (gastoReal / totalOrcado) * 100 : 0)))),
+      execucao: Math.max(
+        0,
+        Math.min(100, asNumber(row.execucao ?? (totalOrcado > 0 ? (gastoReal / totalOrcado) * 100 : 0))),
+      ),
       status: asStatus(row.status, 'em_andamento'),
     };
   });
@@ -211,7 +248,9 @@ export async function listLatestMovements(limit = 10): Promise<FinanceiroMovimen
   }));
 }
 
-export async function getDashboardData(range?: { startDate?: string; endDate?: string }): Promise<DashboardData> {
+export async function getDashboardData(
+  range?: { startDate?: string; endDate?: string },
+): Promise<DashboardData> {
   const empty: DashboardData = {
     entradas: 0,
     saidas: 0,
@@ -231,7 +270,7 @@ export async function getDashboardData(range?: { startDate?: string; endDate?: s
   const start = range?.startDate ? new Date(range.startDate) : null;
   const end = range?.endDate ? new Date(range.endDate) : null;
 
-  const movements = movementsRows.filter((row: AnyRow) => {
+  const movements = (movementsRows || []).filter((row: AnyRow) => {
     const date = new Date(String(row.date ?? row.data ?? row.created_at ?? ''));
     if (Number.isNaN(date.getTime())) return false;
     if (start && date < start) return false;
@@ -241,13 +280,24 @@ export async function getDashboardData(range?: { startDate?: string; endDate?: s
 
   const entradas = movements
     .filter((row: AnyRow) => String(row.type ?? row.tipo ?? '').toLowerCase() === 'entrada')
-    .reduce((acc: number, row: AnyRow) => acc + asNumber(row.total_value ?? row.valor_total ?? row.valor), 0);
+    .reduce(
+      (acc: number, row: AnyRow) =>
+        acc + asNumber(row.total_value ?? row.valor_total ?? row.valorTotal ?? row.valor),
+      0,
+    );
 
   const saidas = movements
     .filter((row: AnyRow) => String(row.type ?? row.tipo ?? '').toLowerCase() === 'saida')
-    .reduce((acc: number, row: AnyRow) => acc + asNumber(row.total_value ?? row.valor_total ?? row.valor), 0);
+    .reduce(
+      (acc: number, row: AnyRow) =>
+        acc + asNumber(row.total_value ?? row.valor_total ?? row.valorTotal ?? row.valor),
+      0,
+    );
 
-  const hasStatusColumn = movements.some((row: AnyRow) => Object.prototype.hasOwnProperty.call(row, 'status'));
+  const hasStatusColumn = movements.some((row: AnyRow) =>
+    Object.prototype.hasOwnProperty.call(row, 'status'),
+  );
+
   const pendencias = hasStatusColumn
     ? movements.filter((row: AnyRow) => String(row.status || '').toLowerCase() !== 'pago').length
     : 0;
@@ -263,7 +313,7 @@ export async function getDashboardData(range?: { startDate?: string; endDate?: s
     if (!periodo) return;
 
     const current = fluxoMap.get(periodo) ?? { periodo, entradas: 0, saidas: 0 };
-    const value = asNumber(row.total_value ?? row.valor_total ?? row.valor);
+    const value = asNumber(row.total_value ?? row.valor_total ?? row.valorTotal ?? row.valor);
     const type = String(row.type ?? row.tipo ?? '').toLowerCase();
 
     if (type === 'entrada') current.entradas += value;
@@ -277,7 +327,11 @@ export async function getDashboardData(range?: { startDate?: string; endDate?: s
   });
 
   const fluxoCaixa = [...fluxoMap.values()].sort((a, b) => a.periodo.localeCompare(b.periodo));
-  const distribuicaoCategoria = [...categoriaMap.entries()].map(([categoria, valor]) => ({ categoria, valor: asNumber(valor) }));
+
+  const distribuicaoCategoria = [...categoriaMap.entries()].map(([categoria, valor]) => ({
+    categoria,
+    valor: asNumber(valor),
+  }));
 
   const realPorPeriodo = new Map<string, number>();
   fluxoCaixa.forEach((item) => realPorPeriodo.set(item.periodo, asNumber(item.saidas)));
@@ -287,12 +341,15 @@ export async function getDashboardData(range?: { startDate?: string; endDate?: s
     budgetRes.data.forEach((row: AnyRow) => {
       const periodo = monthKey(row.date ?? row.data ?? row.periodo ?? row.created_at);
       if (!periodo) return;
-      const valor = asNumber(row.value ?? row.valor ?? row.valor_orcado ?? row.valor_planejado ?? row.total_orcado);
+      const valor = asNumber(
+        row.value ?? row.valor ?? row.valor_orcado ?? row.valor_planejado ?? row.total_orcado,
+      );
       orcadoPorPeriodo.set(periodo, (orcadoPorPeriodo.get(periodo) ?? 0) + valor);
     });
   }
 
   const periodos = Array.from(new Set([...realPorPeriodo.keys(), ...orcadoPorPeriodo.keys()])).sort();
+
   const orcadoVsReal = periodos.map((periodo) => ({
     periodo,
     orcado: asNumber(orcadoPorPeriodo.get(periodo) ?? 0),
