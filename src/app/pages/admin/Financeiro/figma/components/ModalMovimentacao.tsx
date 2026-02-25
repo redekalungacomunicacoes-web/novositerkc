@@ -17,7 +17,6 @@ interface ModalMovimentacaoProps {
 
 export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], funds = [], attachments = [], onSubmit, onDelete, onChanged, onUploadAttachment, onDeleteAttachment }: ModalMovimentacaoProps) {
   const [formData, setFormData] = useState<any>({});
-  const [localFiles, setLocalFiles] = useState<string[]>([]);
 
   useEffect(() => {
     setFormData({
@@ -32,7 +31,6 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
       status: editData?.status || 'pendente',
       notes: editData?.notes || editData?.observacoes || '',
     });
-    setLocalFiles([]);
   }, [editData, isOpen]);
 
   if (!isOpen) return null;
@@ -63,7 +61,7 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
     for (const file of Array.from(files)) {
       await onUploadAttachment?.(file, editData.id);
     }
-    setLocalFiles((prev) => [...prev, ...Array.from(files).map((f) => f.name)]);
+    e.target.value = '';
   };
 
   return (
@@ -89,14 +87,13 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
           </div>
 
           <div className="mt-6 p-4 border border-gray-200 rounded-xl">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Comprovantes</h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Comprovantes: {attachments.length}</h3>
             <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#0f3d2e] text-white rounded-lg hover:bg-[#0a2b20] transition-colors cursor-pointer"><Upload className="w-4 h-4" />Upload<input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!editData?.id} /></label>
             {!editData?.id ? <p className="text-xs text-gray-500 mt-2">Salve a movimentação para habilitar uploads.</p> : null}
             <div className="mt-3 space-y-2">
               {attachments.map((a) => (
                 <div key={a.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"><div className="flex items-center gap-2"><FileText className="w-4 h-4 text-gray-500" /><span className="text-sm text-gray-700">{a.file_name}</span></div><button type="button" onClick={() => void onDeleteAttachment?.(a.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div>
               ))}
-              {localFiles.map((file) => <div key={file} className="text-xs text-gray-500">{file}</div>)}
             </div>
           </div>
 
