@@ -6,6 +6,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ModalMovimentacao } from '../components/ModalMovimentacao';
 import { formatCurrency, formatDate } from '../data/financeiro-data';
 import { useFinanceSupabase } from '../../hooks/useFinanceSupabase';
+import { SupabaseHealth } from '../../components/SupabaseHealth';
 
 export function FundoDetalhes() {
   const { id } = useParams();
@@ -22,18 +23,26 @@ export function FundoDetalhes() {
 
   const load = async () => {
     if (!id) return;
-    const [fundRes, movRes, projRes, fundsRes] = await Promise.all([getFund(id), listMovementsByFund(id), listProjects(), listFunds()]);
-    setFundo(fundRes.data);
-    setMovements(movRes.data || []);
-    setProjects(projRes.data || []);
-    setFunds(fundsRes.data || []);
+    try {
+      const [fundRes, movRes, projRes, fundsRes] = await Promise.all([getFund(id), listMovementsByFund(id), listProjects(), listFunds()]);
+      setFundo(fundRes);
+      setMovements(movRes || []);
+      setProjects(projRes || []);
+      setFunds(fundsRes || []);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error(error);
+    }
   };
 
   useEffect(() => { void load(); }, [id]);
 
   useEffect(() => {
-    if (!editing?.id) return;
-    void listAttachments(editing.id).then(({ data }) => setAttachments(data || []));
+    const loadAttachments = async () => {
+      if (!editing?.id) return;
+      const data = await listAttachments(editing.id);
+      setAttachments(data || []);
+    };
+    void loadAttachments();
   }, [editing]);
 
   const paidIn = useMemo(() => movements.filter((m) => m.type === 'entrada' && m.status === 'pago').reduce((a, b) => a + Number(b.total_value || 0), 0), [movements]);
@@ -56,6 +65,7 @@ export function FundoDetalhes() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-8">
+      <SupabaseHealth />
       <div className="mb-8">
         <Link to="/admin/financeiro/fundos" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"><ArrowLeft className="w-4 h-4" />Voltar para Fundos</Link>
         <div className="flex items-center justify-between"><div><h1 className="text-3xl font-semibold text-gray-900 mb-2">{fundo?.name || 'Fundo'}</h1><p className="text-gray-600">Acompanhamento completo do fundo</p></div><button onClick={() => { setEditing(null); setModalOpen(true); }} className="flex items-center gap-2 px-6 py-3 bg-[#0f3d2e] text-white rounded-xl hover:bg-[#0a2b20] transition-colors shadow-sm"><Plus className="w-5 h-5" />Nova Movimentação</button></div>
@@ -69,10 +79,7 @@ export function FundoDetalhes() {
         <div className="bg-white rounded-xl border-2 border-[#ffdd9a] p-6 shadow-sm"><p className="text-sm text-gray-600 mb-1">Pendências</p><p className="text-2xl font-semibold text-gray-900">{formatCurrency(pending)}</p></div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6"><h3 className="text-lg font-semibold text-gray-900 mb-6">Orçado vs Real por Mês</h3><ResponsiveContainer width="100%" height={300}><BarChart data={mesData}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" /><XAxis dataKey="mes" stroke="#6b7280" /><YAxis stroke="#6b7280" /><Tooltip formatter={(value: number) => formatCurrency(value)} /><Legend /><Bar dataKey="orcado" fill="#ffdd9a" name="Orçado" /><Bar dataKey="real" fill="#0f3d2e" name="Real" /></BarChart></ResponsiveContainer></div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6"><h3 className="text-lg font-semibold text-gray-900 mb-6">Saldo ao Longo do Tempo</h3><ResponsiveContainer width="100%" height={300}><LineChart data={mesData}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" /><XAxis dataKey="mes" stroke="#6b7280" /><YAxis stroke="#6b7280" /><Tooltip formatter={(value: number) => formatCurrency(value)} /><Legend /><Line type="monotone" dataKey="saldo" stroke="#0f3d2e" strokeWidth={3} name="Saldo" /></LineChart></ResponsiveContainer></div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"><div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6"><h3 className="text-lg font-semibold text-gray-900 mb-6">Orçado vs Real por Mês</h3><ResponsiveContainer width="100%" height={300}><BarChart data={mesData}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" /><XAxis dataKey="mes" stroke="#6b7280" /><YAxis stroke="#6b7280" /><Tooltip formatter={(value: number) => formatCurrency(value)} /><Legend /><Bar dataKey="orcado" fill="#ffdd9a" name="Orçado" /><Bar dataKey="real" fill="#0f3d2e" name="Real" /></BarChart></ResponsiveContainer></div><div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6"><h3 className="text-lg font-semibold text-gray-900 mb-6">Saldo ao Longo do Tempo</h3><ResponsiveContainer width="100%" height={300}><LineChart data={mesData}><CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" /><XAxis dataKey="mes" stroke="#6b7280" /><YAxis stroke="#6b7280" /><Tooltip formatter={(value: number) => formatCurrency(value)} /><Legend /><Line type="monotone" dataKey="saldo" stroke="#0f3d2e" strokeWidth={3} name="Saldo" /></LineChart></ResponsiveContainer></div></div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-8">
         <div className="p-6 border-b border-gray-200"><h3 className="text-lg font-semibold text-gray-900 mb-4">Movimentações do Fundo</h3><div className="flex items-center gap-4"><div className="flex-1 relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input type="text" placeholder="Buscar movimentações..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" /></div></div></div>
@@ -87,21 +94,35 @@ export function FundoDetalhes() {
         funds={funds.map((f) => ({ id: f.id, name: f.name }))}
         attachments={attachments}
         onSubmit={async (payload) => {
-          if (editing?.id) await updateMovement(editing.id, payload);
-          else await createMovement({ ...payload, fund_id: id });
-          await load();
+          try {
+            if (editing?.id) await updateMovement(editing.id, payload);
+            else await createMovement({ ...payload, fund_id: id });
+            await load();
+          } catch (error) {
+            if (import.meta.env.DEV) console.error(error);
+          }
         }}
         onUploadAttachment={async (file, movementId) => {
           if (!movementId) return;
-          await uploadAttachment(file, movementId, ['funds', id || 'unknown', movementId]);
-          const { data } = await listAttachments(movementId);
-          setAttachments(data || []);
+          try {
+            await uploadAttachment(file, { id: movementId }, id, editing?.project_id);
+            const data = await listAttachments(movementId);
+            setAttachments(data || []);
+          } catch (error) {
+            if (import.meta.env.DEV) console.error(error);
+          }
         }}
         onDeleteAttachment={async (attachmentId) => {
-          await deleteAttachment(attachmentId);
-          if (editing?.id) {
-            const { data } = await listAttachments(editing.id);
-            setAttachments(data || []);
+          try {
+            const target = attachments.find((a) => a.id === attachmentId);
+            if (!target) return;
+            await deleteAttachment(target);
+            if (editing?.id) {
+              const data = await listAttachments(editing.id);
+              setAttachments(data || []);
+            }
+          } catch (error) {
+            if (import.meta.env.DEV) console.error(error);
           }
         }}
       />

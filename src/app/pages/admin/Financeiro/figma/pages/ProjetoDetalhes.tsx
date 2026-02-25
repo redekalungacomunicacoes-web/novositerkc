@@ -8,6 +8,7 @@ import { ModalMovimentacao } from '../components/ModalMovimentacao';
 import { ModalUploadComprovante } from '../components/ModalUploadComprovante';
 import { formatCurrency, formatDate } from '../data/financeiro-data';
 import { useFinanceSupabase } from '../../hooks/useFinanceSupabase';
+import { SupabaseHealth } from '../../components/SupabaseHealth';
 
 export function ProjetoDetalhes() {
   const { id } = useParams();
@@ -18,7 +19,7 @@ export function ProjetoDetalhes() {
   const [fundos, setFundos] = useState<any[]>([]);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [editing, setEditing] = useState<any>(null);
-  const { getProject, listMovementsByProject, listFunds, listProjects, createMovement, updateMovement, deleteMovement, uploadAttachment, listAttachments, deleteAttachment } = useFinanceSupabase();
+  const { getProject, listMovementsByProject, listFunds, createMovement, updateMovement, deleteMovement, uploadAttachment, listAttachments, deleteAttachment } = useFinanceSupabase();
 
 
 
@@ -28,14 +29,23 @@ export function ProjetoDetalhes() {
     const load = async () => {
       if (!id) return;
       const [projRes, movRes, fundsRes] = await Promise.all([getProject(id), listMovementsByProject(id), listFunds()]);
-      setProjeto(projRes.data);
-      setMovimentacoesProjeto(movRes.data || []);
-      setFundos(fundsRes.data || []);
+      setProjeto(projRes);
+      setMovimentacoesProjeto(movRes || []);
+      setFundos(fundsRes || []);
     };
     void load();
   }, [id]);
 
   const fundoNome = fundos.find((f) => f.id === projeto?.fund_id)?.name || '-';
+
+  useEffect(() => {
+    const loadAttachments = async () => {
+      if (!editing?.id) return;
+      const data = await listAttachments(editing.id);
+      setAttachments(data || []);
+    };
+    void loadAttachments();
+  }, [editing]);
   // Dados para gráficos
   const categoriaData = [
     { categoria: 'PESSOAL', orcado: 30000, real: 12000 },
@@ -54,6 +64,7 @@ export function ProjetoDetalhes() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-8">
+      <SupabaseHealth />
       {/* Header */}
       <div className="mb-8">
         <Link
@@ -72,7 +83,7 @@ export function ProjetoDetalhes() {
             <p className="text-gray-600">Fundo: {fundoNome}</p>
           </div>
           <button
-            onClick={() => setModalMovOpen(true)}
+            onClick={() => { setEditing(null); setModalMovOpen(true); }}
             className="flex items-center gap-2 px-6 py-3 bg-[#0f3d2e] text-white rounded-xl hover:bg-[#0a2b20] transition-colors shadow-sm"
           >
             <Plus className="w-5 h-5" />
@@ -327,7 +338,7 @@ export function ProjetoDetalhes() {
                       <div className="flex items-center gap-3">
                         <StatusBadge status={mov.status} />
                         <button
-                          onClick={() => setModalUploadOpen(true)}
+                          onClick={() => { setEditing(mov); setModalUploadOpen(true); }}
                           className="px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20] transition-colors"
                         >
                           Anexar ({(mov.attachments || []).length})
@@ -431,7 +442,47 @@ export function ProjetoDetalhes() {
       </Tabs.Root>
 
       {/* Modals */}
-      <ModalMovimentacao isOpen={modalMovOpen} onClose={() => setModalMovOpen(false)} />
+      <ModalMovimentacao
+        isOpen={modalMovOpen}
+        onClose={() => setModalMovOpen(false)}
+        editData={editing || { project_id: id }}
+        projects={[{ id: projeto?.id || '', name: projeto?.name || '' }]}
+        funds={fundos.map((f) => ({ id: f.id, name: f.name }))}
+        attachments={attachments}
+        onSubmit={async (payload) => {
+          try {
+            if (editing?.id) await updateMovement(editing.id, payload);
+            else await createMovement({ ...payload, project_id: id, fund_id: payload.fund_id || projeto?.fund_id });
+            const movs = id ? await listMovementsByProject(id) : [];
+            setMovimentacoesProjeto(movs || []);
+          } catch (error) {
+            if (import.meta.env.DEV) console.error(error);
+          }
+        }}
+        onUploadAttachment={async (file, movementId) => {
+          if (!movementId) return;
+          try {
+            await uploadAttachment(file, { id: movementId }, projeto?.fund_id, id);
+            const list = await listAttachments(movementId);
+            setAttachments(list || []);
+          } catch (error) {
+            if (import.meta.env.DEV) console.error(error);
+          }
+        }}
+        onDeleteAttachment={async (attachmentId) => {
+          try {
+            const target = attachments.find((a) => a.id === attachmentId);
+            if (!target) return;
+            await deleteAttachment(target);
+            if (editing?.id) {
+              const list = await listAttachments(editing.id);
+              setAttachments(list || []);
+            }
+          } catch (error) {
+            if (import.meta.env.DEV) console.error(error);
+          }
+        }}
+      />
       <ModalUploadComprovante
         isOpen={modalUploadOpen}
         onClose={() => setModalUploadOpen(false)}
