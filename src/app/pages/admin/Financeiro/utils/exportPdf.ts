@@ -16,13 +16,11 @@ const css = `
   th { background: #f3f4f6; }
   .totals { display: flex; gap: 16px; margin-top: 12px; }
   .card { border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 10px; }
+  .footer { margin-top: 16px; font-size: 11px; color: #6b7280; }
 `;
 
 export function exportMovementsPdf({ title = 'Relatório Financeiro', subtitle, periodLabel, totals, columns, rows }: ExportPdfOptions) {
-  const table = rows
-    .map((row) => `<tr>${columns.map((column) => `<td>${row[column] ?? ''}</td>`).join('')}</tr>`)
-    .join('');
-
+  const table = rows.map((row) => `<tr>${columns.map((column) => `<td>${row[column] ?? ''}</td>`).join('')}</tr>`).join('');
   const win = window.open('', '_blank');
   if (!win) return;
 
@@ -33,17 +31,9 @@ export function exportMovementsPdf({ title = 'Relatório Financeiro', subtitle, 
         <h1>${title}</h1>
         ${subtitle ? `<p>${subtitle}</p>` : ''}
         ${periodLabel ? `<p>Período: ${periodLabel}</p>` : ''}
-        ${totals ? `
-          <div class="totals">
-            <div class="card"><strong>Entradas:</strong> ${totals.entradas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-            <div class="card"><strong>Saídas:</strong> ${totals.saidas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-            <div class="card"><strong>Saldo:</strong> ${totals.saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-          </div>
-        ` : ''}
-        <table>
-          <thead><tr>${columns.map((column) => `<th>${column}</th>`).join('')}</tr></thead>
-          <tbody>${table}</tbody>
-        </table>
+        ${totals ? `<div class="totals"><div class="card"><strong>Entradas:</strong> ${totals.entradas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div><div class="card"><strong>Saídas:</strong> ${totals.saidas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div><div class="card"><strong>Saldo:</strong> ${totals.saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div></div>` : ''}
+        <table><thead><tr>${columns.map((column) => `<th>${column}</th>`).join('')}</tr></thead><tbody>${table}</tbody></table>
+        <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')}</div>
       </body>
     </html>
   `);

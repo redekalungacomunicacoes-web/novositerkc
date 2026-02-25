@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Edit, Paperclip, Trash2 } from 'lucide-react';
+import { Edit, Paperclip, Trash2, Eye } from 'lucide-react';
 import { useFinanceSupabase } from './hooks/useFinanceSupabase';
 import { formatCurrency, formatDate } from './figma/data/financeiro-data';
 import { StatusBadge } from './figma/components/StatusBadge';
 import { ModalMovimentacao } from './figma/components/ModalMovimentacao';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { AttachmentViewerDialog } from './components/AttachmentViewerDialog';
 import { toast } from 'sonner';
 
 export function FinanceiroMovimentacoes() {
@@ -17,6 +18,7 @@ export function FinanceiroMovimentacoes() {
   const [attachments, setAttachments] = useState<any[]>([]);
   const [deleting, setDeleting] = useState<any>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
+  const [previewAttachment, setPreviewAttachment] = useState<any>(null);
 
   const { pathname } = useLocation();
 
@@ -35,7 +37,7 @@ export function FinanceiroMovimentacoes() {
     listAttachmentsForMovements,
     createMovement,
     updateMovement,
-    deleteMovement,
+    deleteMovementCascade,
     uploadAttachment,
     deleteAttachment,
   } = useFinanceSupabase();
@@ -145,6 +147,7 @@ export function FinanceiroMovimentacoes() {
                     <button onClick={() => setEditing(mov)} className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg" title="Editar"><Edit className="w-4 h-4" /></button>
                     <button onClick={() => setDeleting(mov)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                     <button onClick={() => setEditing(mov)} className="p-2 text-[#0f3d2e] hover:bg-[#e8f2ef] rounded-lg" title="Comprovantes"><Paperclip className="w-4 h-4" /></button>
+                    {attachmentCounts[mov.id] ? <button onClick={async () => { const list = await listAttachments(mov.id); if (list.length) setPreviewAttachment(list[0]); }} className="p-2 text-[#0f3d2e] hover:bg-[#e8f2ef] rounded-lg" title="Ver"><Eye className="w-4 h-4" /></button> : null}
                   </div>
                 </td>
               </tr>
@@ -172,7 +175,7 @@ export function FinanceiroMovimentacoes() {
         }}
         onChanged={load}
         onDelete={async (movementId) => {
-          await deleteMovement(movementId);
+          await deleteMovementCascade({ id: movementId });
           setEditing(null);
           await load();
         }}
@@ -200,6 +203,8 @@ export function FinanceiroMovimentacoes() {
         }}
       />
 
+      <AttachmentViewerDialog open={Boolean(previewAttachment)} attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
+
       <ConfirmDialog
         open={Boolean(deleting)}
         title="Excluir movimentação"
@@ -207,7 +212,7 @@ export function FinanceiroMovimentacoes() {
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (!deleting?.id) return;
-          await deleteMovement(deleting.id);
+          await deleteMovementCascade(deleting);
           setDeleting(null);
           await load();
           toast.success('Movimentação excluída com sucesso.');
