@@ -10,7 +10,8 @@ export function SupabaseHealth() {
     const check = async () => {
       const { error } = await supabase.from("finance_funds").select("id").limit(1);
       if (error) {
-        setErrorMessage(error.message);
+        const isRlsError = error.message.toLowerCase().includes("row-level security");
+        setErrorMessage(isRlsError ? "Acesso negado (RLS). Verifique profiles.role = 'admin'." : error.message);
         if (import.meta.env.DEV) {
           console.error("Finance Supabase healthcheck failed", error);
         }

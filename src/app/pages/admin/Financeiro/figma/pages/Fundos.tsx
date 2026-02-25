@@ -10,7 +10,7 @@ import { FundFormDialog } from '../../components/FundFormDialog';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, AlertDescription } from '../components/ui/alert';
 
-const FRIENDLY_RLS = "Seu usuário não é admin no Supabase. Verifique tabela profiles.role='admin'.";
+const FRIENDLY_RLS = "Acesso negado (RLS). Verifique profiles.role = 'admin'.";
 const normalizeError = (error: unknown) => {
   const message = (error as Error)?.message || 'Erro inesperado.';
   return message.toLowerCase().includes('row-level security') ? FRIENDLY_RLS : message;
@@ -55,6 +55,10 @@ export function Fundos() {
             <Plus className="w-5 h-5" />
             Novo Fundo
           </button>
+        </div>
+        <div className="mb-2">
+          <Link to="/admin/financeiro" className="inline-flex items-center gap-1 text-sm text-[#0f3d2e] hover:underline font-medium">← Voltar para Financeiro</Link>
+          <p className="text-xs text-gray-500 mt-1">Financeiro / Fundos</p>
         </div>
         <p className="text-gray-600">Gerencie todos os fundos e recursos disponíveis</p>
       </div>

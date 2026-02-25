@@ -147,6 +147,21 @@ export function useFinanceSupabase() {
     return ensure(res.data ?? [], res.error);
   };
 
+  const listAttachmentCounts = async (movementIds: string[]) => {
+    if (!movementIds.length) return {} as Record<string, number>;
+
+    const res = await supabase
+      .from("finance_attachments")
+      .select("movement_id")
+      .in("movement_id", movementIds);
+
+    const rows = ensure(res.data ?? [], res.error) as Array<{ movement_id: string }>;
+    return rows.reduce<Record<string, number>>((acc, row) => {
+      acc[row.movement_id] = (acc[row.movement_id] || 0) + 1;
+      return acc;
+    }, {});
+  };
+
   const uploadAttachment = async (file: File, { movementId, fundId, projectId }: UploadAttachmentArgs) => {
     const path = `${fundId ?? "no-fund"}/${projectId ?? "no-project"}/${movementId}/${Date.now()}-${file.name}`;
     const upload = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
@@ -193,6 +208,7 @@ export function useFinanceSupabase() {
     listCategories,
     listTags,
     listAttachments,
+    listAttachmentCounts,
     uploadAttachment,
     deleteAttachment,
   };

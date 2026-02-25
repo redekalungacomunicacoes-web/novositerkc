@@ -16,20 +16,42 @@ export function ProjetoDetalhes() {
   const [movimentacoesProjeto, setMovimentacoesProjeto] = useState<any[]>([]);
   const [fundos, setFundos] = useState<any[]>([]);
   const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
   const [editing, setEditing] = useState<any>(null);
-  const { getProject, listMovementsByProject, listFunds, createMovement, updateMovement, deleteMovement, uploadAttachment, listAttachments, deleteAttachment } = useFinanceSupabase();
+  const [activeTab, setActiveTab] = useState('visao-geral');
+  const {
+    getProject,
+    listMovementsByProject,
+    listFunds,
+    createMovement,
+    updateMovement,
+    deleteMovement,
+    uploadAttachment,
+    listAttachments,
+    listAttachmentCounts,
+    deleteAttachment,
+  } = useFinanceSupabase();
 
 
 
 
+
+  const refetchMovements = async () => {
+    if (!id) return;
+    const movs = await listMovementsByProject(id);
+    const safeMovs = movs || [];
+    setMovimentacoesProjeto(safeMovs);
+    const counts = await listAttachmentCounts(safeMovs.map((mov) => mov.id));
+    setAttachmentCounts(counts);
+  };
 
   useEffect(() => {
     const load = async () => {
       if (!id) return;
-      const [projRes, movRes, fundsRes] = await Promise.all([getProject(id), listMovementsByProject(id), listFunds()]);
+      const [projRes, fundsRes] = await Promise.all([getProject(id), listFunds()]);
       setProjeto(projRes);
-      setMovimentacoesProjeto(movRes || []);
       setFundos(fundsRes || []);
+      await refetchMovements();
     };
     void load();
   }, [id]);
@@ -43,7 +65,7 @@ export function ProjetoDetalhes() {
       setAttachments(data || []);
     };
     void loadAttachments();
-  }, [editing]);
+  }, [editing?.id]);
   // Dados para gráficos
   const categoriaData = [
     { categoria: 'PESSOAL', orcado: 30000, real: 12000 },
@@ -66,11 +88,11 @@ export function ProjetoDetalhes() {
       {/* Header */}
       <div className="mb-8">
         <Link
-          to="/admin/financeiro/projetos"
+          to="/admin/financeiro"
           className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
-          Voltar para Projetos
+          Voltar para Financeiro
         </Link>
         <div className="flex items-center justify-between">
           <div>
@@ -111,7 +133,7 @@ export function ProjetoDetalhes() {
       </div>
 
       {/* Tabs */}
-      <Tabs.Root defaultValue="visao-geral" className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <Tabs.List className="flex border-b border-gray-200 bg-gray-50">
           <Tabs.Trigger
             value="visao-geral"
@@ -244,6 +266,7 @@ export function ProjetoDetalhes() {
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
                       <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Comprovantes</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -269,7 +292,33 @@ export function ProjetoDetalhes() {
                           <StatusBadge status={mov.status} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="text-sm text-gray-600">{(mov.attachments || []).length}</span>
+                          <span className="text-sm text-gray-600">{attachmentCounts[mov.id] || 0}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => { setEditing(mov); setModalMovOpen(true); }}
+                              className="px-3 py-1 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm('Deseja realmente excluir esta movimentação?')) return;
+                                await deleteMovement(mov.id);
+                                await refetchMovements();
+                              }}
+                              className="px-3 py-1 border border-red-300 rounded-lg text-red-700 hover:bg-red-50 transition-colors"
+                            >
+                              Excluir
+                            </button>
+                            <button
+                              onClick={() => { setEditing(mov); setActiveTab('prestacao'); setModalMovOpen(true); }}
+                              className="px-3 py-1 bg-[#0f3d2e] text-white rounded-lg hover:bg-[#0a2b20] transition-colors"
+                            >
+                              Comprovantes
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -339,7 +388,7 @@ export function ProjetoDetalhes() {
                           onClick={() => { setEditing(mov); setModalMovOpen(true); }}
                           className="px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20] transition-colors"
                         >
-                          Anexar ({(mov.attachments || []).length})
+                          Anexar ({attachmentCounts[mov.id] || 0})
                         </button>
                       </div>
                     </div>
@@ -451,8 +500,7 @@ export function ProjetoDetalhes() {
           try {
             if (editing?.id) await updateMovement(editing.id, payload);
             else await createMovement({ ...payload, project_id: id, fund_id: payload.fund_id || projeto?.fund_id });
-            const movs = id ? await listMovementsByProject(id) : [];
-            setMovimentacoesProjeto(movs || []);
+            await refetchMovements();
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
           }
@@ -460,15 +508,13 @@ export function ProjetoDetalhes() {
         onDelete={async (movementId) => {
           try {
             await deleteMovement(movementId);
-            const movs = id ? await listMovementsByProject(id) : [];
-            setMovimentacoesProjeto(movs || []);
+            await refetchMovements();
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
           }
         }}
         onChanged={async () => {
-          const movs = id ? await listMovementsByProject(id) : [];
-          setMovimentacoesProjeto(movs || []);
+          await refetchMovements();
         }}
         onUploadAttachment={async (file, movementId) => {
           if (!movementId) return;
@@ -476,6 +522,7 @@ export function ProjetoDetalhes() {
             await uploadAttachment(file, { movementId, fundId: projeto?.fund_id, projectId: id });
             const list = await listAttachments(movementId);
             setAttachments(list || []);
+            await refetchMovements();
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
           }
@@ -489,6 +536,7 @@ export function ProjetoDetalhes() {
               const list = await listAttachments(editing.id);
               setAttachments(list || []);
             }
+            await refetchMovements();
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
           }
