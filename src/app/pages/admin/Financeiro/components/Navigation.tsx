@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router';
-import { LayoutDashboard, FolderKanban, Wallet } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, CircleDollarSign } from 'lucide-react';
 
 export function Navigation() {
   const location = useLocation();
@@ -13,7 +13,7 @@ export function Navigation() {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/admin/financeiro/projetos', label: 'Projetos', icon: FolderKanban },
-    { path: '/admin/financeiro', label: 'Fundos', icon: Wallet },
+    { path: '/admin/financeiro', label: 'Fundos', icon: CircleDollarSign },
   ];
 
   return (
@@ -23,7 +23,7 @@ export function Navigation() {
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
-                <Wallet className="w-6 h-6 text-white" />
+                <CircleDollarSign className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-white">Financeiro</h1>
