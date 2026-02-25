@@ -20,9 +20,10 @@ interface ModalMovimentacaoProps {
 export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], funds = [], attachments = [], onSubmit, onDelete, onChanged, onUploadAttachment, onDeleteAttachment }: ModalMovimentacaoProps) {
   const [formData, setFormData] = useState<any>({});
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [savedAttachments, setSavedAttachments] = useState<any[]>([]);
   const [loadedFunds, setLoadedFunds] = useState<any[]>([]);
   const [loadedProjects, setLoadedProjects] = useState<any[]>([]);
-  const { listFunds, listProjects } = useFinanceSupabase();
+  const { listFunds, listProjects, listAttachments } = useFinanceSupabase();
 
   useEffect(() => {
     setFormData({
@@ -36,8 +37,17 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
       status: editData?.status || 'pendente',
       notes: editData?.notes || editData?.observacoes || '',
     });
-    setPendingFiles([]);
   }, [editData, isOpen]);
+
+  useEffect(() => {
+    setSavedAttachments(attachments || []);
+  }, [attachments]);
+
+  useEffect(() => {
+    if (isOpen) return;
+    setPendingFiles([]);
+    setSavedAttachments([]);
+  }, [isOpen]);
 
   useEffect(() => {
     const loadSelects = async () => {
@@ -74,7 +84,11 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
       for (const file of pendingFiles) {
         await onUploadAttachment?.(file, movementId, nextPayload);
       }
-      setPendingFiles([]);
+    }
+
+    if (movementId) {
+      const latestAttachments = await listAttachments(movementId);
+      setSavedAttachments(latestAttachments || []);
     }
 
     await onChanged?.();
@@ -109,6 +123,14 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
     setPendingFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
   };
 
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    await onDeleteAttachment?.(attachmentId);
+    if (!editData?.id) return;
+    const latestAttachments = await listAttachments(editData.id);
+    setSavedAttachments(latestAttachments || []);
+    await onChanged?.();
+  };
+
   const handleProjectChange = (projectId: string) => {
     const project = projectOptions.find((proj) => proj.id === projectId);
     setFormData({
@@ -141,14 +163,14 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects = [], fu
           </div>
 
           <div className="mt-6 p-4 border border-gray-200 rounded-xl">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Comprovantes: {attachments.length + pendingFiles.length}</h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Comprovantes: {savedAttachments.length + pendingFiles.length}</h3>
             <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#0f3d2e] text-white rounded-lg hover:bg-[#0a2b20] transition-colors cursor-pointer"><Upload className="w-4 h-4" />Upload<input type="file" multiple className="hidden" onChange={handleFileUpload} /></label>
             <div className="mt-3 space-y-2">
               {pendingFiles.map((file, index) => (
                 <div key={`${file.name}-${index}`} className="flex items-center justify-between p-2 bg-amber-50 rounded-lg"><div className="flex items-center gap-2"><FileText className="w-4 h-4 text-amber-600" /><span className="text-sm text-amber-700">{file.name} <span className="text-xs">(pendente)</span></span></div><button type="button" onClick={() => removePending(index)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div>
               ))}
-              {attachments.map((a) => (
-                <div key={a.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"><div className="flex items-center gap-2"><FileText className="w-4 h-4 text-gray-500" /><span className="text-sm text-gray-700">{a.file_name}</span></div><button type="button" onClick={() => void onDeleteAttachment?.(a.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div>
+              {savedAttachments.map((a) => (
+                <div key={a.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"><div className="flex items-center gap-2"><FileText className="w-4 h-4 text-gray-500" /><span className="text-sm text-gray-700">{a.file_name}</span></div><button type="button" onClick={() => void handleDeleteAttachment(a.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div>
               ))}
             </div>
           </div>

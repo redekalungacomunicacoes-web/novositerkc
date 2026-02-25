@@ -176,9 +176,13 @@ export function FinanceiroMovimentacoes() {
           setEditing(null);
           await load();
         }}
-        onUploadAttachment={async (file, movementId) => {
+        onUploadAttachment={async (file, movementId, payload) => {
           if (!movementId) return;
-          await uploadAttachment(file, { movementId, fundId: editing?.fund_id, projectId: editing?.project_id });
+          await uploadAttachment(file, {
+            movementId,
+            fundId: payload?.fund_id || editing?.fund_id || null,
+            projectId: payload?.project_id || editing?.project_id || null,
+          });
           const list = await listAttachments(movementId);
           setAttachments(list || []);
           await load();

@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Attachment, Category, Movement, MovementInput, Project, ProjectInput, Tag } from "../types/financial";
+import { normalizeEntityStatus } from "../utils/statusMap";
 
 const BUCKET = "finance-attachments";
 
@@ -15,17 +16,21 @@ export function useFinance() {
   };
 
   const createProject = async (payload: ProjectInput) => {
+    const normalizedStatus = payload.status ? normalizeEntityStatus(payload.status) : payload.status;
+
     return supabase
       .from("finance_projects")
-      .insert({ ...payload, start_date: payload.start_date || null, end_date: payload.end_date || null })
+      .insert({ ...payload, status: normalizedStatus, start_date: payload.start_date || null, end_date: payload.end_date || null })
       .select("*")
       .single<Project>();
   };
 
   const updateProject = async (id: string, payload: Partial<ProjectInput>) => {
+    const normalizedStatus = payload.status ? normalizeEntityStatus(payload.status) : payload.status;
+
     return supabase
       .from("finance_projects")
-      .update({ ...payload, start_date: payload.start_date || null, end_date: payload.end_date || null })
+      .update({ ...payload, status: normalizedStatus, start_date: payload.start_date || null, end_date: payload.end_date || null })
       .eq("id", id)
       .select("*")
       .single<Project>();
