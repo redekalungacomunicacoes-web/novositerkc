@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Users } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   Info,
   Wallet,
 } from "lucide-react";
+
 import { supabase } from "@/lib/supabase";
 
 import logoRKC from "../../../assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png";
@@ -57,6 +59,7 @@ export function AdminSidebar() {
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard, allow: ["admin_alfa", "admin", "editor", "autor"] },
     { href: "/admin/materias", label: "Matérias", icon: FileText, allow: ["admin_alfa", "admin", "editor", "autor"] },
     { href: "/admin/projetos", label: "Projetos", icon: FolderOpen, allow: ["admin_alfa", "admin", "editor"] },
+    { href: "/admin/equipe", label: "Equipe", icon: Users, allow: ["admin_alfa", "admin", "editor"] },
 
     // ✅ Quem Somos (configuração de página institucional)
     { href: "/admin/quem-somos", label: "Quem Somos", icon: Info, allow: ["admin_alfa", "admin", "editor"] },
