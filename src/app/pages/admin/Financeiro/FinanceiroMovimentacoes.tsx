@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Edit, Paperclip, Trash2 } from 'lucide-react';
 import { useFinanceSupabase } from './hooks/useFinanceSupabase';
 import { formatCurrency, formatDate } from './figma/data/financeiro-data';
 import { StatusBadge } from './figma/components/StatusBadge';
 import { ModalMovimentacao } from './figma/components/ModalMovimentacao';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { toast } from 'sonner';
 
 export function FinanceiroMovimentacoes() {
   const [params, setParams] = useSearchParams();
@@ -16,6 +17,15 @@ export function FinanceiroMovimentacoes() {
   const [attachments, setAttachments] = useState<any[]>([]);
   const [deleting, setDeleting] = useState<any>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
+
+  const { pathname } = useLocation();
+
+  const pathFilters = useMemo(() => {
+    if (pathname.endsWith('/movimentacoes/entrada')) return { type: 'entrada' as const };
+    if (pathname.endsWith('/movimentacoes/saida')) return { type: 'saida' as const };
+    if (pathname.endsWith('/movimentacoes/pendencias')) return { status: 'pendente' as const };
+    return {};
+  }, [pathname]);
 
   const {
     listMovements,
@@ -32,13 +42,13 @@ export function FinanceiroMovimentacoes() {
 
   const filters = useMemo(
     () => ({
-      status: params.get('status') || undefined,
-      type: (params.get('type') as 'entrada' | 'saida' | null) || undefined,
+      status: params.get('status') || pathFilters.status,
+      type: (params.get('type') as 'entrada' | 'saida' | null) || pathFilters.type,
       dateFrom: params.get('dateFrom') || undefined,
       dateTo: params.get('dateTo') || undefined,
       search: params.get('q') || undefined,
     }),
-    [params],
+    [params, pathFilters.status, pathFilters.type],
   );
 
   const load = async () => {
@@ -151,8 +161,14 @@ export function FinanceiroMovimentacoes() {
         funds={funds.map((f) => ({ id: f.id, name: f.name }))}
         attachments={attachments}
         onSubmit={async (payload) => {
-          if (editing?.id) return updateMovement(editing.id, payload);
-          return createMovement(payload);
+          if (editing?.id) {
+            const updated = await updateMovement(editing.id, payload);
+            toast.success('Movimentação atualizada com sucesso.');
+            return updated;
+          }
+          const created = await createMovement(payload);
+          toast.success('Movimentação criada com sucesso.');
+          return created;
         }}
         onChanged={load}
         onDelete={async (movementId) => {
@@ -171,6 +187,7 @@ export function FinanceiroMovimentacoes() {
           const target = attachments.find((attachment) => attachment.id === attachmentId);
           if (!target) return;
           await deleteAttachment(target);
+          toast.success('Comprovante excluído com sucesso.');
           if (editing?.id) {
             const list = await listAttachments(editing.id);
             setAttachments(list || []);
@@ -189,6 +206,7 @@ export function FinanceiroMovimentacoes() {
           await deleteMovement(deleting.id);
           setDeleting(null);
           await load();
+          toast.success('Movimentação excluída com sucesso.');
         }}
       />
     </div>

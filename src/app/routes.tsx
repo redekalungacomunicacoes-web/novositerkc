@@ -1,4 +1,4 @@
-import { createBrowserRouter, redirect } from "react-router-dom";
+import { Navigate, createBrowserRouter, redirect } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
 import { RootLayout } from "@/app/layouts/RootLayout";
@@ -33,6 +33,7 @@ import { FinanceiroProjeto } from "@/app/pages/admin/Financeiro/FinanceiroProjet
 import { FinanceiroProjetos } from "@/app/pages/admin/Financeiro/FinanceiroProjetos";
 import { FinanceiroFundos } from "@/app/pages/admin/Financeiro/FinanceiroFundos";
 import { FinanceiroFundoDetalhes } from "@/app/pages/admin/Financeiro/FinanceiroFundoDetalhes";
+import { FinanceiroMovimentacoes } from "@/app/pages/admin/Financeiro/FinanceiroMovimentacoes";
 
 // ✅ NOVO: Admin Quem Somos
 import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
@@ -112,6 +113,13 @@ export const router = createBrowserRouter([
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
 
           { path: "financeiro", loader: requireRoles(["admin", "editor"]), Component: FinanceiroHome },
+          { path: "financeiro/movimentacoes", loader: requireRoles(["admin", "editor"]), Component: FinanceiroMovimentacoes },
+          { path: "financeiro/movimentacoes/entrada", loader: requireRoles(["admin", "editor"]), Component: FinanceiroMovimentacoes },
+          { path: "financeiro/movimentacoes/saida", loader: requireRoles(["admin", "editor"]), Component: FinanceiroMovimentacoes },
+          { path: "financeiro/movimentacoes/pendencias", loader: requireRoles(["admin", "editor"]), Component: FinanceiroMovimentacoes },
+          { path: "financeiro/entrada", loader: requireRoles(["admin", "editor"]), Component: () => <Navigate to="/admin/financeiro/movimentacoes/entrada" replace /> },
+          { path: "financeiro/saida", loader: requireRoles(["admin", "editor"]), Component: () => <Navigate to="/admin/financeiro/movimentacoes/saida" replace /> },
+          { path: "financeiro/pendencias", loader: requireRoles(["admin", "editor"]), Component: () => <Navigate to="/admin/financeiro/movimentacoes/pendencias" replace /> },
           { path: "financeiro/novo", loader: requireRoles(["admin", "editor"]), Component: FinanceiroNovoProjeto },
           { path: "financeiro/projetos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjeto },
           { path: "financeiro/projetos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetos },

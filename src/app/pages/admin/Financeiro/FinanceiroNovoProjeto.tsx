@@ -28,7 +28,7 @@ export function FinanceiroNovoProjeto() {
 
   const save = async () => {
     try {
-      await createProject({ ...form, fund_id: form.fund_id || null, current_balance: Number(form.current_balance || form.initial_amount) });
+      await createProject({ ...form, description: form.description || null, fund_id: form.fund_id || null, current_balance: Number(form.current_balance || form.initial_amount) });
       navigate("/admin/financeiro/projetos");
     } catch (err) {
       setError(normalizeError(err));
