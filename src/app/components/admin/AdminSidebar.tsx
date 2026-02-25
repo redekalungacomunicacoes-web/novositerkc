@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Users } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   FileText,
@@ -8,13 +8,13 @@ import {
   LogOut,
   Settings,
   Users,
+  Users2,
   Mail,
   Info,
   Wallet,
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
-
 import logoRKC from "../../../assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png";
 
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
@@ -22,7 +22,7 @@ type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
 type LinkItem = {
   href: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
   allow: RoleName[];
 };
 
@@ -37,6 +37,7 @@ async function loadMyRoles(): Promise<RoleName[]> {
     .eq("user_id", session.user.id);
 
   if (error) return [];
+
   return (data || [])
     .map((r: any) => r?.role?.name)
     .filter(Boolean) as RoleName[];
@@ -56,24 +57,72 @@ export function AdminSidebar() {
   const [loadingRoles, setLoadingRoles] = useState(true);
 
   const links: LinkItem[] = [
-    { href: "/admin", label: "Dashboard", icon: LayoutDashboard, allow: ["admin_alfa", "admin", "editor", "autor"] },
-    { href: "/admin/materias", label: "Matérias", icon: FileText, allow: ["admin_alfa", "admin", "editor", "autor"] },
-    { href: "/admin/projetos", label: "Projetos", icon: FolderOpen, allow: ["admin_alfa", "admin", "editor"] },
-    { href: "/admin/equipe", label: "Equipe", icon: Users, allow: ["admin_alfa", "admin", "editor"] },
+    {
+      href: "/admin",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      allow: ["admin_alfa", "admin", "editor", "autor"],
+    },
+    {
+      href: "/admin/materias",
+      label: "Matérias",
+      icon: FileText,
+      allow: ["admin_alfa", "admin", "editor", "autor"],
+    },
+    {
+      href: "/admin/projetos",
+      label: "Projetos",
+      icon: FolderOpen,
+      allow: ["admin_alfa", "admin", "editor"],
+    },
 
-    // ✅ Quem Somos (configuração de página institucional)
-    { href: "/admin/quem-somos", label: "Quem Somos", icon: Info, allow: ["admin_alfa", "admin", "editor"] },
+    // ✅ EQUIPE
+    {
+      href: "/admin/equipe",
+      label: "Equipe",
+      icon: Users2,
+      allow: ["admin_alfa", "admin", "editor"],
+    },
 
-    // ✅ Newsletter (admin/editor)
-    { href: "/admin/newsletter", label: "Newsletter", icon: Mail, allow: ["admin_alfa", "admin", "editor"] },
+    // ✅ Quem Somos
+    {
+      href: "/admin/quem-somos",
+      label: "Quem Somos",
+      icon: Info,
+      allow: ["admin_alfa", "admin", "editor"],
+    },
 
-    { href: "/admin/financeiro", label: "Financeiro", icon: Wallet, allow: ["admin_alfa", "admin", "editor"] },
+    // ✅ Newsletter
+    {
+      href: "/admin/newsletter",
+      label: "Newsletter",
+      icon: Mail,
+      allow: ["admin_alfa", "admin", "editor"],
+    },
+
+    // ✅ Financeiro
+    {
+      href: "/admin/financeiro",
+      label: "Financeiro",
+      icon: Wallet,
+      allow: ["admin_alfa", "admin", "editor"],
+    },
 
     // RBAC/usuários só super
-    { href: "/admin/usuarios", label: "Usuários", icon: Users, allow: ["admin_alfa"] },
+    {
+      href: "/admin/usuarios",
+      label: "Usuários",
+      icon: Users,
+      allow: ["admin_alfa"],
+    },
 
     // Config só super
-    { href: "/admin/configuracoes", label: "Configurações", icon: Settings, allow: ["admin_alfa"] },
+    {
+      href: "/admin/configuracoes",
+      label: "Configurações",
+      icon: Settings,
+      allow: ["admin_alfa"],
+    },
   ];
 
   useEffect(() => {
@@ -101,6 +150,7 @@ export function AdminSidebar() {
 
   const visibleLinks = useMemo(() => {
     return links.filter((l) => canSee(roles, l.allow));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roles]);
 
   const handleLogout = async () => {
@@ -115,13 +165,19 @@ export function AdminSidebar() {
       </div>
 
       <div className="px-6 py-3 border-b border-sidebar-border text-xs text-muted-foreground">
-        {loadingRoles ? <span>Carregando permissões...</span> : <span>Permissões: {roles.length ? roles.join(", ") : "—"}</span>}
+        {loadingRoles ? (
+          <span>Carregando permissões...</span>
+        ) : (
+          <span>Permissões: {roles.length ? roles.join(", ") : "—"}</span>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">
         {visibleLinks.map((link) => {
           const Icon = link.icon;
-          const isActive = pathname === link.href || (link.href !== "/admin" && pathname.startsWith(link.href));
+          const isActive =
+            pathname === link.href ||
+            (link.href !== "/admin" && pathname.startsWith(link.href));
 
           return (
             <Link
