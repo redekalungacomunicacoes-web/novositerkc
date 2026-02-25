@@ -53,11 +53,7 @@ type MovementFilters = {
 };
 
 type AttachmentRow = { id: string; storage_path: string };
-type UploadAttachmentArgs = {
-  movementId: string;
-  fundId?: string | null;
-  projectId?: string | null;
-};
+type UploadAttachmentArgs = { movementId: string; fundId?: string | null; projectId?: string | null };
 
 type DashboardAggregateArgs = { months?: number };
 type ReportFilters = Pick<MovementFilters, "type" | "status" | "dateFrom" | "dateTo">;
@@ -74,19 +70,12 @@ const monthKey = (value: string) => {
 
 const monthLabel = (value: string) => {
   const [year, month] = value.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString("pt-BR", {
-    month: "short",
-    year: "2-digit",
-  });
+  return new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
 };
 
 const normalizeStatus = (status: unknown) => `${status ?? ""}`.trim().toLowerCase();
 const normalizeType = (type: unknown) =>
-  `${type ?? ""}`
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+  `${type ?? ""}`.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 export function useFinanceSupabase() {
   const listFunds = async () => {
@@ -106,10 +95,7 @@ export function useFinanceSupabase() {
   const createFund = async (payload: FundPayload) => {
     const res = await supabase
       .from("finance_funds")
-      .insert({
-        ...payload,
-        status: payload.status ? normalizeEntityStatus(payload.status) : payload.status,
-      })
+      .insert({ ...payload, status: payload.status ? normalizeEntityStatus(payload.status) : payload.status })
       .select("*")
       .single();
     return ensure(res.data, res.error);
@@ -118,10 +104,7 @@ export function useFinanceSupabase() {
   const updateFund = async (id: string, payload: Partial<FundPayload>) => {
     const res = await supabase
       .from("finance_funds")
-      .update({
-        ...payload,
-        status: payload.status ? normalizeEntityStatus(payload.status) : payload.status,
-      })
+      .update({ ...payload, status: payload.status ? normalizeEntityStatus(payload.status) : payload.status })
       .eq("id", id)
       .select("*")
       .single();
@@ -219,10 +202,7 @@ export function useFinanceSupabase() {
   };
 
   const listCategories = async () => {
-    const res = await supabase
-      .from("finance_categories")
-      .select("id,name,color")
-      .order("name", { ascending: true });
+    const res = await supabase.from("finance_categories").select("id,name,color").order("name", { ascending: true });
     return ensure(res.data ?? [], res.error);
   };
 
@@ -236,17 +216,18 @@ export function useFinanceSupabase() {
     return ensure(res.data ?? [], res.error);
   };
 
-  // ✅ ÚNICA versão (robusta): tolera schema sem category_id e normaliza status/tipo
   const getDashboardAggregates = async ({ months = 6 }: DashboardAggregateArgs = {}) => {
     const start = new Date();
     start.setMonth(start.getMonth() - months);
     const fromDate = start.toISOString().slice(0, 10);
 
+    // tenta com category_id
     let res = await supabase
       .from("finance_movements")
       .select("id,date,type,status,total_value,created_at,category,category_id")
       .gte("date", fromDate);
 
+    // fallback sem category_id
     if (res.error?.message?.toLowerCase().includes("category_id")) {
       res = await supabase
         .from("finance_movements")
@@ -256,7 +237,7 @@ export function useFinanceSupabase() {
 
     let rows = ensure(res.data ?? [], res.error) as any[];
 
-    // Se não tem nada nos últimos X meses, faz fallback “all time”
+    // fallback all time se vazio
     if (!rows.length) {
       let fallback = await supabase
         .from("finance_movements")
@@ -284,15 +265,9 @@ export function useFinanceSupabase() {
     const cashflowByMonth = new Map<string, { mes: string; entradas: number; saidas: number }>();
     paid.forEach((row) => {
       const key = monthKey(row.date);
-      const record = cashflowByMonth.get(key) || {
-        mes: monthLabel(key),
-        entradas: 0,
-        saidas: 0,
-      };
-
+      const record = cashflowByMonth.get(key) || { mes: monthLabel(key), entradas: 0, saidas: 0 };
       if (normalizeType(row.type) === "entrada") record.entradas += Number(row.total_value || 0);
       if (normalizeType(row.type) === "saida") record.saidas += Number(row.total_value || 0);
-
       cashflowByMonth.set(key, record);
     });
 
@@ -306,10 +281,7 @@ export function useFinanceSupabase() {
 
     const fundsRes = await supabase.from("finance_funds").select("current_balance");
     const funds = ensure(fundsRes.data ?? [], fundsRes.error) as any[];
-    const fundsBalance = funds.reduce(
-      (acc: number, fund: any) => acc + Number(fund.current_balance || 0),
-      0
-    );
+    const fundsBalance = funds.reduce((acc: number, fund: any) => acc + Number(fund.current_balance || 0), 0);
 
     return {
       kpis: {
@@ -355,10 +327,7 @@ export function useFinanceSupabase() {
 
   const listAttachmentsForMovementIds = async (movementIds: string[]) => {
     if (!movementIds.length) return [] as Array<{ movement_id: string }>;
-    const res = await supabase
-      .from("finance_attachments")
-      .select("movement_id")
-      .in("movement_id", movementIds);
+    const res = await supabase.from("finance_attachments").select("movement_id").in("movement_id", movementIds);
     return ensure(res.data ?? [], res.error) as Array<{ movement_id: string }>;
   };
 
@@ -370,23 +339,14 @@ export function useFinanceSupabase() {
     }, {});
   };
 
-  const uploadAttachment = async (
-    file: File,
-    { movementId, fundId, projectId }: UploadAttachmentArgs
-  ) => {
+  const uploadAttachment = async (file: File, { movementId, fundId, projectId }: UploadAttachmentArgs) => {
     const path = `${fundId ?? "no-fund"}/${projectId ?? "no-project"}/${movementId}/${Date.now()}-${file.name}`;
     const upload = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
     ensure(true, upload.error);
 
     const insert = await supabase
       .from("finance_attachments")
-      .insert({
-        movement_id: movementId,
-        file_name: file.name,
-        mime_type: file.type,
-        file_size: file.size,
-        storage_path: path,
-      })
+      .insert({ movement_id: movementId, file_name: file.name, mime_type: file.type, file_size: file.size, storage_path: path })
       .select("*")
       .single();
 
@@ -422,10 +382,7 @@ export function useFinanceSupabase() {
     return ensure(res.data?.signedUrl || "", res.error);
   };
 
-  const getReportBase = async (
-    scope: { projectId?: string; fundId?: string },
-    filters: ReportFilters = {}
-  ) => {
+  const getReportBase = async (scope: { projectId?: string; fundId?: string }, filters: ReportFilters = {}) => {
     let query = supabase
       .from("finance_movements")
       .select("*")
@@ -452,11 +409,8 @@ export function useFinanceSupabase() {
     }));
   };
 
-  const getProjectReport = async (projectId: string, filters: ReportFilters = {}) =>
-    getReportBase({ projectId }, filters);
-
-  const getFundReport = async (fundId: string, filters: ReportFilters = {}) =>
-    getReportBase({ fundId }, filters);
+  const getProjectReport = async (projectId: string, filters: ReportFilters = {}) => getReportBase({ projectId }, filters);
+  const getFundReport = async (fundId: string, filters: ReportFilters = {}) => getReportBase({ fundId }, filters);
 
   const listBudgetItemsByProject = async (projectId: string) => {
     const res = await supabase.from("budget_items").select("*").eq("project_id", projectId);
