@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "../figma/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../figma/components/ui/dialog";
+import { Input } from "../figma/components/ui/input";
+import { Textarea } from "../figma/components/ui/textarea";
 
 interface FundFormDialogProps {
   open: boolean;
@@ -58,26 +61,26 @@ export function FundFormDialog({ open, mode, initialData, onClose, onSubmit }: F
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Nome</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
             {errors.name ? <p className="mt-1 text-xs text-red-600">{errors.name}</p> : null}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Ano</label>
-            <input type="number" value={year} onChange={(e) => setYear(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" />
+            <Input type="number" value={year} onChange={(e) => setYear(e.target.value)} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" />
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Saldo Inicial</label>
-            <input type="number" min="0" step="0.01" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0f3d2e] focus:border-transparent" />
+            <Input type="number" min="0" step="0.01" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} />
             {errors.opening_balance ? <p className="mt-1 text-xs text-red-600">{errors.opening_balance}</p> : null}
           </div>
         </div>
         <DialogFooter>
-          <button type="button" onClick={onClose} className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancelar</button>
-          <button type="button" onClick={() => void submit()} disabled={saving} className="px-6 py-2 bg-[#0f3d2e] text-white rounded-lg hover:bg-[#0a2b20] transition-colors disabled:opacity-60">{saving ? "Salvando..." : "Salvar"}</button>
+          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button type="button" onClick={() => void submit()} disabled={saving} className="bg-[#0f3d2e] hover:bg-[#0a2b20]">{saving ? "Salvando..." : "Salvar"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

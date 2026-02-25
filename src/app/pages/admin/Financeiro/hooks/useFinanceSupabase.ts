@@ -37,6 +37,7 @@ type MovementPayload = {
 };
 
 type AttachmentRow = { id: string; storage_path: string };
+type UploadAttachmentArgs = { movementId: string; fundId?: string | null; projectId?: string | null };
 
 const ensure = <T>(data: T, error: { message: string } | null) => {
   if (error) {
@@ -99,7 +100,7 @@ export function useFinanceSupabase() {
   const listMovementsByFund = async (fundId: string) => {
     const res = await supabase
       .from("finance_movements")
-      .select("*, attachments:finance_attachments(*)")
+      .select("*")
       .eq("fund_id", fundId)
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
@@ -109,7 +110,7 @@ export function useFinanceSupabase() {
   const listMovementsByProject = async (projectId: string) => {
     const res = await supabase
       .from("finance_movements")
-      .select("*, attachments:finance_attachments(*)")
+      .select("*")
       .eq("project_id", projectId)
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
@@ -146,15 +147,15 @@ export function useFinanceSupabase() {
     return ensure(res.data ?? [], res.error);
   };
 
-  const uploadAttachment = async (file: File, movement: { id: string }, fundId?: string, projectId?: string) => {
-    const path = `${fundId ?? "no-fund"}/${projectId ?? "no-project"}/${movement.id}/${Date.now()}-${file.name}`;
+  const uploadAttachment = async (file: File, { movementId, fundId, projectId }: UploadAttachmentArgs) => {
+    const path = `${fundId ?? "no-fund"}/${projectId ?? "no-project"}/${movementId}/${Date.now()}-${file.name}`;
     const upload = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
     ensure(true, upload.error);
 
     const insert = await supabase
       .from("finance_attachments")
       .insert({
-        movement_id: movement.id,
+        movement_id: movementId,
         file_name: file.name,
         mime_type: file.type,
         file_size: file.size,

@@ -5,7 +5,6 @@ import * as Tabs from '@radix-ui/react-tabs';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { StatusBadge } from '../components/StatusBadge';
 import { ModalMovimentacao } from '../components/ModalMovimentacao';
-import { ModalUploadComprovante } from '../components/ModalUploadComprovante';
 import { formatCurrency, formatDate } from '../data/financeiro-data';
 import { useFinanceSupabase } from '../../hooks/useFinanceSupabase';
 import { SupabaseHealth } from '../../components/SupabaseHealth';
@@ -13,7 +12,6 @@ import { SupabaseHealth } from '../../components/SupabaseHealth';
 export function ProjetoDetalhes() {
   const { id } = useParams();
   const [modalMovOpen, setModalMovOpen] = useState(false);
-  const [modalUploadOpen, setModalUploadOpen] = useState(false);
   const [projeto, setProjeto] = useState<any>(null);
   const [movimentacoesProjeto, setMovimentacoesProjeto] = useState<any[]>([]);
   const [fundos, setFundos] = useState<any[]>([]);
@@ -338,7 +336,7 @@ export function ProjetoDetalhes() {
                       <div className="flex items-center gap-3">
                         <StatusBadge status={mov.status} />
                         <button
-                          onClick={() => { setEditing(mov); setModalUploadOpen(true); }}
+                          onClick={() => { setEditing(mov); setModalMovOpen(true); }}
                           className="px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20] transition-colors"
                         >
                           Anexar ({(mov.attachments || []).length})
@@ -459,10 +457,23 @@ export function ProjetoDetalhes() {
             if (import.meta.env.DEV) console.error(error);
           }
         }}
+        onDelete={async (movementId) => {
+          try {
+            await deleteMovement(movementId);
+            const movs = id ? await listMovementsByProject(id) : [];
+            setMovimentacoesProjeto(movs || []);
+          } catch (error) {
+            if (import.meta.env.DEV) console.error(error);
+          }
+        }}
+        onChanged={async () => {
+          const movs = id ? await listMovementsByProject(id) : [];
+          setMovimentacoesProjeto(movs || []);
+        }}
         onUploadAttachment={async (file, movementId) => {
           if (!movementId) return;
           try {
-            await uploadAttachment(file, { id: movementId }, projeto?.fund_id, id);
+            await uploadAttachment(file, { movementId, fundId: projeto?.fund_id, projectId: id });
             const list = await listAttachments(movementId);
             setAttachments(list || []);
           } catch (error) {
@@ -482,11 +493,6 @@ export function ProjetoDetalhes() {
             if (import.meta.env.DEV) console.error(error);
           }
         }}
-      />
-      <ModalUploadComprovante
-        isOpen={modalUploadOpen}
-        onClose={() => setModalUploadOpen(false)}
-        onUpload={(file, desc) => console.log('Upload:', file, desc)}
       />
     </div>
   );
