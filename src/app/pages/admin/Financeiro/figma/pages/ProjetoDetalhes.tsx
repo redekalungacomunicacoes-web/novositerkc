@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Download, FileText, CheckCircle2, AlertCircle, Plus } from 'lucide-react';
 import * as Tabs from '@radix-ui/react-tabs';
@@ -8,6 +8,8 @@ import { ModalMovimentacao } from '../components/ModalMovimentacao';
 import { formatCurrency, formatDate } from '../data/financeiro-data';
 import { useFinanceSupabase } from '../../hooks/useFinanceSupabase';
 import { SupabaseHealth } from '../../components/SupabaseHealth';
+import { DEFAULT_REPORT_COLUMNS, exportMovementsCsv } from '../../utils/exportCsv';
+import { exportMovementsPdf } from '../../utils/exportPdf';
 
 export function ProjetoDetalhes() {
   const { id } = useParams();
@@ -25,11 +27,12 @@ export function ProjetoDetalhes() {
     listFunds,
     createMovement,
     updateMovement,
-    deleteMovement,
+    deleteMovementCascade,
     uploadAttachment,
     listAttachments,
     listAttachmentCounts,
     deleteAttachment,
+    getProjectReport,
   } = useFinanceSupabase();
 
 
@@ -74,6 +77,38 @@ export function ProjetoDetalhes() {
     { categoria: 'LOGÍSTICA', orcado: 22000, real: 0 },
     { categoria: 'OUTROS', orcado: 4500, real: 2380 },
   ];
+
+
+  const reportRows = useMemo(() => movimentacoesProjeto.map((movement) => ({
+    Data: movement.date,
+    Tipo: movement.type,
+    Status: movement.status,
+    'Descrição': movement.description || '',
+    Categoria: movement.category_name || movement.category || '',
+    Projeto: projeto?.name || '-',
+    Fundo: fundoNome,
+    'Valor Unit': Number(movement.unit_value || 0),
+    Qtd: Number(movement.quantity || 0),
+    Total: Number(movement.total_value || 0),
+    'Forma Pgto': movement.payment_method || '',
+    Favorecido: movement.payee || '',
+    'Doc Tipo': movement.document_type || '',
+    'Doc Nº': movement.document_number || '',
+    'Observações': movement.notes || '',
+    'Qtd Comprovantes': attachmentCounts[movement.id] || 0,
+  })), [movimentacoesProjeto, projeto?.name, fundoNome, attachmentCounts]);
+
+  const exportProjectReport = async (mode: 'pdf' | 'csv', filters?: any) => {
+    if (!id) return;
+    const rows = await getProjectReport(id, filters || {});
+    const mapped = rows.map((movement: any) => ({
+      Data: movement.date, Tipo: movement.type, Status: movement.status, 'Descrição': movement.description || '', Categoria: movement.category_name || movement.category || '',
+      Projeto: projeto?.name || '-', Fundo: fundoNome, 'Valor Unit': Number(movement.unit_value || 0), Qtd: Number(movement.quantity || 0), Total: Number(movement.total_value || 0),
+      'Forma Pgto': movement.payment_method || '', Favorecido: movement.payee || '', 'Doc Tipo': movement.document_type || '', 'Doc Nº': movement.document_number || '', 'Observações': movement.notes || '', 'Qtd Comprovantes': movement.attachments_count || 0,
+    }));
+    if (mode === 'csv') exportMovementsCsv(mapped, DEFAULT_REPORT_COLUMNS, `relatorio-projeto-${id}.csv`);
+    else exportMovementsPdf({ title: `Relatório do Projeto ${projeto?.name || ''}`, columns: DEFAULT_REPORT_COLUMNS, rows: mapped });
+  };
 
   const fluxoMensal = [
     { mes: 'Jan', entradas: 25000, saidas: 0 },
@@ -305,7 +340,7 @@ export function ProjetoDetalhes() {
                             <button
                               onClick={async () => {
                                 if (!window.confirm('Deseja realmente excluir esta movimentação?')) return;
-                                await deleteMovement(mov.id);
+                                await deleteMovementCascade(mov);
                                 await refetchMovements();
                               }}
                               className="px-3 py-1 border border-red-300 rounded-lg text-red-700 hover:bg-red-50 transition-colors"
@@ -409,11 +444,11 @@ export function ProjetoDetalhes() {
                 <h4 className="font-semibold text-gray-900 mb-2">Relatório Mensal</h4>
                 <p className="text-sm text-gray-600 mb-6">Movimentações agrupadas por mês</p>
                 <div className="flex gap-2">
-                  <button className="flex-1 px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20]">
+                  <button onClick={() => void exportProjectReport('pdf', { status: 'pendente' })} className="flex-1 px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20]">
                     <Download className="w-4 h-4 inline mr-1" />
                     PDF
                   </button>
-                  <button className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
+                  <button onClick={() => void exportProjectReport('csv', { status: 'pendente' })} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
                     <Download className="w-4 h-4 inline mr-1" />
                     CSV
                   </button>
@@ -426,11 +461,11 @@ export function ProjetoDetalhes() {
                 <h4 className="font-semibold text-gray-900 mb-2">Por Categoria</h4>
                 <p className="text-sm text-gray-600 mb-6">Análise por categoria de despesa</p>
                 <div className="flex gap-2">
-                  <button className="flex-1 px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20]">
+                  <button onClick={() => void exportProjectReport('pdf')} className="flex-1 px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20]">
                     <Download className="w-4 h-4 inline mr-1" />
                     PDF
                   </button>
-                  <button className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
+                  <button onClick={() => void exportProjectReport('csv')} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
                     <Download className="w-4 h-4 inline mr-1" />
                     CSV
                   </button>
@@ -477,7 +512,7 @@ export function ProjetoDetalhes() {
                 <h4 className="font-semibold text-gray-900 mb-2">Prestação de Contas</h4>
                 <p className="text-sm text-gray-600 mb-6">Documento oficial com comprovantes</p>
                 <div className="flex gap-2">
-                  <button className="flex-1 px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20]">
+                  <button onClick={() => exportMovementsPdf({ title: `Prestação de Contas - ${projeto?.name || ""}`, columns: DEFAULT_REPORT_COLUMNS, rows: reportRows })} className="flex-1 px-4 py-2 bg-[#0f3d2e] text-white text-sm rounded-lg hover:bg-[#0a2b20]">
                     <Download className="w-4 h-4 inline mr-1" />
                     Gerar
                   </button>
@@ -506,7 +541,7 @@ export function ProjetoDetalhes() {
         }}
         onDelete={async (movementId) => {
           try {
-            await deleteMovement(movementId);
+            await deleteMovementCascade({ id: movementId });
             await refetchMovements();
           } catch (error) {
             if (import.meta.env.DEV) console.error(error);
