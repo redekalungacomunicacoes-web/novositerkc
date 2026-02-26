@@ -9,6 +9,7 @@ import type {
   FinanceiroProjeto,
 } from '../data/financeiro.repo';
 import { formatCurrency } from '../data/financeiro.repo';
+import { computeFundBalances } from '../utils/balances';
 
 type AnyRow = Record<string, unknown>;
 
@@ -331,19 +332,29 @@ export function useFinanceSupabase() {
     const start = startDate.toISOString().slice(0, 10);
     const end = endDate.toISOString().slice(0, 10);
 
-    const [movementsRes, fundsList] = await Promise.all([
+    const [movementsRes, paidFundsMovementsRes, fundsList] = await Promise.all([
       buildMovementsQuery({ startDate: start, endDate: end }),
+      buildMovementsQuery({ status: 'pago' }),
       listFunds(),
     ]);
 
     ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
+    ensure(paidFundsMovementsRes.error, 'Falha ao carregar saldo dos fundos.');
     const raw = (movementsRes.data || []).map((row) => mapMovement(row as AnyRow));
+    const paidFundsRaw = (paidFundsMovementsRes.data || []).map((row) => mapMovement(row as AnyRow));
 
     const projectFundFromRow = new Map<string, string>();
     raw.forEach((m, idx) => {
       const r = movementsRes.data?.[idx] as AnyRow | undefined;
       const proj = r?.project as AnyRow | undefined;
       if (proj?.id && proj?.fund_id) projectFundFromRow.set(String(proj.id), String(proj.fund_id));
+    });
+
+    const paidFundProjectMap = new Map<string, string>();
+    paidFundsRaw.forEach((m, idx) => {
+      const r = paidFundsMovementsRes.data?.[idx] as AnyRow | undefined;
+      const proj = r?.project as AnyRow | undefined;
+      if (proj?.id && proj?.fund_id) paidFundProjectMap.set(String(proj.id), String(proj.fund_id));
     });
 
     const fundsNameById = new Map(fundsList.map((f) => [f.id, f.nome]));
@@ -354,6 +365,13 @@ export function useFinanceSupabase() {
       return { ...m, fundoId: resolvedFundId, fundo: resolvedFundName || '—' };
     });
 
+    const paidFundsNormalized = paidFundsRaw
+      .map((m) => {
+        const resolvedFundId = m.fundoId || (m.projetoId ? (paidFundProjectMap.get(m.projetoId) ?? '') : '');
+        return { ...m, fundoId: resolvedFundId };
+      })
+      .filter((m) => Boolean(m.fundoId));
+
     const paid = normalized.filter((m) => m.status === 'pago');
     const paidIn = paid.filter((m) => m.tipo === 'entrada');
     const paidOut = paid.filter((m) => m.tipo === 'saida');
@@ -362,10 +380,8 @@ export function useFinanceSupabase() {
     const saidas = paidOut.reduce((acc, m) => acc + m.valorTotal, 0);
     const pendencias = normalized.filter((m) => m.status === 'pendente').reduce((acc, m) => acc + m.valorTotal, 0);
 
-    const saldoAtual = fundsList.reduce((acc, fundo) => {
-      const saldoRestante = (Number(fundo.totalGasto) || 0) + ((Number(fundo.totalOrcado) || 0) - (Number(fundo.totalGasto) || 0));
-      return acc + saldoRestante;
-    }, 0);
+    const { totalSaldoGeral } = computeFundBalances(fundsList, paidFundsNormalized);
+    const saldoAtual = totalSaldoGeral;
 
     const fluxoMap = new Map<string, { periodo: string; entradas: number; saidas: number }>();
     const pizzaMap = new Map<string, number>();
@@ -407,7 +423,35 @@ export function useFinanceSupabase() {
       const fundsList = await listFunds();
       const projectsList = await listProjects(fundsList);
 
-      setFunds(fundsList);
+      const { data: paidFundsMovementsData, error: paidFundsMovementsError } = await buildMovementsQuery({ status: 'pago' });
+      ensure(paidFundsMovementsError, 'Falha ao carregar saldo dos fundos.');
+
+      const paidFundsMovementsRaw = (paidFundsMovementsData || []).map((row) => mapMovement(row as AnyRow));
+      const projectFundById = new Map(projectsList.map((project) => [project.id, project.fundoId]));
+      const paidFundsMovements = paidFundsMovementsRaw
+        .map((m) => {
+          const resolvedFundId = m.fundoId || (m.projetoId ? (projectFundById.get(m.projetoId) ?? '') : '');
+          return { ...m, fundoId: resolvedFundId };
+        })
+        .filter((m) => Boolean(m.fundoId));
+
+      const fundBalances = computeFundBalances(fundsList, paidFundsMovements);
+      const fundsWithCalculatedBalance = fundsList.map((fund) => {
+        const summary = fundBalances.byFundId.get(fund.id);
+        const saldoCalculado = summary?.saldo ?? (Number(fund.saldoInicial) || 0);
+        const saidasCalculadas = summary?.saidas ?? 0;
+        const entradasCalculadas = summary?.entradas ?? 0;
+
+        return {
+          ...fund,
+          saldoAtual: saldoCalculado,
+          totalEntradas: entradasCalculadas,
+          totalSaidas: saidasCalculadas,
+          totalGasto: saidasCalculadas,
+        };
+      });
+
+      setFunds(fundsWithCalculatedBalance);
       setProjects(projectsList);
 
       const [latest, categoriesList, aggregates] = await Promise.all([
