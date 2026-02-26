@@ -92,14 +92,12 @@ export const formatDate = (dateLike: string) => {
 };
 
 /**
- * Mantive a função, mas ela agora não é usada como “cérebro” do dashboard.
- * O dashboard fica 100% no hook (useFinanceSupabase), para cruzar fundo/projeto corretamente.
+ * Mantido por compatibilidade. O dashboard real (com cruzamento fundo/projeto)
+ * está no hook useFinanceSupabase.
  */
 export async function getDashboardData(): Promise<DashboardData> {
-  // (compat) caso você use em algum lugar antigo
   const { error } = await supabase.from('v_finance_movements_enriched').select('id').limit(1);
   if (error) {
-    // fallback seguro
     return { entradas: 0, saidas: 0, saldoAtual: 0, pendencias: 0, fluxoCaixa: [], distribuicaoCategoria: [], orcadoVsReal: [] };
   }
   return { entradas: 0, saidas: 0, saldoAtual: 0, pendencias: 0, fluxoCaixa: [], distribuicaoCategoria: [], orcadoVsReal: [] };
