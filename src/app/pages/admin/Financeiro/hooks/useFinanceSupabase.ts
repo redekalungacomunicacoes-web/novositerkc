@@ -32,6 +32,7 @@ export type MovementPayload = {
   fund_id?: string;
   category_id?: string;
   title?: string;
+  category?: string;
   description: string;
   unit_value: number;
   quantity: number;
@@ -58,6 +59,16 @@ export type MovementFilters = {
   endDate?: string;
   status?: MovementStatus;
   limit?: number;
+};
+
+export type ReportFilters = {
+  startDate?: string;
+  endDate?: string;
+  type?: MovementType | 'todos';
+  status?: MovementStatus | 'todos';
+  fundId?: string;
+  projectId?: string;
+  categoryId?: string;
 };
 
 const toNumber = (value: unknown) => Number(value) || 0;
@@ -93,6 +104,7 @@ const normalizePayMethod = (value: unknown): PayMethod => {
   return 'pix';
 };
 
+const monthKey = (value: string) => value.slice(0, 7);
 
 const mapAttachment = (row: AnyRow): FinanceAttachment => ({
   id: String(row.id ?? ''),
@@ -188,11 +200,40 @@ const buildMovementsQuery = (filters?: MovementFilters) => {
   return query;
 };
 
+const createEmptyDashboard = (): DashboardData => ({
+  kpis: {
+    totalFunds: 0,
+    totalProjects: 0,
+    currentBalanceFunds: 0,
+    currentBalanceProjects: 0,
+    totalInPaid: 0,
+    totalOutPaid: 0,
+    totalPending: 0,
+    totalMovements: 0,
+    budgetTotal: 0,
+    budgetReal: 0,
+    executionPct: 0,
+    attachmentsPct: 0,
+    noDocumentCount: 0,
+  },
+  cashflowLine: [],
+  budgetVsReal: [],
+  categoryPie: [],
+  latestMovements: [],
+  entradas: 0,
+  saidas: 0,
+  saldoAtual: 0,
+  pendencias: 0,
+  fluxoCaixa: [],
+  distribuicaoCategoria: [],
+  orcadoVsReal: [],
+});
+
 export function useFinanceSupabase() {
   const [funds, setFunds] = useState<FinanceiroFundo[]>([]);
   const [projects, setProjects] = useState<FinanceiroProjeto[]>([]);
   const [movements, setMovements] = useState<FinanceiroMovimentacao[]>([]);
-  const [dashboard, setDashboard] = useState<DashboardData>({ entradas: 0, saidas: 0, saldoAtual: 0, pendencias: 0, fluxoCaixa: [], distribuicaoCategoria: [], orcadoVsReal: [] });
+  const [dashboard, setDashboard] = useState<DashboardData>(createEmptyDashboard());
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -230,84 +271,246 @@ export function useFinanceSupabase() {
     return (data || []).map((row) => mapMovement(row as AnyRow));
   }, []);
 
-  const listLatestMovements = useCallback(async () => listMovements({ limit: 10 }), [listMovements]);
+  const listLatestMovements = useCallback(async (limit = 10) => listMovements({ limit }), [listMovements]);
 
-  const buildLastSixMonths = () => {
+  const buildMonths = (months: number, endDate?: Date) => {
     const periods: string[] = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i -= 1) {
+    const now = endDate ?? new Date();
+    for (let i = months - 1; i >= 0; i -= 1) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       periods.push(date.toISOString().slice(0, 7));
     }
     return periods;
   };
 
-  const getDashboardAggregates = useCallback(async (): Promise<DashboardData> => {
+  const getDashboardAggregates = useCallback(async ({ months = 6 }: { months?: number } = {}): Promise<DashboardData> => {
     const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 5);
+    const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - (months - 1), 1);
     const start = startDate.toISOString().slice(0, 10);
     const end = endDate.toISOString().slice(0, 10);
 
-    const [movementsRes, fundsList] = await Promise.all([
-      buildMovementsQuery({ startDate: start, endDate: end }),
-      listFunds(),
+    const [
+      fundsRes,
+      projectsRes,
+      categoriesRes,
+      movementsRes,
+      budgetRes,
+    ] = await Promise.all([
+      supabase.from('finance_funds').select('id,current_balance'),
+      supabase.from('finance_projects').select('id,current_balance'),
+      supabase.from('finance_categories').select('id,name,color'),
+      supabase
+        .from('finance_movements')
+        .select('id,date,type,description,fund_id,project_id,total_value,status,category_id,created_at')
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: false }),
+      supabase
+        .from('finance_budget_items')
+        .select('id,total_value,start_date,created_at,year,category_id')
+        .gte('created_at', `${start}T00:00:00`)
+        .lte('created_at', `${end}T23:59:59`),
     ]);
 
-    ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
-    const latestMovements = (movementsRes.data || []).map((row) => mapMovement(row as AnyRow));
+    ensure(fundsRes.error, 'Falha ao carregar fundos do dashboard.');
+    ensure(projectsRes.error, 'Falha ao carregar projetos do dashboard.');
+    ensure(categoriesRes.error, 'Falha ao carregar categorias do dashboard.');
+    ensure(movementsRes.error, 'Falha ao carregar movimentações do dashboard.');
+    ensure(budgetRes.error, 'Falha ao carregar orçamento do dashboard.');
 
-    const paid = latestMovements.filter((m) => m.status === 'pago');
-    const outPaid = paid.filter((m) => m.tipo === 'saida');
-    const entradas = paid.filter((m) => m.tipo === 'entrada').reduce((acc, m) => acc + m.valorTotal, 0);
-    const saidas = outPaid.reduce((acc, m) => acc + m.valorTotal, 0);
-    const pendencias = latestMovements.filter((m) => m.status === 'pendente').reduce((acc, m) => acc + m.valorTotal, 0);
+    const movementRows = (movementsRes.data || []) as AnyRow[];
+    const categoriesMap = new Map((categoriesRes.data || []).map((item) => [String(item.id), String(item.name)]));
+    const monthsList = buildMonths(months, endDate);
 
-    const saldoFundos = fundsList.reduce((acc, item) => acc + (Number.isFinite(item.saldoAtual) ? item.saldoAtual : 0), 0);
-    const saldoAtual = saldoFundos !== 0 ? saldoFundos : entradas - saidas;
+    const totalFunds = (fundsRes.data || []).length;
+    const totalProjects = (projectsRes.data || []).length;
+    const currentBalanceFunds = (fundsRes.data || []).reduce((acc, row) => acc + toNumber(row.current_balance), 0);
+    const currentBalanceProjects = (projectsRes.data || []).reduce((acc, row) => acc + toNumber(row.current_balance), 0);
 
-    const fluxoMap = new Map<string, { periodo: string; entradas: number; saidas: number }>();
-    const pizzaMap = new Map<string, number>();
+    const paidIn = movementRows.filter((m) => m.status === 'pago' && m.type === 'entrada');
+    const paidOut = movementRows.filter((m) => m.status === 'pago' && m.type === 'saida');
+    const pending = movementRows.filter((m) => m.status === 'pendente');
 
-    for (const row of paid) {
-      const month = row.data.slice(0, 7);
-      const current = fluxoMap.get(month) ?? { periodo: month, entradas: 0, saidas: 0 };
-      if (row.tipo === 'entrada') current.entradas += row.valorTotal;
-      if (row.tipo === 'saida') current.saidas += row.valorTotal;
-      fluxoMap.set(month, current);
-      if (row.tipo === 'saida') {
-        pizzaMap.set(row.categoria || 'Sem categoria', (pizzaMap.get(row.categoria || 'Sem categoria') ?? 0) + row.valorTotal);
+    const totalInPaid = paidIn.reduce((acc, row) => acc + toNumber(row.total_value), 0);
+    const totalOutPaid = paidOut.reduce((acc, row) => acc + toNumber(row.total_value), 0);
+    const totalPending = pending.length;
+    const totalMovements = movementRows.length;
+
+    const movementsMap = new Map<string, { mes: string; entradas: number; saidas: number }>();
+    const realBudgetMap = new Map<string, number>();
+    const categoryPieMap = new Map<string, number>();
+
+    for (const row of movementRows) {
+      const rawDate = String(row.date || row.created_at || new Date().toISOString());
+      const mes = monthKey(rawDate);
+      const flow = movementsMap.get(mes) || { mes, entradas: 0, saidas: 0 };
+      const value = toNumber(row.total_value);
+      if (row.status === 'pago' && row.type === 'entrada') flow.entradas += value;
+      if (row.status === 'pago' && row.type === 'saida') {
+        flow.saidas += value;
+        realBudgetMap.set(mes, (realBudgetMap.get(mes) || 0) + value);
+        const cat = row.category_id ? categoriesMap.get(String(row.category_id)) || 'Sem categoria' : 'Sem categoria';
+        categoryPieMap.set(cat, (categoryPieMap.get(cat) || 0) + value);
       }
+      movementsMap.set(mes, flow);
     }
 
-    const realMap = new Map<string, number>();
-    for (const row of outPaid) {
-      const period = row.data.slice(0, 7);
-      realMap.set(period, (realMap.get(period) ?? 0) + row.valorTotal);
+    const budgetItems = (budgetRes.data || []) as AnyRow[];
+    const budgetMap = new Map<string, number>();
+    for (const item of budgetItems) {
+      const monthSource = String(item.start_date || item.created_at || '');
+      if (!monthSource) continue;
+      const key = monthKey(monthSource);
+      if (!monthsList.includes(key)) continue;
+      budgetMap.set(key, (budgetMap.get(key) || 0) + toNumber(item.total_value));
     }
 
-    const periods = buildLastSixMonths();
+    const budgetTotal = Array.from(budgetMap.values()).reduce((a, b) => a + b, 0);
+    const budgetReal = totalOutPaid;
+    const executionPct = budgetTotal > 0 ? (budgetReal / budgetTotal) * 100 : 0;
+
+    const movementIds = movementRows.map((m) => String(m.id));
+    let attachmentsByMovement = new Map<string, number>();
+    if (movementIds.length > 0) {
+      const { data: attachmentRows, error: attachmentErr } = await supabase
+        .from('finance_attachments')
+        .select('movement_id')
+        .in('movement_id', movementIds);
+      ensure(attachmentErr, 'Falha ao carregar anexos do dashboard.');
+      attachmentsByMovement = new Map();
+      (attachmentRows || []).forEach((row) => {
+        const id = String(row.movement_id);
+        attachmentsByMovement.set(id, (attachmentsByMovement.get(id) || 0) + 1);
+      });
+    }
+
+    const movementsPaidTotal = movementRows.filter((m) => m.status === 'pago').length;
+    const movementsPaidWithAttachment = movementRows.filter((m) => m.status === 'pago' && (attachmentsByMovement.get(String(m.id)) || 0) > 0).length;
+    const attachmentsPct = movementsPaidTotal > 0 ? (movementsPaidWithAttachment / movementsPaidTotal) * 100 : 0;
+    const noDocumentCount = movementRows.filter((m) => (m.status === 'pago' || m.status === 'pendente') && (attachmentsByMovement.get(String(m.id)) || 0) === 0).length;
+
+    const cashflowLine = monthsList.map((mes) => movementsMap.get(mes) || { mes, entradas: 0, saidas: 0 });
+    const budgetVsReal = monthsList.map((mes) => ({ mes, orcado: budgetMap.get(mes) || 0, real: realBudgetMap.get(mes) || 0 }));
+    const categoryPie = Array.from(categoryPieMap.entries()).map(([name, value]) => ({ name, value }));
+
+    const latestMovements = movementRows.slice(0, 10).map((row) => ({
+      id: String(row.id),
+      date: String(row.date || row.created_at || new Date().toISOString()),
+      type: normalizeType(row.type),
+      description: String(row.description || ''),
+      fund_id: row.fund_id ? String(row.fund_id) : undefined,
+      project_id: row.project_id ? String(row.project_id) : undefined,
+      total_value: toNumber(row.total_value),
+      status: normalizeMovementStatus(row.status),
+      category_id: row.category_id ? String(row.category_id) : undefined,
+      category_name: row.category_id ? categoriesMap.get(String(row.category_id)) || 'Sem categoria' : 'Sem categoria',
+      attachments_count: attachmentsByMovement.get(String(row.id)) || 0,
+    }));
 
     return {
-      entradas,
-      saidas,
-      saldoAtual,
-      pendencias,
-      fluxoCaixa: periods.map((periodo) => fluxoMap.get(periodo) ?? { periodo, entradas: 0, saidas: 0 }),
-      distribuicaoCategoria: Array.from(pizzaMap.entries()).map(([categoria, valor]) => ({ categoria, valor })),
-      orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: 0, real: realMap.get(periodo) ?? 0 })),
+      kpis: {
+        totalFunds,
+        totalProjects,
+        currentBalanceFunds,
+        currentBalanceProjects,
+        totalInPaid,
+        totalOutPaid,
+        totalPending,
+        totalMovements,
+        budgetTotal,
+        budgetReal,
+        executionPct,
+        attachmentsPct,
+        noDocumentCount,
+      },
+      cashflowLine,
+      budgetVsReal,
+      categoryPie,
+      latestMovements,
+      entradas: totalInPaid,
+      saidas: totalOutPaid,
+      saldoAtual: currentBalanceFunds,
+      pendencias: totalPending,
+      fluxoCaixa: cashflowLine.map((item) => ({ periodo: item.mes, entradas: item.entradas, saidas: item.saidas })),
+      distribuicaoCategoria: categoryPie.map((item) => ({ categoria: item.name, valor: item.value })),
+      orcadoVsReal: budgetVsReal.map((item) => ({ periodo: item.mes, orcado: item.orcado, real: item.real })),
     };
-  }, [listFunds]);
+  }, []);
+
+  const getMovementsReport = useCallback(async (filters: ReportFilters) => {
+    let query = supabase
+      .from('finance_movements')
+      .select('id,date,type,description,fund_id,project_id,total_value,status,category_id,unit_value,quantity,pay_method,beneficiary,cost_center,doc_type,doc_number,created_at,fund:finance_funds(name),project:finance_projects(name),category:finance_categories(name)')
+      .order('date', { ascending: false });
+
+    if (filters.startDate) query = query.gte('date', filters.startDate);
+    if (filters.endDate) query = query.lte('date', filters.endDate);
+    if (filters.type && filters.type !== 'todos') query = query.eq('type', filters.type);
+    if (filters.status && filters.status !== 'todos') query = query.eq('status', filters.status);
+    if (filters.fundId) query = query.eq('fund_id', filters.fundId);
+    if (filters.projectId) query = query.eq('project_id', filters.projectId);
+    if (filters.categoryId) query = query.eq('category_id', filters.categoryId);
+
+    const { data, error: reportError } = await query;
+    ensure(reportError, 'Falha ao gerar relatório.');
+
+    const rows = (data || []) as AnyRow[];
+    const ids = rows.map((row) => String(row.id));
+    const attachmentMap = await listAttachmentsForMovementIds(ids);
+
+    return rows.map((row) => ({
+      id: String(row.id),
+      date: String(row.date ?? row.created_at ?? ''),
+      type: normalizeType(row.type),
+      description: String(row.description ?? ''),
+      fundName: String((row.fund as AnyRow | undefined)?.name ?? '—'),
+      projectName: String((row.project as AnyRow | undefined)?.name ?? '—'),
+      categoryName: String((row.category as AnyRow | undefined)?.name ?? 'Sem categoria'),
+      totalValue: toNumber(row.total_value),
+      status: normalizeMovementStatus(row.status),
+      beneficiary: String(row.beneficiary ?? ''),
+      payMethod: normalizePayMethod(row.pay_method),
+      costCenter: String(row.cost_center ?? ''),
+      doc: [String(row.doc_type ?? ''), String(row.doc_number ?? '')].filter(Boolean).join(' '),
+      quantity: toNumber(row.quantity),
+      unitValue: toNumber(row.unit_value),
+      attachmentsCount: attachmentMap.get(String(row.id)) || 0,
+    }));
+  }, [listAttachmentsForMovementIds]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const fundsList = await listFunds();
-      const [projectsList, latest, categoriesList, aggregates] = await Promise.all([listProjects(fundsList), listLatestMovements(), listCategories(), getDashboardAggregates()]);
+      const [projectsList, categoriesList, aggregates] = await Promise.all([listProjects(fundsList), listCategories(), getDashboardAggregates({ months: 6 })]);
       setFunds(fundsList);
       setProjects(projectsList);
-      setMovements(latest);
+      setMovements(aggregates.latestMovements.map((row) => ({
+        id: row.id,
+        data: row.date,
+        tipo: row.type,
+        titulo: row.description,
+        descricao: row.description,
+        valorUnitario: row.total_value,
+        quantidade: 1,
+        valorTotal: row.total_value,
+        status: row.status,
+        projetoNome: '—',
+        projetoId: row.project_id || '',
+        fundo: '—',
+        fundoId: row.fund_id || '',
+        categoria: row.category_name,
+        categoriaId: row.category_id || '',
+        payMethod: 'pix',
+        beneficiary: '',
+        notes: '',
+        docType: '',
+        docNumber: '',
+        costCenter: '',
+        attachmentsCount: row.attachments_count,
+        comprovantes: [],
+      })));
       setCategories(categoriesList);
       setDashboard(aggregates);
     } catch (loadError) {
@@ -315,7 +518,7 @@ export function useFinanceSupabase() {
     } finally {
       setLoading(false);
     }
-  }, [getDashboardAggregates, listCategories, listLatestMovements, listProjects, listFunds]);
+  }, [getDashboardAggregates, listCategories, listProjects, listFunds]);
 
   useEffect(() => {
     void load();
@@ -381,13 +584,20 @@ export function useFinanceSupabase() {
     if (!title) throw new Error('Título é obrigatório.');
     if (!description) throw new Error('Descrição é obrigatória.');
     if (!payload.fund_id && !payload.project_id) throw new Error('Selecione ao menos um fundo ou projeto.');
-    if (!payload.category_id) throw new Error('Categoria é obrigatória.');
+
+    let categoryId = payload.category_id;
+    if (!categoryId && payload.category) {
+      const normalized = payload.category.toLowerCase();
+      const found = categories.find((item) => item.name.toLowerCase() === normalized);
+      categoryId = found?.id;
+    }
+
     return {
       date: payload.date,
       type: normalizeType(payload.type),
       fund_id: payload.fund_id || null,
       project_id: payload.project_id || null,
-      category_id: payload.category_id || null,
+      category_id: categoryId || null,
       title,
       description,
       unit_value: unit,
@@ -504,6 +714,7 @@ export function useFinanceSupabase() {
     listMovements,
     listLatestMovements,
     getDashboardAggregates,
+    getMovementsReport,
     listCategories,
     createMovement,
     updateMovement,
