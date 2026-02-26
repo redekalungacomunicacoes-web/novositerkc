@@ -1,6 +1,6 @@
 import { createBrowserRouter } from 'react-router';
 import { MainLayout } from './layouts/MainLayout';
-import { Dashboard, Fundos, FundoDetalhes, Projetos, ProjetoDetalhes, Relatorios } from './index';
+import { Dashboard, Fundos, FundoDetalhes, Projetos, ProjetoDetalhes } from './index';
 
 export const router = createBrowserRouter([
   {
@@ -17,7 +17,7 @@ export const router = createBrowserRouter([
           { path: 'projetos', Component: Projetos },
           { path: 'projetos/:id', Component: ProjetoDetalhes },
           { path: 'movimentacoes', Component: Dashboard },
-          { path: 'relatorios', Component: Relatorios },
+          { path: 'relatorios', Component: Dashboard },
         ],
       },
     ],
