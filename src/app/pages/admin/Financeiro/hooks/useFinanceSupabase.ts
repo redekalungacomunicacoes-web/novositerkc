@@ -327,12 +327,14 @@ export function useFinanceSupabase() {
     const start = startDate.toISOString().slice(0, 10);
     const end = endDate.toISOString().slice(0, 10);
 
-    const [movementsRes, fundsList] = await Promise.all([
+    const [movementsRes, fundsList, dashboardFundsRes] = await Promise.all([
       buildMovementsQuery({ startDate: start, endDate: end }),
       listFunds(),
+      supabase.from('fundos').select('saldo_atual'),
     ]);
 
     ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
+    ensure(dashboardFundsRes.error, 'Falha ao carregar saldo dos fundos.');
     const raw = (movementsRes.data || []).map((row) => mapMovement(row as AnyRow));
 
     const projectFundFromRow = new Map<string, string>();
@@ -358,8 +360,7 @@ export function useFinanceSupabase() {
     const saidas = paidOut.reduce((acc, m) => acc + m.valorTotal, 0);
     const pendencias = normalized.filter((m) => m.status === 'pendente').reduce((acc, m) => acc + m.valorTotal, 0);
 
-    const saldoFundos = fundsList.reduce((acc, f) => acc + (Number.isFinite(f.saldoAtual) ? f.saldoAtual : 0), 0);
-    const saldoAtual = saldoFundos !== 0 ? saldoFundos : entradas - saidas;
+    const saldoAtual = (dashboardFundsRes.data || []).reduce((acc, fundo) => acc + (Number((fundo as AnyRow).saldo_atual || 0) || 0), 0);
 
     const fluxoMap = new Map<string, { periodo: string; entradas: number; saidas: number }>();
     const pizzaMap = new Map<string, number>();
