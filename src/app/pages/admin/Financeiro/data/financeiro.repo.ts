@@ -73,6 +73,37 @@ export type FinanceiroMovimentacao = {
 };
 
 export type DashboardData = {
+  kpis: {
+    totalFunds: number;
+    totalProjects: number;
+    currentBalanceFunds: number;
+    currentBalanceProjects: number;
+    totalInPaid: number;
+    totalOutPaid: number;
+    totalPending: number;
+    totalMovements: number;
+    budgetTotal: number;
+    budgetReal: number;
+    executionPct: number;
+    attachmentsPct: number;
+    noDocumentCount: number;
+  };
+  cashflowLine: { mes: string; entradas: number; saidas: number }[];
+  budgetVsReal: { mes: string; orcado: number; real: number }[];
+  categoryPie: { name: string; value: number }[];
+  latestMovements: {
+    id: string;
+    date: string;
+    type: 'entrada' | 'saida';
+    description: string;
+    fund_id?: string;
+    project_id?: string;
+    total_value: number;
+    status: 'pago' | 'pendente' | 'cancelado';
+    category_id?: string;
+    category_name: string;
+    attachments_count: number;
+  }[];
   entradas: number;
   saidas: number;
   saldoAtual: number;
@@ -94,7 +125,61 @@ export const formatDate = (dateLike: string) => {
 export async function getDashboardData(): Promise<DashboardData> {
   const { data } = await supabase.from('v_finance_movements_enriched').select('*').limit(1);
   if (data) {
-    return { entradas: 0, saidas: 0, saldoAtual: 0, pendencias: 0, fluxoCaixa: [], distribuicaoCategoria: [], orcadoVsReal: [] };
+    return {
+      kpis: {
+        totalFunds: 0,
+        totalProjects: 0,
+        currentBalanceFunds: 0,
+        currentBalanceProjects: 0,
+        totalInPaid: 0,
+        totalOutPaid: 0,
+        totalPending: 0,
+        totalMovements: 0,
+        budgetTotal: 0,
+        budgetReal: 0,
+        executionPct: 0,
+        attachmentsPct: 0,
+        noDocumentCount: 0,
+      },
+      cashflowLine: [],
+      budgetVsReal: [],
+      categoryPie: [],
+      latestMovements: [],
+      entradas: 0,
+      saidas: 0,
+      saldoAtual: 0,
+      pendencias: 0,
+      fluxoCaixa: [],
+      distribuicaoCategoria: [],
+      orcadoVsReal: [],
+    };
   }
-  return { entradas: 0, saidas: 0, saldoAtual: 0, pendencias: 0, fluxoCaixa: [], distribuicaoCategoria: [], orcadoVsReal: [] };
+  return {
+    kpis: {
+      totalFunds: 0,
+      totalProjects: 0,
+      currentBalanceFunds: 0,
+      currentBalanceProjects: 0,
+      totalInPaid: 0,
+      totalOutPaid: 0,
+      totalPending: 0,
+      totalMovements: 0,
+      budgetTotal: 0,
+      budgetReal: 0,
+      executionPct: 0,
+      attachmentsPct: 0,
+      noDocumentCount: 0,
+    },
+    cashflowLine: [],
+    budgetVsReal: [],
+    categoryPie: [],
+    latestMovements: [],
+    entradas: 0,
+    saidas: 0,
+    saldoAtual: 0,
+    pendencias: 0,
+    fluxoCaixa: [],
+    distribuicaoCategoria: [],
+    orcadoVsReal: [],
+  };
 }
