@@ -174,7 +174,7 @@ const mapMovement = (row: AnyRow): FinanceiroMovimentacao => ({
   comprovantes: Array.isArray(row.attachments) ? row.attachments.map((item) => mapAttachment(item as AnyRow)) : [],
 });
 
-const movementSelect = 'id,date,type,fund_id,project_id,budget_item_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
+const movementSelect = 'id,date,type,fund_id,project_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
 
 const buildMovementsQuery = (filters?: MovementFilters) => {
   let query = supabase.from('finance_movements').select(movementSelect);
@@ -207,10 +207,10 @@ export function useFinanceSupabase() {
   const listProjects = useCallback(async (fundItems?: FinanceiroFundo[]) => {
     const { data, error: projectsError } = await supabase.from('finance_projects').select('*').order('created_at', { ascending: false });
     ensure(projectsError, 'Falha ao listar projetos.');
-    const list = fundItems ?? funds;
+    const list = fundItems ?? [];
     const byId = new Map(list.map((f) => [f.id, f.nome]));
     return (data || []).map((row) => mapProject(row as AnyRow, byId));
-  }, [funds]);
+  }, []);
 
   const listCategories = useCallback(async () => {
     const { data, error: categoriesError } = await supabase.from('finance_categories').select('id,name,color').order('name', { ascending: true });
@@ -387,7 +387,6 @@ export function useFinanceSupabase() {
       type: normalizeType(payload.type),
       fund_id: payload.fund_id || null,
       project_id: payload.project_id || null,
-      budget_item_id: null,
       category_id: payload.category_id || null,
       title,
       description,
