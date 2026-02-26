@@ -13,7 +13,7 @@ export type FundPayload = {
   year: number;
   description: string;
   opening_balance: number;
-  status: Extract<FinanceStatus, 'ativo' | 'concluido' | 'cancelado'>;
+    status: Extract<FinanceStatus, 'ativo' | 'concluido' | 'cancelado'>;
 };
 
 export type ProjectPayload = {
@@ -22,7 +22,7 @@ export type ProjectPayload = {
   description: string;
   fund_id: string;
   initial_amount: number;
-  status: Extract<FinanceStatus, 'em_andamento' | 'concluido' | 'cancelado'>;
+    status: Extract<FinanceStatus, 'em_andamento' | 'concluido' | 'cancelado'>;
 };
 
 export type MovementPayload = {
@@ -32,12 +32,11 @@ export type MovementPayload = {
   fund_id?: string;
   category_id?: string;
   title?: string;
-  category?: string;
   description: string;
   unit_value: number;
   quantity: number;
   total_value?: number;
-  status: MovementStatus;
+    status: MovementStatus;
   pay_method: PayMethod;
   beneficiary?: string;
   notes?: string;
@@ -62,6 +61,7 @@ export type MovementFilters = {
 };
 
 export type ReportFilters = {
+  scope?: 'geral' | 'fundo' | 'projeto';
   startDate?: string;
   endDate?: string;
   type?: MovementType | 'todos';
@@ -69,6 +69,28 @@ export type ReportFilters = {
   fundId?: string;
   projectId?: string;
   categoryId?: string;
+};
+
+const TITLE_PREFIX = 'Título:';
+
+const composeDescription = (title: string, description: string) => `${TITLE_PREFIX} ${title.trim()}\n${description.trim()}`;
+
+const splitDescription = (rawValue: unknown) => {
+  const raw = String(rawValue ?? '').trim();
+  if (!raw) return { title: '', description: '' };
+  const lines = raw.split('\n');
+  const head = lines[0]?.trim() || '';
+  if (head.toLowerCase().startsWith(TITLE_PREFIX.toLowerCase())) {
+    const title = head.slice(TITLE_PREFIX.length).trim();
+    const description = lines.slice(1).join('\n').trim();
+    return { title, description: description || title };
+  }
+
+  const [firstSentence] = raw.split(/[\.|\n]/);
+  return {
+    title: firstSentence.trim().slice(0, 90) || 'Movimentação',
+    description: raw,
+  };
 };
 
 const toNumber = (value: unknown) => Number(value) || 0;
@@ -135,7 +157,7 @@ const mapFund = (row: AnyRow): FinanceiroFundo => {
     totalGasto,
     totalEntradas,
     totalSaidas,
-    status: normalizeStatus(row.status, 'ativo'),
+      status: normalizeStatus(row.status, 'ativo'),
     execucao: totalOrcado > 0 ? Math.min(100, (totalGasto / totalOrcado) * 100) : 0,
   };
 };
@@ -149,44 +171,47 @@ const mapProject = (row: AnyRow, fundsById: Map<string, string>): FinanceiroProj
   return {
     id: String(row.id),
     nome: String(row.name ?? row.nome ?? 'Sem nome'),
-    fundo: fundsById.get(fundoId) ?? String(row.funder ?? '—'),
+      fundo: fundsById.get(fundoId) ?? String(row.funder ?? '—'),
     fundoId,
     saldoDisponivel,
     totalOrcado,
     gastoReal,
     diferenca: gastoReal - totalOrcado,
     execucao: totalOrcado > 0 ? Math.min(100, (gastoReal / totalOrcado) * 100) : 0,
-    status: normalizeStatus(row.status, 'em_andamento'),
+      status: normalizeStatus(row.status, 'em_andamento'),
   };
 };
 
-const mapMovement = (row: AnyRow): FinanceiroMovimentacao => ({
-  id: String(row.id),
-  data: String(row.date ?? row.created_at ?? new Date().toISOString()),
-  tipo: normalizeType(row.type),
-  titulo: String(row.title ?? row.description ?? 'Sem título'),
-  descricao: String(row.description ?? row.title ?? 'Sem descrição'),
-  valorUnitario: toNumber(row.unit_value),
-  quantidade: toNumber(row.quantity || 1),
-  valorTotal: toNumber(row.total_value),
-  status: normalizeMovementStatus(row.status),
-  projetoNome: String((row.project as AnyRow | undefined)?.name ?? row.project_name ?? '—'),
-  projetoId: String(row.project_id ?? ''),
-  fundo: String((row.fund as AnyRow | undefined)?.name ?? row.fund_name ?? '—'),
-  fundoId: String(row.fund_id ?? ''),
-  categoria: String((row.category as AnyRow | undefined)?.name ?? row.category_name ?? 'Sem categoria'),
-  categoriaId: row.category_id ? String(row.category_id) : '',
-  payMethod: normalizePayMethod(row.pay_method),
-  beneficiary: String(row.beneficiary ?? ''),
-  notes: String(row.notes ?? ''),
-  docType: String(row.doc_type ?? ''),
-  docNumber: String(row.doc_number ?? ''),
-  costCenter: String(row.cost_center ?? ''),
-  attachmentsCount: toNumber(row.attachments_count),
-  comprovantes: Array.isArray(row.attachments) ? row.attachments.map((item) => mapAttachment(item as AnyRow)) : [],
-});
+const mapMovement = (row: AnyRow): FinanceiroMovimentacao => {
+  const split = splitDescription(row.description ?? row.title);
+  return {
+    id: String(row.id),
+    data: String(row.date ?? row.created_at ?? new Date().toISOString()),
+    tipo: normalizeType(row.type),
+    titulo: split.title || 'Sem título',
+    descricao: split.description || 'Sem descrição',
+    valorUnitario: toNumber(row.unit_value),
+    quantidade: toNumber(row.quantity || 1),
+    valorTotal: toNumber(row.total_value),
+    status: normalizeMovementStatus(row.status),
+    projetoNome: String((row.project as AnyRow | undefined)?.name ?? row.project_name ?? '—'),
+    projetoId: String(row.project_id ?? ''),
+    fundo: String((row.fund as AnyRow | undefined)?.name ?? row.fund_name ?? '—'),
+    fundoId: String(row.fund_id ?? ''),
+    categoria: String((row.category as AnyRow | undefined)?.name ?? row.category_name ?? 'Sem categoria'),
+    categoriaId: row.category_id ? String(row.category_id) : '',
+    payMethod: normalizePayMethod(row.pay_method),
+    beneficiary: String(row.beneficiary ?? ''),
+    notes: String(row.notes ?? ''),
+    docType: String(row.doc_type ?? ''),
+    docNumber: String(row.doc_number ?? ''),
+    costCenter: String(row.cost_center ?? ''),
+    attachmentsCount: toNumber(row.attachments_count),
+    comprovantes: Array.isArray(row.attachments) ? row.attachments.map((item) => mapAttachment(item as AnyRow)) : [],
+  };
+};
 
-const movementSelect = 'id,date,type,fund_id,project_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
+const movementSelect = 'id,date,type,fund_id,project_id,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
 
 const buildMovementsQuery = (filters?: MovementFilters) => {
   let query = supabase.from('finance_movements').select(movementSelect);
@@ -397,11 +422,11 @@ export function useFinanceSupabase() {
       id: String(row.id),
       date: String(row.date || row.created_at || new Date().toISOString()),
       type: normalizeType(row.type),
-      description: String(row.description || ''),
+      description: splitDescription(row.description).description || '',
       fund_id: row.fund_id ? String(row.fund_id) : undefined,
       project_id: row.project_id ? String(row.project_id) : undefined,
       total_value: toNumber(row.total_value),
-      status: normalizeMovementStatus(row.status),
+        status: normalizeMovementStatus(row.status),
       category_id: row.category_id ? String(row.category_id) : undefined,
       category_name: row.category_id ? categoriesMap.get(String(row.category_id)) || 'Sem categoria' : 'Sem categoria',
       attachments_count: attachmentsByMovement.get(String(row.id)) || 0,
@@ -437,7 +462,7 @@ export function useFinanceSupabase() {
     };
   }, []);
 
-  const getMovementsReport = useCallback(async (filters: ReportFilters) => {
+  const getReport = useCallback(async (filters: ReportFilters) => {
     let query = supabase
       .from('finance_movements')
       .select('id,date,type,description,fund_id,project_id,total_value,status,category_id,unit_value,quantity,pay_method,beneficiary,cost_center,doc_type,doc_number,created_at,fund:finance_funds(name),project:finance_projects(name),category:finance_categories(name)')
@@ -447,8 +472,12 @@ export function useFinanceSupabase() {
     if (filters.endDate) query = query.lte('date', filters.endDate);
     if (filters.type && filters.type !== 'todos') query = query.eq('type', filters.type);
     if (filters.status && filters.status !== 'todos') query = query.eq('status', filters.status);
-    if (filters.fundId) query = query.eq('fund_id', filters.fundId);
-    if (filters.projectId) query = query.eq('project_id', filters.projectId);
+    if (filters.scope === 'fundo' && filters.fundId) query = query.eq('fund_id', filters.fundId);
+    if (filters.scope === 'projeto' && filters.projectId) query = query.eq('project_id', filters.projectId);
+    if (!filters.scope || filters.scope === 'geral') {
+      if (filters.fundId) query = query.eq('fund_id', filters.fundId);
+      if (filters.projectId) query = query.eq('project_id', filters.projectId);
+    }
     if (filters.categoryId) query = query.eq('category_id', filters.categoryId);
 
     const { data, error: reportError } = await query;
@@ -467,14 +496,14 @@ export function useFinanceSupabase() {
       projectName: String((row.project as AnyRow | undefined)?.name ?? '—'),
       categoryName: String((row.category as AnyRow | undefined)?.name ?? 'Sem categoria'),
       totalValue: toNumber(row.total_value),
-      status: normalizeMovementStatus(row.status),
-      beneficiary: String(row.beneficiary ?? ''),
-      payMethod: normalizePayMethod(row.pay_method),
-      costCenter: String(row.cost_center ?? ''),
+        status: normalizeMovementStatus(row.status),
+        beneficiary: String(row.beneficiary ?? ''),
+        payMethod: normalizePayMethod(row.pay_method),
+        costCenter: String(row.cost_center ?? ''),
       doc: [String(row.doc_type ?? ''), String(row.doc_number ?? '')].filter(Boolean).join(' '),
       quantity: toNumber(row.quantity),
       unitValue: toNumber(row.unit_value),
-      attachmentsCount: attachmentMap.get(String(row.id)) || 0,
+        attachmentsCount: attachmentMap.get(String(row.id)) || 0,
     }));
   }, [listAttachmentsForMovementIds]);
 
@@ -488,28 +517,28 @@ export function useFinanceSupabase() {
       setProjects(projectsList);
       setMovements(aggregates.latestMovements.map((row) => ({
         id: row.id,
-        data: row.date,
-        tipo: row.type,
-        titulo: row.description,
-        descricao: row.description,
-        valorUnitario: row.total_value,
-        quantidade: 1,
-        valorTotal: row.total_value,
-        status: row.status,
-        projetoNome: '—',
-        projetoId: row.project_id || '',
-        fundo: '—',
-        fundoId: row.fund_id || '',
-        categoria: row.category_name,
-        categoriaId: row.category_id || '',
-        payMethod: 'pix',
-        beneficiary: '',
-        notes: '',
-        docType: '',
-        docNumber: '',
-        costCenter: '',
-        attachmentsCount: row.attachments_count,
-        comprovantes: [],
+          data: row.date,
+          tipo: row.type,
+          titulo: splitDescription(row.description).title,
+          descricao: splitDescription(row.description).description,
+          valorUnitario: row.total_value,
+          quantidade: 1,
+          valorTotal: row.total_value,
+          status: row.status,
+          projetoNome: '—',
+          projetoId: row.project_id || '',
+          fundo: '—',
+          fundoId: row.fund_id || '',
+          categoria: row.category_name,
+          categoriaId: row.category_id || '',
+          payMethod: 'pix',
+          beneficiary: '',
+          notes: '',
+          docType: '',
+          docNumber: '',
+          costCenter: '',
+          attachmentsCount: row.attachments_count,
+          comprovantes: [],
       })));
       setCategories(categoriesList);
       setDashboard(aggregates);
@@ -583,30 +612,22 @@ export function useFinanceSupabase() {
     const description = String(payload.description || '').trim();
     if (!title) throw new Error('Título é obrigatório.');
     if (!description) throw new Error('Descrição é obrigatória.');
-    if (!payload.fund_id && !payload.project_id) throw new Error('Selecione ao menos um fundo ou projeto.');
-
-    let categoryId = payload.category_id;
-    if (!categoryId && payload.category) {
-      const normalized = payload.category.toLowerCase();
-      const found = categories.find((item) => item.name.toLowerCase() === normalized);
-      categoryId = found?.id;
-    }
+    if (!payload.fund_id) throw new Error('Fundo é obrigatório.');
 
     return {
       date: payload.date,
       type: normalizeType(payload.type),
       fund_id: payload.fund_id || null,
       project_id: payload.project_id || null,
-      category_id: categoryId || null,
-      title,
-      description,
+      category_id: payload.category_id || null,
+      description: composeDescription(title, description),
       unit_value: unit,
       quantity: qty,
       total_value: payload.total_value !== undefined ? toNumber(payload.total_value) : unit * qty,
-      status: normalizeMovementStatus(payload.status),
+        status: normalizeMovementStatus(payload.status),
       pay_method: normalizePayMethod(payload.pay_method),
-      beneficiary: payload.beneficiary || null,
-      notes: payload.notes || null,
+        beneficiary: payload.beneficiary || null,
+        notes: payload.notes || null,
       doc_type: payload.doc_type || null,
       doc_number: payload.doc_number || null,
       cost_center: payload.cost_center || null,
@@ -714,7 +735,8 @@ export function useFinanceSupabase() {
     listMovements,
     listLatestMovements,
     getDashboardAggregates,
-    getMovementsReport,
+    getReport,
+    getMovementsReport: getReport,
     listCategories,
     createMovement,
     updateMovement,

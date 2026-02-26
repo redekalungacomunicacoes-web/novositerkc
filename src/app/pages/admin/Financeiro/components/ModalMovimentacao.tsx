@@ -79,7 +79,7 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
     setErrorMsg(null);
 
     try {
-      if (!form.fund_id && !form.project_id) throw new Error('Selecione ao menos um fundo ou projeto.');
+      if (!form.fund_id) throw new Error('Selecione um fundo.');
       const payload: MovementPayload = { ...form, total_value: totalValue };
       const result = await onSubmit(payload);
       const movementId = editData?.id || result?.id;
@@ -127,7 +127,7 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
             <input required type="date" value={form.date} onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))} className="rounded border px-3 py-2 text-sm" />
             <select required value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value as MovementPayload['type'] }))} className="rounded border px-3 py-2 text-sm"><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
 
-            <select value={form.fund_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, fund_id: e.target.value, project_id: '' }))} className="rounded border px-3 py-2 text-sm"><option value="">Fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.name}</option>)}</select>
+            <select required value={form.fund_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, fund_id: e.target.value, project_id: '' }))} className="rounded border px-3 py-2 text-sm"><option value="">Selecione um fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.name}</option>)}</select>
             <select value={form.project_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, project_id: e.target.value }))} className="rounded border px-3 py-2 text-sm"><option value="">Projeto</option>{fundProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
 
             <input required value={form.title || ''} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Título" className="rounded border px-3 py-2 text-sm" />
@@ -146,7 +146,7 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
             <input value={form.cost_center || ''} onChange={(e) => setForm((prev) => ({ ...prev, cost_center: e.target.value }))} placeholder="Centro de custo" className="rounded border px-3 py-2 text-sm" />
             <input value={form.doc_type || ''} onChange={(e) => setForm((prev) => ({ ...prev, doc_type: e.target.value }))} placeholder="Tipo de documento" className="rounded border px-3 py-2 text-sm" />
             <input value={form.doc_number || ''} onChange={(e) => setForm((prev) => ({ ...prev, doc_number: e.target.value }))} placeholder="Número do documento" className="rounded border px-3 py-2 text-sm" />
-            <textarea required value={form.notes || ''} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Observações" className="col-span-2 rounded border px-3 py-2 text-sm" />
+            <textarea value={form.notes || ''} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Observações" className="col-span-2 rounded border px-3 py-2 text-sm" />
 
 
             {members.length > 0 && <datalist id="beneficiarios-list">{members.map((member) => <option key={member.id} value={member.name} />)}</datalist>}
@@ -165,7 +165,7 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
             </div>
 
             <div className="col-span-2 flex justify-between gap-2 pt-2">
-              <div>{onDelete && editData && <button type="button" onClick={() => { void onDelete(); }} className="rounded border border-red-300 px-4 py-2 text-sm text-red-700">Excluir</button>}</div>
+              <div>{onDelete && editData && <button type="button" onClick={() => { void onDelete().then(onChanged).then(onClose); }} className="rounded border border-red-300 px-4 py-2 text-sm text-red-700">Excluir</button>}</div>
               <div className="flex gap-2"><button type="button" onClick={onClose} className="rounded border px-4 py-2 text-sm">Cancelar</button><button disabled={saving} type="submit" className="rounded bg-[#0f3d2e] px-4 py-2 text-sm text-white disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></div>
             </div>
           </form>
