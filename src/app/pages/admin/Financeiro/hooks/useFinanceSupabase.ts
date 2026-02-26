@@ -132,10 +132,10 @@ const mapAttachment = (row: AnyRow): FinanceAttachment => ({
 const mapFund = (row: AnyRow): FinanceiroFundo => {
   const totalOrcado = toNumber(row.total_orcado ?? row.opening_balance);
   const saldoInicial = toNumber(row.saldo_inicial ?? row.opening_balance);
-  const saldoAtual = toNumber(row.saldo_atual ?? row.current_balance ?? saldoInicial);
   const totalEntradas = toNumber(row.total_entradas);
   const totalSaidas = toNumber(row.total_saidas);
   const totalGasto = toNumber(row.total_gasto ?? totalSaidas);
+  const saldoAtual = saldoInicial + totalEntradas - (totalSaidas || totalGasto);
 
   return {
     id: String(row.id),
@@ -358,8 +358,7 @@ export function useFinanceSupabase() {
     const saidas = paidOut.reduce((acc, m) => acc + m.valorTotal, 0);
     const pendencias = normalized.filter((m) => m.status === 'pendente').reduce((acc, m) => acc + m.valorTotal, 0);
 
-    const saldoFundos = fundsList.reduce((acc, f) => acc + (Number.isFinite(f.saldoAtual) ? f.saldoAtual : 0), 0);
-    const saldoAtual = saldoFundos !== 0 ? saldoFundos : entradas - saidas;
+    const saldoAtual = fundsList.reduce((acc, fundo) => acc + (Number(fundo.saldoAtual) || 0), 0);
 
     const fluxoMap = new Map<string, { periodo: string; entradas: number; saidas: number }>();
     const pizzaMap = new Map<string, number>();
