@@ -19,7 +19,6 @@ export const router = createBrowserRouter([
           { path: 'projetos', Component: Projetos },
           { path: 'projetos/:id', Component: ProjetoDetalhes },
 
-          // mantidos por compatibilidade, mas agora o dashboard já tem o botão de relatório
           { path: 'movimentacoes', Component: Dashboard },
           { path: 'relatorios', Component: Dashboard },
         ],
