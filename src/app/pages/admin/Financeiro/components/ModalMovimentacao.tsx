@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Eye, Paperclip, Trash2, Upload, X } from 'lucide-react';
+import { Files, Upload, X } from 'lucide-react';
 import type { FinanceAttachment, FinanceiroMovimentacao } from '../data/financeiro.repo';
 import type { FinanceCategory, MovementPayload } from '../hooks/useFinanceSupabase';
 import { AttachmentViewerDialog } from './AttachmentViewerDialog';
 
-type SimpleItem = { id: string; name: string };
+type SimpleItem = { id: string; name: string; fundId?: string };
 
 type Props = {
   isOpen: boolean;
@@ -18,6 +18,7 @@ type Props = {
   onDelete?: () => Promise<void>;
   onUploadAttachment: (file: File, movementId: string, payload: MovementPayload) => Promise<void>;
   onDeleteAttachment: (attachmentId: string) => Promise<void>;
+  onViewAttachment: (attachment: FinanceAttachment) => Promise<void>;
   onChanged: () => Promise<void>;
 };
 
@@ -25,6 +26,7 @@ const payMethods: { value: MovementPayload['pay_method']; label: string }[] = [
   { value: 'pix', label: 'Pix' },
   { value: 'transferencia', label: 'Transferência' },
   { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'cartao', label: 'Cartão' },
 ];
 
 const makeInitial = (movement?: FinanceiroMovimentacao | null): MovementPayload => ({
@@ -47,22 +49,25 @@ const makeInitial = (movement?: FinanceiroMovimentacao | null): MovementPayload 
   cost_center: movement?.costCenter || '',
 });
 
-export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, categories, attachments, onSubmit, onDelete, onUploadAttachment, onDeleteAttachment, onChanged }: Props) {
+export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, categories, attachments, onSubmit, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment, onChanged }: Props) {
   const [form, setForm] = useState<MovementPayload>(makeInitial(editData));
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [viewerAttachment, setViewerAttachment] = useState<FinanceAttachment | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [openAttachments, setOpenAttachments] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setForm(makeInitial(editData));
       setErrorMsg(null);
-      setSelectedFile(null);
+      setSelectedFiles([]);
     }
   }, [isOpen, editData]);
 
-  const fundProjects = useMemo(() => projects, [projects]);
+  const fundProjects = useMemo(
+    () => (form.fund_id ? projects.filter((project) => !project.fundId || project.fundId === form.fund_id) : projects),
+    [projects, form.fund_id],
+  );
 
   const totalValue = (Number(form.unit_value) || 0) * (Number(form.quantity) || 0);
 
@@ -76,8 +81,8 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
       const result = await onSubmit(payload);
       const movementId = editData?.id || result?.id;
 
-      if (selectedFile && movementId) {
-        await onUploadAttachment(selectedFile, movementId, payload);
+      if (movementId && selectedFiles.length > 0) {
+        await Promise.all(selectedFiles.map((file) => onUploadAttachment(file, movementId, payload)));
       }
 
       await onChanged();
@@ -119,16 +124,16 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
             <input required type="date" value={form.date} onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))} className="rounded border px-3 py-2 text-sm" />
             <select required value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value as MovementPayload['type'] }))} className="rounded border px-3 py-2 text-sm"><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
 
-            <select value={form.fund_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, fund_id: e.target.value }))} className="rounded border px-3 py-2 text-sm"><option value="">Fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.name}</option>)}</select>
+            <select value={form.fund_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, fund_id: e.target.value, project_id: '' }))} className="rounded border px-3 py-2 text-sm"><option value="">Fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.name}</option>)}</select>
             <select value={form.project_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, project_id: e.target.value }))} className="rounded border px-3 py-2 text-sm"><option value="">Projeto</option>{fundProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
 
             <input value={form.title || ''} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Título" className="rounded border px-3 py-2 text-sm" />
             <input required value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Descrição" className="rounded border px-3 py-2 text-sm" />
 
-            <input required min={0} type="number" value={form.unit_value} onChange={(e) => setForm((prev) => ({ ...prev, unit_value: Number(e.target.value) }))} placeholder="Valor unitário" className="rounded border px-3 py-2 text-sm" />
-            <input required min={1} type="number" value={form.quantity} onChange={(e) => setForm((prev) => ({ ...prev, quantity: Number(e.target.value) }))} placeholder="Quantidade" className="rounded border px-3 py-2 text-sm" />
+            <input required min={0} step="0.01" type="number" value={form.unit_value} onChange={(e) => setForm((prev) => ({ ...prev, unit_value: Number(e.target.value) }))} placeholder="Valor unitário" className="rounded border px-3 py-2 text-sm" />
+            <input required min={1} step="0.01" type="number" value={form.quantity} onChange={(e) => setForm((prev) => ({ ...prev, quantity: Number(e.target.value) }))} placeholder="Quantidade" className="rounded border px-3 py-2 text-sm" />
 
-            <div className="rounded border bg-gray-50 px-3 py-2 text-sm">Total: <strong>{totalValue.toFixed(2)}</strong></div>
+            <div className="rounded border bg-gray-50 px-3 py-2 text-sm">Total: <strong>{totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
             <select required value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value as MovementPayload['status'] }))} className="rounded border px-3 py-2 text-sm"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option></select>
 
             <select value={form.category_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, category_id: e.target.value || undefined }))} className="rounded border px-3 py-2 text-sm"><option value="">Sem categoria</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
@@ -143,33 +148,33 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
             <div className="col-span-2 space-y-3 rounded border p-3">
               <p className="text-sm font-medium">Comprovantes</p>
               <label className="inline-flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm">
-                <Upload className="h-4 w-4" /> Selecionar arquivo
-                <input className="hidden" type="file" accept="application/pdf,image/png,image/jpeg,image/jpg" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
+                <Upload className="h-4 w-4" /> Selecionar arquivo(s)
+                <input className="hidden" multiple type="file" accept="application/pdf,image/png,image/jpeg,image/jpg" onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))} />
               </label>
-              {selectedFile && <p className="text-xs text-gray-500">Arquivo selecionado: {selectedFile.name}</p>}
+              {selectedFiles.length > 0 && <p className="text-xs text-gray-500">{selectedFiles.length} arquivo(s): {selectedFiles.map((file) => file.name).join(', ')}</p>}
 
-              <div className="space-y-2">
-                {attachments.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between rounded border p-2 text-sm">
-                    <span className="inline-flex items-center gap-2"><Paperclip className="h-4 w-4" />{item.file_name}</span>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setViewerAttachment(item)} className="rounded p-1 hover:bg-gray-100"><Eye className="h-4 w-4" /></button>
-                      <button type="button" onClick={() => void handleDeleteAttachment(item.id)} className="rounded p-1 hover:bg-gray-100"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  </div>
-                ))}
-                {attachments.length === 0 && <p className="text-xs text-gray-500">Sem comprovantes anexados.</p>}
+              <div className="flex items-center justify-between rounded border bg-gray-50 px-3 py-2 text-sm">
+                <span>{attachments.length} comprovante(s) já anexado(s)</span>
+                <button disabled={attachments.length === 0} type="button" onClick={() => setOpenAttachments(true)} className="inline-flex items-center gap-2 rounded border px-2 py-1 disabled:opacity-50"><Files className="h-4 w-4" />Ver anexos</button>
               </div>
             </div>
 
             <div className="col-span-2 flex justify-between gap-2 pt-2">
-              <div>{onDelete && editData && <button type="button" onClick={() => { void onDelete(); }} className="rounded border border-red-300 px-4 py-2 text-sm text-red-700"><Trash2 className="mr-1 inline h-4 w-4" />Excluir</button>}</div>
+              <div>{onDelete && editData && <button type="button" onClick={() => { void onDelete(); }} className="rounded border border-red-300 px-4 py-2 text-sm text-red-700">Excluir</button>}</div>
               <div className="flex gap-2"><button type="button" onClick={onClose} className="rounded border px-4 py-2 text-sm">Cancelar</button><button disabled={saving} type="submit" className="rounded bg-[#0f3d2e] px-4 py-2 text-sm text-white disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button></div>
             </div>
           </form>
         </div>
       </div>
-      <AttachmentViewerDialog open={Boolean(viewerAttachment)} attachment={viewerAttachment} onClose={() => setViewerAttachment(null)} />
+      <AttachmentViewerDialog
+        open={openAttachments}
+        attachments={attachments}
+        loading={saving}
+        error={errorMsg}
+        onClose={() => setOpenAttachments(false)}
+        onView={onViewAttachment}
+        onDelete={handleDeleteAttachment}
+      />
     </>
   );
 }

@@ -24,7 +24,7 @@ const downloadCsv = (filename: string, rows: Record<string, unknown>[]) => {
 export function FundoDetalhes() {
   const { id = '' } = useParams();
   const finance = useFinanceSupabase();
-  const { funds, projects, categories, listMovements, listAttachments, load, createMovement, updateMovement, deleteMovementCascade, uploadAttachment, deleteAttachment } = finance;
+  const { funds, projects, categories, listMovements, listAttachments, load, createMovement, updateMovement, deleteMovementCascade, uploadAttachment, deleteAttachment, getSignedUrl } = finance;
   const [tab, setTab] = useState<'geral' | 'caixa' | 'prestacao' | 'relatorios'>('geral');
   const [openModal, setOpenModal] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
@@ -45,6 +45,12 @@ export function FundoDetalhes() {
   useEffect(() => {
     void refreshAll();
   }, [id]);
+
+
+  const viewAttachment = async (attachment: { storage_path: string }) => {
+    const url = await getSignedUrl(attachment.storage_path);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   const metrics = useMemo(() => {
     const orcado = fundo?.totalOrcado || 0;
@@ -83,7 +89,7 @@ export function FundoDetalhes() {
       {tab === 'prestacao' && <div className="space-y-3 rounded-xl border bg-white p-6"><p className="text-sm text-gray-600">Pendentes: {metrics.pendencias}</p><p className="text-sm text-gray-600">Sem documento: {metrics.semDocumento}</p>{movimentacoesFundo.map((mov) => <div className="flex justify-between rounded border p-3 text-sm" key={mov.id}><span>{mov.titulo} • {formatCurrency(mov.valorTotal)}</span><span>{mov.status} • {mov.attachmentsCount || mov.comprovantes.length} comprovante(s)</span></div>)}</div>}
       {tab === 'relatorios' && <div className="flex flex-wrap gap-3 rounded-xl border bg-white p-6"><button className="rounded border px-4 py-2 text-sm" onClick={() => downloadCsv('relatorio-completo-fundo.csv', movimentacoesFundo.map((mov) => ({ data: mov.data, titulo: mov.titulo, projeto_id: mov.projetoId, categoria: mov.categoria, valor_total: mov.valorTotal, status: mov.status })))}>Relatório completo (CSV)</button><button className="inline-flex items-center gap-2 rounded border px-4 py-2 text-sm"><FileText className="h-4 w-4" />PDF (stub)</button></div>}
 
-      <ModalMovimentacao isOpen={openModal} onClose={() => setOpenModal(false)} editData={editingMovement} projects={projects.map((p) => ({ id: p.id, name: p.nome }))} funds={funds.map((f) => ({ id: f.id, name: f.nome }))} categories={categories} attachments={attachments} onSubmit={(payload: MovementPayload) => editingMovement ? updateMovement(editingMovement.id, payload) : createMovement({ ...payload, fund_id: id, project_id: payload.project_id || '' })} onDelete={editingMovement ? async () => { await deleteMovementCascade(editingMovement.id); setOpenModal(false); } : undefined} onUploadAttachment={async (file, movementId, payload) => uploadAttachment(file, movementId, payload.fund_id || id, payload.project_id)} onDeleteAttachment={deleteAttachment} onChanged={refreshAll} />
+      <ModalMovimentacao isOpen={openModal} onClose={() => setOpenModal(false)} editData={editingMovement} projects={projects.map((p) => ({ id: p.id, name: p.nome, fundId: p.fundoId }))} funds={funds.map((f) => ({ id: f.id, name: f.nome }))} categories={categories} attachments={attachments} onSubmit={(payload: MovementPayload) => editingMovement ? updateMovement(editingMovement.id, payload) : createMovement({ ...payload, fund_id: id, project_id: payload.project_id || '' })} onDelete={editingMovement ? async () => { await deleteMovementCascade(editingMovement.id); setOpenModal(false); } : undefined} onUploadAttachment={async (file, movementId, payload) => uploadAttachment(file, movementId, payload.fund_id || id, payload.project_id)} onDeleteAttachment={deleteAttachment} onViewAttachment={viewAttachment} onChanged={refreshAll} />
       <ConfirmDialog open={openDelete} title="Excluir movimentação" description="Esta ação remove movimentação e comprovantes." onCancel={() => setOpenDelete(false)} onConfirm={() => { if (selectedMovement) void deleteMovementCascade(selectedMovement.id); setOpenDelete(false); }} />
     </div>
   );

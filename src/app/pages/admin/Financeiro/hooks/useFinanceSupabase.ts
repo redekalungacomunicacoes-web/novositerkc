@@ -6,7 +6,7 @@ type AnyRow = Record<string, unknown>;
 
 type MovementStatus = 'pago' | 'pendente' | 'cancelado';
 type MovementType = 'entrada' | 'saida';
-type PayMethod = 'pix' | 'transferencia' | 'dinheiro';
+type PayMethod = 'pix' | 'transferencia' | 'dinheiro' | 'cartao';
 
 export type FundPayload = {
   name: string;
@@ -88,7 +88,8 @@ const normalizeType = (value: unknown): MovementType => (String(value || '').tri
 
 const normalizePayMethod = (value: unknown): PayMethod => {
   const method = String(value || '').trim().toLowerCase();
-  if (method === 'pix' || method === 'transferencia' || method === 'dinheiro') return method;
+  if (method === 'pix' || method === 'transferencia' || method === 'dinheiro' || method === 'cartao') return method;
+  if (method === 'cartão') return 'cartao';
   if (method === 'transferência') return 'transferencia';
   return 'pix';
 };
@@ -234,6 +235,16 @@ export function useFinanceSupabase() {
 
   const listLatestMovements = useCallback(async () => listMovements({ limit: 10 }), [listMovements]);
 
+  const buildLastSixMonths = () => {
+    const periods: string[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i -= 1) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      periods.push(date.toISOString().slice(0, 7));
+    }
+    return periods;
+  };
+
   const getDashboardAggregates = useCallback(async (): Promise<DashboardData> => {
     const endDate = new Date();
     const startDate = new Date();
@@ -241,11 +252,14 @@ export function useFinanceSupabase() {
     const start = startDate.toISOString().slice(0, 10);
     const end = endDate.toISOString().slice(0, 10);
 
-    const [latestMovements, fundsList, budgetRes] = await Promise.all([
-      listMovements({ startDate: start, endDate: end }),
+    const [viewRes, fundsList, budgetRes] = await Promise.all([
+      supabase.from('finance_movements_view').select('*').gte('date', start).lte('date', end),
       listFunds(),
       supabase.from('finance_budget_items').select('*').gte('date', start).lte('date', end),
     ]);
+
+    ensure(viewRes.error, 'Falha ao carregar dados do dashboard.');
+    const latestMovements = (viewRes.data || []).map((row) => mapMovement(row as AnyRow));
 
     const paid = latestMovements.filter((m) => m.status === 'pago');
     const outPaid = paid.filter((m) => m.tipo === 'saida');
@@ -287,7 +301,7 @@ export function useFinanceSupabase() {
       realMap.set(period, (realMap.get(period) ?? 0) + row.valorTotal);
     }
 
-    const periods = Array.from(new Set([...fluxoMap.keys(), ...budgetMap.keys(), ...realMap.keys()])).sort();
+    const periods = buildLastSixMonths();
 
     return {
       entradas,
@@ -298,7 +312,7 @@ export function useFinanceSupabase() {
       distribuicaoCategoria: Array.from(pizzaMap.entries()).map(([categoria, valor]) => ({ categoria, valor })),
       orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: budgetMap.get(periodo) ?? 0, real: realMap.get(periodo) ?? 0 })),
     };
-  }, [listFunds, listMovements]);
+  }, [listFunds]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -412,7 +426,7 @@ export function useFinanceSupabase() {
 
   const createMovement = useCallback(async (payload: MovementPayload) => runAndReload(async () => {
     const movementId = await insertMovement(payload);
-    const list = await listMovements({ limit: 1 });
+    const list = await listMovements();
     const created = list.find((m) => m.id === movementId) ?? { id: movementId };
     return created;
   }), [runAndReload, listMovements]);
