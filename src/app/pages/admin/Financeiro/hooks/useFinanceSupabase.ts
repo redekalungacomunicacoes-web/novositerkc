@@ -132,10 +132,14 @@ const mapAttachment = (row: AnyRow): FinanceAttachment => ({
 const mapFund = (row: AnyRow): FinanceiroFundo => {
   const totalOrcado = toNumber(row.total_orcado ?? row.opening_balance);
   const saldoInicial = toNumber(row.saldo_inicial ?? row.opening_balance);
-  const saldoAtual = toNumber(row.saldo_atual ?? row.current_balance ?? saldoInicial);
   const totalEntradas = toNumber(row.total_entradas);
   const totalSaidas = toNumber(row.total_saidas);
   const totalGasto = toNumber(row.total_gasto ?? totalSaidas);
+  const saldoAtualInformado = row.saldo_atual ?? row.current_balance;
+  const saldoAtualCalculado = saldoInicial + totalEntradas - totalSaidas;
+  const saldoAtual = Number.isFinite(Number(saldoAtualInformado))
+    ? Number(saldoAtualInformado)
+    : saldoAtualCalculado;
 
   return {
     id: String(row.id),
@@ -327,14 +331,12 @@ export function useFinanceSupabase() {
     const start = startDate.toISOString().slice(0, 10);
     const end = endDate.toISOString().slice(0, 10);
 
-    const [movementsRes, fundsList, dashboardFundsRes] = await Promise.all([
+    const [movementsRes, fundsList] = await Promise.all([
       buildMovementsQuery({ startDate: start, endDate: end }),
       listFunds(),
-      supabase.from('fundos').select('saldo_atual'),
     ]);
 
     ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
-    ensure(dashboardFundsRes.error, 'Falha ao carregar saldo dos fundos.');
     const raw = (movementsRes.data || []).map((row) => mapMovement(row as AnyRow));
 
     const projectFundFromRow = new Map<string, string>();
@@ -360,7 +362,10 @@ export function useFinanceSupabase() {
     const saidas = paidOut.reduce((acc, m) => acc + m.valorTotal, 0);
     const pendencias = normalized.filter((m) => m.status === 'pendente').reduce((acc, m) => acc + m.valorTotal, 0);
 
-    const saldoAtual = (dashboardFundsRes.data || []).reduce((acc, fundo) => acc + (Number((fundo as AnyRow).saldo_atual || 0) || 0), 0);
+    const saldoAtual = fundsList.reduce((acc, fundo) => {
+      const saldoRestante = (Number(fundo.totalGasto) || 0) + ((Number(fundo.totalOrcado) || 0) - (Number(fundo.totalGasto) || 0));
+      return acc + saldoRestante;
+    }, 0);
 
     const fluxoMap = new Map<string, { periodo: string; entradas: number; saidas: number }>();
     const pizzaMap = new Map<string, number>();
