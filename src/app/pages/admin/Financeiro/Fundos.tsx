@@ -20,10 +20,7 @@ export function Fundos() {
   const [form, setForm] = useState<FundPayload>(EMPTY_FUND);
 
   const totalFundos = useMemo(() => funds.reduce((acc, f) => acc + (Number(f.totalOrcado) || 0), 0), [funds]);
-  const saldoRestante = useMemo(
-    () => funds.reduce((acc, f) => acc + (Number(f.totalGasto) || 0) + ((Number(f.totalOrcado) || 0) - (Number(f.totalGasto) || 0)), 0),
-    [funds],
-  );
+  const saldoDisponivel = useMemo(() => funds.reduce((acc, f) => acc + (Number(f.saldoAtual) || 0), 0), [funds]);
   const fundosAtivos = useMemo(() => funds.filter((f) => f.status === 'ativo').length, [funds]);
 
   const openCreate = () => {
@@ -75,7 +72,7 @@ export function Fundos() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-6"><div className="flex items-start justify-between mb-2"><p className="text-sm text-gray-600">Total em Fundos</p><Copy className="w-5 h-5 text-gray-400" /></div><p className="text-2xl font-semibold text-gray-900">{formatCurrency(totalFundos)}</p></div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6"><div className="flex items-start justify-between mb-2"><p className="text-sm text-gray-600">Saldo Restante</p><TrendingUp className="w-5 h-5 text-gray-400" /></div><p className="text-2xl font-semibold text-gray-900">{formatCurrency(saldoRestante)}</p></div>
+        <div className="bg-white rounded-xl border border-gray-200 p-6"><div className="flex items-start justify-between mb-2"><p className="text-sm text-gray-600">Saldo Disponível</p><TrendingUp className="w-5 h-5 text-gray-400" /></div><p className="text-2xl font-semibold text-gray-900">{formatCurrency(saldoDisponivel)}</p></div>
         <div className="bg-white rounded-xl border border-gray-200 p-6"><div className="flex items-start justify-between mb-2"><p className="text-sm text-gray-600">Fundos Ativos</p><div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center"><span className="text-xs font-medium text-gray-600">i</span></div></div><p className="text-2xl font-semibold text-gray-900">{fundosAtivos}</p></div>
       </div>
 
@@ -89,7 +86,7 @@ export function Fundos() {
 
             <div className="p-6">
               <div className="mb-6"><div className="flex items-center justify-between mb-2"><span className="text-sm text-gray-600">Execução</span><span className="text-sm font-medium text-gray-900">{Number(fundo.execucao) || 0}%</span></div><div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden"><div className="absolute top-0 left-0 h-full bg-[#0f3d2e] rounded-full transition-all" style={{ width: `${Number(fundo.execucao) || 0}%` }} /></div></div>
-              <div className="grid grid-cols-2 gap-4 mb-6"><div><p className="text-xs text-gray-500 mb-1">Saldo Atual</p><p className="text-base font-semibold text-gray-900">{formatCurrency(Number(fundo.saldoAtual) || 0)}</p></div><div><p className="text-xs text-gray-500 mb-1">Saldo Restante</p><p className="text-base font-semibold text-gray-900">{formatCurrency((Number(fundo.totalGasto) || 0) + ((Number(fundo.totalOrcado) || 0) - (Number(fundo.totalGasto) || 0)))}</p></div></div>
+              <div className="grid grid-cols-2 gap-4 mb-6"><div><p className="text-xs text-gray-500 mb-1">Saldo Atual</p><p className="text-base font-semibold text-gray-900">{formatCurrency(Number(fundo.saldoAtual) || 0)}</p></div><div><p className="text-xs text-gray-500 mb-1">Saldo Restante</p><p className="text-base font-semibold text-gray-900">{formatCurrency(Number(fundo.saldoAtual) || 0)}</p></div></div>
               <div className="flex gap-3"><Link to={`/admin/financeiro/fundos/${fundo.id}`} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0f3d2e] text-white rounded-lg hover:bg-[#0a2b20] transition-colors text-sm font-medium"><Eye className="w-4 h-4" />Ver Detalhes</Link></div>
               <div className="flex gap-3 mt-3"><button onClick={() => openEdit(fundo)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"><Edit className="w-4 h-4" />Editar</button><button onClick={() => { void deleteFund(fundo.id).catch(() => undefined); }} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"><Trash2 className="w-4 h-4" />Excluir</button></div>
             </div>
