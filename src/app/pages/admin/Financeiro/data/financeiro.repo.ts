@@ -73,37 +73,6 @@ export type FinanceiroMovimentacao = {
 };
 
 export type DashboardData = {
-  kpis: {
-    totalFunds: number;
-    totalProjects: number;
-    currentBalanceFunds: number;
-    currentBalanceProjects: number;
-    totalInPaid: number;
-    totalOutPaid: number;
-    totalPending: number;
-    totalMovements: number;
-    budgetTotal: number;
-    budgetReal: number;
-    executionPct: number;
-    attachmentsPct: number;
-    noDocumentCount: number;
-  };
-  cashflowLine: { mes: string; entradas: number; saidas: number }[];
-  budgetVsReal: { mes: string; orcado: number; real: number }[];
-  categoryPie: { name: string; value: number }[];
-  latestMovements: {
-    id: string;
-    date: string;
-    type: 'entrada' | 'saida';
-    description: string;
-    fund_id?: string;
-    project_id?: string;
-    total_value: number;
-    status: 'pago' | 'pendente' | 'cancelado';
-    category_id?: string;
-    category_name: string;
-    attachments_count: number;
-  }[];
   entradas: number;
   saidas: number;
   saldoAtual: number;
