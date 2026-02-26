@@ -30,7 +30,6 @@ export type MovementPayload = {
   type: MovementType;
   project_id?: string;
   fund_id?: string;
-  budget_item_id?: string;
   category_id?: string;
   title?: string;
   description: string;
@@ -177,7 +176,7 @@ const mapMovement = (row: AnyRow): FinanceiroMovimentacao => ({
   comprovantes: Array.isArray(row.attachments) ? row.attachments.map((item) => mapAttachment(item as AnyRow)) : [],
 });
 
-const movementSelect = 'id,date,type,fund_id,project_id,budget_item_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
+const movementSelect = 'id,date,type,fund_id,project_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
 
 const buildMovementsQuery = (filters?: MovementFilters) => {
   let query = supabase.from('finance_movements').select(movementSelect);
@@ -383,7 +382,6 @@ export function useFinanceSupabase() {
       type: normalizeType(payload.type),
       fund_id: payload.fund_id || null,
       project_id: payload.project_id || null,
-      budget_item_id: payload.budget_item_id || null,
       category_id: payload.category_id || null,
       description: payload.description || payload.title || '',
       unit_value: unit,
