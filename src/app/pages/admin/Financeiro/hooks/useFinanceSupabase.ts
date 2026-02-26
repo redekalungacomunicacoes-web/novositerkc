@@ -69,7 +69,7 @@ const ensure = (error: { message?: string } | null, fallbackMessage: string) => 
 };
 
 const normalizeStatus = (value: unknown, fallback: FinanceStatus): FinanceStatus => {
-  const status = String(value || '').trim().toLowerCase();
+  const status = `${value ?? ''}`.toLowerCase();
   if (['pago', 'pendente', 'cancelado', 'ativo', 'em_andamento', 'concluido'].includes(status)) return status as FinanceStatus;
   if (status === 'active') return 'ativo';
   if (status === 'done') return 'concluido';
@@ -79,15 +79,15 @@ const normalizeStatus = (value: unknown, fallback: FinanceStatus): FinanceStatus
 };
 
 const normalizeMovementStatus = (value: unknown): MovementStatus => {
-  const status = String(value || '').trim().toLowerCase();
+  const status = `${value ?? ''}`.toLowerCase();
   if (status === 'pago' || status === 'pendente' || status === 'cancelado') return status;
   return 'pendente';
 };
 
-const normalizeType = (value: unknown): MovementType => (String(value || '').trim().toLowerCase() === 'entrada' ? 'entrada' : 'saida');
+const normalizeType = (value: unknown): MovementType => (`${value ?? ''}`.toLowerCase() === 'entrada' ? 'entrada' : 'saida');
 
 const normalizePayMethod = (value: unknown): PayMethod => {
-  const method = String(value || '').trim().toLowerCase();
+  const method = `${value ?? ''}`.toLowerCase();
   if (method === 'pix' || method === 'transferencia' || method === 'dinheiro') return method;
   if (method === 'transferência') return 'transferencia';
   return 'pix';
@@ -174,7 +174,7 @@ const mapMovement = (row: AnyRow): FinanceiroMovimentacao => ({
   comprovantes: Array.isArray(row.attachments) ? row.attachments.map((item) => mapAttachment(item as AnyRow)) : [],
 });
 
-const movementSelect = 'id,date,type,fund_id,project_id,budget_item_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
+const movementSelect = 'id,date,type,fund_id,project_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
 
 const buildMovementsQuery = (filters?: MovementFilters) => {
   let query = supabase.from('finance_movements').select(movementSelect);
@@ -207,10 +207,10 @@ export function useFinanceSupabase() {
   const listProjects = useCallback(async (fundItems?: FinanceiroFundo[]) => {
     const { data, error: projectsError } = await supabase.from('finance_projects').select('*').order('created_at', { ascending: false });
     ensure(projectsError, 'Falha ao listar projetos.');
-    const list = fundItems ?? funds;
+    const list = fundItems ?? [];
     const byId = new Map(list.map((f) => [f.id, f.nome]));
     return (data || []).map((row) => mapProject(row as AnyRow, byId));
-  }, [funds]);
+  }, []);
 
   const listCategories = useCallback(async () => {
     const { data, error: categoriesError } = await supabase.from('finance_categories').select('id,name,color').order('name', { ascending: true });
@@ -249,10 +249,9 @@ export function useFinanceSupabase() {
     const start = startDate.toISOString().slice(0, 10);
     const end = endDate.toISOString().slice(0, 10);
 
-    const [movementsRes, fundsList, budgetRes] = await Promise.all([
+    const [movementsRes, fundsList] = await Promise.all([
       buildMovementsQuery({ startDate: start, endDate: end }),
       listFunds(),
-      supabase.from('finance_budget_items').select('*').gte('date', start).lte('date', end),
     ]);
 
     ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
@@ -281,21 +280,6 @@ export function useFinanceSupabase() {
       }
     }
 
-    const budgetMap = new Map<string, number>();
-    let fallbackBudgetRes = budgetRes;
-    if (budgetRes.error) {
-      fallbackBudgetRes = await supabase.from('budget_items').select('*').gte('date', start).lte('date', end);
-    }
-    if (!fallbackBudgetRes.error && fallbackBudgetRes.data) {
-      for (const row of fallbackBudgetRes.data) {
-        const item = row as AnyRow;
-        const period = String(item.date ?? item.month ?? item.periodo ?? '').slice(0, 7);
-        if (!period) continue;
-        const value = toNumber(item.value ?? item.valor ?? item.planned_value);
-        budgetMap.set(period, (budgetMap.get(period) ?? 0) + value);
-      }
-    }
-
     const realMap = new Map<string, number>();
     for (const row of outPaid) {
       const period = row.data.slice(0, 7);
@@ -311,7 +295,7 @@ export function useFinanceSupabase() {
       pendencias,
       fluxoCaixa: periods.map((periodo) => fluxoMap.get(periodo) ?? { periodo, entradas: 0, saidas: 0 }),
       distribuicaoCategoria: Array.from(pizzaMap.entries()).map(([categoria, valor]) => ({ categoria, valor })),
-      orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: budgetMap.get(periodo) ?? 0, real: realMap.get(periodo) ?? 0 })),
+      orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: 0, real: realMap.get(periodo) ?? 0 })),
     };
   }, [listFunds]);
 
@@ -403,7 +387,6 @@ export function useFinanceSupabase() {
       type: normalizeType(payload.type),
       fund_id: payload.fund_id || null,
       project_id: payload.project_id || null,
-      budget_item_id: null,
       category_id: payload.category_id || null,
       title,
       description,
