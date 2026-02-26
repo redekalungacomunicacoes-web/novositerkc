@@ -27,7 +27,7 @@ import { AdminConfiguracoes } from "@/app/pages/admin/AdminConfiguracoes";
 import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
 import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
 import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
-import { Dashboard as FinanceiroDashboard, Fundos as FinanceiroFundos, FundoDetalhes as FinanceiroFundoDetalhes, Projetos as FinanceiroProjetos, ProjetoDetalhes as FinanceiroProjetoDetalhes, Relatorios as FinanceiroRelatorios } from "@/app/pages/admin/Financeiro";
+import { Dashboard as FinanceiroDashboard, Fundos as FinanceiroFundos, FundoDetalhes as FinanceiroFundoDetalhes, Projetos as FinanceiroProjetos, ProjetoDetalhes as FinanceiroProjetoDetalhes } from "@/app/pages/admin/Financeiro";
 
 // ✅ NOVO: Admin Quem Somos
 import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
@@ -113,7 +113,7 @@ export const router = createBrowserRouter([
           { path: "financeiro/projetos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetos },
           { path: "financeiro/projetos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetoDetalhes },
           { path: "financeiro/movimentacoes", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
-          { path: "financeiro/relatorios", loader: requireRoles(["admin", "editor"]), Component: FinanceiroRelatorios },
+          { path: "financeiro/relatorios", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
 
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
           { path: "configuracoes", loader: requireRoles(["admin_alfa"]), Component: AdminConfiguracoes },
