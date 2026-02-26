@@ -6,6 +6,8 @@ import { AttachmentViewerDialog } from './AttachmentViewerDialog';
 
 type SimpleItem = { id: string; name: string; fundId?: string };
 
+type MemberItem = { id: string; name: string };
+
 type Props = {
   isOpen: boolean;
   onClose: () => void;
@@ -13,12 +15,13 @@ type Props = {
   projects: SimpleItem[];
   funds: SimpleItem[];
   categories: FinanceCategory[];
+  members?: MemberItem[];
   attachments: FinanceAttachment[];
   onSubmit: (payload: MovementPayload) => Promise<{ id?: string } | void>;
   onDelete?: () => Promise<void>;
-  onUploadAttachment: (file: File, movementId: string, payload: MovementPayload) => Promise<void>;
+  onUploadAttachment: (file: File, context: { movementId: string; fundId?: string; projectId?: string }) => Promise<void>;
   onDeleteAttachment: (attachmentId: string) => Promise<void>;
-  onViewAttachment: (attachment: FinanceAttachment) => Promise<void>;
+  onViewAttachment: (attachment: FinanceAttachment) => Promise<string>;
   onChanged: () => Promise<void>;
 };
 
@@ -26,7 +29,6 @@ const payMethods: { value: MovementPayload['pay_method']; label: string }[] = [
   { value: 'pix', label: 'Pix' },
   { value: 'transferencia', label: 'Transferência' },
   { value: 'dinheiro', label: 'Dinheiro' },
-  { value: 'cartao', label: 'Cartão' },
 ];
 
 const makeInitial = (movement?: FinanceiroMovimentacao | null): MovementPayload => ({
@@ -49,7 +51,7 @@ const makeInitial = (movement?: FinanceiroMovimentacao | null): MovementPayload 
   cost_center: movement?.costCenter || '',
 });
 
-export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, categories, attachments, onSubmit, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment, onChanged }: Props) {
+export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, categories, members = [], attachments, onSubmit, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment, onChanged }: Props) {
   const [form, setForm] = useState<MovementPayload>(makeInitial(editData));
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -77,12 +79,13 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
     setErrorMsg(null);
 
     try {
+      if (!form.fund_id && !form.project_id) throw new Error('Selecione ao menos um fundo ou projeto.');
       const payload: MovementPayload = { ...form, total_value: totalValue };
       const result = await onSubmit(payload);
       const movementId = editData?.id || result?.id;
 
       if (movementId && selectedFiles.length > 0) {
-        await Promise.all(selectedFiles.map((file) => onUploadAttachment(file, movementId, payload)));
+        await Promise.all(selectedFiles.map((file) => onUploadAttachment(file, { movementId, fundId: payload.fund_id, projectId: payload.project_id })));
       }
 
       await onChanged();
@@ -127,7 +130,7 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
             <select value={form.fund_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, fund_id: e.target.value, project_id: '' }))} className="rounded border px-3 py-2 text-sm"><option value="">Fundo</option>{funds.map((fund) => <option key={fund.id} value={fund.id}>{fund.name}</option>)}</select>
             <select value={form.project_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, project_id: e.target.value }))} className="rounded border px-3 py-2 text-sm"><option value="">Projeto</option>{fundProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
 
-            <input value={form.title || ''} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Título" className="rounded border px-3 py-2 text-sm" />
+            <input required value={form.title || ''} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Título" className="rounded border px-3 py-2 text-sm" />
             <input required value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Descrição" className="rounded border px-3 py-2 text-sm" />
 
             <input required min={0} step="0.01" type="number" value={form.unit_value} onChange={(e) => setForm((prev) => ({ ...prev, unit_value: Number(e.target.value) }))} placeholder="Valor unitário" className="rounded border px-3 py-2 text-sm" />
@@ -136,15 +139,17 @@ export function ModalMovimentacao({ isOpen, onClose, editData, projects, funds, 
             <div className="rounded border bg-gray-50 px-3 py-2 text-sm">Total: <strong>{totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
             <select required value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value as MovementPayload['status'] }))} className="rounded border px-3 py-2 text-sm"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option></select>
 
-            <select value={form.category_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, category_id: e.target.value || undefined }))} className="rounded border px-3 py-2 text-sm"><option value="">Sem categoria</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+            <select required value={form.category_id || ''} onChange={(e) => setForm((prev) => ({ ...prev, category_id: e.target.value || undefined }))} className="rounded border px-3 py-2 text-sm"><option value="">Sem categoria</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
             <select required value={form.pay_method} onChange={(e) => setForm((prev) => ({ ...prev, pay_method: e.target.value as MovementPayload['pay_method'] }))} className="rounded border px-3 py-2 text-sm">{payMethods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
 
-            <input value={form.beneficiary || ''} onChange={(e) => setForm((prev) => ({ ...prev, beneficiary: e.target.value }))} placeholder="Favorecido" className="rounded border px-3 py-2 text-sm" />
+            <input required list="beneficiarios-list" value={form.beneficiary || ''} onChange={(e) => setForm((prev) => ({ ...prev, beneficiary: e.target.value }))} placeholder="Favorecido" className="rounded border px-3 py-2 text-sm" />
             <input value={form.cost_center || ''} onChange={(e) => setForm((prev) => ({ ...prev, cost_center: e.target.value }))} placeholder="Centro de custo" className="rounded border px-3 py-2 text-sm" />
             <input value={form.doc_type || ''} onChange={(e) => setForm((prev) => ({ ...prev, doc_type: e.target.value }))} placeholder="Tipo de documento" className="rounded border px-3 py-2 text-sm" />
             <input value={form.doc_number || ''} onChange={(e) => setForm((prev) => ({ ...prev, doc_number: e.target.value }))} placeholder="Número do documento" className="rounded border px-3 py-2 text-sm" />
-            <textarea value={form.notes || ''} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Observações" className="col-span-2 rounded border px-3 py-2 text-sm" />
+            <textarea required value={form.notes || ''} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Observações" className="col-span-2 rounded border px-3 py-2 text-sm" />
 
+
+            {members.length > 0 && <datalist id="beneficiarios-list">{members.map((member) => <option key={member.id} value={member.name} />)}</datalist>}
             <div className="col-span-2 space-y-3 rounded border p-3">
               <p className="text-sm font-medium">Comprovantes</p>
               <label className="inline-flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm">

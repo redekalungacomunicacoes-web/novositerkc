@@ -6,7 +6,7 @@ type AnyRow = Record<string, unknown>;
 
 type MovementStatus = 'pago' | 'pendente' | 'cancelado';
 type MovementType = 'entrada' | 'saida';
-type PayMethod = 'pix' | 'transferencia' | 'dinheiro' | 'cartao';
+type PayMethod = 'pix' | 'transferencia' | 'dinheiro';
 
 export type FundPayload = {
   name: string;
@@ -88,14 +88,11 @@ const normalizeType = (value: unknown): MovementType => (String(value || '').tri
 
 const normalizePayMethod = (value: unknown): PayMethod => {
   const method = String(value || '').trim().toLowerCase();
-  if (method === 'pix' || method === 'transferencia' || method === 'dinheiro' || method === 'cartao') return method;
-  if (method === 'cartão') return 'cartao';
+  if (method === 'pix' || method === 'transferencia' || method === 'dinheiro') return method;
   if (method === 'transferência') return 'transferencia';
   return 'pix';
 };
 
-const isMissingColumnError = (message: string | undefined, column: string) =>
-  Boolean(message?.toLowerCase().includes('column') && message?.toLowerCase().includes(column.toLowerCase()));
 
 const mapAttachment = (row: AnyRow): FinanceAttachment => ({
   id: String(row.id ?? ''),
@@ -166,7 +163,7 @@ const mapMovement = (row: AnyRow): FinanceiroMovimentacao => ({
   fundo: String((row.fund as AnyRow | undefined)?.name ?? row.fund_name ?? '—'),
   fundoId: String(row.fund_id ?? ''),
   categoria: String((row.category as AnyRow | undefined)?.name ?? row.category_name ?? 'Sem categoria'),
-  categoriaId: String(row.category_id ?? ''),
+  categoriaId: row.category_id ? String(row.category_id) : '',
   payMethod: normalizePayMethod(row.pay_method),
   beneficiary: String(row.beneficiary ?? ''),
   notes: String(row.notes ?? ''),
@@ -177,7 +174,7 @@ const mapMovement = (row: AnyRow): FinanceiroMovimentacao => ({
   comprovantes: Array.isArray(row.attachments) ? row.attachments.map((item) => mapAttachment(item as AnyRow)) : [],
 });
 
-const movementSelect = 'id,date,type,fund_id,project_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
+const movementSelect = 'id,date,type,fund_id,project_id,budget_item_id,title,description,unit_value,quantity,total_value,status,category_id,pay_method,beneficiary,notes,doc_type,doc_number,cost_center,created_at,project:finance_projects(id,name),fund:finance_funds(id,name),category:finance_categories(id,name,color),attachments:finance_attachments(*)';
 
 const buildMovementsQuery = (filters?: MovementFilters) => {
   let query = supabase.from('finance_movements').select(movementSelect);
@@ -252,14 +249,14 @@ export function useFinanceSupabase() {
     const start = startDate.toISOString().slice(0, 10);
     const end = endDate.toISOString().slice(0, 10);
 
-    const [viewRes, fundsList, budgetRes] = await Promise.all([
-      supabase.from('finance_movements_view').select('*').gte('date', start).lte('date', end),
+    const [movementsRes, fundsList, budgetRes] = await Promise.all([
+      buildMovementsQuery({ startDate: start, endDate: end }),
       listFunds(),
       supabase.from('finance_budget_items').select('*').gte('date', start).lte('date', end),
     ]);
 
-    ensure(viewRes.error, 'Falha ao carregar dados do dashboard.');
-    const latestMovements = (viewRes.data || []).map((row) => mapMovement(row as AnyRow));
+    ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
+    const latestMovements = (movementsRes.data || []).map((row) => mapMovement(row as AnyRow));
 
     const paid = latestMovements.filter((m) => m.status === 'pago');
     const outPaid = paid.filter((m) => m.tipo === 'saida');
@@ -285,10 +282,14 @@ export function useFinanceSupabase() {
     }
 
     const budgetMap = new Map<string, number>();
-    if (!budgetRes.error && budgetRes.data) {
-      for (const row of budgetRes.data) {
+    let fallbackBudgetRes = budgetRes;
+    if (budgetRes.error) {
+      fallbackBudgetRes = await supabase.from('budget_items').select('*').gte('date', start).lte('date', end);
+    }
+    if (!fallbackBudgetRes.error && fallbackBudgetRes.data) {
+      for (const row of fallbackBudgetRes.data) {
         const item = row as AnyRow;
-        const period = String(item.date ?? item.periodo ?? '').slice(0, 7);
+        const period = String(item.date ?? item.month ?? item.periodo ?? '').slice(0, 7);
         if (!period) continue;
         const value = toNumber(item.value ?? item.valor ?? item.planned_value);
         budgetMap.set(period, (budgetMap.get(period) ?? 0) + value);
@@ -308,7 +309,7 @@ export function useFinanceSupabase() {
       saidas,
       saldoAtual,
       pendencias,
-      fluxoCaixa: Array.from(fluxoMap.values()).sort((a, b) => a.periodo.localeCompare(b.periodo)),
+      fluxoCaixa: periods.map((periodo) => fluxoMap.get(periodo) ?? { periodo, entradas: 0, saidas: 0 }),
       distribuicaoCategoria: Array.from(pizzaMap.entries()).map(([categoria, valor]) => ({ categoria, valor })),
       orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: budgetMap.get(periodo) ?? 0, real: realMap.get(periodo) ?? 0 })),
     };
@@ -391,13 +392,21 @@ export function useFinanceSupabase() {
   const toMovementDbPayload = (payload: MovementPayload) => {
     const qty = Math.max(1, toNumber(payload.quantity || 1));
     const unit = toNumber(payload.unit_value);
+    const title = String(payload.title || '').trim();
+    const description = String(payload.description || '').trim();
+    if (!title) throw new Error('Título é obrigatório.');
+    if (!description) throw new Error('Descrição é obrigatória.');
+    if (!payload.fund_id && !payload.project_id) throw new Error('Selecione ao menos um fundo ou projeto.');
+    if (!payload.category_id) throw new Error('Categoria é obrigatória.');
     return {
       date: payload.date,
       type: normalizeType(payload.type),
       fund_id: payload.fund_id || null,
       project_id: payload.project_id || null,
+      budget_item_id: null,
       category_id: payload.category_id || null,
-      description: payload.description || payload.title || '',
+      title,
+      description,
       unit_value: unit,
       quantity: qty,
       total_value: payload.total_value !== undefined ? toNumber(payload.total_value) : unit * qty,
@@ -413,15 +422,9 @@ export function useFinanceSupabase() {
 
   const insertMovement = async (payload: MovementPayload) => {
     const base = toMovementDbPayload(payload);
-    const withTitle = await supabase.from('finance_movements').insert({ ...base, title: payload.title || payload.description }).select('id').single();
-    if (!withTitle.error) return String(withTitle.data.id);
-    if (isMissingColumnError(withTitle.error.message, 'title')) {
-      const withoutTitle = await supabase.from('finance_movements').insert(base).select('id').single();
-      ensure(withoutTitle.error, 'Falha ao criar movimentação.');
-      return String(withoutTitle.data.id);
-    }
-    ensure(withTitle.error, 'Falha ao criar movimentação.');
-    return '';
+    const result = await supabase.from('finance_movements').insert(base).select('id').single();
+    ensure(result.error, 'Falha ao criar movimentação.');
+    return String(result.data.id);
   };
 
   const createMovement = useCallback(async (payload: MovementPayload) => runAndReload(async () => {
@@ -433,13 +436,8 @@ export function useFinanceSupabase() {
 
   const updateMovement = useCallback(async (id: string, payload: MovementPayload) => runAndReload(async () => {
     const base = toMovementDbPayload(payload);
-    const withTitle = await supabase.from('finance_movements').update({ ...base, title: payload.title || payload.description }).eq('id', id);
-    if (withTitle.error && isMissingColumnError(withTitle.error.message, 'title')) {
-      const fallback = await supabase.from('finance_movements').update(base).eq('id', id);
-      ensure(fallback.error, 'Falha ao atualizar movimentação.');
-    } else {
-      ensure(withTitle.error, 'Falha ao atualizar movimentação.');
-    }
+    const result = await supabase.from('finance_movements').update(base).eq('id', id);
+    ensure(result.error, 'Falha ao atualizar movimentação.');
     return true;
   }), [runAndReload]);
 
@@ -449,7 +447,8 @@ export function useFinanceSupabase() {
     return data.signedUrl;
   }, []);
 
-  const uploadAttachment = useCallback(async (file: File, movementId: string, fundId?: string, projectId?: string) => {
+  const uploadAttachment = useCallback(async (file: File, context: { movementId: string; fundId?: string; projectId?: string }) => {
+    const { movementId, fundId, projectId } = context;
     const safeName = file.name.replaceAll(' ', '_');
     const path = `${fundId || 'sem-fundo'}/${projectId || 'sem-projeto'}/${movementId}/${Date.now()}-${safeName}`;
     const { error: uploadError } = await supabase.storage.from('finance-attachments').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
@@ -457,6 +456,21 @@ export function useFinanceSupabase() {
     const { error: insertError } = await supabase.from('finance_attachments').insert({ movement_id: movementId, storage_path: path, file_name: file.name, mime_type: file.type, file_size: file.size });
     ensure(insertError, 'Falha ao registrar metadados do anexo.');
     return true;
+  }, []);
+
+  const listAttachmentsForMovementIds = useCallback(async (movementIds: string[]) => {
+    if (movementIds.length === 0) return new Map<string, number>();
+    const { data, error: attachmentsError } = await supabase
+      .from('finance_attachments')
+      .select('movement_id')
+      .in('movement_id', movementIds);
+    ensure(attachmentsError, 'Falha ao listar anexos das movimentações.');
+    const map = new Map<string, number>();
+    (data || []).forEach((row) => {
+      const key = String(row.movement_id);
+      map.set(key, (map.get(key) ?? 0) + 1);
+    });
+    return map;
   }, []);
 
   const deleteAttachment = useCallback(async (attachmentId: string) => runAndReload(async () => {
@@ -513,6 +527,7 @@ export function useFinanceSupabase() {
     uploadAttachment,
     deleteAttachment,
     listAttachments,
+    listAttachmentsForMovementIds,
     getSignedUrl,
     deleteMovementCascade,
   };

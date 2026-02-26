@@ -62,7 +62,7 @@ export type FinanceiroMovimentacao = {
   fundoId: string;
   categoria: string;
   categoriaId: string;
-  payMethod: 'pix' | 'transferencia' | 'dinheiro' | 'cartao';
+  payMethod: 'pix' | 'transferencia' | 'dinheiro';
   beneficiary: string;
   notes: string;
   docType?: string;
