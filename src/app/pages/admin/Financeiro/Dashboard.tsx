@@ -13,7 +13,7 @@ const CHART_COLORS = ['#0f3d2e', '#ffdd9a', '#6b7280', '#10b981', '#ef4444'];
 
 export function Dashboard() {
   const finance = useFinanceSupabase();
-  const { dashboard, movements, funds, projects, categories, error, load, createMovement, updateMovement, deleteMovementCascade, uploadAttachment, deleteAttachment, listAttachments } = finance;
+  const { dashboard, movements, funds, projects, categories, error, load, createMovement, updateMovement, deleteMovementCascade, uploadAttachment, deleteAttachment, listAttachments, getSignedUrl } = finance;
   const [openModal, setOpenModal] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const [editingMovement, setEditingMovement] = useState<FinanceiroMovimentacao | null>(null);
@@ -38,6 +38,11 @@ export function Dashboard() {
     setOpenModal(true);
   };
 
+
+  const viewAttachment = async (attachment: { storage_path: string }) => {
+    const url = await getSignedUrl(attachment.storage_path);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
   const handleSubmit = async (payload: MovementPayload) => {
     return editingMovement ? updateMovement(editingMovement.id, payload) : createMovement(payload);
   };
@@ -78,7 +83,7 @@ export function Dashboard() {
         isOpen={openModal}
         onClose={() => setOpenModal(false)}
         editData={editingMovement}
-        projects={projects.map((p) => ({ id: p.id, name: p.nome }))}
+        projects={projects.map((p) => ({ id: p.id, name: p.nome, fundId: p.fundoId }))}
         funds={funds.map((f) => ({ id: f.id, name: f.nome }))}
         categories={categories}
         attachments={attachments}
@@ -86,6 +91,7 @@ export function Dashboard() {
         onDelete={editingMovement ? async () => { await deleteMovementCascade(editingMovement.id); setOpenModal(false); } : undefined}
         onUploadAttachment={async (file, movementId, payload) => { await uploadAttachment(file, movementId, payload.fund_id, payload.project_id); }}
         onDeleteAttachment={deleteAttachment}
+        onViewAttachment={viewAttachment}
         onChanged={load}
       />
       <ConfirmDialog open={openDelete} title="Excluir movimentação" description="Esta ação remove movimentação e comprovantes." onCancel={() => setOpenDelete(false)} onConfirm={() => { if (selectedMovement) void deleteMovementCascade(selectedMovement.id); setOpenDelete(false); }} />
