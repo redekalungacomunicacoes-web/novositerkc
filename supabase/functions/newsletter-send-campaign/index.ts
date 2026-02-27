@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       return json(405, { ok: false, error: "Method not allowed" });
     }
 
-    // 🔐 auth
+    // 🔐 auth (obrigatório)
     const user = await getUserFromRequest(req);
     if (!user) return json(401, { ok: false, error: "Unauthorized" });
 
@@ -79,12 +79,18 @@ Deno.serve(async (req) => {
       const type = String((body as any).type || "custom"); // opcional
       const title = String((body as any).title || "Campanha sem título").trim();
       const subject = String((body as any).subject || "").trim();
-      const content_html = String((body as any).content_html || (body as any).html || "")
-        .trim();
-      const materia_id = (body as any).materia_id ? String((body as any).materia_id) : null;
+      const content_html = String(
+        (body as any).content_html || (body as any).html || "",
+      ).trim();
+      const materia_id = (body as any).materia_id
+        ? String((body as any).materia_id)
+        : null;
 
       if (!subject || !content_html) {
-        return json(400, { ok: false, error: "Missing subject/content_html" });
+        return json(400, {
+          ok: false,
+          error: "Missing subject/content_html",
+        });
       }
 
       const { data: camp, error: campErr } = await sb
@@ -96,7 +102,7 @@ Deno.serve(async (req) => {
           content_html,
           materia_id,
           created_by: user.id,
-          mode: "custom", // sua coluna mode é TEXT (não enum). Pode ajustar se quiser.
+          mode: "custom", // sua coluna mode é TEXT (não enum)
           status: "draft" as CampaignStatus,
           sent_count: 0,
           fail_count: 0,
@@ -134,7 +140,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Se já estiver sent, não dispara de novo (evita duplicar envio)
+    // Evita reenvio
     if (status === "sent") {
       return json(409, {
         ok: false,
@@ -180,7 +186,6 @@ Deno.serve(async (req) => {
     recipients = recipients.slice(0, max);
 
     if (recipients.length === 0) {
-      // marca failed se não tem ninguém
       await sb
         .from("newsletter_campaigns")
         .update({ status: "failed" as CampaignStatus })
@@ -198,7 +203,10 @@ Deno.serve(async (req) => {
     // -----------------------------
     const { error: updSendingErr } = await sb
       .from("newsletter_campaigns")
-      .update({ status: "sending" as CampaignStatus, updated_at: new Date().toISOString() })
+      .update({
+        status: "sending" as CampaignStatus,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", campaign.id);
 
     if (updSendingErr) {
@@ -239,7 +247,6 @@ Deno.serve(async (req) => {
       .eq("id", campaign.id);
 
     if (finErr) {
-      // se falhar update final, ainda devolve info (mas com 500)
       return json(500, {
         ok: false,
         error: finErr.message,
@@ -258,7 +265,7 @@ Deno.serve(async (req) => {
       total: recipients.length,
       sent,
       failed,
-      errors, // se quiser ocultar em produção, remove aqui
+      errors,
     });
   } catch (e) {
     return json(500, { ok: false, error: String((e as any)?.message || e) });
