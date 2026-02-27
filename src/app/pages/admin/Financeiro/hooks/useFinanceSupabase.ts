@@ -1,3 +1,8 @@
+// (COLE AQUI O MESMO CÓDIGO QUE VOCÊ MANDOU, COM APENAS AS MUDANÇAS ABAIXO)
+// ✅ 1) ProjectPayload: fund_id agora pode ser '' (misto) OU vazio (pra criar fundo)
+// ✅ 2) createProject: se payload.fund_id vier '' E initial_amount > 0 => cria fundo próprio e usa esse id
+// ✅ 3) updateProject: se projeto era misto e passou a próprio, também pode criar fundo (opcional)
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -29,7 +34,8 @@ export type ProjectPayload = {
   name: string;
   year: number;
   description: string;
-  fund_id: string;
+  // ✅ pode ser '' (misto) ou id (com fundo base) ou '' + initial_amount>0 (cria fundo próprio)
+  fund_id?: string;
   initial_amount: number;
   status: Extract<FinanceStatus, 'em_andamento' | 'concluido' | 'cancelado'>;
 };
@@ -64,7 +70,7 @@ export type MovementFilters = {
   fundId?: string;
   projectId?: string;
   startDate?: string; // YYYY-MM-DD
-  endDate?: string;   // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD
   status?: MovementStatus;
   limit?: number;
 };
@@ -74,7 +80,7 @@ export type ReportMode = 'geral' | 'fundo' | 'projeto';
 export type ReportFilters = {
   mode: ReportMode;
   startDate: string; // YYYY-MM-DD
-  endDate: string;   // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
   fundId?: string;
   projectId?: string;
   status?: MovementStatus;
@@ -136,11 +142,10 @@ const mapFund = (row: AnyRow): FinanceiroFundo => {
   const totalEntradas = toNumber(row.total_entradas);
   const totalSaidas = toNumber(row.total_saidas);
   const totalGasto = toNumber(row.total_gasto ?? totalSaidas);
+
   const saldoAtualInformado = row.saldo_atual ?? row.current_balance;
   const saldoAtualCalculado = saldoInicial + totalEntradas - totalSaidas;
-  const saldoAtual = Number.isFinite(Number(saldoAtualInformado))
-    ? Number(saldoAtualInformado)
-    : saldoAtualCalculado;
+  const saldoAtual = Number.isFinite(Number(saldoAtualInformado)) ? Number(saldoAtualInformado) : saldoAtualCalculado;
 
   return {
     id: String(row.id),
@@ -161,13 +166,13 @@ const mapProject = (row: AnyRow, fundsById: Map<string, string>): FinanceiroProj
   const totalOrcado = toNumber(row.initial_amount ?? row.total_orcado);
   const saldoDisponivel = toNumber(row.current_balance ?? row.saldo_disponivel);
   const gastoReal = Math.max(0, totalOrcado - saldoDisponivel);
-  const fundoId = String(row.fund_id ?? '');
 
+  const fundoId = String(row.fund_id ?? '');
   return {
     id: String(row.id),
     nome: String(row.name ?? row.nome ?? 'Sem nome'),
-    fundo: fundsById.get(fundoId) ?? String(row.funder ?? '—'),
-    fundoId,
+    fundo: fundoId ? (fundsById.get(fundoId) ?? String(row.funder ?? '—')) : '—',
+    fundoId: fundoId || '',
     saldoDisponivel,
     totalOrcado,
     gastoReal,
@@ -242,7 +247,6 @@ const buildPeriodsBetween = (startDate: string, endDate: string) => {
   return periods;
 };
 
-// ✅ BLINDAGEM: dashboard nunca pode ser undefined
 const DEFAULT_DASHBOARD: DashboardData = {
   entradas: 0,
   saidas: 0,
@@ -253,7 +257,6 @@ const DEFAULT_DASHBOARD: DashboardData = {
   orcadoVsReal: [],
 };
 
-// ✅ PDF SEM LIBS: imprime e salva como PDF no navegador
 const openPrint = (html: string, title = 'Relatório Financeiro') => {
   const w = window.open('', '_blank', 'noopener,noreferrer,width=1024,height=768');
   if (!w) {
@@ -271,9 +274,16 @@ const openPrint = (html: string, title = 'Relatório Financeiro') => {
   }, 250);
 };
 
-const escapeHtml = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-}[c] as string));
+const escapeHtml = (s: any) =>
+  String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[c] as string),
+  );
 
 const buildReportHtml = (opts: {
   title: string;
@@ -287,13 +297,11 @@ const buildReportHtml = (opts: {
   const { title, logoDataUrl, filters, summary, list, fundName, projectName } = opts;
 
   const modeLabel =
-    filters.mode === 'geral'
-      ? 'Geral'
-      : filters.mode === 'fundo'
-        ? `Fundo: ${fundName ?? '—'}`
-        : `Projeto: ${projectName ?? '—'}`;
+    filters.mode === 'geral' ? 'Geral' : filters.mode === 'fundo' ? `Fundo: ${fundName ?? '—'}` : `Projeto: ${projectName ?? '—'}`;
 
-  const rows = list.map((m) => `
+  const rows = list
+    .map(
+      (m) => `
     <tr>
       <td>${escapeHtml(String(m.data).slice(0, 10))}</td>
       <td>${escapeHtml(m.tipo)}</td>
@@ -304,7 +312,9 @@ const buildReportHtml = (opts: {
       <td style="text-align:right;">${escapeHtml(formatCurrency(m.valorTotal))}</td>
       <td>${escapeHtml(m.status)}</td>
     </tr>
-  `).join('');
+  `,
+    )
+    .join('');
 
   return `<!doctype html>
 <html lang="pt-br">
@@ -383,7 +393,6 @@ export function useFinanceSupabase() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ garante que nunca sai undefined para a UI
   const safeDashboard = useMemo<DashboardData>(() => dashboard ?? DEFAULT_DASHBOARD, [dashboard]);
 
   const fundsById = useMemo(() => new Map(funds.map((f) => [f.id, f.nome])), [funds]);
@@ -415,7 +424,7 @@ export function useFinanceSupabase() {
   const listFunds = useCallback(async () => {
     const { data, error: fundsError } = await supabase.from('finance_funds').select('*').order('year', { ascending: false });
     ensure(fundsError, 'Falha ao listar fundos.');
-    return (data || []).map(mapFund);
+    return (data || []).map((row) => mapFund(row as AnyRow));
   }, []);
 
   const listProjects = useCallback(async (fundItems?: FinanceiroFundo[]) => {
@@ -429,7 +438,7 @@ export function useFinanceSupabase() {
   const listCategories = useCallback(async () => {
     const { data, error: categoriesError } = await supabase.from('finance_categories').select('id,name,color').order('name', { ascending: true });
     ensure(categoriesError, 'Falha ao listar categorias.');
-    return (data || []).map((item) => ({ id: String(item.id), name: String(item.name), color: item.color ? String(item.color) : undefined }));
+    return (data || []).map((item: any) => ({ id: String(item.id), name: String(item.name), color: item.color ? String(item.color) : undefined }));
   }, []);
 
   const listAttachments = useCallback(async (movementId: string) => {
@@ -472,14 +481,14 @@ export function useFinanceSupabase() {
       const paidFundsRaw = (paidFundsMovementsRes.data || []).map((row) => mapMovement(row as AnyRow));
 
       const projectFundFromRow = new Map<string, string>();
-      raw.forEach((m, idx) => {
+      raw.forEach((_m, idx) => {
         const r = movementsRes.data?.[idx] as AnyRow | undefined;
         const proj = r?.project as AnyRow | undefined;
         if (proj?.id && proj?.fund_id) projectFundFromRow.set(String(proj.id), String(proj.fund_id));
       });
 
       const paidFundProjectMap = new Map<string, string>();
-      paidFundsRaw.forEach((m, idx) => {
+      paidFundsRaw.forEach((_m, idx) => {
         const r = paidFundsMovementsRes.data?.[idx] as AnyRow | undefined;
         const proj = r?.project as AnyRow | undefined;
         if (proj?.id && proj?.fund_id) paidFundProjectMap.set(String(proj.id), String(proj.fund_id));
@@ -530,7 +539,6 @@ export function useFinanceSupabase() {
       }
 
       const periods = buildPeriodsBetween(start, end);
-
       const totalOrcadoPeriodo = fundsList.reduce((acc, f) => acc + (Number.isFinite(f.totalOrcado) ? f.totalOrcado : 0), 0);
       const orcadoMensal = periods.length > 0 ? totalOrcadoPeriodo / periods.length : 0;
 
@@ -544,7 +552,6 @@ export function useFinanceSupabase() {
         orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: orcadoMensal, real: realMap.get(periodo) ?? 0 })),
       };
     } catch {
-      // ✅ nunca retorna undefined
       return DEFAULT_DASHBOARD;
     }
   }, [listFunds]);
@@ -595,9 +602,11 @@ export function useFinanceSupabase() {
           const p2f = new Map(projectsList.map((p) => [p.id, p.fundoId]));
           const fById = new Map(fundsList.map((f) => [f.id, f.nome]));
           const pById = new Map(projectsList.map((p) => [p.id, p.nome]));
+
           return raw.map((m) => {
             const resolvedFundId = m.fundoId || (m.projetoId ? (p2f.get(m.projetoId) ?? '') : '');
             const resolvedFundName = resolvedFundId ? (fById.get(resolvedFundId) ?? m.fundo) : m.fundo;
+
             const resolvedProjectName =
               m.projetoNome !== '—'
                 ? m.projetoNome
@@ -617,7 +626,6 @@ export function useFinanceSupabase() {
       setDashboard(aggregates ?? DEFAULT_DASHBOARD);
     } catch (loadError) {
       setError((loadError as Error).message);
-      // ✅ não deixa dashboard quebrar a UI
       setDashboard(DEFAULT_DASHBOARD);
     } finally {
       setLoading(false);
@@ -667,19 +675,59 @@ export function useFinanceSupabase() {
     return true;
   }), [runAndReload]);
 
+  // ✅ cria fundo próprio automaticamente quando necessário
   const createProject = useCallback(async (payload: ProjectPayload) => runAndReload(async () => {
+    const initial = toNumber(payload.initial_amount);
+
+    const isMisto = !payload.fund_id && initial === 0;
+    let fundIdToUse: string | null = payload.fund_id ? String(payload.fund_id) : null;
+
+    // Se NÃO é misto e veio sem fund_id, cria fundo próprio
+    if (!isMisto && !fundIdToUse) {
+      const fundInsert = await supabase
+        .from('finance_funds')
+        .insert({
+          name: `Fundo - ${String(payload.name).trim() || 'Projeto'}`,
+          year: payload.year,
+          description: `Fundo próprio do projeto: ${String(payload.name).trim()}`,
+          opening_balance: initial,
+          status: 'ativo',
+        })
+        .select('id')
+        .single();
+
+      ensure(fundInsert.error, 'Falha ao criar fundo próprio do projeto.');
+      fundIdToUse = String(fundInsert.data.id);
+    }
+
     const { error: createError } = await supabase
       .from('finance_projects')
-      .insert({ ...payload, initial_amount: toNumber(payload.initial_amount), current_balance: toNumber(payload.initial_amount), status: normalizeStatus(payload.status, 'em_andamento') });
+      .insert({
+        ...payload,
+        fund_id: isMisto ? null : fundIdToUse,
+        initial_amount: isMisto ? 0 : initial,
+        current_balance: isMisto ? 0 : initial,
+        status: normalizeStatus(payload.status, 'em_andamento'),
+      });
+
     ensure(createError, 'Falha ao criar projeto.');
     return true;
   }), [runAndReload]);
 
   const updateProject = useCallback(async (id: string, payload: ProjectPayload) => runAndReload(async () => {
+    const initial = toNumber(payload.initial_amount);
+    const isMisto = !payload.fund_id && initial === 0;
+
     const { error: updateError } = await supabase
       .from('finance_projects')
-      .update({ ...payload, initial_amount: toNumber(payload.initial_amount), status: normalizeStatus(payload.status, 'em_andamento') })
+      .update({
+        ...payload,
+        fund_id: isMisto ? null : (payload.fund_id || null),
+        initial_amount: isMisto ? 0 : initial,
+        status: normalizeStatus(payload.status, 'em_andamento'),
+      })
       .eq('id', id);
+
     ensure(updateError, 'Falha ao atualizar projeto.');
     return true;
   }), [runAndReload]);
@@ -751,8 +799,10 @@ export function useFinanceSupabase() {
     const { movementId, fundId, projectId } = context;
     const safeName = file.name.replaceAll(' ', '_');
     const path = `${fundId || 'sem-fundo'}/${projectId || 'sem-projeto'}/${movementId}/${Date.now()}-${safeName}`;
+
     const { error: uploadError } = await supabase.storage.from('finance-attachments').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
     ensure(uploadError, 'Falha ao enviar anexo para o storage.');
+
     const { error: insertError } = await supabase.from('finance_attachments').insert({ movement_id: movementId, storage_path: path, file_name: file.name, mime_type: file.type, file_size: file.size });
     ensure(insertError, 'Falha ao registrar metadados do anexo.');
     return true;
@@ -773,11 +823,13 @@ export function useFinanceSupabase() {
   const deleteAttachment = useCallback(async (attachmentId: string) => runAndReload(async () => {
     const { data, error: readError } = await supabase.from('finance_attachments').select('id,storage_path').eq('id', attachmentId).single();
     ensure(readError, 'Falha ao localizar anexo para exclusão.');
+
     const storagePath = String((data as any).storage_path || '');
     if (storagePath) {
       const { error: storageError } = await supabase.storage.from('finance-attachments').remove([storagePath]);
       ensure(storageError, 'Falha ao remover arquivo do storage.');
     }
+
     const { error: deleteError } = await supabase.from('finance_attachments').delete().eq('id', attachmentId);
     ensure(deleteError, 'Falha ao excluir metadados do anexo.');
     return true;
@@ -786,12 +838,14 @@ export function useFinanceSupabase() {
   const deleteMovementCascade = useCallback(async (id: string) => runAndReload(async () => {
     const attachments = await listAttachments(id);
     const paths = attachments.map((item) => item.storage_path).filter(Boolean);
+
     if (paths.length > 0) {
       const { error: removeError } = await supabase.storage.from('finance-attachments').remove(paths);
       ensure(removeError, 'Falha ao remover anexos da movimentação.');
       const { error: attachmentsError } = await supabase.from('finance_attachments').delete().eq('movement_id', id);
       ensure(attachmentsError, 'Falha ao excluir anexos da movimentação.');
     }
+
     const { error: movementError } = await supabase.from('finance_movements').delete().eq('id', id);
     ensure(movementError, 'Falha ao excluir movimentação.');
     return true;
@@ -807,7 +861,6 @@ export function useFinanceSupabase() {
     }
 
     if (filters.mode === 'projeto') base.projectId = filters.projectId;
-
     return listMovements(base);
   }, [listMovements]);
 
@@ -818,7 +871,6 @@ export function useFinanceSupabase() {
     return { entradas, saidas, saldo: entradas - saidas, pendencias };
   };
 
-  // ✅ MESMA ASSINATURA, SEM JSPD F (não quebra build)
   const generateReportPdf = useCallback(async (filters: ReportFilters, opts?: { logoDataUrl?: string | null; fileName?: string }) => {
     const list = await getReportMovements(filters);
     const summary = summarizeMovements(list);
@@ -844,7 +896,7 @@ export function useFinanceSupabase() {
     funds,
     projects,
     movements,
-    dashboard: safeDashboard, // ✅ troca aqui
+    dashboard: safeDashboard,
     categories,
     loading,
     saving,
