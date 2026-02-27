@@ -199,9 +199,16 @@ export function AdminNewsletter() {
     const payload = {
       title: form.title.trim(),
       subject: form.subject.trim(),
+
+      // seu código usa mode...
       mode: form.mode,
+
+      // ...mas o banco exige type NOT NULL
+      type: form.mode, // ✅ adiciona isso
+
       materia_id: form.mode === "materia" ? form.materia_id : null,
       content_html: finalHtml,
+
       status: selectedCampaign ? selectedCampaign.status : "draft",
     };
 
