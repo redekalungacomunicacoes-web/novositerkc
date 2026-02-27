@@ -19,11 +19,8 @@ import { getSiteSettings, SiteSettings } from "@/lib/siteSettings";
 
 type MembroEquipe = {
   id: string;
-  nome: string;
-  cargo: string;
-  foto_url: string;
-  bio?: string | null;
-  instagram?: string | null;
+  name: string;
+  nome?: string;
   slug?: string | null;
 };
 
@@ -53,38 +50,36 @@ interface MemberCardProps {
 }
 
 function MemberCard({ membro }: MemberCardProps) {
-  return (
-    <Link
-      to={`/equipe/${membro.slug || membro.id}`}
-      className="group block w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
-    >
-      {/* Foto */}
+  const cardContent = (
+    <>
       <div className="relative overflow-hidden aspect-square bg-gray-100">
-        {membro.foto_url ? (
-          <img
-            src={membro.foto_url}
-            alt={membro.nome}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
-            Sem foto
-          </div>
-        )}
-        <div className="absolute inset-0 bg-[#0F7A3E]/0 group-hover:bg-[#0F7A3E]/10 transition-colors duration-200" />
+        <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
+          Sem foto
+        </div>
       </div>
 
-      {/* Info */}
       <div className="p-3">
         <p className="font-bold text-[#2E2E2E] text-sm leading-tight truncate">
-          {membro.nome}
+          {membro.name}
         </p>
-        <p className="text-xs text-gray-500 mt-0.5 truncate">{membro.cargo}</p>
-        <span className="mt-2 inline-block text-xs font-medium text-[#0F7A3E] group-hover:underline">
-          Ver perfil →
-        </span>
       </div>
+    </>
+  );
+
+  if (!membro.slug) {
+    return (
+      <div className="group block w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {cardContent}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={`/equipe/${membro.slug}`}
+      className="group block w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
+    >
+      {cardContent}
     </Link>
   );
 }
@@ -101,6 +96,7 @@ export function QuemSomos() {
   const [valoresDB, setValoresDB] = useState<ValorDB[]>([]);
 
   const [loadingEquipe, setLoadingEquipe] = useState(true);
+  const [equipeError, setEquipeError] = useState<string | null>(null);
   const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
 
   // Fallback (se ainda não cadastrou valores no banco)
@@ -174,10 +170,9 @@ export function QuemSomos() {
 
             supabase
               .from("equipe")
-              .select("id, nome, cargo, foto_url, bio, instagram, slug, ordem, ativo")
-              .or("and(ativo.eq.true,is_public.eq.true),and(ativo.is.null,is_public.eq.true)")
-              .order("ordem", { ascending: true })
-              .order("nome", { ascending: true }),
+              .select("id, nome, slug")
+              .eq("is_public", true)
+              .order("created_at", { ascending: true }),
           ]);
 
         if (!mounted) return;
@@ -205,16 +200,17 @@ export function QuemSomos() {
         setLoadingEquipe(false);
 
         if (equipeRes.error) {
-          console.warn("Erro ao carregar equipe:", equipeRes.error.message);
+          console.error("Erro ao carregar equipe:", equipeRes.error);
+          setEquipeError(
+            "Não foi possível carregar os integrantes agora. Tente novamente em instantes."
+          );
           setEquipe([]);
         } else {
+          setEquipeError(null);
           const mapped: MembroEquipe[] = (equipeRes.data || []).map((m: any) => ({
             id: String(m.id),
+            name: m.nome || "",
             nome: m.nome || "",
-            cargo: m.cargo || m.funcao || "",
-            foto_url: m.foto_url || "",
-            bio: m.bio ?? null,
-            instagram: (m.instagram ?? "").toString() || null,
             slug: m.slug ?? null,
           }));
           setEquipe(mapped);
@@ -366,13 +362,17 @@ export function QuemSomos() {
             </p>
           )}
 
-          {!loadingEquipe && equipe.length === 0 && (
+          {!loadingEquipe && equipeError && (
+            <p className="text-center text-sm text-red-500">{equipeError}</p>
+          )}
+
+          {!loadingEquipe && !equipeError && equipe.length === 0 && (
             <p className="text-center text-sm text-gray-400">
               Nenhum membro cadastrado ainda.
             </p>
           )}
 
-          {!loadingEquipe && equipe.length > 0 && (
+          {!loadingEquipe && !equipeError && equipe.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
               {equipe.map((m) => (
                 <MemberCard key={m.id} membro={m} />
