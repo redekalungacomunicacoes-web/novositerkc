@@ -62,6 +62,31 @@ export function Dashboard() {
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
 
+  // -----------------------------
+  // ✅ NOVO: saldoAtual calculado para o Caixa Geral
+  // Regra: soma de todos os fundos (saldoAtual) + entradas pagas - saídas pagas
+  // Observação:
+  // - projetos com fundo próprio já devem aparecer em funds (ou ter um fundo espelhado).
+  // - para misto, a base vem só das entradas/saídas.
+  // -----------------------------
+  const computedSaldoAtual = useMemo(() => {
+    const baseFundos = (funds || []).reduce((acc, f) => acc + (Number((f as any).saldoAtual) || 0), 0);
+
+    const entradasPagas = (movements || [])
+      .filter((m) => m.tipo === 'entrada' && m.status === 'pago')
+      .reduce((acc, m) => acc + (Number(m.valorTotal) || 0), 0);
+
+    const saidasPagas = (movements || [])
+      .filter((m) => m.tipo === 'saida' && m.status === 'pago')
+      .reduce((acc, m) => acc + (Number(m.valorTotal) || 0), 0);
+
+    return baseFundos + entradasPagas - saidasPagas;
+  }, [funds, movements]);
+
+  // Mantém também as métricas “padrão” do dashboard,
+  // mas garante que o KPI Saldo Atual use o valor calculado acima.
+  const kpiSaldoAtual = computedSaldoAtual;
+
   const categoriaData = useMemo(
     () =>
       (dashboard.distribuicaoCategoria || []).map((item, index) => ({
@@ -90,7 +115,12 @@ export function Dashboard() {
 
   useEffect(() => {
     const loadCounts = async () => {
-      const map = await listAttachmentsForMovementIds(movements.map((mov) => mov.id));
+      const ids = (movements || []).map((mov) => mov.id);
+      if (ids.length === 0) {
+        setAttachmentCountMap(new Map());
+        return;
+      }
+      const map = await listAttachmentsForMovementIds(ids);
       setAttachmentCountMap(map);
     };
     void loadCounts();
@@ -174,7 +204,8 @@ export function Dashboard() {
       {error && <div className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard title="Saldo Atual" value={formatCurrency(dashboard.saldoAtual)} icon={<CircleDollarSign className="h-5 w-5" />} variant="primary" />
+        {/* ✅ aqui usamos o saldo corrigido */}
+        <KPICard title="Saldo Atual" value={formatCurrency(kpiSaldoAtual)} icon={<CircleDollarSign className="h-5 w-5" />} variant="primary" />
         <KPICard title="Entradas pagas" value={formatCurrency(dashboard.entradas)} icon={<TrendingUp className="h-5 w-5" />} />
         <KPICard title="Saídas pagas" value={formatCurrency(dashboard.saidas)} icon={<TrendingDown className="h-5 w-5" />} />
         <KPICard title="Pendências" value={formatCurrency(dashboard.pendencias)} icon={<AlertCircle className="h-5 w-5" />} />
@@ -243,6 +274,7 @@ export function Dashboard() {
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h3 className="text-base font-semibold text-gray-900">Últimas movimentações</h3>
         </div>
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-gray-200 bg-gray-50">
@@ -257,6 +289,7 @@ export function Dashboard() {
                 <th className="px-6 py-3 text-center text-xs uppercase">Ações</th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-gray-200 bg-white">
               {movements.map((mov) => (
                 <tr key={mov.id}>
@@ -290,6 +323,7 @@ export function Dashboard() {
                   </td>
                 </tr>
               ))}
+
               {movements.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-8 text-center text-sm text-gray-500">
