@@ -1,11 +1,6 @@
 import { handleCors, corsHeaders } from "../_shared/cors.ts";
 import { sendMail } from "../_shared/smtp.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
-import {
-  getUserFromRequest,
-  getRolesForUser,
-  hasAnyRole,
-} from "../_shared/roles.ts";
 
 type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
 type Mode = "test" | "all";
@@ -35,22 +30,18 @@ Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  const adminKey = req.headers.get("x-newsletter-key") || "";
+  const expected = Deno.env.get("NEWSLETTER_ADMIN_KEY") || "";
+  if (!expected || adminKey !== expected) {
+    return new Response(JSON.stringify({ ok: false, error: "Forbidden" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     if (req.method !== "POST") {
       return json(405, { ok: false, error: "Method not allowed" });
-    }
-
-    // 🔐 auth (obrigatório)
-    const user = await getUserFromRequest(req);
-    if (!user) return json(401, { ok: false, error: "Unauthorized" });
-
-    const roles = await getRolesForUser(user.id);
-    if (!hasAnyRole(roles, ["admin_alfa", "admin", "editor"])) {
-      return json(403, {
-        ok: false,
-        error: "Forbidden",
-        code: "FORBIDDEN",
-      });
     }
 
     const body = await req.json().catch(() => null);
@@ -105,7 +96,6 @@ Deno.serve(async (req) => {
           subject,
           content_html,
           materia_id,
-          created_by: user.id,
           mode: "custom", // sua coluna mode é TEXT (não enum)
           status: "draft" as CampaignStatus,
           sent_count: 0,
