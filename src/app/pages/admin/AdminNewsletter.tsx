@@ -70,6 +70,27 @@ async function getInvokeErrorDetails(error: any): Promise<{ status?: number; det
   };
 }
 
+async function invokeNewsletterFunction(body: Record<string, unknown>) {
+  const {
+    data: { session },
+    error: sessErr,
+  } = await supabase.auth.getSession();
+
+  if (sessErr || !session?.access_token) {
+    throw new Error("Sessão inválida. Faça login novamente.");
+  }
+
+  const { data: refreshedData } = await supabase.auth.refreshSession();
+  const accessToken = refreshedData.session?.access_token || session.access_token;
+
+  return supabase.functions.invoke("newsletter-send-campaign", {
+    body,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export function AdminNewsletter() {
   const [tab, setTab] = useState<"campaigns" | "subscribers" | "config">("campaigns");
 
@@ -300,24 +321,28 @@ export function AdminNewsletter() {
     setSendLog(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
-        body: {
-          mode: "test",
-          campaign_id: selectedCampaign.id,
-          test_email: testEmail.trim().toLowerCase(),
-        },
+      const { data, error } = await invokeNewsletterFunction({
+        mode: "test",
+        campaign_id: selectedCampaign.id,
+        test_email: testEmail.trim().toLowerCase(),
       });
 
       if (error) {
         const { status, details } = await getInvokeErrorDetails(error);
-        const statusPrefix = typeof status === "number" ? `(${status}) ` : "";
-        setSendLog(`❌ ${statusPrefix}${details}`);
+        setSendLog(`❌ (${status || "?"}) ${details}`);
         return;
       }
 
       const sent = Number(data?.sent || 0);
       const failed = Number(data?.failed || 0);
       setSendLog(`✅ Teste concluído. Enviados: ${sent} | Falhas: ${failed}`);
+    } catch (error: any) {
+      if (error?.message === "Sessão inválida. Faça login novamente.") {
+        setSendLog("❌ Sessão inválida. Faça login novamente.");
+        return;
+      }
+
+      setSendLog(`❌ (?) ${String(error?.message || "Erro ao enviar teste.")}`);
     } finally {
       setSendingTest(false);
     }
@@ -339,17 +364,14 @@ export function AdminNewsletter() {
     setSendLog("Iniciando envio para todos inscritos...");
 
     try {
-      const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
-        body: {
-          mode: "all",
-          campaign_id: selectedCampaign.id,
-        },
+      const { data, error } = await invokeNewsletterFunction({
+        mode: "all",
+        campaign_id: selectedCampaign.id,
       });
 
       if (error) {
         const { status, details } = await getInvokeErrorDetails(error);
-        const statusPrefix = typeof status === "number" ? `(${status}) ` : "";
-        setSendLog(`❌ ${statusPrefix}${details}`);
+        setSendLog(`❌ (${status || "?"}) ${details}`);
         return;
       }
 
@@ -357,6 +379,13 @@ export function AdminNewsletter() {
       const failed = Number(data?.failed || 0);
       const status = String(data?.status || "—");
       setSendLog(`✅ Concluído. Status: ${status} | Enviados: ${sent} | Falhas: ${failed}`);
+    } catch (error: any) {
+      if (error?.message === "Sessão inválida. Faça login novamente.") {
+        setSendLog("❌ Sessão inválida. Faça login novamente.");
+        return;
+      }
+
+      setSendLog(`❌ (?) ${String(error?.message || "Erro ao enviar campanha.")}`);
     } finally {
       setSendingAll(false);
     }
