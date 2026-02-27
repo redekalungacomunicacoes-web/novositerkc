@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Plus, Send, Mail, Users, RefreshCw, Trash2, Eye } from "lucide-react";
+import { Plus, Send, Mail, Users, RefreshCw, Trash2, Eye, Settings } from "lucide-react";
+import { NewsletterEmailConfig } from "./newsletter/NewsletterEmailConfig";
 
 type Subscriber = {
   id: string;
@@ -10,6 +11,8 @@ type Subscriber = {
   created_at: string;
 };
 
+type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+
 type Campaign = {
   id: string;
   title: string;
@@ -17,7 +20,7 @@ type Campaign = {
   mode: "custom" | "materia";
   materia_id: string | null;
   content_html: string;
-  status: "draft" | "sending" | "sent" | "paused";
+  status: CampaignStatus;
   sent_count: number | null;
   fail_count: number | null;
   created_at: string;
@@ -39,8 +42,15 @@ function toBR(d?: string | null) {
   }
 }
 
+function normalizeStatus(s: any): CampaignStatus {
+  const v = String(s || "draft");
+  if (v === "draft" || v === "scheduled" || v === "sending" || v === "sent" || v === "failed") return v;
+  // se tiver coisa antiga no banco (ex: "paused"), rebaixa pra draft
+  return "draft";
+}
+
 export function AdminNewsletter() {
-  const [tab, setTab] = useState<"campaigns" | "subscribers">("campaigns");
+  const [tab, setTab] = useState<"campaigns" | "subscribers" | "config">("campaigns");
 
   // subscribers
   const [subs, setSubs] = useState<Subscriber[]>([]);
@@ -71,7 +81,7 @@ export function AdminNewsletter() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [sendingTest, setSendingTest] = useState(false);
   const [testEmail, setTestEmail] = useState("");
-  const [sendingBatch, setSendingBatch] = useState(false);
+  const [sendingAll, setSendingAll] = useState(false);
   const [sendLog, setSendLog] = useState<string | null>(null);
 
   async function loadSubscribers() {
@@ -94,15 +104,20 @@ export function AdminNewsletter() {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (!error && data) setCampaigns(data as any);
+    if (!error && data) {
+      const normalized = (data as any[]).map((c) => ({
+        ...c,
+        status: normalizeStatus(c.status),
+      }));
+      setCampaigns(normalized as any);
+    }
+
     setCampLoading(false);
   }
 
   async function loadMateriasLite() {
     setMateriasLoading(true);
 
-    // tenta buscar do seu CMS (ajuste se sua tabela tiver outro nome)
-    // aqui uso "materias" com campos id/titulo/resumo/slug (comum no seu projeto)
     const { data, error } = await supabase
       .from("materias")
       .select("id,titulo,resumo,slug")
@@ -122,7 +137,11 @@ export function AdminNewsletter() {
   const filteredSubs = useMemo(() => {
     const needle = subsQ.trim().toLowerCase();
     if (!needle) return subs;
-    return subs.filter((s) => (s.email || "").toLowerCase().includes(needle) || (s.name || "").toLowerCase().includes(needle));
+    return subs.filter(
+      (s) =>
+        (s.email || "").toLowerCase().includes(needle) ||
+        (s.name || "").toLowerCase().includes(needle),
+    );
   }, [subs, subsQ]);
 
   function openNewCampaign() {
@@ -177,7 +196,10 @@ export function AdminNewsletter() {
         return;
       }
 
-      const link = m.slug ? `${form.site_url}/materias/${m.slug}` : `${form.site_url}/materias/${m.id}`;
+      const link = m.slug
+        ? `${form.site_url}/materias/${m.slug}`
+        : `${form.site_url}/materias/${m.id}`;
+
       finalHtml = `
         <h3 style="margin:0 0 8px;">${m.titulo}</h3>
         ${m.resumo ? `<p style="margin:0 0 14px; color:#333;">${m.resumo}</p>` : ""}
@@ -196,27 +218,38 @@ export function AdminNewsletter() {
       }
     }
 
+    const statusForSave: CampaignStatus = selectedCampaign
+      ? normalizeStatus(selectedCampaign.status)
+      : "draft";
+
     const payload = {
       title: form.title.trim(),
       subject: form.subject.trim(),
 
-      // seu código usa mode...
+      // sua tabela tem `mode` (text)
       mode: form.mode,
 
-      // ...mas o banco exige type NOT NULL
-      type: form.mode, // ✅ adiciona isso
+      // sua tabela tem `type` NOT NULL (print anterior)
+      type: form.mode,
 
       materia_id: form.mode === "materia" ? form.materia_id : null,
       content_html: finalHtml,
 
-      status: selectedCampaign ? selectedCampaign.status : "draft",
+      status: statusForSave,
     };
 
     if (selectedCampaign) {
-      const { error } = await supabase.from("newsletter_campaigns").update(payload).eq("id", selectedCampaign.id);
+      const { error } = await supabase
+        .from("newsletter_campaigns")
+        .update(payload)
+        .eq("id", selectedCampaign.id);
+
       if (error) alert(error.message);
     } else {
-      const { error } = await supabase.from("newsletter_campaigns").insert(payload);
+      const { error } = await supabase
+        .from("newsletter_campaigns")
+        .insert(payload);
+
       if (error) alert(error.message);
     }
 
@@ -226,7 +259,7 @@ export function AdminNewsletter() {
   }
 
   async function deleteCampaign(id: string) {
-    if (!confirm("Excluir esta campanha? Isso apaga também os logs de envio.")) return;
+    if (!confirm("Excluir esta campanha?")) return;
     const { error } = await supabase.from("newsletter_campaigns").delete().eq("id", id);
     if (error) alert(error.message);
     await loadCampaigns();
@@ -250,21 +283,22 @@ export function AdminNewsletter() {
         mode: "test",
         campaign_id: selectedCampaign.id,
         test_email: testEmail.trim().toLowerCase(),
-        site_url: form.site_url || "https://kalungacomunicacoes.org",
       },
     });
 
     if (error) {
-      setSendLog(error.message);
+      setSendLog(`❌ ${error.message}`);
     } else {
-      setSendLog(`✅ Teste enviado para ${data?.sentTo || testEmail}`);
+      const sent = Number(data?.sent || 0);
+      const failed = Number(data?.failed || 0);
+      setSendLog(`✅ Teste concluído. Enviados: ${sent} | Falhas: ${failed}`);
     }
 
     setSendingTest(false);
+    await loadCampaigns();
   }
 
-  // envio em lotes (evita timeout)
-  async function sendCampaignBatched() {
+  async function sendCampaignAll() {
     if (!selectedCampaign) {
       alert("Selecione uma campanha.");
       return;
@@ -274,46 +308,26 @@ export function AdminNewsletter() {
       return;
     }
 
-    setSendingBatch(true);
-    setSendLog("Iniciando envio em lotes...");
+    setSendingAll(true);
+    setSendLog("Iniciando envio para todos inscritos...");
 
-    let offset = 0;
-    let totalSent = 0;
-    let totalFailed = 0;
+    const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
+      body: {
+        mode: "all",
+        campaign_id: selectedCampaign.id,
+      },
+    });
 
-    // loop até terminar (quando a função retornar done=true)
-    for (let i = 0; i < 9999; i++) {
-      const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
-        body: {
-          mode: "send",
-          campaign_id: selectedCampaign.id,
-          site_url: form.site_url || "https://kalungacomunicacoes.org",
-          limit: 50,
-          offset,
-        },
-      });
-
-      if (error) {
-        setSendLog(`❌ Erro: ${error.message}`);
-        break;
-      }
-
-      totalSent += Number(data?.sent || 0);
-      totalFailed += Number(data?.failed || 0);
-
-      if (data?.done) {
-        setSendLog(`✅ Concluído. Enviados: ${totalSent} | Falhas: ${totalFailed}`);
-        break;
-      }
-
-      offset = Number(data?.nextOffset ?? 0);
-      setSendLog(`Enviando... +${data?.sent || 0} enviados, +${data?.failed || 0} falhas. Próximo lote offset=${offset}`);
-
-      // pequena pausa pra não saturar
-      await new Promise((r) => setTimeout(r, 400));
+    if (error) {
+      setSendLog(`❌ ${error.message}`);
+    } else {
+      const sent = Number(data?.sent || 0);
+      const failed = Number(data?.failed || 0);
+      const status = String(data?.status || "—");
+      setSendLog(`✅ Concluído. Status: ${status} | Enviados: ${sent} | Falhas: ${failed}`);
     }
 
-    setSendingBatch(false);
+    setSendingAll(false);
     await loadCampaigns();
   }
 
@@ -332,6 +346,7 @@ export function AdminNewsletter() {
             onClick={() => {
               loadCampaigns();
               loadSubscribers();
+              loadMateriasLite();
             }}
             className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
           >
@@ -339,35 +354,61 @@ export function AdminNewsletter() {
             Atualizar
           </button>
 
-          <button
-            onClick={openNewCampaign}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Nova Campanha
-          </button>
+          {tab === "campaigns" && (
+            <button
+              onClick={openNewCampaign}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Nova Campanha
+            </button>
+          )}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setTab("campaigns")}
           className={`px-4 py-2 rounded-md text-sm font-medium border ${
-            tab === "campaigns" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"
+            tab === "campaigns"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-background hover:bg-muted"
           }`}
         >
           Campanhas
         </button>
+
         <button
           onClick={() => setTab("subscribers")}
           className={`px-4 py-2 rounded-md text-sm font-medium border ${
-            tab === "subscribers" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted"
+            tab === "subscribers"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-background hover:bg-muted"
           }`}
         >
           Inscritos
         </button>
+
+        <button
+          onClick={() => setTab("config")}
+          className={`px-4 py-2 rounded-md text-sm font-medium border inline-flex items-center gap-2 ${
+            tab === "config"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-background hover:bg-muted"
+          }`}
+        >
+          <Settings className="h-4 w-4" />
+          Configuração de E-mail
+        </button>
       </div>
+
+      {/* CONFIG */}
+      {tab === "config" && (
+        <div className="rounded-md border bg-card shadow-sm overflow-hidden">
+          <NewsletterEmailConfig />
+        </div>
+      )}
 
       {/* Campaigns */}
       {tab === "campaigns" && (
@@ -404,7 +445,9 @@ export function AdminNewsletter() {
                     <tr key={c.id} className="hover:bg-muted/50 transition-colors">
                       <td className="px-6 py-4 font-medium">{c.title}</td>
                       <td className="px-6 py-4">{c.subject}</td>
-                      <td className="px-6 py-4">{c.mode === "materia" ? "Matéria" : "Personalizado"}</td>
+                      <td className="px-6 py-4">
+                        {c.mode === "materia" ? "Matéria" : "Personalizado"}
+                      </td>
                       <td className="px-6 py-4">{c.status}</td>
                       <td className="px-6 py-4">{c.sent_count ?? 0}</td>
                       <td className="px-6 py-4">{c.fail_count ?? 0}</td>
@@ -575,7 +618,9 @@ export function AdminNewsletter() {
                     onChange={(e) => setForm({ ...form, materia_id: e.target.value })}
                     className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
                   >
-                    <option value="">{materiasLoading ? "Carregando..." : "Selecione..."}</option>
+                    <option value="">
+                      {materiasLoading ? "Carregando..." : "Selecione..."}
+                    </option>
                     {materias.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.titulo}
@@ -596,7 +641,7 @@ export function AdminNewsletter() {
                     placeholder="<h3>Olá...</h3><p>Conteúdo...</p>"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Dica: use HTML simples. O template final é montado na Edge Function.
+                    Dica: use HTML simples.
                   </p>
                 </div>
               )}
@@ -620,13 +665,13 @@ export function AdminNewsletter() {
 
                   {selectedCampaign && (
                     <button
-                      onClick={sendCampaignBatched}
-                      disabled={sendingBatch}
+                      onClick={sendCampaignAll}
+                      disabled={sendingAll}
                       className="inline-flex items-center gap-2 rounded-md bg-[#0F7A3E] px-4 py-2 text-sm font-medium text-white hover:bg-[#0d6633] disabled:opacity-60"
-                      title="Envia para todos inscritos (em lotes)"
+                      title="Envia para todos inscritos"
                     >
                       <Send className="h-4 w-4" />
-                      {sendingBatch ? "Enviando..." : "Enviar campanha"}
+                      {sendingAll ? "Enviando..." : "Enviar campanha"}
                     </button>
                   )}
                 </div>
@@ -656,7 +701,9 @@ export function AdminNewsletter() {
 
               {selectedCampaign && (
                 <div className="text-xs text-muted-foreground">
-                  Status atual: <b>{selectedCampaign.status}</b> • Enviados: <b>{selectedCampaign.sent_count ?? 0}</b> • Falhas: <b>{selectedCampaign.fail_count ?? 0}</b>
+                  Status atual: <b>{selectedCampaign.status}</b> • Enviados:{" "}
+                  <b>{selectedCampaign.sent_count ?? 0}</b> • Falhas:{" "}
+                  <b>{selectedCampaign.fail_count ?? 0}</b>
                 </div>
               )}
             </div>
