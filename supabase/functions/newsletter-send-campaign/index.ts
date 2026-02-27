@@ -45,8 +45,12 @@ Deno.serve(async (req) => {
     if (!user) return json(401, { ok: false, error: "Unauthorized" });
 
     const roles = await getRolesForUser(user.id);
-    if (!hasAnyRole(roles, ["admin", "editor"])) {
-      return json(403, { ok: false, error: "Forbidden" });
+    if (!hasAnyRole(roles, ["admin_alfa", "admin", "editor"])) {
+      return json(403, {
+        ok: false,
+        error: "Forbidden",
+        code: "FORBIDDEN",
+      });
     }
 
     const body = await req.json().catch(() => null);

@@ -49,6 +49,27 @@ function normalizeStatus(s: any): CampaignStatus {
   return "draft";
 }
 
+
+async function getInvokeErrorDetails(error: any): Promise<{ status?: number; details: string }> {
+  const status = error?.context?.status;
+
+  if (error?.context && typeof error.context.text === "function") {
+    try {
+      const details = await error.context.text();
+      if (details && String(details).trim()) {
+        return { status, details: String(details).trim() };
+      }
+    } catch {
+      // fallback para message
+    }
+  }
+
+  return {
+    status,
+    details: String(error?.message || "Erro ao invocar a função de newsletter."),
+  };
+}
+
 export function AdminNewsletter() {
   const [tab, setTab] = useState<"campaigns" | "subscribers" | "config">("campaigns");
 
@@ -278,23 +299,29 @@ export function AdminNewsletter() {
     setSendingTest(true);
     setSendLog(null);
 
-    const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
-      body: {
-        mode: "test",
-        campaign_id: selectedCampaign.id,
-        test_email: testEmail.trim().toLowerCase(),
-      },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
+        body: {
+          mode: "test",
+          campaign_id: selectedCampaign.id,
+          test_email: testEmail.trim().toLowerCase(),
+        },
+      });
 
-    if (error) {
-      setSendLog(`❌ ${error.message}`);
-    } else {
+      if (error) {
+        const { status, details } = await getInvokeErrorDetails(error);
+        const statusPrefix = typeof status === "number" ? `(${status}) ` : "";
+        setSendLog(`❌ ${statusPrefix}${details}`);
+        return;
+      }
+
       const sent = Number(data?.sent || 0);
       const failed = Number(data?.failed || 0);
       setSendLog(`✅ Teste concluído. Enviados: ${sent} | Falhas: ${failed}`);
+    } finally {
+      setSendingTest(false);
     }
 
-    setSendingTest(false);
     await loadCampaigns();
   }
 
@@ -311,23 +338,29 @@ export function AdminNewsletter() {
     setSendingAll(true);
     setSendLog("Iniciando envio para todos inscritos...");
 
-    const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
-      body: {
-        mode: "all",
-        campaign_id: selectedCampaign.id,
-      },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
+        body: {
+          mode: "all",
+          campaign_id: selectedCampaign.id,
+        },
+      });
 
-    if (error) {
-      setSendLog(`❌ ${error.message}`);
-    } else {
+      if (error) {
+        const { status, details } = await getInvokeErrorDetails(error);
+        const statusPrefix = typeof status === "number" ? `(${status}) ` : "";
+        setSendLog(`❌ ${statusPrefix}${details}`);
+        return;
+      }
+
       const sent = Number(data?.sent || 0);
       const failed = Number(data?.failed || 0);
       const status = String(data?.status || "—");
       setSendLog(`✅ Concluído. Status: ${status} | Enviados: ${sent} | Falhas: ${failed}`);
+    } finally {
+      setSendingAll(false);
     }
 
-    setSendingAll(false);
     await loadCampaigns();
   }
 
