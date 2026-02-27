@@ -54,7 +54,8 @@ Deno.serve(async (req) => {
     // B) Disparar existente (campaign_id)
     const createCampaign = Boolean((body as any).create_campaign);
 
-    const mode = String((body as any).mode || "all") as Mode; // "test" | "all"
+    const requestedMode = String((body as any).mode || "all");
+    const mode: Mode = requestedMode === "test" ? "test" : "all";
     const test_email = (body as any).test_email
       ? String((body as any).test_email).trim().toLowerCase()
       : null;
