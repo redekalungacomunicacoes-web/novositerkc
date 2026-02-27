@@ -242,23 +242,149 @@ const buildPeriodsBetween = (startDate: string, endDate: string) => {
   return periods;
 };
 
+// ✅ BLINDAGEM: dashboard nunca pode ser undefined
+const DEFAULT_DASHBOARD: DashboardData = {
+  entradas: 0,
+  saidas: 0,
+  saldoAtual: 0,
+  pendencias: 0,
+  fluxoCaixa: [],
+  distribuicaoCategoria: [],
+  orcadoVsReal: [],
+};
+
+// ✅ PDF SEM LIBS: imprime e salva como PDF no navegador
+const openPrint = (html: string, title = 'Relatório Financeiro') => {
+  const w = window.open('', '_blank', 'noopener,noreferrer,width=1024,height=768');
+  if (!w) {
+    alert('Pop-up bloqueado. Permita pop-ups para gerar o PDF.');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.document.title = title;
+  setTimeout(() => {
+    w.focus();
+    w.print();
+    setTimeout(() => w.close(), 500);
+  }, 250);
+};
+
+const escapeHtml = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[c] as string));
+
+const buildReportHtml = (opts: {
+  title: string;
+  logoDataUrl?: string | null;
+  filters: ReportFilters;
+  summary: ReportSummary;
+  list: FinanceiroMovimentacao[];
+  fundName?: string;
+  projectName?: string;
+}) => {
+  const { title, logoDataUrl, filters, summary, list, fundName, projectName } = opts;
+
+  const modeLabel =
+    filters.mode === 'geral'
+      ? 'Geral'
+      : filters.mode === 'fundo'
+        ? `Fundo: ${fundName ?? '—'}`
+        : `Projeto: ${projectName ?? '—'}`;
+
+  const rows = list.map((m) => `
+    <tr>
+      <td>${escapeHtml(String(m.data).slice(0, 10))}</td>
+      <td>${escapeHtml(m.tipo)}</td>
+      <td>${escapeHtml(m.fundo || '—')}</td>
+      <td>${escapeHtml(m.projetoNome !== '—' ? m.projetoNome : '—')}</td>
+      <td>${escapeHtml(m.categoria || '—')}</td>
+      <td>${escapeHtml(m.descricao || '—')}</td>
+      <td style="text-align:right;">${escapeHtml(formatCurrency(m.valorTotal))}</td>
+      <td>${escapeHtml(m.status)}</td>
+    </tr>
+  `).join('');
+
+  return `<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${escapeHtml(title)}</title>
+<style>
+  @page { margin: 14mm; }
+  body { font-family: Arial, Helvetica, sans-serif; color:#111; }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:12px; }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .logo { width:52px; height:52px; border-radius:12px; object-fit:contain; background:#f3f3f3; }
+  h1 { margin:0; font-size:16px; }
+  .meta { font-size:12px; color:#444; margin-top:4px; }
+  .cards { display:flex; gap:10px; margin: 12px 0 14px; }
+  .card { flex:1; border:1px solid #e3e3e3; border-radius:12px; padding:10px; }
+  .label { font-size:11px; color:#666; }
+  .value { font-size:14px; font-weight:700; margin-top:6px; }
+  table { width:100%; border-collapse:collapse; font-size:11px; }
+  th, td { border-bottom:1px solid #eee; padding:7px 6px; vertical-align:top; }
+  th { text-align:left; font-size:10px; color:#555; }
+  .footer { margin-top:12px; font-size:10px; color:#666; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">
+      ${logoDataUrl ? `<img class="logo" src="${escapeHtml(logoDataUrl)}" />` : `<div class="logo"></div>`}
+      <div>
+        <h1>RELATÓRIO FINANCEIRO</h1>
+        <div class="meta">Período: ${escapeHtml(filters.startDate)} até ${escapeHtml(filters.endDate)}</div>
+        <div class="meta">Filtro: ${escapeHtml(modeLabel)} • Status: ${escapeHtml(filters.status ?? 'todos')}</div>
+      </div>
+    </div>
+    <div class="meta">Gerado em: ${escapeHtml(new Date().toLocaleString('pt-BR'))}</div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Entradas pagas</div><div class="value">${escapeHtml(formatCurrency(summary.entradas))}</div></div>
+    <div class="card"><div class="label">Saídas pagas</div><div class="value">${escapeHtml(formatCurrency(summary.saidas))}</div></div>
+    <div class="card"><div class="label">Saldo (pagos)</div><div class="value">${escapeHtml(formatCurrency(summary.saldo))}</div></div>
+    <div class="card"><div class="label">Pendências</div><div class="value">${escapeHtml(formatCurrency(summary.pendencias))}</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:75px;">Data</th>
+        <th style="width:55px;">Tipo</th>
+        <th style="width:110px;">Fundo</th>
+        <th style="width:110px;">Projeto</th>
+        <th style="width:90px;">Categoria</th>
+        <th>Descrição</th>
+        <th style="width:85px;text-align:right;">Valor</th>
+        <th style="width:75px;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows || `<tr><td colspan="8" style="padding:12px;color:#666;">Sem registros para este filtro/período.</td></tr>`}
+    </tbody>
+  </table>
+
+  <div class="footer">PDF gerado via impressão do navegador (sem bibliotecas externas).</div>
+</body>
+</html>`;
+};
+
 export function useFinanceSupabase() {
   const [funds, setFunds] = useState<FinanceiroFundo[]>([]);
   const [projects, setProjects] = useState<FinanceiroProjeto[]>([]);
   const [movements, setMovements] = useState<FinanceiroMovimentacao[]>([]);
-  const [dashboard, setDashboard] = useState<DashboardData>({
-    entradas: 0,
-    saidas: 0,
-    saldoAtual: 0,
-    pendencias: 0,
-    fluxoCaixa: [],
-    distribuicaoCategoria: [],
-    orcadoVsReal: [],
-  });
+  const [dashboard, setDashboard] = useState<DashboardData>(DEFAULT_DASHBOARD);
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ✅ garante que nunca sai undefined para a UI
+  const safeDashboard = useMemo<DashboardData>(() => dashboard ?? DEFAULT_DASHBOARD, [dashboard]);
 
   const fundsById = useMemo(() => new Map(funds.map((f) => [f.id, f.nome])), [funds]);
   const projectToFundId = useMemo(() => new Map(projects.map((p) => [p.id, p.fundoId])), [projects]);
@@ -325,95 +451,102 @@ export function useFinanceSupabase() {
   const listLatestMovements = useCallback(async () => listMovements({ limit: 10 }), [listMovements]);
 
   const getDashboardAggregates = useCallback(async (): Promise<DashboardData> => {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 5);
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 5);
 
-    const start = startDate.toISOString().slice(0, 10);
-    const end = endDate.toISOString().slice(0, 10);
+      const start = startDate.toISOString().slice(0, 10);
+      const end = endDate.toISOString().slice(0, 10);
 
-    const [movementsRes, paidFundsMovementsRes, fundsList] = await Promise.all([
-      buildMovementsQuery({ startDate: start, endDate: end }),
-      buildMovementsQuery({ status: 'pago' }),
-      listFunds(),
-    ]);
+      const [movementsRes, paidFundsMovementsRes, fundsList] = await Promise.all([
+        buildMovementsQuery({ startDate: start, endDate: end }),
+        buildMovementsQuery({ status: 'pago' }),
+        listFunds(),
+      ]);
 
-    ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
-    ensure(paidFundsMovementsRes.error, 'Falha ao carregar saldo dos fundos.');
-    const raw = (movementsRes.data || []).map((row) => mapMovement(row as AnyRow));
-    const paidFundsRaw = (paidFundsMovementsRes.data || []).map((row) => mapMovement(row as AnyRow));
+      ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
+      ensure(paidFundsMovementsRes.error, 'Falha ao carregar saldo dos fundos.');
 
-    const projectFundFromRow = new Map<string, string>();
-    raw.forEach((m, idx) => {
-      const r = movementsRes.data?.[idx] as AnyRow | undefined;
-      const proj = r?.project as AnyRow | undefined;
-      if (proj?.id && proj?.fund_id) projectFundFromRow.set(String(proj.id), String(proj.fund_id));
-    });
+      const raw = (movementsRes.data || []).map((row) => mapMovement(row as AnyRow));
+      const paidFundsRaw = (paidFundsMovementsRes.data || []).map((row) => mapMovement(row as AnyRow));
 
-    const paidFundProjectMap = new Map<string, string>();
-    paidFundsRaw.forEach((m, idx) => {
-      const r = paidFundsMovementsRes.data?.[idx] as AnyRow | undefined;
-      const proj = r?.project as AnyRow | undefined;
-      if (proj?.id && proj?.fund_id) paidFundProjectMap.set(String(proj.id), String(proj.fund_id));
-    });
+      const projectFundFromRow = new Map<string, string>();
+      raw.forEach((m, idx) => {
+        const r = movementsRes.data?.[idx] as AnyRow | undefined;
+        const proj = r?.project as AnyRow | undefined;
+        if (proj?.id && proj?.fund_id) projectFundFromRow.set(String(proj.id), String(proj.fund_id));
+      });
 
-    const fundsNameById = new Map(fundsList.map((f) => [f.id, f.nome]));
+      const paidFundProjectMap = new Map<string, string>();
+      paidFundsRaw.forEach((m, idx) => {
+        const r = paidFundsMovementsRes.data?.[idx] as AnyRow | undefined;
+        const proj = r?.project as AnyRow | undefined;
+        if (proj?.id && proj?.fund_id) paidFundProjectMap.set(String(proj.id), String(proj.fund_id));
+      });
 
-    const normalized = raw.map((m) => {
-      const resolvedFundId = m.fundoId || (m.projetoId ? (projectFundFromRow.get(m.projetoId) ?? '') : '');
-      const resolvedFundName = resolvedFundId ? (fundsNameById.get(resolvedFundId) ?? m.fundo) : m.fundo;
-      return { ...m, fundoId: resolvedFundId, fundo: resolvedFundName || '—' };
-    });
+      const fundsNameById = new Map(fundsList.map((f) => [f.id, f.nome]));
 
-    const paidFundsNormalized = paidFundsRaw
-      .map((m) => {
-        const resolvedFundId = m.fundoId || (m.projetoId ? (paidFundProjectMap.get(m.projetoId) ?? '') : '');
-        return { ...m, fundoId: resolvedFundId };
-      })
-      .filter((m) => Boolean(m.fundoId));
+      const normalized = raw.map((m) => {
+        const resolvedFundId = m.fundoId || (m.projetoId ? (projectFundFromRow.get(m.projetoId) ?? '') : '');
+        const resolvedFundName = resolvedFundId ? (fundsNameById.get(resolvedFundId) ?? m.fundo) : m.fundo;
+        return { ...m, fundoId: resolvedFundId, fundo: resolvedFundName || '—' };
+      });
 
-    const paid = normalized.filter((m) => m.status === 'pago');
-    const paidIn = paid.filter((m) => m.tipo === 'entrada');
-    const paidOut = paid.filter((m) => m.tipo === 'saida');
+      const paidFundsNormalized = paidFundsRaw
+        .map((m) => {
+          const resolvedFundId = m.fundoId || (m.projetoId ? (paidFundProjectMap.get(m.projetoId) ?? '') : '');
+          return { ...m, fundoId: resolvedFundId };
+        })
+        .filter((m) => Boolean(m.fundoId));
 
-    const entradas = paidIn.reduce((acc, m) => acc + m.valorTotal, 0);
-    const saidas = paidOut.reduce((acc, m) => acc + m.valorTotal, 0);
-    const pendencias = normalized.filter((m) => m.status === 'pendente').reduce((acc, m) => acc + m.valorTotal, 0);
+      const paid = normalized.filter((m) => m.status === 'pago');
+      const paidIn = paid.filter((m) => m.tipo === 'entrada');
+      const paidOut = paid.filter((m) => m.tipo === 'saida');
 
-    const { totalSaldoGeral } = computeFundBalances(fundsList, paidFundsNormalized);
-    const saldoAtual = totalSaldoGeral;
+      const entradas = paidIn.reduce((acc, m) => acc + m.valorTotal, 0);
+      const saidas = paidOut.reduce((acc, m) => acc + m.valorTotal, 0);
+      const pendencias = normalized.filter((m) => m.status === 'pendente').reduce((acc, m) => acc + m.valorTotal, 0);
 
-    const fluxoMap = new Map<string, { periodo: string; entradas: number; saidas: number }>();
-    const pizzaMap = new Map<string, number>();
-    const realMap = new Map<string, number>();
+      const { totalSaldoGeral } = computeFundBalances(fundsList, paidFundsNormalized);
+      const saldoAtual = totalSaldoGeral;
 
-    for (const row of paid) {
-      const period = monthKey(row.data);
-      const current = fluxoMap.get(period) ?? { periodo: period, entradas: 0, saidas: 0 };
-      if (row.tipo === 'entrada') current.entradas += row.valorTotal;
-      if (row.tipo === 'saida') current.saidas += row.valorTotal;
-      fluxoMap.set(period, current);
+      const fluxoMap = new Map<string, { periodo: string; entradas: number; saidas: number }>();
+      const pizzaMap = new Map<string, number>();
+      const realMap = new Map<string, number>();
 
-      if (row.tipo === 'saida') {
-        pizzaMap.set(row.categoria || 'Sem categoria', (pizzaMap.get(row.categoria || 'Sem categoria') ?? 0) + row.valorTotal);
-        realMap.set(period, (realMap.get(period) ?? 0) + row.valorTotal);
+      for (const row of paid) {
+        const period = monthKey(row.data);
+        const current = fluxoMap.get(period) ?? { periodo: period, entradas: 0, saidas: 0 };
+        if (row.tipo === 'entrada') current.entradas += row.valorTotal;
+        if (row.tipo === 'saida') current.saidas += row.valorTotal;
+        fluxoMap.set(period, current);
+
+        if (row.tipo === 'saida') {
+          const cat = row.categoria || 'Sem categoria';
+          pizzaMap.set(cat, (pizzaMap.get(cat) ?? 0) + row.valorTotal);
+          realMap.set(period, (realMap.get(period) ?? 0) + row.valorTotal);
+        }
       }
+
+      const periods = buildPeriodsBetween(start, end);
+
+      const totalOrcadoPeriodo = fundsList.reduce((acc, f) => acc + (Number.isFinite(f.totalOrcado) ? f.totalOrcado : 0), 0);
+      const orcadoMensal = periods.length > 0 ? totalOrcadoPeriodo / periods.length : 0;
+
+      return {
+        entradas,
+        saidas,
+        saldoAtual,
+        pendencias,
+        fluxoCaixa: periods.map((periodo) => fluxoMap.get(periodo) ?? { periodo, entradas: 0, saidas: 0 }),
+        distribuicaoCategoria: Array.from(pizzaMap.entries()).map(([categoria, valor]) => ({ categoria, valor })),
+        orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: orcadoMensal, real: realMap.get(periodo) ?? 0 })),
+      };
+    } catch {
+      // ✅ nunca retorna undefined
+      return DEFAULT_DASHBOARD;
     }
-
-    const periods = buildPeriodsBetween(start, end);
-
-    const totalOrcadoPeriodo = fundsList.reduce((acc, f) => acc + (Number.isFinite(f.totalOrcado) ? f.totalOrcado : 0), 0);
-    const orcadoMensal = periods.length > 0 ? totalOrcadoPeriodo / periods.length : 0;
-
-    return {
-      entradas,
-      saidas,
-      saldoAtual,
-      pendencias,
-      fluxoCaixa: periods.map((periodo) => fluxoMap.get(periodo) ?? { periodo, entradas: 0, saidas: 0 }),
-      distribuicaoCategoria: Array.from(pizzaMap.entries()).map(([categoria, valor]) => ({ categoria, valor })),
-      orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: orcadoMensal, real: realMap.get(periodo) ?? 0 })),
-    };
   }, [listFunds]);
 
   const load = useCallback(async () => {
@@ -481,9 +614,11 @@ export function useFinanceSupabase() {
 
       setMovements(latest);
       setCategories(categoriesList);
-      setDashboard(aggregates);
+      setDashboard(aggregates ?? DEFAULT_DASHBOARD);
     } catch (loadError) {
       setError((loadError as Error).message);
+      // ✅ não deixa dashboard quebrar a UI
+      setDashboard(DEFAULT_DASHBOARD);
     } finally {
       setLoading(false);
     }
@@ -665,7 +800,6 @@ export function useFinanceSupabase() {
   const getReportMovements = useCallback(async (filters: ReportFilters) => {
     const base: MovementFilters = { startDate: filters.startDate, endDate: filters.endDate, status: filters.status };
 
-    // Modo fundo: não dá pra confiar só no eq('fund_id') porque movimento pode vir do projeto sem fund_id
     if (filters.mode === 'fundo') {
       const list = await listMovements({ startDate: filters.startDate, endDate: filters.endDate, status: filters.status });
       const target = filters.fundId || '';
@@ -673,7 +807,6 @@ export function useFinanceSupabase() {
     }
 
     if (filters.mode === 'projeto') base.projectId = filters.projectId;
-    if (filters.mode === 'geral') { /* nada */ }
 
     return listMovements(base);
   }, [listMovements]);
@@ -685,87 +818,25 @@ export function useFinanceSupabase() {
     return { entradas, saidas, saldo: entradas - saidas, pendencias };
   };
 
+  // ✅ MESMA ASSINATURA, SEM JSPD F (não quebra build)
   const generateReportPdf = useCallback(async (filters: ReportFilters, opts?: { logoDataUrl?: string | null; fileName?: string }) => {
     const list = await getReportMovements(filters);
     const summary = summarizeMovements(list);
 
-    const jsPDFmod = await import('jspdf');
-    const autoTableMod: any = await import('jspdf-autotable');
+    const fundName = filters.fundId ? (fundsById.get(filters.fundId) ?? '—') : '—';
+    const projectName = filters.projectId ? (projectsById.get(filters.projectId) ?? '—') : '—';
 
-    const doc = new jsPDFmod.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    let cursorY = 12;
-
-    if (opts?.logoDataUrl) {
-      try {
-        const imgW = 40;
-        const imgH = 18;
-        doc.addImage(opts.logoDataUrl, 'PNG', (pageWidth - imgW) / 2, cursorY, imgW, imgH);
-        cursorY += imgH + 6;
-      } catch {
-        // ignora se a logo vier em formato não suportado
-      }
-    }
-
-    doc.setFontSize(14);
-    doc.text('RELATÓRIO FINANCEIRO', pageWidth / 2, cursorY, { align: 'center' });
-    cursorY += 6;
-
-    doc.setFontSize(10);
-
-    const modeLabel =
-      filters.mode === 'geral'
-        ? 'Geral'
-        : filters.mode === 'fundo'
-          ? `Fundo: ${fundsById.get(filters.fundId || '') ?? '—'}`
-          : `Projeto: ${projectsById.get(filters.projectId || '') ?? '—'}`;
-
-    doc.text(`Período: ${filters.startDate} até ${filters.endDate}`, 14, cursorY); cursorY += 5;
-    doc.text(`Filtro: ${modeLabel}`, 14, cursorY); cursorY += 5;
-    doc.text(`Status: ${filters.status ?? 'todos'}`, 14, cursorY); cursorY += 8;
-
-    doc.setFontSize(11);
-    doc.text('Resumo', 14, cursorY); cursorY += 5;
-
-    doc.setFontSize(10);
-    doc.text(`Entradas pagas: ${formatCurrency(summary.entradas)}`, 14, cursorY); cursorY += 5;
-    doc.text(`Saídas pagas: ${formatCurrency(summary.saidas)}`, 14, cursorY); cursorY += 5;
-    doc.text(`Saldo (pagos): ${formatCurrency(summary.saldo)}`, 14, cursorY); cursorY += 5;
-    doc.text(`Pendências: ${formatCurrency(summary.pendencias)}`, 14, cursorY); cursorY += 8;
-
-    const head = [['Data', 'Tipo', 'Fundo', 'Projeto', 'Categoria', 'Descrição', 'Valor', 'Status']];
-    const body = list.map((m) => ([
-      String(m.data).slice(0, 10),
-      m.tipo,
-      m.fundo || '—',
-      m.projetoNome !== '—' ? m.projetoNome : '—',
-      m.categoria || '—',
-      m.descricao || '—',
-      formatCurrency(m.valorTotal),
-      m.status,
-    ]));
-
-    (autoTableMod.default || autoTableMod)(doc, {
-      head,
-      body,
-      startY: cursorY,
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [15, 61, 46] },
-      columnStyles: {
-        0: { cellWidth: 18 },
-        1: { cellWidth: 14 },
-        6: { cellWidth: 18, halign: 'right' },
-        7: { cellWidth: 16 },
-      },
-      didDrawPage: () => {
-        const now = new Date();
-        const footer = `Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`;
-        doc.setFontSize(8);
-        doc.text(footer, 14, doc.internal.pageSize.getHeight() - 10);
-      },
+    const html = buildReportHtml({
+      title: opts?.fileName ?? 'relatorio-financeiro',
+      logoDataUrl: opts?.logoDataUrl ?? null,
+      filters,
+      summary,
+      list,
+      fundName,
+      projectName,
     });
 
-    doc.save(opts?.fileName ?? `relatorio-financeiro_${filters.startDate}_a_${filters.endDate}.pdf`);
+    openPrint(html, 'Relatório Financeiro');
     return { ok: true, total: list.length };
   }, [fundsById, projectsById, getReportMovements]);
 
@@ -773,7 +844,7 @@ export function useFinanceSupabase() {
     funds,
     projects,
     movements,
-    dashboard,
+    dashboard: safeDashboard, // ✅ troca aqui
     categories,
     loading,
     saving,
@@ -805,7 +876,6 @@ export function useFinanceSupabase() {
     getSignedUrl,
     deleteMovementCascade,
 
-    // NOVO
     generateReportPdf,
   };
 }
