@@ -14,6 +14,7 @@ import { MateriaDetalhes } from "@/app/pages/MateriaDetalhes";
 import { Newsletter } from "@/app/pages/Newsletter";
 import { Contato } from "@/app/pages/Contato";
 import { NotFound } from "@/app/pages/NotFound";
+import { TeamMemberPublicPage } from "@/app/pages/public/TeamMember/TeamMemberPublicPage";
 
 // Admin
 import { Dashboard } from "@/app/pages/admin/Dashboard";
@@ -128,6 +129,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Home },
       { path: "quem-somos", Component: QuemSomos },
+      { path: "equipe/:slug", Component: TeamMemberPublicPage },
       { path: "projetos", Component: Projetos },
       { path: "projetos/:id", Component: ProjetoDetalhes },
       { path: "materias", Component: Materias },
