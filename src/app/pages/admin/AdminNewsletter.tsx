@@ -89,10 +89,12 @@ export function AdminNewsletter() {
   const [sendLog, setSendLog] = useState<string | null>(null);
 
   async function callNewsletter(body: any) {
+    // garante sessão
     const { data: s0, error: e0 } = await supabase.auth.getSession();
     if (e0) throw new Error("Erro ao obter sessão: " + e0.message);
     if (!s0?.session?.access_token) throw new Error("Sessão Supabase inválida. Faça login novamente.");
 
+    // tenta refresh para evitar token expirado
     await supabase.auth.refreshSession().catch(() => null);
 
     const { data: s1 } = await supabase.auth.getSession();
@@ -102,7 +104,7 @@ export function AdminNewsletter() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        "Authorization": `Bearer ${token}`,
       },
       body: JSON.stringify(body),
     });
