@@ -3,6 +3,9 @@ import { supabase } from "@/lib/supabase";
 import { Plus, Send, Mail, Users, RefreshCw, Trash2, Eye, Settings } from "lucide-react";
 import { NewsletterEmailConfig } from "./newsletter/NewsletterEmailConfig";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const FN_URL = (SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/newsletter-send-campaign";
+
 type Subscriber = {
   id: string;
   email: string;
@@ -50,47 +53,6 @@ function normalizeStatus(s: any): CampaignStatus {
 }
 
 
-async function getInvokeErrorDetails(error: any): Promise<{ status?: number; details: string }> {
-  const status = error?.context?.status;
-
-  if (error?.context && typeof error.context.text === "function") {
-    try {
-      const details = await error.context.text();
-      if (details && String(details).trim()) {
-        return { status, details: String(details).trim() };
-      }
-    } catch {
-      // fallback para message
-    }
-  }
-
-  return {
-    status,
-    details: String(error?.message || "Erro ao invocar a função de newsletter."),
-  };
-}
-
-async function invokeNewsletterFunction(body: Record<string, unknown>) {
-  const {
-    data: { session },
-    error: sessErr,
-  } = await supabase.auth.getSession();
-
-  if (sessErr || !session?.access_token) {
-    throw new Error("Sessão inválida. Faça login novamente.");
-  }
-
-  const { data: refreshedData } = await supabase.auth.refreshSession();
-  const accessToken = refreshedData.session?.access_token || session.access_token;
-
-  return supabase.functions.invoke("newsletter-send-campaign", {
-    body,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-}
-
 export function AdminNewsletter() {
   const [tab, setTab] = useState<"campaigns" | "subscribers" | "config">("campaigns");
 
@@ -125,6 +87,35 @@ export function AdminNewsletter() {
   const [testEmail, setTestEmail] = useState("");
   const [sendingAll, setSendingAll] = useState(false);
   const [sendLog, setSendLog] = useState<string | null>(null);
+
+  async function callNewsletter(body: any) {
+    const { data: s0, error: e0 } = await supabase.auth.getSession();
+    if (e0) throw new Error("Erro ao obter sessão: " + e0.message);
+    if (!s0?.session?.access_token) throw new Error("Sessão Supabase inválida. Faça login novamente.");
+
+    await supabase.auth.refreshSession().catch(() => null);
+
+    const { data: s1 } = await supabase.auth.getSession();
+    const token = s1?.session?.access_token || s0.session.access_token;
+
+    const resp = await fetch(FN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const text = await resp.text().catch(() => "");
+    if (!resp.ok) throw new Error(`(${resp.status}) ${text || resp.statusText}`);
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
 
   async function loadSubscribers() {
     setSubsLoading(true);
@@ -321,28 +312,17 @@ export function AdminNewsletter() {
     setSendLog(null);
 
     try {
-      const { data, error } = await invokeNewsletterFunction({
+      const data = await callNewsletter({
         mode: "test",
         campaign_id: selectedCampaign.id,
         test_email: testEmail.trim().toLowerCase(),
       });
 
-      if (error) {
-        const { status, details } = await getInvokeErrorDetails(error);
-        setSendLog(`❌ (${status || "?"}) ${details}`);
-        return;
-      }
-
-      const sent = Number(data?.sent || 0);
-      const failed = Number(data?.failed || 0);
+      const sent = Number((data as any)?.sent || 0);
+      const failed = Number((data as any)?.failed || 0);
       setSendLog(`✅ Teste concluído. Enviados: ${sent} | Falhas: ${failed}`);
-    } catch (error: any) {
-      if (error?.message === "Sessão inválida. Faça login novamente.") {
-        setSendLog("❌ Sessão inválida. Faça login novamente.");
-        return;
-      }
-
-      setSendLog(`❌ (?) ${String(error?.message || "Erro ao enviar teste.")}`);
+    } catch (e: any) {
+      setSendLog(`❌ ${e?.message || String(e)}`);
     } finally {
       setSendingTest(false);
     }
@@ -364,28 +344,17 @@ export function AdminNewsletter() {
     setSendLog("Iniciando envio para todos inscritos...");
 
     try {
-      const { data, error } = await invokeNewsletterFunction({
+      const data = await callNewsletter({
         mode: "all",
         campaign_id: selectedCampaign.id,
       });
 
-      if (error) {
-        const { status, details } = await getInvokeErrorDetails(error);
-        setSendLog(`❌ (${status || "?"}) ${details}`);
-        return;
-      }
-
-      const sent = Number(data?.sent || 0);
-      const failed = Number(data?.failed || 0);
-      const status = String(data?.status || "—");
+      const status = String((data as any)?.status || "—");
+      const sent = Number((data as any)?.sent || 0);
+      const failed = Number((data as any)?.failed || 0);
       setSendLog(`✅ Concluído. Status: ${status} | Enviados: ${sent} | Falhas: ${failed}`);
-    } catch (error: any) {
-      if (error?.message === "Sessão inválida. Faça login novamente.") {
-        setSendLog("❌ Sessão inválida. Faça login novamente.");
-        return;
-      }
-
-      setSendLog(`❌ (?) ${String(error?.message || "Erro ao enviar campanha.")}`);
+    } catch (e: any) {
+      setSendLog(`❌ ${e?.message || String(e)}`);
     } finally {
       setSendingAll(false);
     }
