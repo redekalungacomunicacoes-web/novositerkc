@@ -1,16 +1,22 @@
-import { supabaseAdmin, supabaseAnon } from "./supabase.ts";
+import { supabaseAdmin } from "./supabase.ts";
 
 export type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
 
 export async function getUserFromRequest(req: Request) {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  const auth = req.headers.get("Authorization") || req.headers.get("authorization");
+  if (!auth) return null;
+
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m) return null;
+
+  const token = m[1].trim();
   if (!token) return null;
 
-  const sb = supabaseAnon();
+  const sb = supabaseAdmin();
   const { data, error } = await sb.auth.getUser(token);
-  if (error) return null;
-  return data.user ?? null;
+
+  if (error || !data?.user) return null;
+  return data.user;
 }
 
 export async function getRolesForUser(userId: string): Promise<RoleName[]> {
