@@ -3,9 +3,6 @@ import { supabase } from "@/lib/supabase";
 import { Plus, Send, Mail, Users, RefreshCw, Trash2, Eye, Settings } from "lucide-react";
 import { NewsletterEmailConfig } from "./newsletter/NewsletterEmailConfig";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const FN_URL = (SUPABASE_URL || "").replace(/\/$/, "") + "/functions/v1/newsletter-send-campaign";
-
 type Subscriber = {
   id: string;
   email: string;
@@ -88,25 +85,27 @@ export function AdminNewsletter() {
   const [sendingAll, setSendingAll] = useState(false);
   const [sendLog, setSendLog] = useState<string | null>(null);
 
-  async function callNewsletter(body: any) {
-    const adminKey = (import.meta.env.VITE_NEWSLETTER_ADMIN_KEY as string) || "";
 
-    const resp = await fetch(FN_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-newsletter-key": adminKey,
-      },
-      body: JSON.stringify(body),
-    });
+  async function invokeNewsletter(body: { mode: "test" | "all"; campaign_id: string; test_email?: string }) {
+    const adminKey = (import.meta.env.VITE_NEWSLETTER_ADMIN_KEY as string | undefined) ?? "";
 
-    const text = await resp.text().catch(() => "");
-    if (!resp.ok) throw new Error(`(${resp.status}) ${text || resp.statusText}`);
+    if (!adminKey) {
+      return { data: null, errorMessage: "VITE_NEWSLETTER_ADMIN_KEY não configurada no front-end." };
+    }
 
     try {
-      return JSON.parse(text);
-    } catch {
-      return text;
+      const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
+        body,
+        headers: { "x-newsletter-key": adminKey },
+      });
+
+      if (error) {
+        return { data: null, errorMessage: error.message };
+      }
+
+      return { data, errorMessage: null };
+    } catch (error: any) {
+      return { data: null, errorMessage: error?.message || String(error) };
     }
   }
 
@@ -304,13 +303,20 @@ export function AdminNewsletter() {
     setSendingTest(true);
     setSendLog(null);
 
-    try {
-      const data = await callNewsletter({
-        mode: "test",
-        campaign_id: selectedCampaign.id,
-        test_email: testEmail.trim().toLowerCase(),
-      });
+    const { data, errorMessage } = await invokeNewsletter({
+      mode: "test",
+      campaign_id: selectedCampaign.id,
+      test_email: testEmail.trim().toLowerCase(),
+    });
 
+    if (errorMessage) {
+      setSendLog(`❌ ${errorMessage}`);
+      setSendingTest(false);
+      await loadCampaigns();
+      return;
+    }
+
+    try {
       const sent = Number((data as any)?.sent || 0);
       const failed = Number((data as any)?.failed || 0);
       setSendLog(`✅ Teste concluído. Enviados: ${sent} | Falhas: ${failed}`);
@@ -336,12 +342,19 @@ export function AdminNewsletter() {
     setSendingAll(true);
     setSendLog("Iniciando envio para todos inscritos...");
 
-    try {
-      const data = await callNewsletter({
-        mode: "all",
-        campaign_id: selectedCampaign.id,
-      });
+    const { data, errorMessage } = await invokeNewsletter({
+      mode: "all",
+      campaign_id: selectedCampaign.id,
+    });
 
+    if (errorMessage) {
+      setSendLog(`❌ ${errorMessage}`);
+      setSendingAll(false);
+      await loadCampaigns();
+      return;
+    }
+
+    try {
       const status = String((data as any)?.status || "—");
       const sent = Number((data as any)?.sent || 0);
       const failed = Number((data as any)?.failed || 0);
