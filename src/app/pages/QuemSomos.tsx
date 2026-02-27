@@ -8,8 +8,6 @@ import {
   Target,
   Megaphone,
   ArrowRight,
-  Instagram,
-  X,
   Sparkles,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +24,7 @@ type MembroEquipe = {
   foto_url: string;
   bio?: string | null;
   instagram?: string | null;
+  slug?: string | null;
 };
 
 type QuemSomosData = {
@@ -46,49 +45,18 @@ type ValorDB = {
 const QUEM_SOMOS_ID = 1;
 
 // ---------------------------------------------------------------------------
-// Helper: parse do Instagram
-// Aceita: @user | user | instagram.com/user | https://instagram.com/user
-// ---------------------------------------------------------------------------
-
-function parseInstagram(raw?: string | null) {
-  const v = (raw || "").trim();
-  if (!v) return null;
-
-  if (v.includes("instagram.com")) {
-    try {
-      const url = new URL(v.startsWith("http") ? v : `https://${v}`);
-      const parts = url.pathname.split("/").filter(Boolean);
-      const handle = (parts[0] || "").replace(/^@/, "");
-      if (!handle) return { label: "@instagram", href: url.toString() };
-      return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
-    } catch {
-      const handle =
-        v.split("/").filter(Boolean).pop()?.replace(/^@/, "") || "";
-      if (!handle) return { label: "@instagram", href: v };
-      return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
-    }
-  }
-
-  const handle = v.replace(/^@/, "").split("/").filter(Boolean).pop() || "";
-  if (!handle) return null;
-  return { label: `@${handle}`, href: `https://instagram.com/${handle}` };
-}
-
-// ---------------------------------------------------------------------------
 // Sub-componente: Card do membro (grid)
 // ---------------------------------------------------------------------------
 
 interface MemberCardProps {
   membro: MembroEquipe;
-  onClick: (m: MembroEquipe) => void;
 }
 
-function MemberCard({ membro, onClick }: MemberCardProps) {
+function MemberCard({ membro }: MemberCardProps) {
   return (
-    <button
-      type="button"
-      onClick={() => onClick(membro)}
-      className="group w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
+    <Link
+      to={`/equipe/${membro.slug || membro.id}`}
+      className="group block w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
     >
       {/* Foto */}
       <div className="relative overflow-hidden aspect-square bg-gray-100">
@@ -117,94 +85,7 @@ function MemberCard({ membro, onClick }: MemberCardProps) {
           Ver perfil →
         </span>
       </div>
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-componente: Modal de detalhes
-// ---------------------------------------------------------------------------
-
-interface ModalProps {
-  membro: MembroEquipe | null;
-  onClose: () => void;
-}
-
-function MembroModal({ membro, onClose }: ModalProps) {
-  if (!membro) return null;
-
-  const ig = parseInstagram(membro.instagram);
-
-  return (
-    <div
-      className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Perfil de ${membro.nome}`}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl bg-white shadow-2xl relative overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Faixa verde no topo */}
-        <div className="h-24 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866]" />
-
-        {/* Botão fechar */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
-          aria-label="Fechar"
-        >
-          <X className="h-5 w-5 text-white" />
-        </button>
-
-        {/* Conteúdo */}
-        <div className="px-8 pb-8">
-          {/* Avatar sobreposto à faixa */}
-          <div className="-mt-14 mb-4 flex justify-center">
-            <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100">
-              {membro.foto_url ? (
-                <img
-                  src={membro.foto_url}
-                  alt={membro.nome}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
-                  Sem foto
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="text-center">
-            <h3 className="text-2xl font-bold text-[#2E2E2E]">{membro.nome}</h3>
-            <p className="mt-1 text-sm text-gray-500 font-medium">{membro.cargo}</p>
-
-            {ig && (
-              <a
-                href={ig.href}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-sm text-pink-600 hover:underline"
-              >
-                <Instagram className="h-4 w-4" />
-                {ig.label}
-              </a>
-            )}
-
-            {!!membro.bio && (
-              <p className="mt-5 text-gray-600 text-sm leading-relaxed text-left">
-                {membro.bio}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Link>
   );
 }
 
@@ -221,7 +102,6 @@ export function QuemSomos() {
 
   const [loadingEquipe, setLoadingEquipe] = useState(true);
   const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
-  const [membroModal, setMembroModal] = useState<MembroEquipe | null>(null);
 
   // Fallback (se ainda não cadastrou valores no banco)
   const valoresFallback = useMemo(
@@ -294,8 +174,8 @@ export function QuemSomos() {
 
             supabase
               .from("equipe")
-              .select("id, nome, cargo, foto_url, bio, instagram, ordem, ativo")
-              .or("ativo.eq.true,ativo.is.null")
+              .select("id, nome, cargo, foto_url, bio, instagram, slug, ordem, ativo")
+              .or("and(ativo.eq.true,is_public.eq.true),and(ativo.is.null,is_public.eq.true)")
               .order("ordem", { ascending: true })
               .order("nome", { ascending: true }),
           ]);
@@ -335,6 +215,7 @@ export function QuemSomos() {
             foto_url: m.foto_url || "",
             bio: m.bio ?? null,
             instagram: (m.instagram ?? "").toString() || null,
+            slug: m.slug ?? null,
           }));
           setEquipe(mapped);
         }
@@ -494,7 +375,7 @@ export function QuemSomos() {
           {!loadingEquipe && equipe.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
               {equipe.map((m) => (
-                <MemberCard key={m.id} membro={m} onClick={setMembroModal} />
+                <MemberCard key={m.id} membro={m} />
               ))}
             </div>
           )}
@@ -560,9 +441,6 @@ export function QuemSomos() {
           </div>
         </div>
       </section>
-
-      {/* Modal */}
-      <MembroModal membro={membroModal} onClose={() => setMembroModal(null)} />
     </div>
   );
 }

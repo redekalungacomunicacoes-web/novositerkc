@@ -9,6 +9,8 @@ type EquipeRow = {
   cargo: string | null;
   foto_url: string | null;
   instagram: string | null;
+  slug: string | null;
+  is_public: boolean;
   ativo: boolean;
   ordem: number;
   created_at: string;
@@ -24,7 +26,7 @@ export function AdminEquipe() {
 
     const { data, error } = await supabase
       .from("equipe")
-      .select("id, nome, cargo, foto_url, instagram, ativo, ordem, created_at")
+      .select("id, nome, cargo, foto_url, instagram, slug, is_public, ativo, ordem, created_at")
       .order("ordem", { ascending: true })
       .order("created_at", { ascending: false });
 
@@ -106,6 +108,7 @@ export function AdminEquipe() {
                 <th className="px-6 py-3 font-medium">Cargo</th>
                 <th className="px-6 py-3 font-medium">Ordem</th>
                 <th className="px-6 py-3 font-medium">Ativo</th>
+                <th className="px-6 py-3 font-medium">Público</th>
                 <th className="px-6 py-3 font-medium text-right">Ações</th>
               </tr>
             </thead>
@@ -113,13 +116,13 @@ export function AdminEquipe() {
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td className="px-6 py-4 text-muted-foreground" colSpan={5}>
+                  <td className="px-6 py-4 text-muted-foreground" colSpan={6}>
                     Carregando...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="px-6 py-4 text-muted-foreground" colSpan={5}>
+                  <td className="px-6 py-4 text-muted-foreground" colSpan={6}>
                     Nenhum membro encontrado.
                   </td>
                 </tr>
@@ -161,8 +164,11 @@ export function AdminEquipe() {
                       </button>
                     </td>
 
+                    <td className="px-6 py-4">{r.is_public ? "Publicado" : "Rascunho"}</td>
+
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {r.slug && <a href={`/equipe/${r.slug}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Abrir perfil</a>}
                         <Link
                           to={`/admin/equipe/editar/${r.id}`}
                           className="p-2 hover:bg-muted rounded-full text-blue-600 hover:text-blue-700 transition-colors"
