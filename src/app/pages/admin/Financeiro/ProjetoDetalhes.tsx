@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router';
+import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, FileText, Plus, Trash2, Paperclip } from 'lucide-react';
 import {
   Bar,
@@ -15,6 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+
 import { formatCurrency, formatDate, type FinanceiroMovimentacao } from './data/financeiro.repo';
 import { useFinanceSupabase, type MovementPayload } from './hooks/useFinanceSupabase';
 import { ModalMovimentacao } from './components/ModalMovimentacao';
@@ -27,9 +28,7 @@ const downloadCsv = (filename: string, rows: Record<string, unknown>[]) => {
   const headers = Object.keys(rows[0]);
   const csv = [
     headers.join(';'),
-    ...rows.map((row) =>
-      headers.map((h) => `"${String(row[h] ?? '').replaceAll('"', '""')}"`).join(';'),
-    ),
+    ...rows.map((row) => headers.map((h) => `"${String(row[h] ?? '').replaceAll('"', '""')}"`).join(';')),
   ].join('\n');
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -44,6 +43,7 @@ const downloadCsv = (filename: string, rows: Record<string, unknown>[]) => {
 export function ProjetoDetalhes() {
   const { id = '' } = useParams();
   const finance = useFinanceSupabase();
+
   const {
     funds,
     projects,
@@ -69,12 +69,9 @@ export function ProjetoDetalhes() {
 
   const projeto = useMemo(() => projects.find((project) => project.id === id) ?? null, [projects, id]);
 
-  // Define se é "misto" (sem fundo base fixo) de forma segura
   const isProjetoMisto = useMemo(() => {
     if (!projeto) return false;
-    const hasFundBase = Boolean(projeto.fundoId && String(projeto.fundoId).trim().length > 0);
-    // se não tem fundo base, a gente considera misto
-    return !hasFundBase;
+    return !(projeto.fundoId && String(projeto.fundoId).trim().length > 0);
   }, [projeto]);
 
   const refreshAll = async (opts?: { withAttachmentsFor?: string | null }) => {
@@ -83,9 +80,7 @@ export function ProjetoDetalhes() {
     setMovimentacoesProjeto(rows);
 
     const movId = opts?.withAttachmentsFor ?? null;
-    if (movId) {
-      setAttachments(await listAttachments(movId));
-    }
+    if (movId) setAttachments(await listAttachments(movId));
   };
 
   useEffect(() => {
@@ -97,9 +92,6 @@ export function ProjetoDetalhes() {
 
   const metrics = useMemo(() => {
     const orcado = Number(projeto?.totalOrcado || 0);
-
-    // Se for misto, o saldo inicial (base) começa em 0.
-    // Se for próprio, usamos o "orcado" como base inicial do caixa.
     const saldoInicial = isProjetoMisto ? 0 : orcado;
 
     const gastoPago = movimentacoesProjeto
@@ -125,7 +117,6 @@ export function ProjetoDetalhes() {
       pendencias: movimentacoesProjeto.filter((m) => m.status === 'pendente').length,
       semDocumento: movimentacoesProjeto.length - withAttachments,
 
-      // Caixa
       saldoInicial,
       entradasPagas,
       saidasPagas,
@@ -159,13 +150,11 @@ export function ProjetoDetalhes() {
     <div className="space-y-5 p-8">
       <div className="flex items-center justify-between">
         <div>
-          <Link
-            to="/admin/financeiro/projetos"
-            className="inline-flex items-center gap-2 text-sm text-[#0f3d2e] hover:underline"
-          >
+          <Link to="/admin/financeiro/projetos" className="inline-flex items-center gap-2 text-sm text-[#0f3d2e] hover:underline">
             <ArrowLeft className="h-4 w-4" />
             Voltar para projetos
           </Link>
+
           <h1 className="mt-2 text-2xl font-semibold">{projeto.nome}</h1>
 
           <p className="mt-1 text-xs text-gray-600">
@@ -193,13 +182,7 @@ export function ProjetoDetalhes() {
             className={`rounded px-3 py-2 text-sm ${tab === item ? 'bg-[#0f3d2e] text-white' : 'border'}`}
             onClick={() => setTab(item)}
           >
-            {item === 'geral'
-              ? 'Visão Geral'
-              : item === 'caixa'
-                ? 'Caixa'
-                : item === 'prestacao'
-                  ? 'Prestação de Contas'
-                  : 'Relatórios'}
+            {item === 'geral' ? 'Visão Geral' : item === 'caixa' ? 'Caixa' : item === 'prestacao' ? 'Prestação de Contas' : 'Relatórios'}
           </button>
         ))}
       </div>
@@ -207,30 +190,12 @@ export function ProjetoDetalhes() {
       {tab === 'geral' && (
         <>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Saldo disponível</p>
-              <p className="text-lg font-semibold">{formatCurrency(metrics.saldoDisponivel)}</p>
-            </div>
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Orçado</p>
-              <p className="text-lg font-semibold">{formatCurrency(metrics.orcado)}</p>
-            </div>
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Gasto real</p>
-              <p className="text-lg font-semibold">{formatCurrency(metrics.gastoReal)}</p>
-            </div>
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Execução %</p>
-              <p className="text-lg font-semibold">{metrics.execucao.toFixed(1)}%</p>
-            </div>
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Comprovantes %</p>
-              <p className="text-lg font-semibold">{metrics.comprovantesPct.toFixed(1)}%</p>
-            </div>
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Pendências</p>
-              <p className="text-lg font-semibold">{metrics.pendencias}</p>
-            </div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Saldo disponível</p><p className="text-lg font-semibold">{formatCurrency(metrics.saldoDisponivel)}</p></div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Orçado</p><p className="text-lg font-semibold">{formatCurrency(metrics.orcado)}</p></div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Gasto real</p><p className="text-lg font-semibold">{formatCurrency(metrics.gastoReal)}</p></div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Execução %</p><p className="text-lg font-semibold">{metrics.execucao.toFixed(1)}%</p></div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Comprovantes %</p><p className="text-lg font-semibold">{metrics.comprovantesPct.toFixed(1)}%</p></div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Pendências</p><p className="text-lg font-semibold">{metrics.pendencias}</p></div>
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -284,21 +249,9 @@ export function ProjetoDetalhes() {
               <p className="text-lg font-semibold">{formatCurrency(metrics.saldoInicial)}</p>
               {isProjetoMisto && <p className="mt-1 text-[11px] text-gray-500">Projeto misto inicia em 0 e recebe verba via entradas.</p>}
             </div>
-
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Entradas pagas</p>
-              <p className="text-lg font-semibold">{formatCurrency(metrics.entradasPagas)}</p>
-            </div>
-
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Saídas pagas</p>
-              <p className="text-lg font-semibold">{formatCurrency(metrics.saidasPagas)}</p>
-            </div>
-
-            <div className="rounded-xl border bg-white p-4">
-              <p className="text-xs">Saldo</p>
-              <p className="text-lg font-semibold">{formatCurrency(metrics.saldoCaixa)}</p>
-            </div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Entradas pagas</p><p className="text-lg font-semibold">{formatCurrency(metrics.entradasPagas)}</p></div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Saídas pagas</p><p className="text-lg font-semibold">{formatCurrency(metrics.saidasPagas)}</p></div>
+            <div className="rounded-xl border bg-white p-4"><p className="text-xs">Saldo</p><p className="text-lg font-semibold">{formatCurrency(metrics.saldoCaixa)}</p></div>
           </div>
 
           <div className="overflow-hidden rounded-xl border bg-white">
@@ -363,9 +316,7 @@ export function ProjetoDetalhes() {
             .filter((mov) => mov.status === 'pendente' || (mov.attachmentsCount || mov.comprovantes.length) === 0)
             .map((mov) => (
               <div className="flex items-center justify-between rounded border p-3 text-sm" key={mov.id}>
-                <span>
-                  {mov.titulo} • {formatCurrency(mov.valorTotal)}
-                </span>
+                <span>{mov.titulo} • {formatCurrency(mov.valorTotal)}</span>
                 <button
                   className="inline-flex items-center gap-1 rounded border px-2 py-1"
                   onClick={async () => {
@@ -418,13 +369,9 @@ export function ProjetoDetalhes() {
         categories={categories}
         attachments={attachments}
         onSubmit={(payload: MovementPayload) => {
-          // ✅ Regras do seu fluxo:
-          // - Projeto MISTO: fundo de origem é obrigatório (não existe fallback para projeto.fundoId)
-          // - Projeto PRÓPRIO: se não escolher fundo, usa o fundo base do projeto
           const resolvedFundId = payload.fund_id || projeto.fundoId;
 
           if (isProjetoMisto && !payload.fund_id) {
-            // Não quebra o app: devolve uma Promise rejeitada, o Modal deve lidar (e o hook geralmente mostra erro)
             return Promise.reject(new Error('Em projeto misto, selecione o FUNDO de origem na movimentação.'));
           }
 
@@ -434,7 +381,9 @@ export function ProjetoDetalhes() {
             fund_id: resolvedFundId,
           };
 
-          return editingMovement ? updateMovement(editingMovement.id, finalPayload) : createMovement(finalPayload);
+          return editingMovement
+            ? updateMovement(editingMovement.id, finalPayload)
+            : createMovement(finalPayload);
         }}
         onDelete={
           editingMovement
