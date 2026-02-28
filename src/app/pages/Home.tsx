@@ -56,7 +56,7 @@ export function Home() {
       const projetosP = supabase
         .from("projetos")
         .select("id, slug, titulo, resumo, descricao, capa_url, sort_order, publicado_transparencia, published_at, created_at")
-        .or("publicado_transparencia.eq.true,publicado_transparencia.is.null")
+        .eq("publicado_transparencia", true)
         .order("sort_order", { ascending: true, nullsFirst: false })
         .order("published_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
