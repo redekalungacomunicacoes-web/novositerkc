@@ -11,6 +11,7 @@ import { uploadImageToStorage } from "@/lib/storage";
 type ProjetoFormData = {
   title: string;
   description: string;
+  foundationYear: string;
   status: "Ativo" | "Rascunho";
   coverImage: string;
   instagramUrl?: string;
@@ -275,6 +276,7 @@ export function AdminProjetoForm() {
     defaultValues: {
       title: "",
       description: "",
+      foundationYear: "",
       status: "Rascunho",
       coverImage: "",
       instagramUrl: "",
@@ -330,6 +332,7 @@ export function AdminProjetoForm() {
       reset({
         title: p.titulo || "",
         description: p.descricao || "",
+        foundationYear: p.ano_lancamento ? String(p.ano_lancamento) : "",
         status: p.publicado_transparencia ? "Ativo" : "Rascunho",
         coverImage: p.capa_url || "",
         instagramUrl: p.instagram_url || "",
@@ -433,11 +436,14 @@ export function AdminProjetoForm() {
       const publicado_transparencia = form.status === "Ativo";
       const baseSlug = slugify(form.title);
       const uniqueSlug = await ensureUniqueProjetoSlug(baseSlug, projectDbId || undefined);
+      const parsedYear = Number.parseInt((form.foundationYear || "").trim(), 10);
+      const yearNumber = Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999 ? parsedYear : null;
 
       const payload: any = {
         titulo: form.title,
         slug: uniqueSlug,
         descricao: form.description || null,
+        ano_lancamento: yearNumber,
         capa_url: form.coverImage || null,
         instagram_url: normalizeOptionalUrl(form.instagramUrl),
         youtube_url: normalizeOptionalUrl(form.youtubeUrl),
@@ -453,14 +459,30 @@ export function AdminProjetoForm() {
         const { data, error } = await supabase.from("projetos").update(payload).eq("id", projectDbId).select("id").maybeSingle();
         if (error) throw error;
         if (!data?.id) {
-          throw new Error("Atualização não retornou registro (RLS ou ID incorreto).");
+          const fallbackById = await supabase.from("projetos").select("id").eq("id", projectDbId).maybeSingle();
+          if (fallbackById.error) throw fallbackById.error;
+          if (!fallbackById.data?.id) {
+            throw new Error("Sem permissão para ler o registro após salvar (RLS). Rode a migration de RLS.");
+          }
+          saved = fallbackById.data;
+        } else {
+          saved = data;
         }
-        saved = data;
       } else {
         const { data, error } = await supabase.from("projetos").insert(payload).select("id").maybeSingle();
         if (error) throw error;
         saved = data;
-        expectedId = data?.id || null;
+        if (!saved?.id) {
+          const bySlug = await supabase.from("projetos").select("id").eq("slug", uniqueSlug).maybeSingle();
+          if (bySlug.error) throw bySlug.error;
+          saved = bySlug.data;
+        }
+        if (saved?.id) {
+          expectedId = String(saved.id);
+          setProjectDbId(expectedId);
+        } else {
+          expectedId = null;
+        }
       }
 
       if (!saved) {
@@ -558,6 +580,19 @@ export function AdminProjetoForm() {
         <div>
           <label className="text-sm font-medium">Descrição (Sobre o Projeto)</label>
           <textarea {...register("description")} className="w-full mt-1 px-3 py-2 rounded-lg border min-h-[120px]" />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Ano de fundação</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1000}
+            max={9999}
+            {...register("foundationYear")}
+            className="w-full mt-1 px-3 py-2 rounded-lg border"
+            placeholder="Ex.: 2008"
+          />
         </div>
 
         <div>
