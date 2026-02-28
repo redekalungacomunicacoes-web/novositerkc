@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ExternalLink, Instagram, Linkedin, Facebook, Globe, MessageCircle } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import {
+  getMemberById,
   getMemberBySlug,
   getMemberPortfolio,
   getMemberPosts,
@@ -40,8 +42,15 @@ function socialLinks(member: TeamMemberPublic) {
   return links;
 }
 
+function getAvatar(member: TeamMemberPublic) {
+  if (member.avatar_thumb_path) {
+    return supabase.storage.from("team-avatars").getPublicUrl(member.avatar_thumb_path).data.publicUrl;
+  }
+  return member.avatar_url || member.foto_url || null;
+}
+
 export function TeamMemberPublicPage() {
-  const { slug } = useParams();
+  const { slug, id } = useParams();
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"curriculo" | "materias" | "portfolio">("curriculo");
   const [member, setMember] = useState<TeamMemberPublic | null>(null);
@@ -50,10 +59,13 @@ export function TeamMemberPublicPage() {
   const [preview, setPreview] = useState<TeamMemberPortfolioItem | null>(null);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug && !id) return;
     (async () => {
       setLoading(true);
-      const memberRes = await getMemberBySlug(slug);
+      let memberRes = slug ? await getMemberBySlug(slug) : await getMemberById(id as string);
+      if ((memberRes.error || !memberRes.data) && slug && /^[0-9a-fA-F-]{36}$/.test(slug)) {
+        memberRes = await getMemberById(slug);
+      }
       if (memberRes.error || !memberRes.data) {
         setMember(null);
         setPortfolio([]);
@@ -72,8 +84,8 @@ export function TeamMemberPublicPage() {
 
       if (!postsRes.error) {
         const mapped = (postsRes.data || [])
-          .map((row: any) => row.materias)
-          .filter(Boolean)
+          .map((row: any) => row.materias || row)
+          .filter((row: any) => !!row)
           .map((m: any) => ({
             id: m.id,
             slug: m.slug,
@@ -87,7 +99,7 @@ export function TeamMemberPublicPage() {
 
       setLoading(false);
     })();
-  }, [slug]);
+  }, [id, slug]);
 
   const links = useMemo(() => (member ? socialLinks(member) : []), [member]);
 
@@ -98,7 +110,7 @@ export function TeamMemberPublicPage() {
     <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
       <header className="flex flex-row items-center gap-4 md:flex-col md:items-start">
         <div className="h-24 w-24 md:w-32 md:h-32 rounded-full overflow-hidden bg-muted border border-[#0F7A3E] border-2 ring-2 ring-[#0F7A3E]/20 shrink-0">
-          {member.foto_url ? <img src={member.foto_url} alt={member.nome} className="w-full h-full object-cover" /> : null}
+          {getAvatar(member) ? <img src={getAvatar(member) || ""} alt={member.nome} className="w-full h-full object-cover" /> : null}
         </div>
         <div className="flex-1 space-y-2">
           <h1 className="text-2xl md:text-3xl font-bold">{member.nome}</h1>
