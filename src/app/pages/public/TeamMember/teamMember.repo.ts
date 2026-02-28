@@ -1,5 +1,15 @@
 import { supabase } from "@/lib/supabase";
 
+function isMissingColumnError(message?: string | null) {
+  return /column .* does not exist/i.test(message || "");
+}
+
+const TEAM_MEMBER_COLUMNS =
+  "id, nome, cargo, bio, curriculo_md, foto_url, avatar_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url";
+
+const TEAM_MEMBER_COLUMNS_FALLBACK =
+  "id, nome, cargo, bio, foto_url, slug";
+
 export type TeamMemberPublic = {
   id: string;
   nome: string;
@@ -40,26 +50,42 @@ export type TeamMemberPost = {
 };
 
 export async function getMemberBySlug(slug: string) {
-  return supabase
+  const detailed = await supabase
     .from("equipe")
-    .select(
-      "id, nome, cargo, bio, curriculo_md, foto_url, avatar_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url"
-    )
+    .select(TEAM_MEMBER_COLUMNS)
     .eq("slug", slug)
     .eq("ativo", true)
     .eq("is_public", true)
     .maybeSingle<TeamMemberPublic>();
+
+  if (!detailed.error || !isMissingColumnError(detailed.error?.message)) {
+    return detailed;
+  }
+
+  return supabase
+    .from("equipe")
+    .select(TEAM_MEMBER_COLUMNS_FALLBACK)
+    .eq("slug", slug)
+    .maybeSingle<TeamMemberPublic>();
 }
 
 export async function getMemberById(id: string) {
-  return supabase
+  const detailed = await supabase
     .from("equipe")
-    .select(
-      "id, nome, cargo, bio, curriculo_md, foto_url, avatar_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url"
-    )
+    .select(TEAM_MEMBER_COLUMNS)
     .eq("id", id)
     .eq("ativo", true)
     .eq("is_public", true)
+    .maybeSingle<TeamMemberPublic>();
+
+  if (!detailed.error || !isMissingColumnError(detailed.error?.message)) {
+    return detailed;
+  }
+
+  return supabase
+    .from("equipe")
+    .select(TEAM_MEMBER_COLUMNS_FALLBACK)
+    .eq("id", id)
     .maybeSingle<TeamMemberPublic>();
 }
 
