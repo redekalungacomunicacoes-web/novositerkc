@@ -108,12 +108,25 @@ export function MateriaDetalhes() {
       let authorProfile: MateriaUI["autorPerfil"] = null;
 
       if (resolvedAuthorId) {
-        const { data: authorData } = await supabase
+        const detailedAuthor = await supabase
           .from("equipe")
           .select("id, nome, slug, cargo, bio, foto_url, avatar_url, avatar_thumb_path")
           .eq("id", resolvedAuthorId)
           .eq("is_public", true)
           .maybeSingle();
+
+        const shouldFallbackAuthorLookup =
+          !!detailedAuthor.error && /column .* does not exist/i.test(detailedAuthor.error.message || "");
+
+        const fallbackAuthor = shouldFallbackAuthorLookup
+          ? await supabase
+              .from("equipe")
+              .select("id, nome, slug, cargo, bio, foto_url")
+              .eq("id", resolvedAuthorId)
+              .maybeSingle()
+          : null;
+
+        const authorData = detailedAuthor.data || fallbackAuthor?.data;
 
         if (authorData) {
           authorProfile = {
@@ -122,7 +135,7 @@ export function MateriaDetalhes() {
             nome: authorData.nome || found.autor_nome || "",
             cargo: authorData.cargo || null,
             bio: authorData.bio || null,
-            foto: getTeamAvatarThumbUrl(authorData.avatar_thumb_path) || authorData.avatar_url || authorData.foto_url || null,
+            foto: getTeamAvatarThumbUrl((authorData as any).avatar_thumb_path) || (authorData as any).avatar_url || authorData.foto_url || null,
           };
         }
       }
