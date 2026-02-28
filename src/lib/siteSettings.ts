@@ -14,6 +14,9 @@ export type SiteSettings = {
   about_team_image_url: string | null;
   about_team_title: string | null;
   about_team_subtitle: string | null;
+
+  google_analytics_enabled: boolean;
+  google_analytics_measurement_id: string | null;
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -29,7 +32,9 @@ export async function getSiteSettings(): Promise<SiteSettings> {
       home_territory_subtitle,
       about_team_image_url,
       about_team_title,
-      about_team_subtitle
+      about_team_subtitle,
+      google_analytics_enabled,
+      google_analytics_measurement_id
       `
     )
     .eq("singleton", true)
@@ -49,6 +54,9 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     about_team_image_url: data?.about_team_image_url ?? null,
     about_team_title: data?.about_team_title ?? null,
     about_team_subtitle: data?.about_team_subtitle ?? null,
+
+    google_analytics_enabled: data?.google_analytics_enabled ?? false,
+    google_analytics_measurement_id: data?.google_analytics_measurement_id ?? null,
   };
 }
 
@@ -67,7 +75,9 @@ export async function updateSiteSettings(patch: Partial<SiteSettings>) {
       home_territory_subtitle,
       about_team_image_url,
       about_team_title,
-      about_team_subtitle
+      about_team_subtitle,
+      google_analytics_enabled,
+      google_analytics_measurement_id
       `
     )
     .maybeSingle();
