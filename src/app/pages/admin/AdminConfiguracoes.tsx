@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState } from "react";
-import { Save, Image as ImageIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Save, Image as ImageIcon, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { getSiteSettings, updateSiteSettings } from "@/lib/siteSettings";
 import { uploadPublicImage } from "@/lib/siteUpload";
+import {
+  FOOTER_DESCRIPTION_MAX_CHARS,
+  buildPublicStorageUrl,
+  getFooterSettings,
+  isLikelyUrl,
+  isValidEmail,
+  upsertFooterSettings,
+  uploadFooterLogo,
+} from "@/lib/footerSettings";
 
 type AdminSettingsForm = {
   home_banner_image_url: string;
@@ -11,9 +21,21 @@ type AdminSettingsForm = {
   home_territory_image_url: string;
   home_territory_title: string;
   home_territory_subtitle: string;
+
+  footer_logo_path: string;
+  footer_description: string;
+  footer_email: string;
+  footer_instagram_url: string;
+  footer_whatsapp: string;
+  footer_facebook_url: string;
+  footer_linkedin_url: string;
+  footer_youtube_url: string;
+  footer_location: string;
+  footer_address_short: string;
+  footer_maps_url: string;
 };
 
-type UploadKind = "banner" | "territory";
+type UploadKind = "banner" | "territory" | "footer-logo";
 
 const BUCKET = "site";
 
@@ -29,6 +51,7 @@ export function AdminConfiguracoes() {
 
   const bannerFileRef = useRef<HTMLInputElement | null>(null);
   const territoryFileRef = useRef<HTMLInputElement | null>(null);
+  const footerLogoFileRef = useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState<AdminSettingsForm>({
     home_banner_image_url: "",
@@ -38,7 +61,33 @@ export function AdminConfiguracoes() {
     home_territory_image_url: "",
     home_territory_title: "",
     home_territory_subtitle: "",
+
+    footer_logo_path: "",
+    footer_description: "",
+    footer_email: "",
+    footer_instagram_url: "",
+    footer_whatsapp: "",
+    footer_facebook_url: "",
+    footer_linkedin_url: "",
+    footer_youtube_url: "",
+    footer_location: "",
+    footer_address_short: "",
+    footer_maps_url: "",
   });
+
+  const footerDescriptionCount = form.footer_description.length;
+
+  const urlWarnings = useMemo(
+    () => ({
+      footer_instagram_url: !isLikelyUrl(form.footer_instagram_url),
+      footer_facebook_url: !isLikelyUrl(form.footer_facebook_url),
+      footer_linkedin_url: !isLikelyUrl(form.footer_linkedin_url),
+      footer_youtube_url: !isLikelyUrl(form.footer_youtube_url),
+      footer_maps_url: !isLikelyUrl(form.footer_maps_url),
+      footer_whatsapp: Boolean(form.footer_whatsapp.trim()) && !isLikelyUrl(form.footer_whatsapp) && !/\d{8,}/.test(form.footer_whatsapp),
+    }),
+    [form]
+  );
 
   function setField<K extends keyof AdminSettingsForm>(key: K, value: AdminSettingsForm[K]) {
     setForm((p) => ({ ...p, [key]: value }));
@@ -48,7 +97,7 @@ export function AdminConfiguracoes() {
     (async () => {
       try {
         setLoading(true);
-        const s = await getSiteSettings();
+        const [s, footer] = await Promise.all([getSiteSettings(), getFooterSettings()]);
 
         setForm((p) => ({
           ...p,
@@ -59,10 +108,22 @@ export function AdminConfiguracoes() {
           home_territory_image_url: s.home_territory_image_url ?? "",
           home_territory_title: s.home_territory_title ?? "",
           home_territory_subtitle: s.home_territory_subtitle ?? "",
+
+          footer_logo_path: footer.footer_logo_path ?? "",
+          footer_description: footer.footer_description ?? "",
+          footer_email: footer.footer_email ?? "",
+          footer_instagram_url: footer.footer_instagram_url ?? "",
+          footer_whatsapp: footer.footer_whatsapp ?? "",
+          footer_facebook_url: footer.footer_facebook_url ?? "",
+          footer_linkedin_url: footer.footer_linkedin_url ?? "",
+          footer_youtube_url: footer.footer_youtube_url ?? "",
+          footer_location: footer.footer_location ?? "",
+          footer_address_short: footer.footer_address_short ?? "",
+          footer_maps_url: footer.footer_maps_url ?? "",
         }));
       } catch (e: any) {
         console.warn("Erro ao carregar settings (Admin Configurações):", e?.message || e);
-        alert(e?.message || "Erro ao carregar configurações.");
+        toast.error(e?.message || "Erro ao carregar configurações.");
       } finally {
         setLoading(false);
       }
@@ -75,6 +136,13 @@ export function AdminConfiguracoes() {
     try {
       setUploading(kind);
 
+      if (kind === "footer-logo") {
+        const path = await uploadFooterLogo(file);
+        setField("footer_logo_path", path);
+        toast.success("Logo do rodapé enviada com sucesso.");
+        return;
+      }
+
       const url =
         kind === "banner"
           ? await uploadPublicImage({ bucket: BUCKET, path: "home/banner/banner", file })
@@ -85,31 +153,52 @@ export function AdminConfiguracoes() {
       if (kind === "banner") setField("home_banner_image_url", busted);
       if (kind === "territory") setField("home_territory_image_url", busted);
     } catch (e: any) {
-      alert(e?.message || "Erro ao enviar imagem.");
+      toast.error(e?.message || "Erro ao enviar imagem.");
     } finally {
       setUploading(null);
       if (kind === "banner" && bannerFileRef.current) bannerFileRef.current.value = "";
       if (kind === "territory" && territoryFileRef.current) territoryFileRef.current.value = "";
+      if (kind === "footer-logo" && footerLogoFileRef.current) footerLogoFileRef.current.value = "";
     }
   }
 
   async function onSave() {
+    if (!isValidEmail(form.footer_email)) {
+      toast.error("Informe um e-mail válido para o rodapé.");
+      return;
+    }
+
     try {
       setSaving(true);
 
-      await updateSiteSettings({
-        home_banner_image_url: form.home_banner_image_url || null,
-        home_banner_title: form.home_banner_title || null,
-        home_banner_subtitle: form.home_banner_subtitle || null,
+      await Promise.all([
+        updateSiteSettings({
+          home_banner_image_url: form.home_banner_image_url || null,
+          home_banner_title: form.home_banner_title || null,
+          home_banner_subtitle: form.home_banner_subtitle || null,
 
-        home_territory_image_url: form.home_territory_image_url || null,
-        home_territory_title: form.home_territory_title || null,
-        home_territory_subtitle: form.home_territory_subtitle || null,
-      });
+          home_territory_image_url: form.home_territory_image_url || null,
+          home_territory_title: form.home_territory_title || null,
+          home_territory_subtitle: form.home_territory_subtitle || null,
+        }),
+        upsertFooterSettings({
+          footer_logo_path: form.footer_logo_path || null,
+          footer_description: form.footer_description || null,
+          footer_email: form.footer_email || null,
+          footer_instagram_url: form.footer_instagram_url || null,
+          footer_whatsapp: form.footer_whatsapp || null,
+          footer_facebook_url: form.footer_facebook_url || null,
+          footer_linkedin_url: form.footer_linkedin_url || null,
+          footer_youtube_url: form.footer_youtube_url || null,
+          footer_location: form.footer_location || null,
+          footer_address_short: form.footer_address_short || null,
+          footer_maps_url: form.footer_maps_url || null,
+        }),
+      ]);
 
-      alert("Configurações salvas!");
+      toast.success("Configurações salvas!");
     } catch (e: any) {
-      alert(e?.message || "Erro ao salvar configurações.");
+      toast.error(e?.message || "Erro ao salvar configurações.");
     } finally {
       setSaving(false);
     }
@@ -123,69 +212,6 @@ export function AdminConfiguracoes() {
       </div>
 
       <div className="grid gap-6">
-        {/* Informações Gerais */}
-        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-          <h3 className="font-semibold text-lg border-b pb-4 mb-4">Informações Gerais</h3>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Nome do Site</label>
-              <input
-                defaultValue="Rede Kalunga Comunicações"
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Email de Contato</label>
-              <input
-                defaultValue="contato@kalunga.org.br"
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Telefone</label>
-              <input
-                defaultValue="+55 (62) 99999-9999"
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Endereço</label>
-              <input
-                defaultValue="Cavalcante - GO"
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Redes Sociais */}
-        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-          <h3 className="font-semibold text-lg border-b pb-4 mb-4">Redes Sociais</h3>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Instagram</label>
-              <input
-                placeholder="@usuario"
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Facebook</label>
-              <input
-                placeholder="facebook.com/pagina"
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">YouTube</label>
-              <input
-                placeholder="youtube.com/canal"
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              />
-            </div>
-          </div>
-        </div>
-
         {/* Banner (Home) */}
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
           <h3 className="font-semibold text-lg border-b pb-4 mb-4">Banner (Home)</h3>
@@ -340,6 +366,136 @@ export function AdminConfiguracoes() {
           </div>
         </div>
 
+        {/* Rodapé */}
+        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-6">
+          <h3 className="font-semibold text-lg border-b pb-4">Rodapé</h3>
+
+          <section className="space-y-3">
+            <h4 className="font-medium">Logo do rodapé</h4>
+            <input
+              ref={footerLogoFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleUpload("footer-logo", e.target.files?.[0])}
+            />
+
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div
+                className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 w-full md:max-w-xs cursor-pointer bg-muted/10"
+                onClick={() => {
+                  if (uploading === "footer-logo") return;
+                  footerLogoFileRef.current?.click();
+                }}
+              >
+                {form.footer_logo_path ? (
+                  <img
+                    src={buildPublicStorageUrl(form.footer_logo_path)}
+                    alt="Logo do rodapé"
+                    className="w-full h-24 object-contain rounded-md border bg-white"
+                  />
+                ) : (
+                  <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">Enviar logo</div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="px-3 py-2 text-sm border rounded-md"
+                  onClick={() => footerLogoFileRef.current?.click()}
+                  disabled={uploading === "footer-logo"}
+                >
+                  {uploading === "footer-logo" ? "Enviando..." : "Upload"}
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-2 text-sm border rounded-md text-red-600 inline-flex items-center gap-1"
+                  onClick={() => setField("footer_logo_path", "")}
+                >
+                  <Trash2 className="h-4 w-4" /> Remover
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-medium">Descrição curta</h4>
+            <textarea
+              value={form.footer_description}
+              onChange={(e) => setField("footer_description", e.target.value.slice(0, FOOTER_DESCRIPTION_MAX_CHARS))}
+              rows={3}
+              className="w-full px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              placeholder="Resumo rápido do rodapé"
+            />
+            <p className="text-xs text-muted-foreground text-right">
+              {footerDescriptionCount}/{FOOTER_DESCRIPTION_MAX_CHARS}
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-medium">Contato</h4>
+            <input
+              type="email"
+              value={form.footer_email}
+              onChange={(e) => setField("footer_email", e.target.value)}
+              placeholder="contato@exemplo.com"
+              className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+            />
+            {!isValidEmail(form.footer_email) && <p className="text-xs text-amber-600">E-mail parece inválido.</p>}
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-medium">Redes sociais</h4>
+            <div className="grid md:grid-cols-2 gap-3">
+              {([
+                ["footer_instagram_url", "Instagram URL"],
+                ["footer_whatsapp", "WhatsApp (número ou link)"],
+                ["footer_facebook_url", "Facebook URL"],
+                ["footer_linkedin_url", "LinkedIn URL"],
+                ["footer_youtube_url", "YouTube URL (opcional)"],
+              ] as const).map(([key, label]) => (
+                <div key={key} className="space-y-1">
+                  <input
+                    value={form[key]}
+                    onChange={(e) => setField(key, e.target.value)}
+                    placeholder={label}
+                    className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  />
+                  {urlWarnings[key] && <p className="text-xs text-amber-600">Formato de URL/valor possivelmente inválido.</p>}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="font-medium">Localização</h4>
+            <div className="grid md:grid-cols-2 gap-3">
+              <input
+                value={form.footer_location}
+                onChange={(e) => setField("footer_location", e.target.value)}
+                placeholder="Cidade/Estado"
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              />
+              <input
+                value={form.footer_address_short}
+                onChange={(e) => setField("footer_address_short", e.target.value)}
+                placeholder="Endereço curto (opcional)"
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              />
+              <div className="md:col-span-2 space-y-1">
+                <input
+                  value={form.footer_maps_url}
+                  onChange={(e) => setField("footer_maps_url", e.target.value)}
+                  placeholder="Link Google Maps (opcional)"
+                  className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                />
+                {urlWarnings.footer_maps_url && <p className="text-xs text-amber-600">URL do Maps parece inválida.</p>}
+              </div>
+            </div>
+          </section>
+        </div>
+
         {/* Save */}
         <div className="flex justify-end">
           <button
@@ -348,7 +504,7 @@ export function AdminConfiguracoes() {
             className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
-            {saving ? "Salvando..." : uploading ? "Enviando..." : "Salvar Alterações"}
+            {saving ? "Salvando..." : uploading ? "Enviando..." : "Salvar alterações"}
           </button>
         </div>
       </div>
