@@ -35,6 +35,9 @@ type AdminSettingsForm = {
   footer_location: string;
   footer_address_short: string;
   footer_maps_url: string;
+
+  google_analytics_enabled: boolean;
+  google_analytics_measurement_id: string;
 };
 
 type UploadKind = "banner" | "territory" | "footer-logo" | "favicon";
@@ -77,6 +80,9 @@ export function AdminConfiguracoes() {
     footer_location: "",
     footer_address_short: "",
     footer_maps_url: "",
+
+    google_analytics_enabled: false,
+    google_analytics_measurement_id: "",
   });
 
   const footerDescriptionCount = form.footer_description.length;
@@ -125,6 +131,9 @@ export function AdminConfiguracoes() {
           footer_location: footer.footer_location ?? "",
           footer_address_short: footer.footer_address_short ?? "",
           footer_maps_url: footer.footer_maps_url ?? "",
+
+          google_analytics_enabled: s.google_analytics_enabled ?? false,
+          google_analytics_measurement_id: s.google_analytics_measurement_id ?? "",
         }));
       } catch (e: any) {
         console.warn("Erro ao carregar settings (Admin Configurações):", e?.message || e);
@@ -202,6 +211,9 @@ export function AdminConfiguracoes() {
           home_territory_image_url: form.home_territory_image_url || null,
           home_territory_title: form.home_territory_title || null,
           home_territory_subtitle: form.home_territory_subtitle || null,
+
+          google_analytics_enabled: form.google_analytics_enabled,
+          google_analytics_measurement_id: form.google_analytics_measurement_id.trim() || null,
         }),
         upsertFooterSettings({
           footer_logo_path: form.footer_logo_path || null,
@@ -385,6 +397,36 @@ export function AdminConfiguracoes() {
                 className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 disabled={loading}
               />
+            </div>
+          </div>
+        </div>
+
+
+        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+          <h3 className="font-semibold text-lg border-b pb-4 mb-4">Google Analytics</h3>
+
+          <div className="space-y-3">
+            <label className="inline-flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={form.google_analytics_enabled}
+                onChange={(e) => setField("google_analytics_enabled", e.target.checked)}
+              />
+              Ativar Google Analytics
+            </label>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Measurement ID (GA4)</label>
+              <input
+                value={form.google_analytics_measurement_id}
+                onChange={(e) => setField("google_analytics_measurement_id", e.target.value.toUpperCase())}
+                placeholder="G-XXXXXXXXXX"
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Informe o ID no formato G-XXXXXXXXXX para habilitar o script global no site.
+              </p>
             </div>
           </div>
         </div>

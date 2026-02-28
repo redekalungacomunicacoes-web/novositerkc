@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
-import { ArrowLeft, Calendar, Users, X, Image as ImageIcon, Play } from "lucide-react";
+import { ArrowLeft, Calendar, Users, X, Image as ImageIcon, Play, Eye } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getPublicContentViewCount, trackPageView } from "@/lib/analytics";
 
 type GaleriaItem = {
   id: string;
@@ -95,12 +96,14 @@ export function ProjetoDetalhes() {
   const [loading, setLoading] = useState(true);
   const [projeto, setProjeto] = useState<ProjetoUI | null>(null);
   const [selected, setSelected] = useState<GaleriaItem | null>(null);
+  const [viewCount, setViewCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!paramValue) return;
 
     (async () => {
       setLoading(true);
+      setViewCount(null);
 
       const PUBLIC_FILTER = "publicado_transparencia.eq.true,publicado_transparencia.is.null";
 
@@ -160,6 +163,21 @@ export function ProjetoDetalhes() {
       };
 
       setProjeto(mapped);
+
+      await trackPageView({
+        pageType: "projeto",
+        path: `/projetos/${mapped.slug || mapped.id}`,
+        contentId: mapped.id,
+        contentSlug: mapped.slug,
+      });
+
+      const freshCount = await getPublicContentViewCount({
+        pageType: "projeto",
+        contentId: mapped.id,
+        contentSlug: mapped.slug,
+      });
+      setViewCount(freshCount);
+
       setLoading(false);
     })();
   }, [paramValue]);
@@ -262,6 +280,13 @@ export function ProjetoDetalhes() {
                       <Users className="w-4 h-4" /> Status
                     </span>
                     <span>{projeto.status}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-2">
+                      <Eye className="w-4 h-4" /> Visualizações
+                    </span>
+                    <span>{viewCount ?? "—"}</span>
                   </div>
                 </div>
               </RKCCardContent>

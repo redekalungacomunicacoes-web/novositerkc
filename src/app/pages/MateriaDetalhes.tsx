@@ -3,8 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardImage, RKCCardContent } from "@/app/components/RKCCard";
-import { ArrowLeft, Calendar, User, Share2, Facebook, Instagram, Mail } from "lucide-react";
+import { ArrowLeft, Calendar, User, Share2, Facebook, Instagram, Mail, Eye } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getPublicContentViewCount, trackPageView } from "@/lib/analytics";
 
 type MateriaUI = {
   id: string;
@@ -51,6 +52,7 @@ export function MateriaDetalhes() {
   const [loading, setLoading] = useState(true);
   const [materia, setMateria] = useState<MateriaUI | null>(null);
   const [outrasMateria, setOutrasMateria] = useState<Array<{ id: string; slug: string; titulo: string; imagem: string; categoria: string }>>([]);
+  const [viewCount, setViewCount] = useState<number | null>(null);
 
   const fallbackMateria = useMemo<MateriaUI>(() => ({
     id: "",
@@ -70,6 +72,7 @@ export function MateriaDetalhes() {
 
     (async () => {
       setLoading(true);
+      setViewCount(null);
 
       // 1) tenta buscar por slug (recomendado)
       let found: any = null;
@@ -155,6 +158,20 @@ export function MateriaDetalhes() {
 
       setMateria(mapped);
 
+      await trackPageView({
+        pageType: "materia",
+        path: `/materias/${mapped.slug || mapped.id}`,
+        contentId: mapped.id,
+        contentSlug: mapped.slug,
+      });
+
+      const freshCount = await getPublicContentViewCount({
+        pageType: "materia",
+        contentId: mapped.id,
+        contentSlug: mapped.slug,
+      });
+      setViewCount(freshCount);
+
       // "Leia também": mais 3 publicadas, excluindo a atual
       const { data: rel, error: relErr } = await supabase
         .from("materias")
@@ -226,6 +243,10 @@ export function MateriaDetalhes() {
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
                 <span>{m.data}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Eye className="w-5 h-5" />
+                <span>{viewCount ?? "—"} visualizações</span>
               </div>
             </div>
           </div>
