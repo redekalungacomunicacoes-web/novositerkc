@@ -11,9 +11,10 @@ type EquipeOption = {
   id: string;
   nome: string;
   cargo?: string | null;
-  foto_url?: string | null;
-  ativo?: boolean;
-  ordem?: number;
+  order_index?: number | null;
+  is_public?: boolean | null;
+  is_active?: boolean | null;
+  ativo?: boolean | null;
 };
 
 type MateriaFormData = {
@@ -124,6 +125,7 @@ export function AdminMateriaForm() {
 
   const [loading, setLoading] = useState(false);
   const [equipe, setEquipe] = useState<EquipeOption[]>([]);
+  const [loadingEquipe, setLoadingEquipe] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
 
   // Galeria
@@ -142,14 +144,38 @@ export function AdminMateriaForm() {
   // ── Load equipe ──────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
-        .from("equipe")
-        .select("id, nome, cargo, foto_url, ativo, ordem")
-        .eq("ativo", true)
-        .order("ordem", { ascending: true })
-        .order("created_at", { ascending: false });
+      setLoadingEquipe(true);
 
-      if (!error) setEquipe((data || []) as any);
+      const detailedQuery = supabase
+        .from("equipe")
+        .select("id, nome, cargo, order_index, is_public, is_active, ativo")
+        .order("order_index", { ascending: true })
+        .order("nome", { ascending: true });
+
+      const { data: detailedData, error: detailedError } = await detailedQuery;
+
+      if (!detailedError) {
+        setEquipe((detailedData || []) as EquipeOption[]);
+        setLoadingEquipe(false);
+        return;
+      }
+
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("equipe")
+        .select("id, nome, cargo")
+        .order("nome", { ascending: true });
+
+      if (fallbackError) {
+        console.error("Erro ao carregar integrantes da equipe:", detailedError.message, fallbackError.message);
+        alert(`Não foi possível carregar os integrantes da equipe. ${fallbackError.message}`);
+        setEquipe([]);
+        setLoadingEquipe(false);
+        return;
+      }
+
+      console.warn("Consulta detalhada da equipe falhou; usando fallback por nome:", detailedError.message);
+      setEquipe((fallbackData || []) as EquipeOption[]);
+      setLoadingEquipe(false);
     })();
   }, []);
 
@@ -405,7 +431,11 @@ export function AdminMateriaForm() {
                   className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 >
                   <option value="">
-                    {equipe.length ? "Selecione um autor..." : "Carregando equipe..."}
+                    {loadingEquipe
+                      ? "Carregando equipe..."
+                      : equipe.length
+                      ? "Selecione um autor..."
+                      : "Nenhum integrante cadastrado"}
                   </option>
                   {equipe.map((p) => (
                     <option key={p.id} value={p.id}>
