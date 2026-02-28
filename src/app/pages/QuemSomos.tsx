@@ -26,6 +26,7 @@ type MembroEquipe = {
   nome?: string;
   slug?: string | null;
   avatarUrl?: string | null;
+  order_index?: number | null;
 };
 
 type QuemSomosData = {
@@ -219,9 +220,10 @@ export function QuemSomos() {
 
             supabase
               .from("equipe")
-              .select("id, nome, slug, avatar_thumb_path, avatar_path, avatar_url, foto_url")
+              .select("id, nome, slug, avatar_thumb_path, avatar_path, avatar_url, foto_url, is_public, order_index")
               .eq("is_public", true)
-              .order("created_at", { ascending: true }),
+              .order("order_index", { ascending: true })
+              .order("nome", { ascending: true }),
           ]);
 
         if (!mounted) return;
@@ -253,9 +255,10 @@ export function QuemSomos() {
           if (maybeMissingAvatarUrlColumn) {
             const retryEquipeRes = await supabase
               .from("equipe")
-              .select("id, nome, slug, avatar_thumb_path, avatar_path, foto_url")
+              .select("id, nome, slug, avatar_thumb_path, avatar_path, foto_url, is_public, order_index")
               .eq("is_public", true)
-              .order("created_at", { ascending: true });
+              .order("order_index", { ascending: true })
+              .order("nome", { ascending: true });
 
             if (retryEquipeRes.error) {
               console.error("Erro ao carregar equipe:", retryEquipeRes.error);
@@ -269,8 +272,9 @@ export function QuemSomos() {
                 nome: m.nome || "",
                 slug: m.slug ?? null,
                 avatarUrl: getAvatarUrl(m),
+                order_index: m.order_index ?? null,
               }));
-              setEquipe(mapped);
+              setEquipe(mapped.slice().sort((a, b) => (a.order_index ?? 999999) - (b.order_index ?? 999999) || a.name.localeCompare(b.name)));
             }
           } else {
             console.error("Erro ao carregar equipe:", equipeRes.error);
@@ -285,8 +289,9 @@ export function QuemSomos() {
             nome: m.nome || "",
             slug: m.slug ?? null,
             avatarUrl: getAvatarUrl(m),
+            order_index: m.order_index ?? null,
           }));
-          setEquipe(mapped);
+          setEquipe(mapped.slice().sort((a, b) => (a.order_index ?? 999999) - (b.order_index ?? 999999) || a.name.localeCompare(b.name)));
         }
       } finally {
         if (mounted) setLoading(false);
