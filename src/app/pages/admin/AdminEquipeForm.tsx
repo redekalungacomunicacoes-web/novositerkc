@@ -4,6 +4,9 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { slugify } from "@/lib/cms";
+import { createThumbnail } from "@/lib/imageThumbnail";
+
+const TEAM_AVATARS_BUCKET = "team-avatars";
 
 type PortfolioItem = {
   id: string;
@@ -35,6 +38,8 @@ type FormData = {
   is_public: boolean;
   ordem: number;
   foto_url: string;
+  avatar_path?: string | null;
+  avatar_thumb_path?: string | null;
   email_login: string;
   senha_login: string;
   permissoes: { admin: boolean; editor: boolean; autor: boolean };
@@ -48,8 +53,12 @@ function safeFilename(name: string) {
     .toLowerCase();
 }
 
-async function uploadToBucket(bucket: string, path: string, file: File) {
-  const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true, contentType: file.type });
+async function uploadToBucket(bucket: string, path: string, file: Blob, contentType: string) {
+  const { error } = await supabase.storage.from(bucket).upload(path, file, {
+    upsert: true,
+    contentType,
+    cacheControl: "31536000",
+  });
   if (error) throw error;
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
@@ -73,6 +82,9 @@ export function AdminEquipeForm() {
   const [selectedPosts, setSelectedPosts] = useState<string[]>([]);
   const [postsError, setPostsError] = useState<string>("");
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [savedFotoUrl, setSavedFotoUrl] = useState<string>("");
 
   const fotoUrl = watch("foto_url");
   const nome = watch("nome");
@@ -102,7 +114,7 @@ export function AdminEquipeForm() {
       setLoading(true);
       const { data, error } = await supabase
         .from("equipe")
-        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, ordem, foto_url, email_login")
+        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, ordem, foto_url, avatar_path, avatar_thumb_path, email_login")
         .eq("id", id)
         .single();
       setLoading(false);
@@ -111,8 +123,17 @@ export function AdminEquipeForm() {
       reset({
         nome: data.nome || "", slug: data.slug || "", cargo: data.cargo || "", bio: data.bio || "", curriculo_md: data.curriculo_md || "", instagram: data.instagram || "",
         whatsapp: data.whatsapp || "", facebook_url: data.facebook_url || "", linkedin_url: data.linkedin_url || "", website_url: data.website_url || "",
-        ativo: !!data.ativo, is_public: !!data.is_public, ordem: data.ordem ?? 0, foto_url: data.foto_url || "", email_login: data.email_login || "", senha_login: "", permissoes: { admin: false, editor: true, autor: true },
+        ativo: !!data.ativo,
+        is_public: !!data.is_public,
+        ordem: data.ordem ?? 0,
+        foto_url: data.foto_url || "",
+        avatar_path: data.avatar_path || "",
+        avatar_thumb_path: data.avatar_thumb_path || "",
+        email_login: data.email_login || "",
+        senha_login: "",
+        permissoes: { admin: false, editor: true, autor: true },
       });
+      setSavedFotoUrl(data.foto_url || "");
       setSlugTouched(true);
 
       const relRes = await supabase.from("team_member_posts").select("post_id").eq("member_id", id);
@@ -121,15 +142,21 @@ export function AdminEquipeForm() {
     })();
   }, [id, isEditing, reset]);
 
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    };
+  }, [avatarPreviewUrl]);
+
   const handlePickFile = async (file?: File | null) => {
     if (!file) return;
     try {
       setUploading(true);
-      const ext = file.name.split(".").pop() || "jpg";
-      const targetMember = isEditing && id ? id : "temp";
-      const path = `${targetMember}/avatar.${ext}`;
-      const url = await uploadToBucket("team-avatars", path, file);
-      setValue("foto_url", url, { shouldDirty: true });
+      setPendingAvatarFile(file);
+      const previewUrl = URL.createObjectURL(file);
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+      setAvatarPreviewUrl(previewUrl);
+      setValue("foto_url", previewUrl, { shouldDirty: true });
     } catch (e: any) {
       alert(e?.message || "Erro no upload da foto.");
     } finally {
@@ -154,7 +181,9 @@ export function AdminEquipeForm() {
         ativo: !!v.ativo,
         is_public: !!v.is_public,
         ordem: Number(v.ordem || 0),
-        foto_url: v.foto_url || null,
+        foto_url: pendingAvatarFile ? (savedFotoUrl || null) : (v.foto_url || null),
+        avatar_path: v.avatar_path || null,
+        avatar_thumb_path: v.avatar_thumb_path || null,
         email_login: v.email_login || null,
         updated_at: new Date().toISOString(),
       };
@@ -167,6 +196,41 @@ export function AdminEquipeForm() {
         const res = await supabase.from("equipe").insert(payload).select("id").single();
         if (res.error) throw res.error;
         equipeId = res.data.id;
+      }
+
+      if (pendingAvatarFile) {
+        const thumbBlob = await createThumbnail(pendingAvatarFile, 320, 0.75);
+        const thumbContentType = thumbBlob.type || "image/jpeg";
+        const isThumbWebp = thumbContentType.includes("webp");
+        const thumbExt = isThumbWebp ? "webp" : "jpg";
+        const originalIsWebp = pendingAvatarFile.type.includes("webp");
+        const originalExt = originalIsWebp ? "webp" : "jpg";
+        const originalType = originalIsWebp ? "image/webp" : "image/jpeg";
+
+        const avatarPath = `avatars/${equipeId}/avatar.${originalExt}`;
+        const avatarThumbPath = `avatars/${equipeId}/thumb.${thumbExt}`;
+
+        const [avatarUrl] = await Promise.all([
+          uploadToBucket(TEAM_AVATARS_BUCKET, avatarPath, pendingAvatarFile, originalType),
+          uploadToBucket(TEAM_AVATARS_BUCKET, avatarThumbPath, thumbBlob, thumbContentType),
+        ]);
+
+        const { error: avatarUpdateError } = await supabase
+          .from("equipe")
+          .update({
+            foto_url: avatarUrl,
+            avatar_path: avatarPath,
+            avatar_thumb_path: avatarThumbPath,
+          })
+          .eq("id", equipeId);
+
+        if (avatarUpdateError) throw avatarUpdateError;
+        setSavedFotoUrl(avatarUrl);
+        setPendingAvatarFile(null);
+        if (avatarPreviewUrl) {
+          URL.revokeObjectURL(avatarPreviewUrl);
+          setAvatarPreviewUrl(null);
+        }
       }
 
       const { error: delErr } = await supabase.from("team_member_posts").delete().eq("member_id", equipeId);
@@ -206,7 +270,7 @@ export function AdminEquipeForm() {
     const portfolioId = crypto.randomUUID();
     const path = `${memberId}/${portfolioId}.${safeFilename(ext)}`;
     try {
-      const url = await uploadToBucket("team-portfolio", path, file);
+      const url = await uploadToBucket("team-portfolio", path, file, file.type || (kind === "image" ? "image/jpeg" : "video/mp4"));
       const { error } = await supabase.from("team_member_portfolio").insert({
         id: portfolioId,
         member_id: memberId,
@@ -348,7 +412,7 @@ export function AdminEquipeForm() {
               <p className="text-sm">{uploading ? "Enviando..." : "Clique para upload"}</p>
             </label>
             {fotoUrl && <img src={fotoUrl} alt="Prévia" className="w-full h-48 object-cover rounded-md border" />}
-            {fotoUrl && <button type="button" className="text-xs text-red-600" onClick={() => setValue("foto_url", "", { shouldDirty: true })}>Remover avatar</button>}
+            {fotoUrl && <button type="button" className="text-xs text-red-600" onClick={() => { setPendingAvatarFile(null); if (avatarPreviewUrl) { URL.revokeObjectURL(avatarPreviewUrl); setAvatarPreviewUrl(null); } setValue("foto_url", "", { shouldDirty: true }); }}>Remover avatar</button>}
             <input {...register("foto_url")} className="w-full h-10 px-3 rounded-md border" placeholder="Ou URL do avatar" />
           </div>
         </div>
