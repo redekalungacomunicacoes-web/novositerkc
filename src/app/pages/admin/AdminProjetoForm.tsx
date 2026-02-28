@@ -46,12 +46,12 @@ async function ensureUniqueProjetoSlug(baseSlug: string, currentId?: string) {
       .from("projetos")
       .select("id")
       .eq("slug", slug)
-      .limit(1);
+      .maybeSingle();
 
     if (error) throw error;
 
-    if (!data || data.length === 0) return slug;
-    if (currentId && data[0]?.id === currentId) return slug;
+    if (!data) return slug;
+    if (currentId && data.id === currentId) return slug;
 
     i += 1;
     slug = `${baseSlug}-${i}`;
@@ -73,17 +73,15 @@ async function getProjetoForEdit(param: string) {
     .eq("id", param)
     .maybeSingle();
 
-  if (!byId.error && byId.data) return { data: byId.data, error: null as any };
+  if (byId.data) return { data: byId.data, error: byId.error };
 
   const bySlug = await supabase
     .from("projetos")
     .select("*")
     .eq("slug", param)
-    .limit(1);
+    .maybeSingle();
 
-  if (bySlug.error) return { data: null, error: bySlug.error };
-
-  return { data: bySlug.data?.[0] || null, error: null as any };
+  return { data: bySlug.data, error: bySlug.error || byId.error };
 }
 
 function fileExtension(file: File) {
@@ -135,7 +133,7 @@ export function AdminProjetoForm() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [imagens, setImagens] = useState<ProjectImageItem[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
-  const [projectDbId, setProjectDbId] = useState<string | null>(id ?? null);
+  const [projectDbId, setProjectDbId] = useState<string | null>(null);
 
   const coverImage = watch("coverImage");
   const coverInputRef = useRef<HTMLInputElement | null>(null);
@@ -349,9 +347,7 @@ export function AdminProjetoForm() {
 
       let saved: any = null;
 
-      if (id) {
-        if (!projectDbId) throw new Error("ID real do projeto não encontrado para atualização. Reabra o formulário pela lista de projetos.");
-
+      if (projectDbId) {
         const { data, error } = await supabase
           .from("projetos")
           .update(payload)
@@ -375,11 +371,8 @@ export function AdminProjetoForm() {
       }
 
       // navegação
-      if (id) {
-        navigate("/admin/projetos");
-      } else {
-        navigate(`/admin/projetos/editar/${saved.id}`);
-      }
+      // TODO: se houver rota de edição pós-save oficial, reavaliar este redirecionamento.
+      navigate("/admin/projetos");
     } catch (err: any) {
       alert(`Erro ao salvar projeto: ${err?.message || "Falha inesperada."}`);
     } finally {
