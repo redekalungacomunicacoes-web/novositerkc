@@ -1,26 +1,93 @@
-import { FileText, FolderOpen, Users, TrendingUp, Mail } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FileText, FolderOpen, Users, Users2, Mail } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+
+type DashboardCounts = {
+  materias: number | null;
+  projetos: number | null;
+  equipe: number | null;
+  newsletter: number | null;
+  usuarios: number | null;
+};
+
+const EMPTY_COUNTS: DashboardCounts = {
+  materias: null,
+  projetos: null,
+  equipe: null,
+  newsletter: null,
+  usuarios: null,
+};
+
+function toNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
 
 export function Dashboard() {
-  const stats = [
-    { title: "Total de Matérias", value: "124", icon: FileText, change: "+12% esse mês" },
-    { title: "Projetos Ativos", value: "8", icon: FolderOpen, change: "2 novos" },
-    { title: "Usuários Cadastrados", value: "1,203", icon: Users, change: "+5% essa semana" },
-    { title: "Visitas (30 dias)", value: "45.2k", icon: TrendingUp, change: "+18%" },
+  const [counts, setCounts] = useState<DashboardCounts>(EMPTY_COUNTS);
+  const [loadingCounts, setLoadingCounts] = useState(true);
 
-    // ✅ NOVO (mantendo padrão visual do grid)
-    { title: "Newsletter (ativos)", value: "—", icon: Mail, change: "Pronto para disparos" },
-  ];
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadCounts() {
+      setLoadingCounts(true);
+
+      const { data, error } = await supabase.rpc("admin_dashboard_counts");
+      if (error) {
+        console.warn("[admin_dashboard_counts] Falha ao carregar indicadores:", error.message);
+        if (mounted) {
+          setCounts(EMPTY_COUNTS);
+          setLoadingCounts(false);
+        }
+        return;
+      }
+
+      const raw = (data ?? {}) as Record<string, unknown>;
+      const nextCounts: DashboardCounts = {
+        materias: toNullableNumber(raw.materias),
+        projetos: toNullableNumber(raw.projetos),
+        equipe: toNullableNumber(raw.equipe),
+        newsletter: toNullableNumber(raw.newsletter),
+        usuarios: toNullableNumber(raw.usuarios),
+      };
+
+      if (mounted) {
+        setCounts(nextCounts);
+        setLoadingCounts(false);
+      }
+    }
+
+    loadCounts();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const stats = useMemo(
+    () => [
+      { title: "Matérias", value: counts.materias, icon: FileText },
+      { title: "Projetos", value: counts.projetos, icon: FolderOpen },
+      { title: "Integrantes (Equipe)", value: counts.equipe, icon: Users2 },
+      { title: "Usuários", value: counts.usuarios, icon: Users },
+      { title: "Cadastrados na Newsletter", value: counts.newsletter, icon: Mail },
+    ],
+    [counts],
+  );
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">
-          Bem-vindo ao painel administrativo da Rede Kalunga Comunicações.
-        </p>
+        <p className="text-muted-foreground mt-2">Bem-vindo ao painel administrativo da Rede Kalunga Comunicações.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {stats.map((stat) => (
           <div key={stat.title} className="rounded-xl border bg-card text-card-foreground shadow-sm p-6">
             <div className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -28,64 +95,15 @@ export function Dashboard() {
               <stat.icon className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="pt-2">
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground mt-1">{stat.change}</p>
+              {loadingCounts ? (
+                <div className="h-8 w-16 rounded bg-muted animate-pulse" aria-label="Carregando indicador" />
+              ) : (
+                <div className="text-2xl font-bold">{stat.value ?? "—"}</div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">Indicador em tempo real</p>
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <div className="col-span-4 rounded-xl border bg-card text-card-foreground shadow-sm">
-          <div className="p-6">
-            <h3 className="font-semibold text-lg">Matérias Recentes</h3>
-            <p className="text-sm text-muted-foreground mb-4">Últimas publicações no portal.</p>
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center gap-4 pb-4 border-b last:border-0 last:pb-0">
-                  <div className="h-12 w-12 rounded bg-muted flex items-center justify-center">
-                    <FileText className="h-6 w-6 text-muted-foreground/50" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Título da Matéria Exemplo {i}</p>
-                    <p className="text-xs text-muted-foreground">Publicado em 03/02/2025</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="col-span-3 rounded-xl border bg-card text-card-foreground shadow-sm">
-          <div className="p-6">
-            <h3 className="font-semibold text-lg">Status do Sistema</h3>
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span>Banco de Dados</span>
-                <span className="text-green-600 font-medium">Conectado</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span>API</span>
-                <span className="text-green-600 font-medium">Online</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span>Versão</span>
-                <span className="text-muted-foreground">v1.0.0</span>
-              </div>
-            </div>
-
-            {/* ✅ Bloco extra (sem quebrar layout) */}
-            <div className="mt-6 pt-6 border-t">
-              <h4 className="font-semibold text-sm flex items-center gap-2">
-                <Mail className="h-4 w-4" />
-                Newsletter
-              </h4>
-              <p className="text-xs text-muted-foreground mt-2">
-                Gestão de inscritos e disparos disponível em <b>/admin/newsletter</b>.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
