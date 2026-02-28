@@ -310,13 +310,36 @@ export function AdminProjetoForm() {
 
       // REGRA CORRETA: update/insert baseado no UUID real do banco
       if (projectDbId) {
-        const { data, error } = await supabase.from("projetos").update(payload).eq("id", projectDbId).select("*").single();
+        const { data, error } = await supabase.from("projetos").update(payload).eq("id", projectDbId).select("*").maybeSingle();
         if (error) throw error;
         saved = data;
       } else {
-        const { data, error } = await supabase.from("projetos").insert(payload).select("*").single();
+        const { data, error } = await supabase.from("projetos").insert(payload).select("*").maybeSingle();
         if (error) throw error;
         saved = data;
+      }
+
+      if (!saved) {
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("projetos")
+          .select("*")
+          .eq("slug", uniqueSlug)
+          .maybeSingle();
+
+        if (fallbackError) {
+          throw fallbackError;
+        }
+
+        if (!fallbackData) {
+          throw new Error(
+            "Projeto salvo, mas não foi possível ler o registro. Verifique as policies de RLS (SELECT) para a tabela projetos.",
+          );
+        }
+
+        saved = fallbackData;
+      }
+
+      if (saved?.id) {
         setProjectDbId(String(saved.id));
       }
 
