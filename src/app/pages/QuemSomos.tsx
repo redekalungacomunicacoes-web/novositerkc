@@ -343,7 +343,7 @@ export function QuemSomos() {
       </section>
 
       {/* Nossa História */}
-      <section className="py-16 md:py-24 bg-white">
+      <section id="historia" className="py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-3 text-center">
             Nossa História
@@ -393,37 +393,8 @@ export function QuemSomos() {
         </div>
       </section>
 
-      {/* Missão e Visão */}
-      {(missaoText || visaoText) && (
-        <section className="py-12 bg-white border-t border-gray-100">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-6">
-            {missaoText && (
-              <RKCCard>
-                <RKCCardContent className="p-8">
-                  <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">
-                    Missão
-                  </h3>
-                  <p className="text-gray-600 leading-relaxed">{missaoText}</p>
-                </RKCCardContent>
-              </RKCCard>
-            )}
-
-            {visaoText && (
-              <RKCCard>
-                <RKCCardContent className="p-8">
-                  <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">
-                    Visão
-                  </h3>
-                  <p className="text-gray-600 leading-relaxed">{visaoText}</p>
-                </RKCCardContent>
-              </RKCCard>
-            )}
-          </div>
-        </section>
-      )}
-
       {/* Integrantes */}
-      <section className="py-16 md:py-20 bg-[#f8faf9] border-t border-gray-100">
+      <section id="equipe" className="py-16 md:py-20 bg-[#f8faf9] border-t border-gray-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E]">
@@ -460,8 +431,43 @@ export function QuemSomos() {
         </div>
       </section>
 
+      {/* Missão e Visão */}
+      {(missaoText || visaoText) && (
+        <section id="missao-visao" className="py-12 bg-white border-t border-gray-100">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-10 text-center">
+              Missão e Visão
+            </h2>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {missaoText && (
+                <RKCCard>
+                  <RKCCardContent className="p-8">
+                    <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">
+                      Missão
+                    </h3>
+                    <p className="text-gray-600 leading-relaxed">{missaoText}</p>
+                  </RKCCardContent>
+                </RKCCard>
+              )}
+
+              {visaoText && (
+                <RKCCard>
+                  <RKCCardContent className="p-8">
+                    <h3 className="font-bold text-2xl text-[#2E2E2E] mb-3">
+                      Visão
+                    </h3>
+                    <p className="text-gray-600 leading-relaxed">{visaoText}</p>
+                  </RKCCardContent>
+                </RKCCard>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Valores */}
-      <section className="py-16 md:py-24 bg-gray-50">
+      <section id="valores" className="py-16 md:py-24 bg-gray-50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-12 text-center">
             Nossos Valores
@@ -495,7 +501,7 @@ export function QuemSomos() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 md:py-20 bg-white">
+      <section id="faca-parte" className="py-16 md:py-20 bg-white">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-[#2E2E2E] mb-6">
             Faça parte dessa história
