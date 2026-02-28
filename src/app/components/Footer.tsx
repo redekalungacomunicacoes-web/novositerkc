@@ -35,17 +35,25 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
   const [footerData, setFooterData] = useState<FooterData>(FALLBACKS);
 
+  const resolveLogoUrl = (footerLogoPath: string | null | undefined, footerLogoUrl?: string | null) => {
+    if (footerLogoUrl && /^https?:\/\//i.test(footerLogoUrl)) return footerLogoUrl;
+    if (footerLogoPath && /^https?:\/\//i.test(footerLogoPath)) return footerLogoPath;
+    return buildPublicStorageUrl(footerLogoPath);
+  };
+
   useEffect(() => {
     (async () => {
       try {
         const settings = await getFooterSettings();
+        const settingsWithLogoUrl = settings as typeof settings & { footer_logo_url?: string | null };
+
         setFooterData({
-          logoUrl: buildPublicStorageUrl(settings.footer_logo_path),
+          logoUrl: resolveLogoUrl(settings.footer_logo_path, settingsWithLogoUrl.footer_logo_url),
           description: settings.footer_description || FALLBACKS.description,
           email: settings.footer_email || FALLBACKS.email,
           location: settings.footer_location || FALLBACKS.location,
-          address: settings.footer_address_short || FALLBACKS.address,
-          mapsUrl: settings.footer_maps_url || "",
+          address: "",
+          mapsUrl: "",
           instagramUrl: settings.footer_instagram_url || "",
           whatsappUrl: normalizeWhatsappLink(settings.footer_whatsapp),
           facebookUrl: settings.footer_facebook_url || "",
@@ -72,14 +80,14 @@ export function Footer() {
 
   return (
     <footer className="border-t bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <div className="grid gap-8 md:grid-cols-3 md:items-center">
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <div className="grid gap-10 md:grid-cols-3 md:items-center">
           <div className="flex justify-center md:justify-start">
             {footerData.logoUrl ? (
               <img
                 src={footerData.logoUrl}
-                alt="Logo do rodapé"
-                className="h-auto max-h-16 w-auto max-w-[220px] object-contain"
+                alt="Rede Kalunga Comunicações"
+                className="h-auto max-h-16 w-auto object-contain"
               />
             ) : (
               <div className="text-left">
@@ -89,54 +97,34 @@ export function Footer() {
             )}
           </div>
 
-          <div className="text-center md:text-center">
-            <p className="mx-auto max-w-md text-sm leading-relaxed text-slate-600 line-clamp-3 md:line-clamp-2">
+          <div className="text-center">
+            <p className="mx-auto max-w-md text-sm leading-relaxed text-slate-600">
               {footerData.description || FALLBACKS.description}
             </p>
           </div>
 
-          <div className="space-y-3 text-center md:text-right">
-            <div className="text-sm text-slate-700">
-              <p className="mb-1 font-medium text-slate-800">Localização</p>
-              {footerData.mapsUrl ? (
-                <a
-                  href={footerData.mapsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-start gap-2 text-slate-700 hover:text-green-800"
-                >
-                  <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-700" />
-                  <span>
-                    {footerData.location || FALLBACKS.location}
-                    {footerData.address ? <><br />{footerData.address}</> : null}
-                  </span>
-                </a>
-              ) : (
-                <span className="inline-flex items-start gap-2">
-                  <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-700" />
-                  <span>
-                    {footerData.location || FALLBACKS.location}
-                    {footerData.address ? <><br />{footerData.address}</> : null}
-                  </span>
-                </span>
-              )}
-            </div>
+          <div className="flex flex-col items-center gap-3 text-sm text-slate-700 md:items-end">
+            {(footerData.location || FALLBACKS.location) && (
+              <p className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-green-700" />
+                <span>{footerData.location || FALLBACKS.location}</span>
+              </p>
+            )}
 
-            <div className="text-sm text-slate-700">
-              <p className="mb-1 font-medium text-slate-800">E-mail</p>
+            {(footerData.email || FALLBACKS.email) && (
               <a
                 href={`mailto:${footerData.email || FALLBACKS.email}`}
-                className="inline-flex items-center gap-2 text-green-700 hover:text-green-800"
+                className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-green-700 transition hover:text-green-800"
               >
-                <Mail className="h-4 w-4" />
-                {footerData.email || FALLBACKS.email}
+                <span className="inline-flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  {footerData.email || FALLBACKS.email}
+                </span>
               </a>
-            </div>
+            )}
 
-            <div className="text-sm text-slate-700">
-              <p className="mb-1 font-medium text-slate-800">Redes sociais</p>
-              {socialLinks.length > 0 ? (
-                <div className="flex flex-wrap justify-center gap-x-3 gap-y-2 md:justify-end">
+            {socialLinks.length > 0 ? (
+              <div className="mt-1 flex items-center gap-4 text-green-700">
                   {socialLinks.map(({ href, icon: Icon, label }) => (
                     <a
                       key={label}
@@ -144,22 +132,18 @@ export function Footer() {
                       target="_blank"
                       rel="noreferrer"
                       aria-label={label}
-                      className="inline-flex items-center gap-2 text-green-700 hover:text-green-800"
+                      className="text-green-700 transition hover:text-green-800"
                     >
-                      <Icon className="h-4 w-4" />
-                      <span>{label}</span>
+                      <Icon className="h-5 w-5" />
                     </a>
                   ))}
-                </div>
-              ) : (
-                <p className="text-slate-500">Nenhuma rede social cadastrada.</p>
-              )}
-            </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="mt-8 border-t border-slate-200 pt-6 text-center">
-          <p className="text-sm text-slate-500">© {currentYear} Rede Kalunga Comunicações. Todos os direitos reservados.</p>
+        <div className="mt-8 border-t pt-6 text-center text-xs text-slate-500">
+          © {currentYear} Rede Kalunga Comunicações. Todos os direitos reservados.
         </div>
       </div>
     </footer>
