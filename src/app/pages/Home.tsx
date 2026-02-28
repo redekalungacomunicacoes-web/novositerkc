@@ -362,27 +362,6 @@ export function Home() {
         </div>
       </section>
 
-      {/* Newsletter CTA */}
-      <section className="py-16 md:py-20 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-10 left-10 w-64 h-64 rounded-full bg-white blur-3xl" />
-          <div className="absolute bottom-10 right-10 w-96 h-96 rounded-full bg-[#F2B705] blur-3xl" />
-        </div>
-
-        <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Receba nossas histórias</h2>
-          <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto">
-            Assine nossa newsletter e acompanhe as histórias, projetos e transformações do Território Kalunga
-          </p>
-          <Link to="/newsletter">
-            <RKCButton variant="accent" size="lg">
-              Assinar Newsletter
-              <ArrowRight className="w-5 h-5" />
-            </RKCButton>
-          </Link>
-        </div>
-      </section>
-
       {/* Chamada Institucional Final */}
       <section className="py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -426,6 +405,27 @@ export function Home() {
               <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-[#0F7A3E] rounded-full opacity-60 blur-2xl" />
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Newsletter CTA */}
+      <section className="py-16 md:py-20 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-10 left-10 w-64 h-64 rounded-full bg-white blur-3xl" />
+          <div className="absolute bottom-10 right-10 w-96 h-96 rounded-full bg-[#F2B705] blur-3xl" />
+        </div>
+
+        <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Receba nossas histórias</h2>
+          <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto">
+            Assine nossa newsletter e acompanhe as histórias, projetos e transformações do Território Kalunga
+          </p>
+          <Link to="/newsletter">
+            <RKCButton variant="accent" size="lg">
+              Assinar Newsletter
+              <ArrowRight className="w-5 h-5" />
+            </RKCButton>
+          </Link>
         </div>
       </section>
     </div>
