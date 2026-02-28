@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ProjectYouTubeGrid } from "@/app/components/ProjectYouTubeGrid";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
-import { ArrowLeft, Calendar, X, Image as ImageIcon, Instagram, Youtube, Music, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { ArrowLeft, Calendar, X, Image as ImageIcon, Instagram, Youtube, Music, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { trackPageView } from "@/lib/analytics";
 
@@ -28,112 +29,6 @@ type ProjetoUI = {
   imagens: ProjectImage[];
 };
 
-type YoutubeVideo = {
-  id: string;
-  title: string;
-  thumbnail: string;
-};
-
-const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
-
-
-function parseYoutubeUrl(url: string) {
-  const fallback = { kind: "url" as const, sourceUrl: url };
-  try {
-    const u = new URL(url);
-    const host = u.hostname.replace("www.", "");
-
-    if (!(host.includes("youtube.com") || host.includes("youtu.be"))) return fallback;
-
-    const playlistId = u.searchParams.get("list");
-    if (playlistId) return { kind: "playlist" as const, playlistId, sourceUrl: url };
-
-    if (host === "youtu.be") {
-      const videoId = u.pathname.replace("/", "");
-      if (videoId) return { kind: "video" as const, videoId, sourceUrl: url };
-    }
-
-    const videoId = u.searchParams.get("v");
-    if (videoId) return { kind: "video" as const, videoId, sourceUrl: url };
-
-    const path = u.pathname;
-    const handle = path.match(/\/@([a-zA-Z0-9._-]+)/)?.[1];
-    if (handle) return { kind: "handle" as const, handle, sourceUrl: url };
-
-    const channelId = path.match(/\/channel\/([a-zA-Z0-9_-]+)/)?.[1];
-    if (channelId) return { kind: "channelId" as const, channelId, sourceUrl: url };
-
-    const channelName = path.match(/\/(c|user)\/([^/]+)/)?.[2];
-    if (channelName) return { kind: "channelName" as const, channelName, sourceUrl: url };
-
-    return fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-async function fetchYouTubeVideos(youtubeUrl: string, limit = 12): Promise<YoutubeVideo[]> {
-  if (!YOUTUBE_API_KEY) return [];
-
-  const parsed = parseYoutubeUrl(youtubeUrl);
-  const apiBase = "https://www.googleapis.com/youtube/v3";
-
-  if (parsed.kind === "playlist") {
-    const playlistUrl = `${apiBase}/playlistItems?part=snippet&maxResults=${limit}&playlistId=${parsed.playlistId}&key=${YOUTUBE_API_KEY}`;
-    const res = await fetch(playlistUrl);
-    if (!res.ok) return [];
-    const json = await res.json();
-    return (json.items || [])
-      .map((item: any) => ({
-        id: item?.snippet?.resourceId?.videoId,
-        title: item?.snippet?.title || "Vídeo",
-        thumbnail: item?.snippet?.thumbnails?.high?.url || item?.snippet?.thumbnails?.medium?.url || "",
-      }))
-      .filter((item: YoutubeVideo) => Boolean(item.id));
-  }
-
-  let channelId: string | null = null;
-
-  if (parsed.kind === "channelId") channelId = parsed.channelId;
-
-  if (!channelId && parsed.kind === "handle") {
-    const byHandle = await fetch(`${apiBase}/channels?part=id&forHandle=${encodeURIComponent(parsed.handle)}&key=${YOUTUBE_API_KEY}`);
-    if (byHandle.ok) {
-      const byHandleJson = await byHandle.json();
-      channelId = byHandleJson?.items?.[0]?.id || null;
-    }
-  }
-
-  if (!channelId && parsed.kind === "channelName") {
-    const bySearch = await fetch(`${apiBase}/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(parsed.channelName)}&key=${YOUTUBE_API_KEY}`);
-    if (bySearch.ok) {
-      const bySearchJson = await bySearch.json();
-      channelId = bySearchJson?.items?.[0]?.snippet?.channelId || null;
-    }
-  }
-
-  if (!channelId) return [];
-
-  const searchVideos = await fetch(`${apiBase}/search?part=snippet&type=video&order=date&maxResults=${limit}&channelId=${channelId}&key=${YOUTUBE_API_KEY}`);
-  if (!searchVideos.ok) return [];
-
-  const json = await searchVideos.json();
-  return (json.items || [])
-    .map((item: any) => ({
-      id: item?.id?.videoId,
-      title: item?.snippet?.title || "Vídeo",
-      thumbnail: item?.snippet?.thumbnails?.high?.url || item?.snippet?.thumbnails?.medium?.url || "",
-    }))
-    .filter((item: YoutubeVideo) => Boolean(item.id));
-}
-
-function getYoutubeFallbackEmbed(url: string) {
-  const parsed = parseYoutubeUrl(url);
-  if (parsed.kind === "playlist") return `https://www.youtube.com/embed/videoseries?list=${parsed.playlistId}`;
-  if (parsed.kind === "video") return `https://www.youtube.com/embed/${parsed.videoId}`;
-  return null;
-}
-
 function parseSpotifyUrl(url: string): { type: string; id: string } | null {
   try {
     const u = new URL(url);
@@ -158,8 +53,6 @@ export function ProjetoDetalhes() {
   const [loading, setLoading] = useState(true);
   const [projeto, setProjeto] = useState<ProjetoUI | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
-  const [youtubeVideos, setYoutubeVideos] = useState<YoutubeVideo[]>([]);
-  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!paramValue) return;
@@ -221,13 +114,6 @@ export function ProjetoDetalhes() {
 
       setProjeto(mapped);
 
-      if (mapped.youtubeUrl && YOUTUBE_API_KEY) {
-        const vids = await fetchYouTubeVideos(mapped.youtubeUrl, 12);
-        setYoutubeVideos(vids);
-      } else {
-        setYoutubeVideos([]);
-      }
-
       await trackPageView({ pageType: "projeto", path: `/projetos/${mapped.slug || mapped.id}`, contentId: mapped.id, contentSlug: mapped.slug });
       setLoading(false);
     })();
@@ -245,7 +131,6 @@ export function ProjetoDetalhes() {
   const hasInfoCard = Boolean(projeto?.anoLancamento || infoItems.length);
   const spotify = projeto?.spotifyUrl ? parseSpotifyUrl(projeto.spotifyUrl) : null;
   const spotifyEmbed = spotify ? `https://open.spotify.com/embed/${spotify.type}/${spotify.id}` : null;
-  const youtubeFallbackEmbed = projeto?.youtubeUrl ? getYoutubeFallbackEmbed(projeto.youtubeUrl) : null;
 
   if (loading) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center text-sm text-gray-500">Carregando projeto...</div></div>;
   if (!projeto) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center text-sm text-gray-500">Projeto não encontrado.</div></div>;
@@ -290,7 +175,7 @@ export function ProjetoDetalhes() {
                     {infoItems.length ? (
                       <div>
                         <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Redes sociais</p>
-                        <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                           {infoItems.map((item) => {
                             const Icon = item.icon;
                             return (
@@ -299,7 +184,7 @@ export function ProjetoDetalhes() {
                                 href={item.url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-2 text-green-700 hover:text-green-800 hover:underline"
+                                className="inline-flex items-center gap-2 rounded-full border border-green-200 px-3 py-1 text-green-700 hover:border-green-300 hover:text-green-800"
                               >
                                 <Icon className="h-4 w-4" />
                                 <span>{item.label}</span>
@@ -333,26 +218,7 @@ export function ProjetoDetalhes() {
 
         {projeto.youtubeUrl ? (
           <section>
-            <h2 className="text-2xl font-semibold">Vídeos</h2>
-            {youtubeVideos.length > 0 ? (
-              <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-4">
-                {youtubeVideos.map((video, index) => (
-                  <button key={video.id} type="button" onClick={() => setSelectedVideoIndex(index)} className="rounded-2xl overflow-hidden border text-left group">
-                    <div className="relative">
-                      <img src={video.thumbnail} alt={video.title} className="h-36 md:h-40 w-full object-cover" loading="lazy" decoding="async" />
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center"><Play className="w-10 h-10 text-white" /></div>
-                    </div>
-                    <div className="p-2 text-sm line-clamp-2">{video.title}</div>
-                  </button>
-                ))}
-              </div>
-            ) : youtubeFallbackEmbed ? (
-              <div className="mt-4 rounded-xl overflow-hidden border">
-                <iframe src={youtubeFallbackEmbed} title="YouTube" className="w-full h-[320px] md:h-[420px]" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-              </div>
-            ) : (
-              <a href={projeto.youtubeUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-lg border px-4 py-2 hover:bg-muted">Abrir no YouTube</a>
-            )}
+            <ProjectYouTubeGrid youtubeUrl={projeto.youtubeUrl} showOpenLink className="space-y-0" />
           </section>
         ) : null}
 
@@ -377,17 +243,6 @@ export function ProjetoDetalhes() {
             <button className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedImageIndex((prev) => (prev === null ? prev : (prev - 1 + projeto.imagens.length) % projeto.imagens.length))}><ChevronLeft className="w-5 h-5" /></button>
             <button className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedImageIndex((prev) => (prev === null ? prev : (prev + 1) % projeto.imagens.length))}><ChevronRight className="w-5 h-5" /></button>
             <img src={selectedImage.url} alt="Imagem" className="w-full max-h-[80vh] object-contain rounded-2xl" />
-          </div>
-        </div>
-      ) : null}
-
-      {selectedVideoIndex !== null ? (
-        <div className="fixed inset-0 z-50 bg-black/70 p-4 flex items-center justify-center" onClick={() => setSelectedVideoIndex(null)}>
-          <div className="relative max-w-5xl w-full bg-black rounded-2xl p-4" onClick={(e) => e.stopPropagation()}>
-            <button className="absolute top-2 right-2 p-2 rounded-full bg-white/90" onClick={() => setSelectedVideoIndex(null)}><X className="w-4 h-4" /></button>
-            <button className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedVideoIndex((prev) => (prev === null ? prev : (prev - 1 + youtubeVideos.length) % youtubeVideos.length))}><ChevronLeft className="w-5 h-5" /></button>
-            <button className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedVideoIndex((prev) => (prev === null ? prev : (prev + 1) % youtubeVideos.length))}><ChevronRight className="w-5 h-5" /></button>
-            <iframe src={`https://www.youtube.com/embed/${youtubeVideos[selectedVideoIndex].id}?autoplay=1`} title={youtubeVideos[selectedVideoIndex].title} className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
           </div>
         </div>
       ) : null}

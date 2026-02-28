@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Image as ImageIcon, Save, Trash2 } from "lucide-react";
 
+import { ProjectYouTubeGrid } from "@/app/components/ProjectYouTubeGrid";
 import { slugify } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 import { uploadImageToStorage } from "@/lib/storage";
@@ -25,19 +26,6 @@ type ProjetoGaleriaItem = {
   tipo: string;
   url: string;
 };
-
-type YoutubeFeedItem = {
-  id: string;
-  title: string;
-  link: string;
-  thumbnail: string;
-  published: string;
-};
-
-type YoutubeCachePayload = { ts: number; items: YoutubeFeedItem[] };
-
-const YOUTUBE_CACHE_TTL_MS = 10 * 60 * 1000;
-const youtubeFeedMemoryCache = new Map<string, YoutubeCachePayload>();
 
 function normalizeOptionalUrl(value?: string) {
   const trimmed = (value || "").trim();
@@ -74,189 +62,6 @@ async function ensureUniqueProjetoSlug(baseSlug: string, currentId?: string) {
     i += 1;
     slug = `${baseSlug}-${i}`;
   }
-}
-
-function formatDateBR(isoDate?: string) {
-  if (!isoDate) return "";
-  const d = new Date(isoDate);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-function extractYoutubeChannelIdFromUrl(url: string) {
-  const byChannelPath = url.match(/\/channel\/(UC[a-zA-Z0-9_-]{10,})/);
-  if (byChannelPath?.[1]) return byChannelPath[1];
-  return null;
-}
-
-async function resolveYoutubeChannelId(youtubeUrl: string) {
-  const directId = extractYoutubeChannelIdFromUrl(youtubeUrl);
-  if (directId) return directId;
-
-  if (!/(\/(@|c\/|user\/))/i.test(youtubeUrl)) {
-    throw new Error("URL do YouTube inválida. Use /channel/UC..., /@handle, /c/... ou /user/...");
-  }
-
-  const resp = await fetch(youtubeUrl, { method: "GET" });
-  if (!resp.ok) {
-    throw new Error("Não foi possível carregar a página do canal do YouTube.");
-  }
-
-  const html = await resp.text();
-  const match = html.match(/"channelId":"(UC[a-zA-Z0-9_-]{10,})"/);
-  if (!match?.[1]) {
-    throw new Error("Não foi possível identificar o channelId no YouTube URL informado.");
-  }
-
-  return match[1];
-}
-
-function readYoutubeCache(channelId: string): YoutubeFeedItem[] | null {
-  const now = Date.now();
-  const mem = youtubeFeedMemoryCache.get(channelId);
-  if (mem && now - mem.ts < YOUTUBE_CACHE_TTL_MS) return mem.items;
-
-  const lsKey = `youtube_feed_${channelId}`;
-  const raw = localStorage.getItem(lsKey);
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw) as YoutubeCachePayload;
-    if (!parsed?.ts || !Array.isArray(parsed?.items)) return null;
-    if (now - parsed.ts > YOUTUBE_CACHE_TTL_MS) return null;
-    youtubeFeedMemoryCache.set(channelId, parsed);
-    return parsed.items;
-  } catch {
-    return null;
-  }
-}
-
-function writeYoutubeCache(channelId: string, items: YoutubeFeedItem[]) {
-  const payload: YoutubeCachePayload = { ts: Date.now(), items };
-  youtubeFeedMemoryCache.set(channelId, payload);
-  localStorage.setItem(`youtube_feed_${channelId}`, JSON.stringify(payload));
-}
-
-async function loadYoutubeFeed(youtubeUrl: string, maxItems = 9) {
-  const channelId = await resolveYoutubeChannelId(youtubeUrl.trim());
-  const cached = readYoutubeCache(channelId);
-  if (cached) return cached.slice(0, maxItems);
-
-  const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-  const response = await fetch(feedUrl, { method: "GET" });
-  if (!response.ok) throw new Error("Não foi possível carregar o feed RSS do YouTube.");
-
-  const xml = await response.text();
-  const doc = new DOMParser().parseFromString(xml, "text/xml");
-  const entries = Array.from(doc.getElementsByTagName("entry"));
-
-  const items = entries
-    .map((entry) => {
-      const videoId = entry.getElementsByTagName("yt:videoId")[0]?.textContent?.trim() || "";
-      const title = entry.getElementsByTagName("title")[0]?.textContent?.trim() || "Sem título";
-      const published = entry.getElementsByTagName("published")[0]?.textContent?.trim() || "";
-      const link = entry.getElementsByTagName("link")[0]?.getAttribute("href") || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : "");
-      const thumbnail =
-        entry.getElementsByTagName("media:thumbnail")[0]?.getAttribute("url") ||
-        (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "");
-
-      return {
-        id: videoId || link || `${title}-${published}`,
-        title,
-        link,
-        thumbnail,
-        published,
-      };
-    })
-    .filter((item) => item.link);
-
-  writeYoutubeCache(channelId, items);
-  return items.slice(0, maxItems);
-}
-
-function YoutubeVideoGallery({ youtubeUrl }: { youtubeUrl?: string }) {
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<YoutubeFeedItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const url = (youtubeUrl || "").trim();
-    if (!url) {
-      setItems([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
-    let alive = true;
-    setLoading(true);
-    setError(null);
-
-    loadYoutubeFeed(url, 9)
-      .then((feedItems) => {
-        if (!alive) return;
-        setItems(feedItems);
-      })
-      .catch((err: any) => {
-        if (!alive) return;
-        setItems([]);
-        setError(err?.message || "Não foi possível carregar os vídeos do YouTube.");
-      })
-      .finally(() => {
-        if (!alive) return;
-        setLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, [youtubeUrl]);
-
-  return (
-    <div className="rounded-xl border p-4 space-y-3">
-      <h3 className="font-semibold">Galeria de vídeos (YouTube)</h3>
-
-      {!(youtubeUrl || "").trim() && <p className="text-sm text-muted-foreground">Informe o YouTube URL para carregar vídeos.</p>}
-
-      {loading && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, idx) => (
-            <div key={`video-skeleton-${idx}`} className="rounded-xl border p-2 animate-pulse">
-              <div className="w-full aspect-video bg-muted rounded" />
-              <div className="h-4 bg-muted rounded mt-2" />
-              <div className="h-3 w-2/3 bg-muted rounded mt-1" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!loading && error && <p className="text-sm text-red-600">{error}</p>}
-
-      {!loading && !error && items.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {items.map((video) => (
-            <a
-              key={video.id}
-              href={video.link}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-xl border overflow-hidden hover:bg-muted/40 transition-colors"
-            >
-              {video.thumbnail ? (
-                <img src={video.thumbnail} alt={video.title} className="w-full aspect-video object-cover" loading="lazy" />
-              ) : (
-                <div className="w-full aspect-video bg-muted" />
-              )}
-              <div className="p-2">
-                <p className="text-sm font-medium line-clamp-2">{video.title}</p>
-                <p className="text-xs text-muted-foreground mt-1">{formatDateBR(video.published)}</p>
-              </div>
-            </a>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function AdminProjetoForm() {
@@ -665,7 +470,13 @@ export function AdminProjetoForm() {
           )}
         </div>
 
-        <YoutubeVideoGallery youtubeUrl={youtubeUrl} />
+        <div className="rounded-xl border p-4">
+          <ProjectYouTubeGrid
+            youtubeUrl={youtubeUrl}
+            heading="Galeria de vídeos (YouTube)"
+            emptyMessage="Informe o YouTube URL para carregar vídeos."
+          />
+        </div>
       </div>
     </div>
   );
