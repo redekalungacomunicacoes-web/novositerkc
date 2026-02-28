@@ -16,7 +16,25 @@ type MateriaUI = {
   data: string;
   categoria: string;
   conteudo: string;
+  autorPerfil: {
+    id: string;
+    slug: string | null;
+    nome: string;
+    cargo: string | null;
+    bio: string | null;
+    foto: string | null;
+  } | null;
 };
+
+function getEquipeHref(author: MateriaUI["autorPerfil"]) {
+  if (!author) return "";
+  return author.slug ? `/equipe/${author.slug}` : `/equipe/id/${author.id}`;
+}
+
+function getTeamAvatarThumbUrl(path?: string | null) {
+  if (!path) return null;
+  return supabase.storage.from("team-avatars").getPublicUrl(path).data.publicUrl;
+}
 
 function formatDateBR(iso?: string | null) {
   if (!iso) return "";
@@ -44,6 +62,7 @@ export function MateriaDetalhes() {
     data: "",
     categoria: "",
     conteudo: "",
+    autorPerfil: null,
   }), []);
 
   useEffect(() => {
@@ -57,7 +76,7 @@ export function MateriaDetalhes() {
 
       const bySlug = await supabase
         .from("materias")
-        .select("id, slug, titulo, resumo, capa_url, autor_nome, tags, conteudo, published_at, created_at, status")
+        .select("id, slug, titulo, resumo, capa_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, published_at, created_at, status")
         .eq("slug", paramValue)
         .eq("status", "published")
         .limit(1);
@@ -68,7 +87,7 @@ export function MateriaDetalhes() {
         // 2) fallback: se a rota ainda estiver usando id
         const byId = await supabase
           .from("materias")
-          .select("id, slug, titulo, resumo, capa_url, autor_nome, tags, conteudo, published_at, created_at, status")
+          .select("id, slug, titulo, resumo, capa_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, published_at, created_at, status")
           .eq("id", paramValue)
           .eq("status", "published")
           .limit(1);
@@ -85,16 +104,40 @@ export function MateriaDetalhes() {
         return;
       }
 
+      const resolvedAuthorId = found.autor_equipe_id || found.autor_id;
+      let authorProfile: MateriaUI["autorPerfil"] = null;
+
+      if (resolvedAuthorId) {
+        const { data: authorData } = await supabase
+          .from("equipe")
+          .select("id, nome, slug, cargo, bio, foto_url, avatar_url, avatar_thumb_path")
+          .eq("id", resolvedAuthorId)
+          .eq("is_public", true)
+          .maybeSingle();
+
+        if (authorData) {
+          authorProfile = {
+            id: authorData.id,
+            slug: authorData.slug || null,
+            nome: authorData.nome || found.autor_nome || "",
+            cargo: authorData.cargo || null,
+            bio: authorData.bio || null,
+            foto: getTeamAvatarThumbUrl(authorData.avatar_thumb_path) || authorData.avatar_url || authorData.foto_url || null,
+          };
+        }
+      }
+
       const mapped: MateriaUI = {
         id: found.id,
         slug: found.slug,
         titulo: found.titulo || "",
         resumo: found.resumo || "",
         imagem: found.capa_url || "",
-        autor: found.autor_nome || "",
+        autor: authorProfile?.nome || found.autor_nome || "",
         data: formatDateBR(found.published_at || found.created_at),
         categoria: (found.tags && found.tags[0]) ? found.tags[0] : "Geral",
         conteudo: found.conteudo || "",
+        autorPerfil: authorProfile,
       };
 
       setMateria(mapped);
@@ -159,7 +202,13 @@ export function MateriaDetalhes() {
             <div className="flex items-center gap-6 text-white/80">
               <div className="flex items-center gap-2">
                 <User className="w-5 h-5" />
-                <span>{m.autor}</span>
+                {m.autorPerfil ? (
+                  <Link to={getEquipeHref(m.autorPerfil)} className="hover:underline font-medium">
+                    {m.autor}
+                  </Link>
+                ) : (
+                  <span>{m.autor}</span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
@@ -219,21 +268,37 @@ export function MateriaDetalhes() {
               <div className="mt-12">
                 <RKCCard className="bg-gradient-to-br from-[#0F7A3E]/5 to-[#2FA866]/5">
                   <RKCCardContent className="p-8">
-                    <div className="flex items-start gap-4">
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center flex-shrink-0">
-                        <User className="w-8 h-8 text-white" />
+                    {m.autorPerfil ? (
+                      <Link to={getEquipeHref(m.autorPerfil)} className="flex items-start gap-4 group">
+                        <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center flex-shrink-0">
+                          {m.autorPerfil.foto ? (
+                            <img src={m.autorPerfil.foto} alt={m.autorPerfil.nome} className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="w-8 h-8 text-white" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-lg text-[#2E2E2E] mb-1 group-hover:underline">
+                            {m.autorPerfil.nome}
+                          </h4>
+                          {m.autorPerfil.cargo && (
+                            <p className="text-sm text-gray-500 mb-1">{m.autorPerfil.cargo}</p>
+                          )}
+                          <p className="text-gray-600 leading-relaxed">
+                            {m.autorPerfil.bio || "Conheça mais sobre este integrante da Rede Kalunga Comunicações."}
+                          </p>
+                        </div>
+                      </Link>
+                    ) : (
+                      <div className="flex items-start gap-4">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center flex-shrink-0">
+                          <User className="w-8 h-8 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-lg text-[#2E2E2E] mb-2">{m.autor}</h4>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-lg text-[#2E2E2E] mb-2">
-                          {m.autor}
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed">
-                          Jornalista comunitária da Rede Kalunga Comunicações,
-                          dedicada a contar as histórias do território quilombola
-                          e fortalecer a comunicação popular.
-                        </p>
-                      </div>
-                    </div>
+                    )}
                   </RKCCardContent>
                 </RKCCard>
               </div>

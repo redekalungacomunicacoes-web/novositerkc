@@ -148,7 +148,7 @@ export function AdminMateriaForm() {
 
       const detailedQuery = supabase
         .from("equipe")
-        .select("id, nome, cargo, order_index, is_public, is_active, ativo")
+        .select("id, nome, cargo, order_index")
         .order("order_index", { ascending: true })
         .order("nome", { ascending: true });
 
@@ -198,7 +198,7 @@ export function AdminMateriaForm() {
       reset({
         title: d.titulo || "",
         subtitle: d.resumo || "",
-        authorId: d.autor_id || "",
+        authorId: d.autor_equipe_id || d.autor_id || "",
         category: (d.tags && d.tags[0]) ? d.tags[0] : "",
         date: (d.published_at
           ? new Date(d.published_at)
@@ -330,6 +330,7 @@ export function AdminMateriaForm() {
         tags,
         status: data.status,
         published_at: data.status === "published" ? new Date(data.date).toISOString() : null,
+        autor_equipe_id: data.authorId || null,
         autor_id: data.authorId || null,
         autor_nome,
       };
