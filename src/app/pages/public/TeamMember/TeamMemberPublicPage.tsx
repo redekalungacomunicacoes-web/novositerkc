@@ -96,20 +96,20 @@ export function TeamMemberPublicPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
-      <header className="flex flex-col md:flex-row gap-6 items-start md:items-center border-b pb-8">
-        <div className="w-32 h-32 rounded-full overflow-hidden bg-muted border">
+      <header className="flex flex-row items-center gap-4 md:flex-col md:items-start border-b pb-8">
+        <div className="h-24 w-24 md:w-32 md:h-32 rounded-full overflow-hidden bg-muted border border-[#0F7A3E] border-2 ring-2 ring-[#0F7A3E]/20 shrink-0">
           {member.foto_url ? <img src={member.foto_url} alt={member.nome} className="w-full h-full object-cover" /> : null}
         </div>
         <div className="flex-1 space-y-2">
-          <h1 className="text-3xl font-bold">{member.nome}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">{member.nome}</h1>
           <p className="text-muted-foreground">{member.cargo || "Integrante"}</p>
           {member.bio && <p>{member.bio}</p>}
           <div className="flex flex-wrap gap-3 pt-2">
             {links.map((item) => {
               const Icon = item.icon;
               return (
-                <a key={item.label} href={item.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm hover:underline">
-                  <Icon className="w-4 h-4" /> {item.label}
+                <a key={item.label} href={item.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-[#0F7A3E] hover:text-[#0b5f30] hover:underline transition-colors">
+                  <Icon className="w-4 h-4 text-[#0F7A3E]" /> {item.label}
                 </a>
               );
             })}
