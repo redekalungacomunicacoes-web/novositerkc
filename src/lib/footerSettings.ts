@@ -6,6 +6,7 @@ export const FOOTER_STORAGE_BUCKET = "site-assets";
 export type FooterSettings = {
   id?: string | number;
   footer_logo_path: string | null;
+  favicon_path: string | null;
   footer_description: string | null;
   footer_email: string | null;
   footer_instagram_url: string | null;
@@ -21,6 +22,7 @@ export type FooterSettings = {
 const FOOTER_COLUMNS = `
   id,
   footer_logo_path,
+  favicon_path,
   footer_description,
   footer_email,
   footer_instagram_url,
@@ -37,6 +39,7 @@ function normalize(data?: Partial<FooterSettings> | null): FooterSettings {
   return {
     id: data?.id,
     footer_logo_path: data?.footer_logo_path ?? null,
+    favicon_path: data?.favicon_path ?? null,
     footer_description: data?.footer_description ?? null,
     footer_email: data?.footer_email ?? null,
     footer_instagram_url: data?.footer_instagram_url ?? null,
@@ -140,4 +143,30 @@ export async function uploadFooterLogo(file: File) {
   if (error) throw error;
 
   return path;
+}
+
+export async function uploadFavicon(file: File) {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+  const path = `site/favicon.${ext}`;
+
+  const { error } = await supabase.storage.from(FOOTER_STORAGE_BUCKET).upload(path, file, {
+    upsert: true,
+    contentType: file.type,
+    cacheControl: "31536000",
+  });
+
+  if (error) throw error;
+
+  return path;
+}
+
+export function getFaviconMimeType(pathOrUrl: string | null | undefined) {
+  if (!pathOrUrl) return undefined;
+
+  const cleanPath = pathOrUrl.split("?")[0]?.toLowerCase() ?? "";
+  if (cleanPath.endsWith(".png")) return "image/png";
+  if (cleanPath.endsWith(".ico")) return "image/x-icon";
+  if (cleanPath.endsWith(".svg")) return "image/svg+xml";
+
+  return undefined;
 }

@@ -10,6 +10,7 @@ import {
   isLikelyUrl,
   isValidEmail,
   upsertFooterSettings,
+  uploadFavicon,
   uploadFooterLogo,
 } from "@/lib/footerSettings";
 
@@ -23,6 +24,7 @@ type AdminSettingsForm = {
   home_territory_subtitle: string;
 
   footer_logo_path: string;
+  favicon_path: string;
   footer_description: string;
   footer_email: string;
   footer_instagram_url: string;
@@ -35,7 +37,7 @@ type AdminSettingsForm = {
   footer_maps_url: string;
 };
 
-type UploadKind = "banner" | "territory" | "footer-logo";
+type UploadKind = "banner" | "territory" | "footer-logo" | "favicon";
 
 const BUCKET = "site";
 
@@ -52,6 +54,7 @@ export function AdminConfiguracoes() {
   const bannerFileRef = useRef<HTMLInputElement | null>(null);
   const territoryFileRef = useRef<HTMLInputElement | null>(null);
   const footerLogoFileRef = useRef<HTMLInputElement | null>(null);
+  const faviconFileRef = useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState<AdminSettingsForm>({
     home_banner_image_url: "",
@@ -63,6 +66,7 @@ export function AdminConfiguracoes() {
     home_territory_subtitle: "",
 
     footer_logo_path: "",
+    favicon_path: "",
     footer_description: "",
     footer_email: "",
     footer_instagram_url: "",
@@ -110,6 +114,7 @@ export function AdminConfiguracoes() {
           home_territory_subtitle: s.home_territory_subtitle ?? "",
 
           footer_logo_path: footer.footer_logo_path ?? "",
+          favicon_path: footer.favicon_path ?? "",
           footer_description: footer.footer_description ?? "",
           footer_email: footer.footer_email ?? "",
           footer_instagram_url: footer.footer_instagram_url ?? "",
@@ -143,6 +148,22 @@ export function AdminConfiguracoes() {
         return;
       }
 
+      if (kind === "favicon") {
+        const allowedMimeTypes = ["image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/svg+xml"];
+        const ext = file.name.split(".").pop()?.toLowerCase();
+        const allowedExts = ["png", "ico", "svg"];
+
+        if (!allowedMimeTypes.includes(file.type) && (!ext || !allowedExts.includes(ext))) {
+          toast.error("Formato inválido. Use PNG, ICO ou SVG.");
+          return;
+        }
+
+        const path = await uploadFavicon(file);
+        setField("favicon_path", path);
+        toast.success("Favicon enviado com sucesso.");
+        return;
+      }
+
       const url =
         kind === "banner"
           ? await uploadPublicImage({ bucket: BUCKET, path: "home/banner/banner", file })
@@ -159,6 +180,7 @@ export function AdminConfiguracoes() {
       if (kind === "banner" && bannerFileRef.current) bannerFileRef.current.value = "";
       if (kind === "territory" && territoryFileRef.current) territoryFileRef.current.value = "";
       if (kind === "footer-logo" && footerLogoFileRef.current) footerLogoFileRef.current.value = "";
+      if (kind === "favicon" && faviconFileRef.current) faviconFileRef.current.value = "";
     }
   }
 
@@ -183,6 +205,7 @@ export function AdminConfiguracoes() {
         }),
         upsertFooterSettings({
           footer_logo_path: form.footer_logo_path || null,
+          favicon_path: form.favicon_path || null,
           footer_description: form.footer_description || null,
           footer_email: form.footer_email || null,
           footer_instagram_url: form.footer_instagram_url || null,
@@ -370,6 +393,56 @@ export function AdminConfiguracoes() {
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-6">
           <h3 className="font-semibold text-lg border-b pb-4">Rodapé</h3>
 
+
+          <section className="space-y-3">
+            <h4 className="font-medium">Favicon</h4>
+            <input
+              ref={faviconFileRef}
+              type="file"
+              accept=".png,.ico,.svg,image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml"
+              className="hidden"
+              onChange={(e) => handleUpload("favicon", e.target.files?.[0])}
+            />
+
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div
+                className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 w-full md:max-w-xs cursor-pointer bg-muted/10"
+                onClick={() => {
+                  if (uploading === "favicon") return;
+                  faviconFileRef.current?.click();
+                }}
+              >
+                {form.favicon_path ? (
+                  <img
+                    src={buildPublicStorageUrl(form.favicon_path)}
+                    alt="Favicon"
+                    className="w-16 h-16 object-contain rounded-md border bg-white"
+                  />
+                ) : (
+                  <div className="h-16 flex items-center justify-center text-muted-foreground text-sm">Enviar favicon</div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="px-3 py-2 text-sm border rounded-md"
+                  onClick={() => faviconFileRef.current?.click()}
+                  disabled={uploading === "favicon"}
+                >
+                  {uploading === "favicon" ? "Enviando..." : "Upload"}
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-2 text-sm border rounded-md text-red-600 inline-flex items-center gap-1"
+                  onClick={() => setField("favicon_path", "")}
+                >
+                  <Trash2 className="h-4 w-4" /> Remover
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Formatos aceitos: PNG, ICO e SVG.</p>
+          </section>
           <section className="space-y-3">
             <h4 className="font-medium">Logo do rodapé</h4>
             <input
