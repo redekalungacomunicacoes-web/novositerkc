@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getSiteSettings, SiteSettings } from "@/lib/siteSettings";
+import avatarPlaceholder from "@/assets/avatar-placeholder.svg";
+
+const TEAM_AVATARS_BUCKET = "team-avatars";
 
 // ---------------------------------------------------------------------------
 // Tipagem
@@ -22,6 +25,7 @@ type MembroEquipe = {
   name: string;
   nome?: string;
   slug?: string | null;
+  avatarUrl?: string | null;
 };
 
 type QuemSomosData = {
@@ -50,12 +54,34 @@ interface MemberCardProps {
 }
 
 function MemberCard({ membro }: MemberCardProps) {
+  const hasAvatar = !!membro.avatarUrl;
   const cardContent = (
     <>
       <div className="relative overflow-hidden aspect-square bg-gray-100">
-        <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
-          Sem foto
-        </div>
+        {hasAvatar ? (
+          <img
+            src={membro.avatarUrl || avatarPlaceholder}
+            alt={`Foto de ${membro.name}`}
+            loading="lazy"
+            decoding="async"
+            width={320}
+            height={320}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={(e) => {
+              e.currentTarget.src = avatarPlaceholder;
+            }}
+          />
+        ) : (
+          <img
+            src={avatarPlaceholder}
+            alt="Sem foto"
+            loading="lazy"
+            decoding="async"
+            width={320}
+            height={320}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        )}
       </div>
 
       <div className="p-3">
@@ -98,6 +124,29 @@ export function QuemSomos() {
   const [loadingEquipe, setLoadingEquipe] = useState(true);
   const [equipeError, setEquipeError] = useState<string | null>(null);
   const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
+
+  const getPublicUrlOnce = (path: string) => {
+    return supabase.storage.from(TEAM_AVATARS_BUCKET).getPublicUrl(path).data.publicUrl;
+  };
+
+  const getAvatarUrl = (member: any) => {
+    const rawAvatarUrl = typeof member.avatar_url === "string" ? member.avatar_url.trim() : "";
+    if (rawAvatarUrl) {
+      if (/^https?:\/\//i.test(rawAvatarUrl)) return rawAvatarUrl;
+      return getPublicUrlOnce(rawAvatarUrl);
+    }
+
+    const thumbPath = typeof member.avatar_thumb_path === "string" ? member.avatar_thumb_path.trim() : "";
+    if (thumbPath) return getPublicUrlOnce(thumbPath);
+
+    const avatarPath = typeof member.avatar_path === "string" ? member.avatar_path.trim() : "";
+    if (avatarPath) return getPublicUrlOnce(avatarPath);
+
+    const legacyUrl = typeof member.foto_url === "string" ? member.foto_url.trim() : "";
+    if (!legacyUrl) return null;
+    if (/^https?:\/\//i.test(legacyUrl)) return legacyUrl;
+    return getPublicUrlOnce(legacyUrl);
+  };
 
   // Fallback (se ainda não cadastrou valores no banco)
   const valoresFallback = useMemo(
@@ -170,7 +219,7 @@ export function QuemSomos() {
 
             supabase
               .from("equipe")
-              .select("id, nome, slug")
+              .select("id, nome, slug, avatar_thumb_path, avatar_path, avatar_url, foto_url")
               .eq("is_public", true)
               .order("created_at", { ascending: true }),
           ]);
@@ -200,11 +249,34 @@ export function QuemSomos() {
         setLoadingEquipe(false);
 
         if (equipeRes.error) {
-          console.error("Erro ao carregar equipe:", equipeRes.error);
-          setEquipeError(
-            "Não foi possível carregar os integrantes agora. Tente novamente em instantes."
-          );
-          setEquipe([]);
+          const maybeMissingAvatarUrlColumn = /avatar_url/i.test(equipeRes.error.message || "");
+          if (maybeMissingAvatarUrlColumn) {
+            const retryEquipeRes = await supabase
+              .from("equipe")
+              .select("id, nome, slug, avatar_thumb_path, avatar_path, foto_url")
+              .eq("is_public", true)
+              .order("created_at", { ascending: true });
+
+            if (retryEquipeRes.error) {
+              console.error("Erro ao carregar equipe:", retryEquipeRes.error);
+              setEquipeError("Não foi possível carregar os integrantes agora. Tente novamente em instantes.");
+              setEquipe([]);
+            } else {
+              setEquipeError(null);
+              const mapped: MembroEquipe[] = (retryEquipeRes.data || []).map((m: any) => ({
+                id: String(m.id),
+                name: m.nome || "",
+                nome: m.nome || "",
+                slug: m.slug ?? null,
+                avatarUrl: getAvatarUrl(m),
+              }));
+              setEquipe(mapped);
+            }
+          } else {
+            console.error("Erro ao carregar equipe:", equipeRes.error);
+            setEquipeError("Não foi possível carregar os integrantes agora. Tente novamente em instantes.");
+            setEquipe([]);
+          }
         } else {
           setEquipeError(null);
           const mapped: MembroEquipe[] = (equipeRes.data || []).map((m: any) => ({
@@ -212,6 +284,7 @@ export function QuemSomos() {
             name: m.nome || "",
             nome: m.nome || "",
             slug: m.slug ?? null,
+            avatarUrl: getAvatarUrl(m),
           }));
           setEquipe(mapped);
         }
