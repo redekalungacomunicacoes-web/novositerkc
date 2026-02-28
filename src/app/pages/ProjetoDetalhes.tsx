@@ -2,93 +2,157 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
-import { ArrowLeft, Calendar, X, Image as ImageIcon, Play, Instagram, Youtube, Music2 } from "lucide-react";
+import { ArrowLeft, Calendar, X, Image as ImageIcon, Instagram, Youtube, Music2, ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { trackPageView } from "@/lib/analytics";
 
-type GaleriaItem = {
+type ProjectImage = {
   id: string;
-  type: "image" | "video";
-  url: string;
-  title?: string;
-  thumb_url?: string;
+  image_path: string;
+  thumb_path: string | null;
+  caption: string | null;
+  order_index: number;
 };
 
 type ProjetoUI = {
   id: string;
   slug: string;
   titulo: string;
-  descricao: string; // subtítulo (banner)
-  descricaoCompleta: string; // “Sobre o Projeto”
-  imagem: string; // banner (capa)
+  descricao: string;
+  descricaoCompleta: string;
+  imagem: string;
   tag: string;
   anoLancamento: number | null;
   instagramUrl: string | null;
   youtubeUrl: string | null;
   spotifyUrl: string | null;
-
-  objetivos: string[];
-  resultados: string[];
-
-  galeria: GaleriaItem[];
+  imagens: ProjectImage[];
 };
 
-function isVideoUrl(url: string) {
-  const u = (url || "").toLowerCase();
-  return (
-    u.endsWith(".mp4") ||
-    u.endsWith(".webm") ||
-    u.endsWith(".mov") ||
-    u.includes("youtube.com") ||
-    u.includes("youtu.be") ||
-    u.includes("vimeo.com")
-  );
+type YoutubeVideo = {
+  id: string;
+  title: string;
+  thumbnail: string;
+};
+
+const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
+
+function publicStorageUrl(path: string) {
+  return supabase.storage.from("projetos").getPublicUrl(path).data.publicUrl;
 }
 
-function getYouTubeEmbed(url: string) {
+function parseYoutubeUrl(url: string) {
+  const fallback = { kind: "url" as const, sourceUrl: url };
   try {
     const u = new URL(url);
-    if (u.hostname.includes("youtu.be")) {
-      const id = u.pathname.replace("/", "");
-      return id ? `https://www.youtube.com/embed/${id}` : null;
+    const host = u.hostname.replace("www.", "");
+
+    if (!(host.includes("youtube.com") || host.includes("youtu.be"))) return fallback;
+
+    const playlistId = u.searchParams.get("list");
+    if (playlistId) return { kind: "playlist" as const, playlistId, sourceUrl: url };
+
+    if (host === "youtu.be") {
+      const videoId = u.pathname.replace("/", "");
+      if (videoId) return { kind: "video" as const, videoId, sourceUrl: url };
     }
-    if (u.hostname.includes("youtube.com")) {
-      const id = u.searchParams.get("v");
-      return id ? `https://www.youtube.com/embed/${id}` : null;
-    }
-    return null;
+
+    const videoId = u.searchParams.get("v");
+    if (videoId) return { kind: "video" as const, videoId, sourceUrl: url };
+
+    const path = u.pathname;
+    const handle = path.match(/\/@([a-zA-Z0-9._-]+)/)?.[1];
+    if (handle) return { kind: "handle" as const, handle, sourceUrl: url };
+
+    const channelId = path.match(/\/channel\/([a-zA-Z0-9_-]+)/)?.[1];
+    if (channelId) return { kind: "channelId" as const, channelId, sourceUrl: url };
+
+    const channelName = path.match(/\/(c|user)\/([^/]+)/)?.[2];
+    if (channelName) return { kind: "channelName" as const, channelName, sourceUrl: url };
+
+    return fallback;
   } catch {
-    return null;
+    return fallback;
   }
 }
 
-type ProjetoGaleriaRow = {
-  id: string;
-  tipo: "image" | "video";
-  url: string;
-  titulo: string | null;
-  thumb_url: string | null;
-  ordem: number | null;
-  created_at: string;
-};
+async function fetchYouTubeVideos(youtubeUrl: string, limit = 12): Promise<YoutubeVideo[]> {
+  if (!YOUTUBE_API_KEY) return [];
 
-async function fetchGaleria(projetoId: string): Promise<GaleriaItem[]> {
-  const { data, error } = await supabase
-    .from("projeto_galeria")
-    .select("id, tipo, url, titulo, thumb_url, ordem, created_at")
-    .eq("projeto_id", projetoId)
-    .order("ordem", { ascending: true, nullsFirst: true })
-    .order("created_at", { ascending: true });
+  const parsed = parseYoutubeUrl(youtubeUrl);
+  const apiBase = "https://www.googleapis.com/youtube/v3";
 
-  if (error) throw error;
+  if (parsed.kind === "playlist") {
+    const playlistUrl = `${apiBase}/playlistItems?part=snippet&maxResults=${limit}&playlistId=${parsed.playlistId}&key=${YOUTUBE_API_KEY}`;
+    const res = await fetch(playlistUrl);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.items || [])
+      .map((item: any) => ({
+        id: item?.snippet?.resourceId?.videoId,
+        title: item?.snippet?.title || "Vídeo",
+        thumbnail: item?.snippet?.thumbnails?.high?.url || item?.snippet?.thumbnails?.medium?.url || "",
+      }))
+      .filter((item: YoutubeVideo) => Boolean(item.id));
+  }
 
-  return (data || []).map((g: ProjetoGaleriaRow) => ({
-    id: g.id,
-    type: g.tipo,
-    url: g.url,
-    title: g.titulo || undefined,
-    thumb_url: g.thumb_url || undefined,
-  }));
+  let channelId: string | null = null;
+
+  if (parsed.kind === "channelId") channelId = parsed.channelId;
+
+  if (!channelId && parsed.kind === "handle") {
+    const byHandle = await fetch(`${apiBase}/channels?part=id&forHandle=${encodeURIComponent(parsed.handle)}&key=${YOUTUBE_API_KEY}`);
+    if (byHandle.ok) {
+      const byHandleJson = await byHandle.json();
+      channelId = byHandleJson?.items?.[0]?.id || null;
+    }
+  }
+
+  if (!channelId && parsed.kind === "channelName") {
+    const bySearch = await fetch(`${apiBase}/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(parsed.channelName)}&key=${YOUTUBE_API_KEY}`);
+    if (bySearch.ok) {
+      const bySearchJson = await bySearch.json();
+      channelId = bySearchJson?.items?.[0]?.snippet?.channelId || null;
+    }
+  }
+
+  if (!channelId) return [];
+
+  const searchVideos = await fetch(`${apiBase}/search?part=snippet&type=video&order=date&maxResults=${limit}&channelId=${channelId}&key=${YOUTUBE_API_KEY}`);
+  if (!searchVideos.ok) return [];
+
+  const json = await searchVideos.json();
+  return (json.items || [])
+    .map((item: any) => ({
+      id: item?.id?.videoId,
+      title: item?.snippet?.title || "Vídeo",
+      thumbnail: item?.snippet?.thumbnails?.high?.url || item?.snippet?.thumbnails?.medium?.url || "",
+    }))
+    .filter((item: YoutubeVideo) => Boolean(item.id));
+}
+
+function getYoutubeFallbackEmbed(url: string) {
+  const parsed = parseYoutubeUrl(url);
+  if (parsed.kind === "playlist") return `https://www.youtube.com/embed/videoseries?list=${parsed.playlistId}`;
+  if (parsed.kind === "video") return `https://www.youtube.com/embed/${parsed.videoId}`;
+  return null;
+}
+
+function parseSpotifyUrl(url: string): { type: string; id: string } | null {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.includes("spotify.com")) return null;
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (parts[0] === "intl-pt") parts.shift();
+    if (parts[0] === "embed") parts.shift();
+    const [type, rawId] = parts;
+    if (!type || !rawId) return null;
+    const id = rawId.split("?")[0];
+    if (!["playlist", "album", "show", "track", "artist"].includes(type)) return null;
+    return { type, id };
+  } catch {
+    return null;
+  }
 }
 
 export function ProjetoDetalhes() {
@@ -97,38 +161,35 @@ export function ProjetoDetalhes() {
 
   const [loading, setLoading] = useState(true);
   const [projeto, setProjeto] = useState<ProjetoUI | null>(null);
-  const [selected, setSelected] = useState<GaleriaItem | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [youtubeVideos, setYoutubeVideos] = useState<YoutubeVideo[]>([]);
+  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!paramValue) return;
 
     (async () => {
       setLoading(true);
-
       const PUBLIC_FILTER = "publicado_transparencia.eq.true,publicado_transparencia.is.null";
 
       let found: any = null;
-
       const bySlug = await supabase
         .from("projetos")
-        .select("id, slug, titulo, resumo, descricao, capa_url, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia, published_at, created_at")
+        .select("id, slug, titulo, resumo, descricao, capa_url, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia")
         .eq("slug", paramValue)
         .or(PUBLIC_FILTER)
         .limit(1);
 
-      if (!bySlug.error && bySlug.data && bySlug.data.length > 0) {
+      if (!bySlug.error && bySlug.data?.length) {
         found = bySlug.data[0];
       } else {
         const byId = await supabase
           .from("projetos")
-          .select("id, slug, titulo, resumo, descricao, capa_url, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia, published_at, created_at")
+          .select("id, slug, titulo, resumo, descricao, capa_url, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia")
           .eq("id", paramValue)
           .or(PUBLIC_FILTER)
           .limit(1);
-
-        if (!byId.error && byId.data && byId.data.length > 0) {
-          found = byId.data[0];
-        }
+        if (!byId.error && byId.data?.length) found = byId.data[0];
       }
 
       if (!found) {
@@ -137,15 +198,15 @@ export function ProjetoDetalhes() {
         return;
       }
 
-      // ✅ Galeria do projeto
-      let galeria: GaleriaItem[] = [];
-      try {
-        galeria = await fetchGaleria(found.id);
-      } catch (e: any) {
-        console.warn("Erro ao carregar galeria do projeto:", e?.message || e);
-      }
+      const { data: imagesData } = await supabase
+        .from("project_images")
+        .select("id, image_path, thumb_path, caption, order_index")
+        .eq("project_id", found.id)
+        .eq("is_public", true)
+        .order("order_index", { ascending: true });
 
-      const fallbackCapa = galeria.find((g) => g.type === "image")?.url || "";
+      const imagens = (imagesData || []) as ProjectImage[];
+      const fallbackCapa = imagens[0] ? publicStorageUrl(imagens[0].image_path) : "";
 
       const mapped: ProjetoUI = {
         id: found.id,
@@ -159,264 +220,138 @@ export function ProjetoDetalhes() {
         instagramUrl: found.instagram_url ?? null,
         youtubeUrl: found.youtube_url ?? null,
         spotifyUrl: found.spotify_url ?? null,
-        objetivos: [],
-        resultados: [],
-        galeria,
+        imagens,
       };
 
       setProjeto(mapped);
 
-      await trackPageView({
-        pageType: "projeto",
-        path: `/projetos/${mapped.slug || mapped.id}`,
-        contentId: mapped.id,
-        contentSlug: mapped.slug,
-      });
+      if (mapped.youtubeUrl && YOUTUBE_API_KEY) {
+        const vids = await fetchYouTubeVideos(mapped.youtubeUrl, 12);
+        setYoutubeVideos(vids);
+      } else {
+        setYoutubeVideos([]);
+      }
 
-
+      await trackPageView({ pageType: "projeto", path: `/projetos/${mapped.slug || mapped.id}`, contentId: mapped.id, contentSlug: mapped.slug });
       setLoading(false);
     })();
   }, [paramValue]);
 
   const infoItems = useMemo(() => {
     if (!projeto) return [];
-
     return [
-      projeto.instagramUrl
-        ? { key: "instagram", label: "Instagram", url: projeto.instagramUrl, icon: Instagram }
-        : null,
+      projeto.instagramUrl ? { key: "instagram", label: "Instagram", url: projeto.instagramUrl, icon: Instagram } : null,
       projeto.youtubeUrl ? { key: "youtube", label: "YouTube", url: projeto.youtubeUrl, icon: Youtube } : null,
       projeto.spotifyUrl ? { key: "spotify", label: "Spotify", url: projeto.spotifyUrl, icon: Music2 } : null,
     ].filter(Boolean) as { key: string; label: string; url: string; icon: typeof Instagram }[];
   }, [projeto]);
 
   const hasInfoCard = Boolean(projeto?.anoLancamento || infoItems.length);
+  const spotify = projeto?.spotifyUrl ? parseSpotifyUrl(projeto.spotifyUrl) : null;
+  const spotifyEmbed = spotify ? `https://open.spotify.com/embed/${spotify.type}/${spotify.id}` : null;
+  const youtubeFallbackEmbed = projeto?.youtubeUrl ? getYoutubeFallbackEmbed(projeto.youtubeUrl) : null;
 
-  const galeriaItems = useMemo(() => {
-    const list = projeto?.galeria || [];
-    return list.map((it: any) => ({
-      ...it,
-      type: it.type || (isVideoUrl(it.url) ? "video" : "image"),
-    })) as GaleriaItem[];
-  }, [projeto]);
+  if (loading) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center text-sm text-gray-500">Carregando projeto...</div></div>;
+  if (!projeto) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center text-sm text-gray-500">Projeto não encontrado.</div></div>;
 
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center text-sm text-gray-500">Carregando projeto...</div>
-      </div>
-    );
-  }
-
-  if (!projeto) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center text-sm text-gray-500">Projeto não encontrado.</div>
-      </div>
-    );
-  }
+  const selectedImage = selectedImageIndex !== null ? projeto.imagens[selectedImageIndex] : null;
 
   return (
     <div className="w-full">
-      {/* ✅ BANNER GRANDE (igual Home) */}
       <section className="relative h-[70vh] md:h-[80vh] min-h-[520px] flex items-center overflow-hidden">
         <div className="absolute inset-0">
-          {projeto.imagem ? (
-            <img
-              src={projeto.imagem}
-              alt={projeto.titulo || "Projeto"}
-              className="w-full h-full object-cover"
-              fetchPriority="high"
-              decoding="async"
-            />
-          ) : (
-            <div className="w-full h-full bg-black/20" />
-          )}
+          {projeto.imagem ? <img src={projeto.imagem} alt={projeto.titulo || "Projeto"} className="w-full h-full object-cover" fetchPriority="high" decoding="async" /> : <div className="w-full h-full bg-black/20" />}
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-transparent" />
         </div>
-
-        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 w-full">
-          <div className="max-w-3xl">
-            <Link to="/projetos" className="inline-flex items-center gap-2 text-sm text-white/85 hover:text-white">
-              <ArrowLeft className="w-4 h-4" />
-              Voltar para Projetos
-            </Link>
-
-            <div className="mt-6">
-              <RKCTag>{projeto.tag}</RKCTag>
-            </div>
-
-            {/* reserva para não “encolher” quando apagar textos */}
-            <div className="mt-3 min-h-[200px]">
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
-                {projeto.titulo || ""}
-              </h1>
-              <p className="text-lg sm:text-xl text-gray-200 leading-relaxed">{projeto.descricao || ""}</p>
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="absolute bottom-0 left-0 right-0 h-24 bg-white"
-          style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }}
-        />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 w-full"><div className="max-w-3xl"><Link to="/projetos" className="inline-flex items-center gap-2 text-sm text-white/85 hover:text-white"><ArrowLeft className="w-4 h-4" />Voltar para Projetos</Link><div className="mt-6"><RKCTag>{projeto.tag}</RKCTag></div><div className="mt-3 min-h-[200px]"><h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">{projeto.titulo || ""}</h1><p className="text-lg sm:text-xl text-gray-200 leading-relaxed">{projeto.descricao || ""}</p></div></div></div>
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-white" style={{ clipPath: "ellipse(100% 100% at 50% 100%)" }} />
       </section>
 
-      {/* ✅ Conteúdo */}
-      <div className="max-w-6xl mx-auto px-4 py-10">
+      <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
         <div className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
-          <div>
-            <h2 className="text-2xl font-semibold">Sobre o Projeto</h2>
-            <p className="mt-3 text-base text-gray-700">{projeto.descricaoCompleta}</p>
-          </div>
-
-          {/* ✅ Coluna direita */}
+          <div><h2 className="text-2xl font-semibold">Sobre o Projeto</h2><p className="mt-3 text-base text-gray-700">{projeto.descricaoCompleta}</p></div>
           <div className="space-y-6">
-            {/* Informações */}
             {hasInfoCard ? (
-              <RKCCard>
-                <RKCCardContent>
-                  <div className="text-lg font-semibold">Informações</div>
-
-                  <div className="mt-4 space-y-4 text-sm text-gray-600">
-                    {projeto.anoLancamento ? (
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-2">
-                          <Calendar className="w-4 h-4" /> Ano de lançamento
-                        </span>
-                        <span>{projeto.anoLancamento}</span>
-                      </div>
-                    ) : null}
-
-                    {infoItems.length ? (
-                      <div>
-                        <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Redes sociais</div>
-                        <div className="flex flex-wrap items-center gap-4">
-                          {infoItems.map((item) => {
-                            const Icon = item.icon;
-                            return (
-                              <a
-                                key={item.key}
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 text-[#0F7A3E] hover:text-[#0C6132]"
-                              >
-                                <Icon className="w-4 h-4" />
-                                <span>{item.label}</span>
-                              </a>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </RKCCardContent>
-              </RKCCard>
+              <RKCCard><RKCCardContent><div className="text-lg font-semibold">Informações</div><div className="mt-4 space-y-4 text-sm text-gray-600">{projeto.anoLancamento ? <div className="flex items-center justify-between"><span className="inline-flex items-center gap-2"><Calendar className="w-4 h-4" />Ano de lançamento</span><span>{projeto.anoLancamento}</span></div> : null}{infoItems.length ? <div><div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Redes sociais</div><div className="flex flex-wrap items-center gap-4">{infoItems.map((item) => { const Icon = item.icon; return <a key={item.key} href={item.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-[#0F7A3E] hover:text-[#0C6132]"><Icon className="w-4 h-4" /><span>{item.label}</span></a>; })}</div></div> : null}</div></RKCCardContent></RKCCard>
             ) : null}
-
-            {/* Quer saber mais? */}
-            <div className="rounded-2xl bg-gradient-to-b from-emerald-700 to-emerald-600 text-white shadow-lg px-8 py-8">
-              <h3 className="text-center text-2xl font-semibold">Quer saber mais?</h3>
-
-              <p className="mt-4 text-center text-base text-white/90 leading-relaxed">
-                Entre em contato para conhecer melhor este <br className="hidden sm:block" />
-                projeto
-              </p>
-
-              <Link
-                to="/contato"
-                className="mt-6 block w-full rounded-xl bg-yellow-400 hover:bg-yellow-500 text-center py-4 text-lg font-semibold text-gray-900 shadow-md transition-colors"
-              >
-                Entrar em Contato
-              </Link>
-            </div>
           </div>
         </div>
 
-        {/* ✅ Galeria */}
-        <section className="mt-10">
-          <h2 className="text-2xl font-semibold">Galeria do Projeto</h2>
-
-          {galeriaItems.length === 0 ? (
-            <div className="mt-4 rounded-xl border p-4 text-sm text-gray-600 flex items-center gap-2">
-              <ImageIcon className="w-4 h-4" />
-              (Em breve) — quando você cadastrar no Admin, vai aparecer aqui automaticamente.
-            </div>
+        <section>
+          <h2 className="text-2xl font-semibold">Galeria</h2>
+          {projeto.imagens.length === 0 ? (
+            <div className="mt-4 rounded-xl border p-4 text-sm text-gray-600 flex items-center gap-2"><ImageIcon className="w-4 h-4" />Sem imagens cadastradas.</div>
           ) : (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {galeriaItems.map((item) => {
-                const isVid = item.type === "video" || isVideoUrl(item.url);
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelected(item)}
-                    className="group rounded-2xl overflow-hidden border text-left"
-                  >
-                    <div className="relative">
-                      {isVid ? (
-                        <div className="h-44 w-full bg-black/5 flex items-center justify-center">
-                          <Play className="w-10 h-10 opacity-70" />
-                        </div>
-                      ) : (
-                        <img
-                          src={item.thumb_url || item.url}
-                          alt={item.title || "Imagem"}
-                          className="h-44 w-full object-cover group-hover:scale-[1.02] transition-transform"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      )}
-                    </div>
-
-                    {item.title ? <div className="p-3 text-sm text-gray-700">{item.title}</div> : null}
-                  </button>
-                );
-              })}
+            <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-4">
+              {projeto.imagens.map((item, index) => (
+                <button key={item.id} type="button" onClick={() => setSelectedImageIndex(index)} className="rounded-2xl overflow-hidden border text-left group">
+                  <img src={publicStorageUrl(item.thumb_path || item.image_path)} alt={item.caption || "Imagem do projeto"} className="h-36 md:h-40 w-full object-cover group-hover:scale-[1.02] transition-transform" loading="lazy" decoding="async" />
+                </button>
+              ))}
             </div>
           )}
         </section>
 
-        {/* ✅ Modal */}
-        {selected ? (
-          <div
-            className="fixed inset-0 z-50 bg-black/60 p-4 flex items-center justify-center"
-            onClick={() => setSelected(null)}
-          >
-            <div
-              className="bg-white rounded-2xl max-w-4xl w-full overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between p-3 border-b">
-                <div className="text-sm font-medium">{selected.title || "Mídia"}</div>
-                <button className="p-2 rounded-lg hover:bg-gray-100" onClick={() => setSelected(null)}>
-                  <X className="w-4 h-4" />
-                </button>
+        {projeto.youtubeUrl ? (
+          <section>
+            <h2 className="text-2xl font-semibold">Vídeos</h2>
+            {youtubeVideos.length > 0 ? (
+              <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-4">
+                {youtubeVideos.map((video, index) => (
+                  <button key={video.id} type="button" onClick={() => setSelectedVideoIndex(index)} className="rounded-2xl overflow-hidden border text-left group">
+                    <div className="relative">
+                      <img src={video.thumbnail} alt={video.title} className="h-36 md:h-40 w-full object-cover" loading="lazy" decoding="async" />
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center"><Play className="w-10 h-10 text-white" /></div>
+                    </div>
+                    <div className="p-2 text-sm line-clamp-2">{video.title}</div>
+                  </button>
+                ))}
               </div>
+            ) : youtubeFallbackEmbed ? (
+              <div className="mt-4 rounded-xl overflow-hidden border">
+                <iframe src={youtubeFallbackEmbed} title="YouTube" className="w-full h-[320px] md:h-[420px]" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+              </div>
+            ) : (
+              <a href={projeto.youtubeUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-lg border px-4 py-2 hover:bg-muted">Abrir no YouTube</a>
+            )}
+          </section>
+        ) : null}
 
-              <div className="p-3">
-                {selected.type === "video" || isVideoUrl(selected.url) ? (
-                  getYouTubeEmbed(selected.url) ? (
-                    <iframe
-                      src={getYouTubeEmbed(selected.url) as string}
-                      title={selected.title || "Vídeo"}
-                      className="w-full h-[60vh] rounded-xl"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <video src={selected.url} controls className="w-full rounded-xl" />
-                  )
-                ) : (
-                  <img src={selected.url} alt={selected.title || "Imagem"} className="w-full rounded-xl" />
-                )}
+        {projeto.spotifyUrl ? (
+          <section>
+            <h2 className="text-2xl font-semibold">Spotify</h2>
+            {spotifyEmbed ? (
+              <div className="mt-4 rounded-xl overflow-hidden border">
+                <iframe src={spotifyEmbed} title="Spotify" className="w-full h-[352px]" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" />
               </div>
-            </div>
-          </div>
+            ) : (
+              <a href={projeto.spotifyUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-lg border px-4 py-2 hover:bg-muted">Abrir no Spotify</a>
+            )}
+          </section>
         ) : null}
       </div>
+
+      {selectedImage ? (
+        <div className="fixed inset-0 z-50 bg-black/70 p-4 flex items-center justify-center" onClick={() => setSelectedImageIndex(null)}>
+          <div className="relative max-w-5xl w-full" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute top-2 right-2 p-2 rounded-full bg-white/90" onClick={() => setSelectedImageIndex(null)}><X className="w-4 h-4" /></button>
+            <button className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedImageIndex((prev) => (prev === null ? prev : (prev - 1 + projeto.imagens.length) % projeto.imagens.length))}><ChevronLeft className="w-5 h-5" /></button>
+            <button className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedImageIndex((prev) => (prev === null ? prev : (prev + 1) % projeto.imagens.length))}><ChevronRight className="w-5 h-5" /></button>
+            <img src={publicStorageUrl(selectedImage.image_path)} alt={selectedImage.caption || "Imagem"} className="w-full max-h-[80vh] object-contain rounded-2xl" />
+          </div>
+        </div>
+      ) : null}
+
+      {selectedVideoIndex !== null ? (
+        <div className="fixed inset-0 z-50 bg-black/70 p-4 flex items-center justify-center" onClick={() => setSelectedVideoIndex(null)}>
+          <div className="relative max-w-5xl w-full bg-black rounded-2xl p-4" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute top-2 right-2 p-2 rounded-full bg-white/90" onClick={() => setSelectedVideoIndex(null)}><X className="w-4 h-4" /></button>
+            <button className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedVideoIndex((prev) => (prev === null ? prev : (prev - 1 + youtubeVideos.length) % youtubeVideos.length))}><ChevronLeft className="w-5 h-5" /></button>
+            <button className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedVideoIndex((prev) => (prev === null ? prev : (prev + 1) % youtubeVideos.length))}><ChevronRight className="w-5 h-5" /></button>
+            <iframe src={`https://www.youtube.com/embed/${youtubeVideos[selectedVideoIndex].id}?autoplay=1`} title={youtubeVideos[selectedVideoIndex].title} className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
