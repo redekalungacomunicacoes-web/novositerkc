@@ -7,6 +7,9 @@ export type TeamMemberPublic = {
   bio: string | null;
   curriculo_md: string | null;
   foto_url: string | null;
+  avatar_url?: string | null;
+  avatar_path?: string | null;
+  avatar_thumb_path?: string | null;
   slug: string;
   instagram: string | null;
   whatsapp: string | null;
@@ -40,9 +43,21 @@ export async function getMemberBySlug(slug: string) {
   return supabase
     .from("equipe")
     .select(
-      "id, nome, cargo, bio, curriculo_md, foto_url, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url"
+      "id, nome, cargo, bio, curriculo_md, foto_url, avatar_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url"
     )
     .eq("slug", slug)
+    .eq("ativo", true)
+    .eq("is_public", true)
+    .maybeSingle<TeamMemberPublic>();
+}
+
+export async function getMemberById(id: string) {
+  return supabase
+    .from("equipe")
+    .select(
+      "id, nome, cargo, bio, curriculo_md, foto_url, avatar_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url"
+    )
+    .eq("id", id)
     .eq("ativo", true)
     .eq("is_public", true)
     .maybeSingle<TeamMemberPublic>();
@@ -59,6 +74,20 @@ export async function getMemberPortfolio(memberId: string) {
 }
 
 export async function getMemberPosts(memberId: string) {
+  const direct = await supabase
+    .from("materias")
+    .select("id, slug, titulo, capa_url, published_at, created_at, status")
+    .eq("autor_equipe_id", memberId)
+    .eq("status", "published")
+    .order("created_at", { ascending: false });
+
+  if (!direct.error) {
+    return {
+      data: (direct.data || []) as TeamMemberPost[],
+      error: null,
+    };
+  }
+
   return supabase
     .from("team_member_posts")
     .select(
