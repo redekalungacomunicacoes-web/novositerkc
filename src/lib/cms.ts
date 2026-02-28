@@ -26,6 +26,10 @@ export type ProjetoRow = {
   resumo: string | null;
   descricao: string | null;
   capa_url: string | null;
+  ano_lancamento: number | null;
+  instagram_url: string | null;
+  youtube_url: string | null;
+  spotify_url: string | null;
   publicado_transparencia: boolean;
   published_at: string | null;
 };
