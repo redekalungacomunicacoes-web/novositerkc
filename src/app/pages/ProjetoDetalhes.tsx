@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
-import { ArrowLeft, Calendar, Users, X, Image as ImageIcon, Play, Eye } from "lucide-react";
+import { ArrowLeft, Calendar, X, Image as ImageIcon, Play, Instagram, Youtube, Music2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { getPublicContentViewCount, trackPageView } from "@/lib/analytics";
+import { trackPageView } from "@/lib/analytics";
 
 type GaleriaItem = {
   id: string;
@@ -22,8 +22,10 @@ type ProjetoUI = {
   descricaoCompleta: string; // “Sobre o Projeto”
   imagem: string; // banner (capa)
   tag: string;
-  ano: string;
-  status: string;
+  anoLancamento: number | null;
+  instagramUrl: string | null;
+  youtubeUrl: string | null;
+  spotifyUrl: string | null;
 
   objetivos: string[];
   resultados: string[];
@@ -96,14 +98,12 @@ export function ProjetoDetalhes() {
   const [loading, setLoading] = useState(true);
   const [projeto, setProjeto] = useState<ProjetoUI | null>(null);
   const [selected, setSelected] = useState<GaleriaItem | null>(null);
-  const [viewCount, setViewCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!paramValue) return;
 
     (async () => {
       setLoading(true);
-      setViewCount(null);
 
       const PUBLIC_FILTER = "publicado_transparencia.eq.true,publicado_transparencia.is.null";
 
@@ -111,7 +111,7 @@ export function ProjetoDetalhes() {
 
       const bySlug = await supabase
         .from("projetos")
-        .select("id, slug, titulo, resumo, descricao, capa_url, publicado_transparencia, published_at, created_at")
+        .select("id, slug, titulo, resumo, descricao, capa_url, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia, published_at, created_at")
         .eq("slug", paramValue)
         .or(PUBLIC_FILTER)
         .limit(1);
@@ -121,7 +121,7 @@ export function ProjetoDetalhes() {
       } else {
         const byId = await supabase
           .from("projetos")
-          .select("id, slug, titulo, resumo, descricao, capa_url, publicado_transparencia, published_at, created_at")
+          .select("id, slug, titulo, resumo, descricao, capa_url, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia, published_at, created_at")
           .eq("id", paramValue)
           .or(PUBLIC_FILTER)
           .limit(1);
@@ -155,8 +155,10 @@ export function ProjetoDetalhes() {
         descricaoCompleta: found.descricao || found.resumo || "",
         imagem: found.capa_url || fallbackCapa,
         tag: "Projeto",
-        ano: "—",
-        status: "Ativo",
+        anoLancamento: found.ano_lancamento ?? null,
+        instagramUrl: found.instagram_url ?? null,
+        youtubeUrl: found.youtube_url ?? null,
+        spotifyUrl: found.spotify_url ?? null,
         objetivos: [],
         resultados: [],
         galeria,
@@ -171,16 +173,24 @@ export function ProjetoDetalhes() {
         contentSlug: mapped.slug,
       });
 
-      const freshCount = await getPublicContentViewCount({
-        pageType: "projeto",
-        contentId: mapped.id,
-        contentSlug: mapped.slug,
-      });
-      setViewCount(freshCount);
 
       setLoading(false);
     })();
   }, [paramValue]);
+
+  const infoItems = useMemo(() => {
+    if (!projeto) return [];
+
+    return [
+      projeto.instagramUrl
+        ? { key: "instagram", label: "Instagram", url: projeto.instagramUrl, icon: Instagram }
+        : null,
+      projeto.youtubeUrl ? { key: "youtube", label: "YouTube", url: projeto.youtubeUrl, icon: Youtube } : null,
+      projeto.spotifyUrl ? { key: "spotify", label: "Spotify", url: projeto.spotifyUrl, icon: Music2 } : null,
+    ].filter(Boolean) as { key: string; label: string; url: string; icon: typeof Instagram }[];
+  }, [projeto]);
+
+  const hasInfoCard = Boolean(projeto?.anoLancamento || infoItems.length);
 
   const galeriaItems = useMemo(() => {
     const list = projeto?.galeria || [];
@@ -263,34 +273,47 @@ export function ProjetoDetalhes() {
           {/* ✅ Coluna direita */}
           <div className="space-y-6">
             {/* Informações */}
-            <RKCCard>
-              <RKCCardContent>
-                <div className="text-lg font-semibold">Informações</div>
+            {hasInfoCard ? (
+              <RKCCard>
+                <RKCCardContent>
+                  <div className="text-lg font-semibold">Informações</div>
 
-                <div className="mt-4 space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-2">
-                      <Calendar className="w-4 h-4" /> Período
-                    </span>
-                    <span>—</span>
-                  </div>
+                  <div className="mt-4 space-y-4 text-sm text-gray-600">
+                    {projeto.anoLancamento ? (
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-2">
+                          <Calendar className="w-4 h-4" /> Ano de lançamento
+                        </span>
+                        <span>{projeto.anoLancamento}</span>
+                      </div>
+                    ) : null}
 
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-2">
-                      <Users className="w-4 h-4" /> Status
-                    </span>
-                    <span>{projeto.status}</span>
+                    {infoItems.length ? (
+                      <div>
+                        <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Redes sociais</div>
+                        <div className="flex flex-wrap items-center gap-4">
+                          {infoItems.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                              <a
+                                key={item.key}
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 text-[#0F7A3E] hover:text-[#0C6132]"
+                              >
+                                <Icon className="w-4 h-4" />
+                                <span>{item.label}</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-2">
-                      <Eye className="w-4 h-4" /> Visualizações
-                    </span>
-                    <span>{viewCount ?? "—"}</span>
-                  </div>
-                </div>
-              </RKCCardContent>
-            </RKCCard>
+                </RKCCardContent>
+              </RKCCard>
+            ) : null}
 
             {/* Quer saber mais? */}
             <div className="rounded-2xl bg-gradient-to-b from-emerald-700 to-emerald-600 text-white shadow-lg px-8 py-8">

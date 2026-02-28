@@ -16,6 +16,10 @@ type ProjetoFormData = {
   startDate: string;
   endDate?: string;
   coverImage: string;
+  releaseYear?: string;
+  instagramUrl?: string;
+  youtubeUrl?: string;
+  spotifyUrl?: string;
 
   // Listas (campos repetíveis)
   objectives: { value: string }[];
@@ -79,6 +83,14 @@ async function uploadMediaToStorage(params: { projetoId: string; file: File }) {
   return { publicUrl, tipo: (isVideo ? "video" : "image") as "video" | "image" };
 }
 
+
+function normalizeOptionalUrl(value?: string) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 export function AdminProjetoForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -103,6 +115,10 @@ export function AdminProjetoForm() {
       startDate: "",
       endDate: "",
       coverImage: "",
+      releaseYear: "",
+      instagramUrl: "",
+      youtubeUrl: "",
+      spotifyUrl: "",
       objectives: [{ value: "" }],
       results: [{ value: "" }],
     },
@@ -170,6 +186,10 @@ export function AdminProjetoForm() {
         startDate: p?.meta?.startDate || "",
         endDate: p?.meta?.endDate || "",
         coverImage: p.capa_url || "",
+        releaseYear: p.ano_lancamento ? String(p.ano_lancamento) : "",
+        instagramUrl: p.instagram_url || "",
+        youtubeUrl: p.youtube_url || "",
+        spotifyUrl: p.spotify_url || "",
         objectives: (objetivos.length ? objetivos : [""]).map((v) => ({ value: v })),
         results: (resultados.length ? resultados : [""]).map((v) => ({ value: v })),
       });
@@ -259,6 +279,14 @@ export function AdminProjetoForm() {
       const objetivos = (data.objectives || []).map((o) => (o?.value || "").trim()).filter(Boolean);
       const resultados = (data.results || []).map((r) => (r?.value || "").trim()).filter(Boolean);
 
+      const year = (data.releaseYear || "").trim();
+      const yearNumber = year ? Number(year) : null;
+      if (year && (!/^\d{4}$/.test(year) || Number.isNaN(yearNumber))) {
+        alert("Ano de lançamento deve ter 4 dígitos.");
+        setLoading(false);
+        return;
+      }
+
       const payload: any = {
         titulo: data.title,
         slug: uniqueSlug,
@@ -267,6 +295,10 @@ export function AdminProjetoForm() {
 
         // ✅ capa separada
         capa_url: data.coverImage || null,
+        ano_lancamento: yearNumber,
+        instagram_url: normalizeOptionalUrl(data.instagramUrl),
+        youtube_url: normalizeOptionalUrl(data.youtubeUrl),
+        spotify_url: normalizeOptionalUrl(data.spotifyUrl),
 
         publicado_transparencia,
         published_at: publicado_transparencia ? new Date().toISOString() : null,
@@ -404,6 +436,54 @@ export function AdminProjetoForm() {
         <div>
           <label className="text-sm font-medium">Fim (opcional)</label>
           <input {...register("endDate")} className="w-full mt-1 px-3 py-2 rounded-lg border" />
+        </div>
+
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-sm font-medium">Ano de lançamento</label>
+            <input
+              type="number"
+              min={1900}
+              max={new Date().getFullYear() + 1}
+              placeholder="Ex: 2026"
+              {...register("releaseYear", {
+                validate: (value) => !value || /^\d{4}$/.test(value) || "Informe um ano com 4 dígitos",
+              })}
+              className="w-full mt-1 px-3 py-2 rounded-lg border"
+            />
+            {errors.releaseYear && <p className="text-xs text-red-600 mt-1">{errors.releaseYear.message}</p>}
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Instagram URL</label>
+            <input
+              type="url"
+              {...register("instagramUrl")}
+              className="w-full mt-1 px-3 py-2 rounded-lg border"
+              placeholder="https://instagram.com/..."
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">YouTube URL</label>
+            <input
+              type="url"
+              {...register("youtubeUrl")}
+              className="w-full mt-1 px-3 py-2 rounded-lg border"
+              placeholder="https://youtube.com/..."
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Spotify URL</label>
+            <input
+              type="url"
+              {...register("spotifyUrl")}
+              className="w-full mt-1 px-3 py-2 rounded-lg border"
+              placeholder="https://open.spotify.com/..."
+            />
+          </div>
         </div>
 
         {/* Objetivos */}
