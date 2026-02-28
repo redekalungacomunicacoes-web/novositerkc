@@ -36,7 +36,8 @@ type FormData = {
   website_url: string;
   ativo: boolean;
   is_public: boolean;
-  ordem: number;
+  order_index: number;
+  ordem?: number;
   foto_url: string;
   avatar_path?: string | null;
   avatar_thumb_path?: string | null;
@@ -71,7 +72,7 @@ export function AdminEquipeForm() {
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     defaultValues: {
       nome: "", slug: "", cargo: "", bio: "", curriculo_md: "", instagram: "", whatsapp: "", facebook_url: "", linkedin_url: "", website_url: "",
-      ativo: true, is_public: false, ordem: 0, foto_url: "", email_login: "", senha_login: "", permissoes: { admin: false, editor: true, autor: true },
+      ativo: true, is_public: false, order_index: 0, ordem: 0, foto_url: "", email_login: "", senha_login: "", permissoes: { admin: false, editor: true, autor: true },
     },
   });
 
@@ -114,7 +115,7 @@ export function AdminEquipeForm() {
       setLoading(true);
       const { data, error } = await supabase
         .from("equipe")
-        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, ordem, foto_url, avatar_path, avatar_thumb_path, email_login")
+        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, order_index, ordem, foto_url, avatar_path, avatar_thumb_path, email_login")
         .eq("id", id)
         .single();
       setLoading(false);
@@ -125,7 +126,8 @@ export function AdminEquipeForm() {
         whatsapp: data.whatsapp || "", facebook_url: data.facebook_url || "", linkedin_url: data.linkedin_url || "", website_url: data.website_url || "",
         ativo: !!data.ativo,
         is_public: !!data.is_public,
-        ordem: data.ordem ?? 0,
+        order_index: data.order_index ?? data.ordem ?? 0,
+        ordem: data.order_index ?? data.ordem ?? 0,
         foto_url: data.foto_url || "",
         avatar_path: data.avatar_path || "",
         avatar_thumb_path: data.avatar_thumb_path || "",
@@ -180,7 +182,8 @@ export function AdminEquipeForm() {
         website_url: v.website_url.trim() || null,
         ativo: !!v.ativo,
         is_public: !!v.is_public,
-        ordem: Number(v.ordem || 0),
+        order_index: Number(v.order_index ?? v.ordem ?? 0),
+        ordem: Number(v.order_index ?? v.ordem ?? 0),
         foto_url: pendingAvatarFile ? (savedFotoUrl || null) : (v.foto_url || null),
         avatar_path: v.avatar_path || null,
         avatar_thumb_path: v.avatar_thumb_path || null,
@@ -400,7 +403,7 @@ export function AdminEquipeForm() {
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
             <label className="flex items-center justify-between text-sm">Ativo <input type="checkbox" {...register("ativo")} /></label>
             <label className="flex items-center justify-between text-sm">Publicar perfil <input type="checkbox" {...register("is_public")} /></label>
-            <input type="number" {...register("ordem", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-md border" placeholder="Ordem" />
+            <input type="number" {...register("order_index", { valueAsNumber: true })} className="w-full h-10 px-3 rounded-md border" placeholder="Ordem" />
             <a href={`/equipe/${watch("slug") || ""}`} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">Abrir perfil público</a>
           </div>
 

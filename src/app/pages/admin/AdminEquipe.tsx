@@ -12,7 +12,8 @@ type EquipeRow = {
   slug: string | null;
   is_public: boolean;
   ativo: boolean;
-  ordem: number;
+  order_index: number;
+  ordem: number | null;
   created_at: string;
 };
 
@@ -26,8 +27,8 @@ export function AdminEquipe() {
 
     const { data, error } = await supabase
       .from("equipe")
-      .select("id, nome, cargo, foto_url, instagram, slug, is_public, ativo, ordem, created_at")
-      .order("ordem", { ascending: true })
+      .select("id, nome, cargo, foto_url, instagram, slug, is_public, ativo, order_index, ordem, created_at")
+      .order("order_index", { ascending: true })
       .order("created_at", { ascending: false });
 
     setLoading(false);
@@ -148,7 +149,7 @@ export function AdminEquipe() {
                     </td>
 
                     <td className="px-6 py-4">{r.cargo || "—"}</td>
-                    <td className="px-6 py-4">{r.ordem ?? 0}</td>
+                    <td className="px-6 py-4">{r.order_index ?? r.ordem ?? 0}</td>
 
                     <td className="px-6 py-4">
                       <button
