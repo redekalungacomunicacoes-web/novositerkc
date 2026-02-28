@@ -1,8 +1,8 @@
 // src/app/pages/admin/Projetos/AdminProjetoForm.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Image as ImageIcon, Plus, Save, Trash2 } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Image as ImageIcon, Save, Trash2 } from "lucide-react";
 
 import { slugify } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
@@ -10,28 +10,33 @@ import { uploadImageToStorage } from "@/lib/storage";
 
 type ProjetoFormData = {
   title: string;
-  shortDescription: string;
   description: string;
-  status: "Em andamento" | "Planejamento" | "Concluído" | "Pausado";
-  beneficiaries: string;
-  location: string;
-  startDate: string;
-  endDate?: string;
+  status: "Ativo" | "Rascunho";
   coverImage: string;
-  releaseYear?: string;
   instagramUrl?: string;
   youtubeUrl?: string;
   spotifyUrl?: string;
-  objectives: { value: string }[];
-  results: { value: string }[];
 };
 
 type ProjetoGaleriaItem = {
   id: string;
   projeto_id: string;
-  tipo: string; // "image" | "video" (por enquanto usamos "image")
+  tipo: string;
   url: string;
 };
+
+type YoutubeFeedItem = {
+  id: string;
+  title: string;
+  link: string;
+  thumbnail: string;
+  published: string;
+};
+
+type YoutubeCachePayload = { ts: number; items: YoutubeFeedItem[] };
+
+const YOUTUBE_CACHE_TTL_MS = 10 * 60 * 1000;
+const youtubeFeedMemoryCache = new Map<string, YoutubeCachePayload>();
 
 function normalizeOptionalUrl(value?: string) {
   const trimmed = (value || "").trim();
@@ -46,11 +51,9 @@ function fileExtension(file: File) {
 }
 
 async function getProjetoForEdit(param: string) {
-  // tenta por UUID (id)
   const byId = await supabase.from("projetos").select("*").eq("id", param).maybeSingle();
   if (!byId.error && byId.data) return { data: byId.data, error: null as any };
 
-  // fallback por slug
   const bySlug = await supabase.from("projetos").select("*").eq("slug", param).maybeSingle();
   if (bySlug.error) return { data: null, error: bySlug.error };
 
@@ -64,10 +67,7 @@ async function ensureUniqueProjetoSlug(baseSlug: string, currentId?: string) {
   while (true) {
     const { data, error } = await supabase.from("projetos").select("id").eq("slug", slug).limit(1);
     if (error) throw error;
-
     if (!data || data.length === 0) return slug;
-
-    // se estiver editando e o slug encontrado é do mesmo registro, está ok
     if (currentId && data[0]?.id === currentId) return slug;
 
     i += 1;
@@ -75,9 +75,193 @@ async function ensureUniqueProjetoSlug(baseSlug: string, currentId?: string) {
   }
 }
 
+function formatDateBR(isoDate?: string) {
+  if (!isoDate) return "";
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function extractYoutubeChannelIdFromUrl(url: string) {
+  const byChannelPath = url.match(/\/channel\/(UC[a-zA-Z0-9_-]{10,})/);
+  if (byChannelPath?.[1]) return byChannelPath[1];
+  return null;
+}
+
+async function resolveYoutubeChannelId(youtubeUrl: string) {
+  const directId = extractYoutubeChannelIdFromUrl(youtubeUrl);
+  if (directId) return directId;
+
+  if (!/(\/(@|c\/|user\/))/i.test(youtubeUrl)) {
+    throw new Error("URL do YouTube inválida. Use /channel/UC..., /@handle, /c/... ou /user/...");
+  }
+
+  const resp = await fetch(youtubeUrl, { method: "GET" });
+  if (!resp.ok) {
+    throw new Error("Não foi possível carregar a página do canal do YouTube.");
+  }
+
+  const html = await resp.text();
+  const match = html.match(/"channelId":"(UC[a-zA-Z0-9_-]{10,})"/);
+  if (!match?.[1]) {
+    throw new Error("Não foi possível identificar o channelId no YouTube URL informado.");
+  }
+
+  return match[1];
+}
+
+function readYoutubeCache(channelId: string): YoutubeFeedItem[] | null {
+  const now = Date.now();
+  const mem = youtubeFeedMemoryCache.get(channelId);
+  if (mem && now - mem.ts < YOUTUBE_CACHE_TTL_MS) return mem.items;
+
+  const lsKey = `youtube_feed_${channelId}`;
+  const raw = localStorage.getItem(lsKey);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as YoutubeCachePayload;
+    if (!parsed?.ts || !Array.isArray(parsed?.items)) return null;
+    if (now - parsed.ts > YOUTUBE_CACHE_TTL_MS) return null;
+    youtubeFeedMemoryCache.set(channelId, parsed);
+    return parsed.items;
+  } catch {
+    return null;
+  }
+}
+
+function writeYoutubeCache(channelId: string, items: YoutubeFeedItem[]) {
+  const payload: YoutubeCachePayload = { ts: Date.now(), items };
+  youtubeFeedMemoryCache.set(channelId, payload);
+  localStorage.setItem(`youtube_feed_${channelId}`, JSON.stringify(payload));
+}
+
+async function loadYoutubeFeed(youtubeUrl: string, maxItems = 9) {
+  const channelId = await resolveYoutubeChannelId(youtubeUrl.trim());
+  const cached = readYoutubeCache(channelId);
+  if (cached) return cached.slice(0, maxItems);
+
+  const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+  const response = await fetch(feedUrl, { method: "GET" });
+  if (!response.ok) throw new Error("Não foi possível carregar o feed RSS do YouTube.");
+
+  const xml = await response.text();
+  const doc = new DOMParser().parseFromString(xml, "text/xml");
+  const entries = Array.from(doc.getElementsByTagName("entry"));
+
+  const items = entries
+    .map((entry) => {
+      const videoId = entry.getElementsByTagName("yt:videoId")[0]?.textContent?.trim() || "";
+      const title = entry.getElementsByTagName("title")[0]?.textContent?.trim() || "Sem título";
+      const published = entry.getElementsByTagName("published")[0]?.textContent?.trim() || "";
+      const link = entry.getElementsByTagName("link")[0]?.getAttribute("href") || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : "");
+      const thumbnail =
+        entry.getElementsByTagName("media:thumbnail")[0]?.getAttribute("url") ||
+        (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "");
+
+      return {
+        id: videoId || link || `${title}-${published}`,
+        title,
+        link,
+        thumbnail,
+        published,
+      };
+    })
+    .filter((item) => item.link);
+
+  writeYoutubeCache(channelId, items);
+  return items.slice(0, maxItems);
+}
+
+function YoutubeVideoGallery({ youtubeUrl }: { youtubeUrl?: string }) {
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<YoutubeFeedItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const url = (youtubeUrl || "").trim();
+    if (!url) {
+      setItems([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    let alive = true;
+    setLoading(true);
+    setError(null);
+
+    loadYoutubeFeed(url, 9)
+      .then((feedItems) => {
+        if (!alive) return;
+        setItems(feedItems);
+      })
+      .catch((err: any) => {
+        if (!alive) return;
+        setItems([]);
+        setError(err?.message || "Não foi possível carregar os vídeos do YouTube.");
+      })
+      .finally(() => {
+        if (!alive) return;
+        setLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [youtubeUrl]);
+
+  return (
+    <div className="rounded-xl border p-4 space-y-3">
+      <h3 className="font-semibold">Galeria de vídeos (YouTube)</h3>
+
+      {!(youtubeUrl || "").trim() && <p className="text-sm text-muted-foreground">Informe o YouTube URL para carregar vídeos.</p>}
+
+      {loading && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={`video-skeleton-${idx}`} className="rounded-xl border p-2 animate-pulse">
+              <div className="w-full aspect-video bg-muted rounded" />
+              <div className="h-4 bg-muted rounded mt-2" />
+              <div className="h-3 w-2/3 bg-muted rounded mt-1" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!loading && !error && items.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {items.map((video) => (
+            <a
+              key={video.id}
+              href={video.link}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border overflow-hidden hover:bg-muted/40 transition-colors"
+            >
+              {video.thumbnail ? (
+                <img src={video.thumbnail} alt={video.title} className="w-full aspect-video object-cover" loading="lazy" />
+              ) : (
+                <div className="w-full aspect-video bg-muted" />
+              )}
+              <div className="p-2">
+                <p className="text-sm font-medium line-clamp-2">{video.title}</p>
+                <p className="text-xs text-muted-foreground mt-1">{formatDateBR(video.published)}</p>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AdminProjetoForm() {
-  const { id } = useParams(); // pode ser uuid OU slug dependendo da sua rota
+  const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEditing = !!id;
 
   const {
@@ -87,38 +271,26 @@ export function AdminProjetoForm() {
     reset,
     setValue,
     watch,
-    control,
   } = useForm<ProjetoFormData>({
     defaultValues: {
       title: "",
-      shortDescription: "",
       description: "",
-      status: "Planejamento",
-      beneficiaries: "",
-      location: "",
-      startDate: "",
-      endDate: "",
+      status: "Rascunho",
       coverImage: "",
-      releaseYear: "",
       instagramUrl: "",
       youtubeUrl: "",
       spotifyUrl: "",
-      objectives: [{ value: "" }],
-      results: [{ value: "" }],
     },
   });
 
-  const objectivesFA = useFieldArray({ control, name: "objectives" });
-  const resultsFA = useFieldArray({ control, name: "results" });
-
   const [loading, setLoading] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
-
-  const [projectDbId, setProjectDbId] = useState<string | null>(null); // UUID REAL do banco
+  const [projectDbId, setProjectDbId] = useState<string | null>(null);
   const [galeria, setGaleria] = useState<ProjetoGaleriaItem[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
   const coverImage = watch("coverImage");
+  const youtubeUrl = watch("youtubeUrl");
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -155,26 +327,14 @@ export function AdminProjetoForm() {
       }
 
       const p: any = data;
-
-      const objetivos: string[] = Array.isArray(p?.meta?.objetivos) ? p.meta.objetivos : [];
-      const resultados: string[] = Array.isArray(p?.meta?.resultados) ? p.meta.resultados : [];
-
       reset({
         title: p.titulo || "",
-        shortDescription: p.resumo || "",
         description: p.descricao || "",
-        status: p.publicado_transparencia ? "Em andamento" : "Planejamento",
-        beneficiaries: p?.meta?.beneficiaries || "",
-        location: p?.meta?.location || "",
-        startDate: p?.meta?.startDate || "",
-        endDate: p?.meta?.endDate || "",
+        status: p.publicado_transparencia ? "Ativo" : "Rascunho",
         coverImage: p.capa_url || "",
-        releaseYear: p.ano_lancamento ? String(p.ano_lancamento) : "",
         instagramUrl: p.instagram_url || "",
         youtubeUrl: p.youtube_url || "",
         spotifyUrl: p.spotify_url || "",
-        objectives: (objetivos.length ? objetivos : [""]).map((v) => ({ value: v })),
-        results: (resultados.length ? resultados : [""]).map((v) => ({ value: v })),
       });
 
       if (p?.id) {
@@ -228,7 +388,6 @@ export function AdminProjetoForm() {
         if (uploadError) throw uploadError;
 
         const { data: publicData } = supabase.storage.from("projetos").getPublicUrl(imagePath);
-
         const { error: insertError } = await supabase.from("projeto_galeria").insert({
           id: imageId,
           projeto_id: projectDbId,
@@ -250,19 +409,19 @@ export function AdminProjetoForm() {
   const handleDeleteGalleryItem = async (item: ProjetoGaleriaItem) => {
     if (!projectDbId) return;
 
-    const ok = confirm("Remover esta imagem da galeria?");
-    if (!ok) return;
+    if (!confirm("Remover esta imagem da galeria?")) return;
 
-    // tenta remover do storage (se for URL pública do supabase storage)
     const storagePrefix = "/storage/v1/object/public/projetos/";
     const pathFromUrl = item.url.includes(storagePrefix) ? item.url.split(storagePrefix)[1] : null;
-
     if (pathFromUrl) {
       await supabase.storage.from("projetos").remove([pathFromUrl]);
     }
 
     const { error } = await supabase.from("projeto_galeria").delete().eq("id", item.id);
-    if (error) return alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
     await loadGallery(projectDbId);
   };
@@ -270,81 +429,69 @@ export function AdminProjetoForm() {
   const onSubmit = async (form: ProjetoFormData) => {
     setLoading(true);
     try {
-      const publicado_transparencia = form.status !== "Planejamento";
+      const nowISO = new Date().toISOString();
+      const publicado_transparencia = form.status === "Ativo";
       const baseSlug = slugify(form.title);
       const uniqueSlug = await ensureUniqueProjetoSlug(baseSlug, projectDbId || undefined);
-
-      const objetivos = (form.objectives || []).map((o) => (o?.value || "").trim()).filter(Boolean);
-      const resultados = (form.results || []).map((r) => (r?.value || "").trim()).filter(Boolean);
-
-      const year = (form.releaseYear || "").trim();
-      const yearNumber = year ? Number(year) : null;
-      if (year && (!/^\d{4}$/.test(year) || Number.isNaN(yearNumber))) {
-        alert("Ano de lançamento deve ter 4 dígitos.");
-        return;
-      }
 
       const payload: any = {
         titulo: form.title,
         slug: uniqueSlug,
-        resumo: form.shortDescription || null,
         descricao: form.description || null,
         capa_url: form.coverImage || null,
-        ano_lancamento: yearNumber,
         instagram_url: normalizeOptionalUrl(form.instagramUrl),
         youtube_url: normalizeOptionalUrl(form.youtubeUrl),
         spotify_url: normalizeOptionalUrl(form.spotifyUrl),
         publicado_transparencia,
-        published_at: publicado_transparencia ? new Date().toISOString() : null,
-        meta: {
-          beneficiaries: (form.beneficiaries || "").trim() || null,
-          location: (form.location || "").trim() || null,
-          startDate: (form.startDate || "").trim() || null,
-          endDate: (form.endDate || "").trim() || null,
-          objetivos,
-          resultados,
-        },
+        published_at: publicado_transparencia ? nowISO : null,
       };
 
       let saved: any = null;
+      let expectedId = projectDbId;
 
-      // REGRA CORRETA: update/insert baseado no UUID real do banco
       if (projectDbId) {
-        const { data, error } = await supabase.from("projetos").update(payload).eq("id", projectDbId).select("*").maybeSingle();
+        const { data, error } = await supabase.from("projetos").update(payload).eq("id", projectDbId).select("id").maybeSingle();
         if (error) throw error;
+        if (!data?.id) {
+          throw new Error("Atualização não retornou registro (RLS ou ID incorreto).");
+        }
         saved = data;
       } else {
-        const { data, error } = await supabase.from("projetos").insert(payload).select("*").maybeSingle();
+        const { data, error } = await supabase.from("projetos").insert(payload).select("id").maybeSingle();
         if (error) throw error;
         saved = data;
+        expectedId = data?.id || null;
       }
 
       if (!saved) {
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from("projetos")
-          .select("*")
-          .eq("slug", uniqueSlug)
-          .maybeSingle();
-
-        if (fallbackError) {
-          throw fallbackError;
+        if (expectedId) {
+          const byId = await supabase.from("projetos").select("id, slug").eq("id", expectedId).maybeSingle();
+          if (byId.error) throw byId.error;
+          if (byId.data) saved = byId.data;
         }
 
-        if (!fallbackData) {
-          throw new Error(
-            "Projeto salvo, mas não foi possível ler o registro. Verifique as policies de RLS (SELECT) para a tabela projetos.",
-          );
+        if (!saved) {
+          const bySlug = await supabase.from("projetos").select("id, slug").eq("slug", uniqueSlug).maybeSingle();
+          if (bySlug.error) throw bySlug.error;
+          if (bySlug.data) saved = bySlug.data;
         }
-
-        saved = fallbackData;
       }
 
-      if (saved?.id) {
-        setProjectDbId(String(saved.id));
+      if (!saved?.id) {
+        throw new Error("Projeto persistido, mas não foi possível confirmar o registro salvo (RLS/SELECT).");
       }
 
-      // simples e consistente (evita erro de rota inexistente)
-      navigate("/admin/projetos");
+      const savedId = String(saved.id);
+      setProjectDbId(savedId);
+      await loadGallery(savedId);
+      alert("Salvo com sucesso.");
+
+      if (!projectDbId) {
+        const nextRoute = location.pathname.includes("/editar/")
+          ? `/admin/projetos/editar/${savedId}`
+          : `/admin/projetos/${savedId}`;
+        navigate(nextRoute, { replace: true });
+      }
     } catch (err: any) {
       alert(`Erro ao salvar projeto: ${err?.message || "Falha inesperada."}`);
     } finally {
@@ -361,7 +508,7 @@ export function AdminProjetoForm() {
           </Link>
           <div>
             <h1 className="text-2xl font-semibold">{isEditing ? "Editar Projeto" : "Novo Projeto"}</h1>
-            <p className="text-sm text-muted-foreground">Gerencie os dados do projeto e a galeria de imagens.</p>
+            <p className="text-sm text-muted-foreground">Gerencie os dados mínimos do projeto, galeria de imagens e vídeos.</p>
           </div>
         </div>
 
@@ -375,7 +522,6 @@ export function AdminProjetoForm() {
         </button>
       </div>
 
-      {/* CAPA */}
       <div className="rounded-xl border p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Capa do Projeto</h2>
@@ -398,13 +544,10 @@ export function AdminProjetoForm() {
         {coverImage ? (
           <img src={coverImage} alt="Capa" className="w-full h-56 object-cover rounded-lg border" />
         ) : (
-          <div className="w-full h-56 rounded-lg border flex items-center justify-center text-sm text-muted-foreground">
-            Nenhuma capa definida
-          </div>
+          <div className="w-full h-56 rounded-lg border flex items-center justify-center text-sm text-muted-foreground">Nenhuma capa definida</div>
         )}
       </div>
 
-      {/* FORM */}
       <div className="rounded-xl border p-4 space-y-4">
         <div>
           <label className="text-sm font-medium">Título</label>
@@ -413,128 +556,33 @@ export function AdminProjetoForm() {
         </div>
 
         <div>
-          <label className="text-sm font-medium">Resumo</label>
-          <input {...register("shortDescription")} className="w-full mt-1 px-3 py-2 rounded-lg border" />
-        </div>
-
-        <div>
           <label className="text-sm font-medium">Descrição (Sobre o Projeto)</label>
           <textarea {...register("description")} className="w-full mt-1 px-3 py-2 rounded-lg border min-h-[120px]" />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-sm font-medium">Status</label>
-            <select {...register("status")} className="w-full mt-1 px-3 py-2 rounded-lg border">
-              <option value="Planejamento">Planejamento</option>
-              <option value="Em andamento">Em andamento</option>
-              <option value="Concluído">Concluído</option>
-              <option value="Pausado">Pausado</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Localização</label>
-            <input {...register("location")} className="w-full mt-1 px-3 py-2 rounded-lg border" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-sm font-medium">Beneficiários</label>
-            <input {...register("beneficiaries")} className="w-full mt-1 px-3 py-2 rounded-lg border" />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Início</label>
-            <input {...register("startDate")} className="w-full mt-1 px-3 py-2 rounded-lg border" />
-          </div>
+        <div>
+          <label className="text-sm font-medium">Status</label>
+          <select {...register("status")} className="w-full mt-1 px-3 py-2 rounded-lg border">
+            <option value="Ativo">Ativo</option>
+            <option value="Rascunho">Rascunho</option>
+          </select>
         </div>
 
         <div>
-          <label className="text-sm font-medium">Fim (opcional)</label>
-          <input {...register("endDate")} className="w-full mt-1 px-3 py-2 rounded-lg border" />
+          <label className="text-sm font-medium">Instagram URL</label>
+          <input type="url" {...register("instagramUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://instagram.com/..." />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="text-sm font-medium">Ano de lançamento</label>
-            <input
-              type="number"
-              min={1900}
-              max={new Date().getFullYear() + 1}
-              placeholder="Ex: 2026"
-              {...register("releaseYear", {
-                validate: (value) => !value || /^\d{4}$/.test(value) || "Informe um ano com 4 dígitos",
-              })}
-              className="w-full mt-1 px-3 py-2 rounded-lg border"
-            />
-            {errors.releaseYear && <p className="text-xs text-red-600 mt-1">{errors.releaseYear.message}</p>}
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Instagram URL</label>
-            <input type="url" {...register("instagramUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://instagram.com/..." />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">YouTube URL</label>
-            <input type="url" {...register("youtubeUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://youtube.com/..." />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Spotify URL</label>
-            <input type="url" {...register("spotifyUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://open.spotify.com/..." />
-          </div>
+        <div>
+          <label className="text-sm font-medium">YouTube URL</label>
+          <input type="url" {...register("youtubeUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://youtube.com/..." />
         </div>
 
-        {/* OBJETIVOS */}
-        <div className="rounded-xl border p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Objetivos</h3>
-            <button
-              type="button"
-              onClick={() => objectivesFA.append({ value: "" })}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-muted"
-            >
-              <Plus className="w-4 h-4" /> Adicionar objetivo
-            </button>
-          </div>
-
-          {objectivesFA.fields.map((f, idx) => (
-            <div key={f.id} className="flex items-center gap-2">
-              <input {...register(`objectives.${idx}.value` as const)} className="w-full px-3 py-2 rounded-lg border" placeholder={`Objetivo ${idx + 1}`} />
-              <button type="button" onClick={() => objectivesFA.remove(idx)} className="p-2 rounded-lg border hover:bg-muted">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+        <div>
+          <label className="text-sm font-medium">Spotify URL</label>
+          <input type="url" {...register("spotifyUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://open.spotify.com/..." />
         </div>
 
-        {/* RESULTADOS */}
-        <div className="rounded-xl border p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Resultados Alcançados</h3>
-            <button
-              type="button"
-              onClick={() => resultsFA.append({ value: "" })}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-muted"
-            >
-              <Plus className="w-4 h-4" /> Adicionar resultado
-            </button>
-          </div>
-
-          {resultsFA.fields.map((f, idx) => (
-            <div key={f.id} className="flex items-center gap-2">
-              <input {...register(`results.${idx}.value` as const)} className="w-full px-3 py-2 rounded-lg border" placeholder={`Resultado ${idx + 1}`} />
-              <button type="button" onClick={() => resultsFA.remove(idx)} className="p-2 rounded-lg border hover:bg-muted">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {/* GALERIA */}
         <div className="rounded-xl border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">Galeria de imagens</h3>
@@ -581,6 +629,8 @@ export function AdminProjetoForm() {
             </div>
           )}
         </div>
+
+        <YoutubeVideoGallery youtubeUrl={youtubeUrl} />
       </div>
     </div>
   );

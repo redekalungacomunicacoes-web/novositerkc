@@ -5,7 +5,7 @@ import { deleteProjeto, listProjetos, ProjetoRow } from "@/lib/cms";
 
 function statusLabel(p: ProjetoRow) {
   // Mantém o layout (status textual), inferindo pelo publicado_transparencia
-  return p.publicado_transparencia ? "Publicado" : "Planejamento";
+  return p.publicado_transparencia ? "Ativo" : "Rascunho";
 }
 
 export function AdminProjetos() {
@@ -104,21 +104,20 @@ export function AdminProjetos() {
 
                 <th className="px-6 py-3 font-medium">Projeto</th>
                 <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium">Beneficiários</th>
-                <th className="px-6 py-3 font-medium">Última atualização</th>
+                                <th className="px-6 py-3 font-medium">Última atualização</th>
                 <th className="px-6 py-3 font-medium text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td className="px-6 py-4 text-muted-foreground" colSpan={6}>
+                  <td className="px-6 py-4 text-muted-foreground" colSpan={5}>
                     Carregando...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="px-6 py-4 text-muted-foreground" colSpan={6}>
+                  <td className="px-6 py-4 text-muted-foreground" colSpan={5}>
                     Nenhum projeto encontrado.
                   </td>
                 </tr>
@@ -128,9 +127,7 @@ export function AdminProjetos() {
                   const lastUpdate = p.updated_at ? new Date(p.updated_at).toLocaleDateString("pt-BR") : "—";
 
                   // Campos extras não existem no schema sem meta; mantemos layout mostrando “—”
-                  const beneficiaries = (p as any).meta?.beneficiaries ? (p as any).meta.beneficiaries : "—";
-
-                  // ✅ NOVO
+                                    // ✅ NOVO
                   const ordem =
                     typeof (p as any).sort_order === "number" && Number.isFinite((p as any).sort_order)
                       ? String((p as any).sort_order)
@@ -143,8 +140,7 @@ export function AdminProjetos() {
 
                       <td className="px-6 py-4 font-medium text-foreground">{p.titulo}</td>
                       <td className="px-6 py-4">{status}</td>
-                      <td className="px-6 py-4">{beneficiaries}</td>
-                      <td className="px-6 py-4">{lastUpdate}</td>
+                                            <td className="px-6 py-4">{lastUpdate}</td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Link

@@ -166,7 +166,7 @@ export function ProjetoDetalhes() {
 
     (async () => {
       setLoading(true);
-      const PUBLIC_FILTER = "publicado_transparencia.eq.true,publicado_transparencia.is.null";
+      const PUBLIC_FILTER = "publicado_transparencia.eq.true";
 
       let found: any = null;
       const bySlug = await supabase
