@@ -473,19 +473,19 @@ export function QuemSomos() {
             Nossos Valores
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-5 md:gap-6 items-stretch">
             {valoresParaRender.map((valor, index) => {
               const Icon = valor.icon;
               return (
-                <RKCCard key={index} className="text-center">
-                  <RKCCardContent className="p-8">
+                <RKCCard key={index} className="text-center h-full">
+                  <RKCCardContent className="p-5 md:p-8 h-full flex flex-col">
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center">
                       <Icon className="w-8 h-8 text-white" />
                     </div>
                     <h3 className="font-bold text-xl text-[#2E2E2E] mb-3">
                       {valor.titulo}
                     </h3>
-                    <p className="text-gray-600 leading-relaxed">{valor.descricao}</p>
+                    <p className="text-gray-600 leading-relaxed flex-1">{valor.descricao}</p>
                   </RKCCardContent>
                 </RKCCard>
               );
