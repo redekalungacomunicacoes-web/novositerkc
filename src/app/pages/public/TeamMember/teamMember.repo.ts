@@ -5,7 +5,7 @@ function isMissingColumnError(message?: string | null) {
 }
 
 const TEAM_MEMBER_COLUMNS =
-  "id, nome, cargo, bio, curriculo_md, foto_url, avatar_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url";
+  "id, nome, cargo, bio, curriculo_md, foto_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url";
 
 const TEAM_MEMBER_COLUMNS_FALLBACK =
   "id, nome, cargo, bio, foto_url, slug";
@@ -31,7 +31,7 @@ export type TeamMemberPublic = {
 export type TeamMemberPortfolioItem = {
   id: string;
   member_id: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "pdf" | "link";
   title: string | null;
   description: string | null;
   file_url: string;

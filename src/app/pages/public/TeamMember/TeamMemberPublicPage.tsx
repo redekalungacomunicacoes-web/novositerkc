@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ExternalLink, Instagram, Linkedin, Facebook, Globe, MessageCircle } from "lucide-react";
+import { ExternalLink, Instagram, Linkedin, Facebook, Globe, MessageCircle, FileText, Link as LinkIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
   getMemberById,
@@ -25,21 +25,31 @@ function markdownToHtml(md?: string | null) {
     .replace(/\n/g, "<br />");
 }
 
+function ensureAbsoluteUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 function socialLinks(member: TeamMemberPublic) {
   const links = [] as Array<{ href: string; label: string; icon: any }>;
   const ig = (member.instagram || "").trim();
   if (ig) {
-    const handle = ig.replace("@", "").replace("https://instagram.com/", "").replace("https://www.instagram.com/", "");
-    links.push({ href: ig.includes("http") ? ig : `https://instagram.com/${handle}`, label: "Instagram", icon: Instagram });
+    const handle = ig
+      .replace("@", "")
+      .replace(/https?:\/\/(www\.)?instagram.com\//i, "")
+      .replace(/\/.*$/, "");
+    const href = ig.includes("http") ? ig : `https://instagram.com/${handle}`;
+    links.push({ href: ensureAbsoluteUrl(href), label: "Instagram", icon: Instagram });
   }
   if (member.whatsapp?.trim()) {
     const onlyDigits = member.whatsapp.replace(/\D/g, "");
-    links.push({ href: `https://wa.me/${onlyDigits}`, label: "WhatsApp", icon: MessageCircle });
+    if (onlyDigits) links.push({ href: `https://wa.me/${onlyDigits}`, label: "WhatsApp", icon: MessageCircle });
   }
-  if (member.facebook_url?.trim()) links.push({ href: member.facebook_url, label: "Facebook", icon: Facebook });
-  if (member.linkedin_url?.trim()) links.push({ href: member.linkedin_url, label: "LinkedIn", icon: Linkedin });
-  if (member.website_url?.trim()) links.push({ href: member.website_url, label: "Website", icon: Globe });
-  return links;
+  if (member.facebook_url?.trim()) links.push({ href: ensureAbsoluteUrl(member.facebook_url), label: "Facebook", icon: Facebook });
+  if (member.linkedin_url?.trim()) links.push({ href: ensureAbsoluteUrl(member.linkedin_url), label: "LinkedIn", icon: Linkedin });
+  if (member.website_url?.trim()) links.push({ href: ensureAbsoluteUrl(member.website_url), label: "Website", icon: Globe });
+  return links.filter((item) => !!item.href);
 }
 
 function getAvatar(member: TeamMemberPublic) {
@@ -142,8 +152,11 @@ export function TeamMemberPublicPage() {
 
       {tab === "curriculo" && (
         <section>
-          {member.curriculo_md ? (
-            <article className="prose max-w-none" dangerouslySetInnerHTML={{ __html: markdownToHtml(member.curriculo_md) }} />
+          {(member.curriculo_md || member.bio) ? (
+            <article
+              className="prose max-w-none"
+              dangerouslySetInnerHTML={{ __html: markdownToHtml(member.curriculo_md || member.bio || "") }}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">Currículo ainda não informado.</p>
           )}
@@ -172,8 +185,12 @@ export function TeamMemberPublicPage() {
             <button key={item.id} onClick={() => setPreview(item)} className="text-left border rounded-lg overflow-hidden">
               {item.kind === "image" ? (
                 <img src={item.thumb_url || item.file_url} alt={item.title || "Portfólio"} className="h-40 w-full object-cover" />
-              ) : (
+              ) : item.kind === "video" ? (
                 <div className="h-40 w-full bg-black/80 text-white flex items-center justify-center gap-2 text-sm"><ExternalLink className="w-4 h-4" /> Vídeo</div>
+              ) : item.kind === "pdf" ? (
+                <div className="h-40 w-full bg-muted text-foreground flex items-center justify-center gap-2 text-sm"><FileText className="w-4 h-4" /> PDF</div>
+              ) : (
+                <div className="h-40 w-full bg-muted text-foreground flex items-center justify-center gap-2 text-sm"><LinkIcon className="w-4 h-4" /> Link</div>
               )}
               <div className="p-2 text-sm">{item.title || "Sem título"}</div>
             </button>
@@ -186,8 +203,17 @@ export function TeamMemberPublicPage() {
           <div className="bg-white max-w-3xl w-full rounded-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
             {preview.kind === "image" ? (
               <img src={preview.file_url} alt={preview.title || "Portfólio"} className="w-full max-h-[70vh] object-contain bg-black" />
-            ) : (
+            ) : preview.kind === "video" ? (
               <video src={preview.file_url} controls className="w-full max-h-[70vh] bg-black" />
+            ) : preview.kind === "pdf" ? (
+              <iframe src={preview.file_url} title={preview.title || "PDF"} className="w-full h-[70vh] bg-white" />
+            ) : (
+              <div className="w-full h-[50vh] flex flex-col items-center justify-center gap-3">
+                <p className="text-sm text-muted-foreground">Este item é um link externo.</p>
+                <a href={ensureAbsoluteUrl(preview.file_url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded bg-primary text-primary-foreground">
+                  <ExternalLink className="w-4 h-4" /> Abrir link
+                </a>
+              </div>
             )}
             <div className="p-4">
               <p className="font-semibold">{preview.title || "Item"}</p>

@@ -11,7 +11,7 @@ const TEAM_AVATARS_BUCKET = "team-avatars";
 type PortfolioItem = {
   id: string;
   member_id: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "pdf" | "link";
   title: string | null;
   description: string | null;
   file_url: string;
@@ -271,22 +271,36 @@ export function AdminEquipeForm() {
     }
   };
 
-  const handlePortfolioUpload = async (file: File, kind: "image" | "video", title: string, description: string) => {
+  const handlePortfolioUpload = async (params: { kind: "image" | "video" | "pdf" | "link"; title: string; description: string; file?: File | null; externalUrl?: string }) => {
     const memberId = id;
     if (!memberId) return alert("Salve o integrante antes de adicionar portfólio.");
-    const ext = file.name.split(".").pop() || (kind === "image" ? "jpg" : "mp4");
-    const portfolioId = crypto.randomUUID();
-    const path = `${memberId}/${portfolioId}.${safeFilename(ext)}`;
+
+    const { kind, title, description, file, externalUrl } = params;
+
     try {
-      const url = await uploadToBucket("team-portfolio", path, file, file.type || (kind === "image" ? "image/jpeg" : "video/mp4"));
+      let fileUrl = "";
+      let thumbUrl: string | null = null;
+
+      if (kind === "link") {
+        const normalizedUrl = (externalUrl || "").trim();
+        if (!normalizedUrl) throw new Error("Informe um link para o item de portfólio.");
+        fileUrl = /^https?:\/\//i.test(normalizedUrl) ? normalizedUrl : `https://${normalizedUrl}`;
+      } else {
+        if (!file) throw new Error("Selecione um arquivo para o item de portfólio.");
+        const ext = file.name.split(".").pop() || (kind === "image" ? "jpg" : kind === "video" ? "mp4" : "pdf");
+        const portfolioId = crypto.randomUUID();
+        const path = `${memberId}/${portfolioId}.${safeFilename(ext)}`;
+        fileUrl = await uploadToBucket("team-portfolio", path, file, file.type || (kind === "image" ? "image/jpeg" : kind === "video" ? "video/mp4" : "application/pdf"));
+        thumbUrl = kind === "image" ? fileUrl : null;
+      }
+
       const { error } = await supabase.from("team_member_portfolio").insert({
-        id: portfolioId,
         member_id: memberId,
         kind,
         title: title || null,
         description: description || null,
-        file_url: url,
-        thumb_url: kind === "image" ? url : null,
+        file_url: fileUrl,
+        thumb_url: thumbUrl,
         order_index: portfolio.length,
         is_public: true,
       });
@@ -377,7 +391,7 @@ export function AdminEquipeForm() {
               {portfolio.map((item, idx) => (
                 <div key={item.id} className="border rounded-md p-3 flex items-center gap-3">
                   <div className="h-14 w-14 rounded bg-muted overflow-hidden">
-                    {item.kind === "image" ? <img src={item.thumb_url || item.file_url} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-xs">Vídeo</div>}
+                    {item.kind === "image" ? <img src={item.thumb_url || item.file_url} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-xs">{item.kind === "video" ? "Vídeo" : item.kind === "pdf" ? "PDF" : "Link"}</div>}
                   </div>
                   <div className="flex-1">
                     <p className="font-medium text-sm">{item.title || "Sem título"}</p>
@@ -430,24 +444,48 @@ export function AdminEquipeForm() {
   );
 }
 
-function AddPortfolioItem({ onAdd }: { onAdd: (file: File, kind: "image" | "video", title: string, description: string) => Promise<void> }) {
-  const [kind, setKind] = useState<"image" | "video">("image");
+function AddPortfolioItem({ onAdd }: { onAdd: (params: { kind: "image" | "video" | "pdf" | "link"; title: string; description: string; file?: File | null; externalUrl?: string }) => Promise<void> }) {
+  const [kind, setKind] = useState<"image" | "video" | "pdf" | "link">("image");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [externalUrl, setExternalUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const accepts = kind === "image" ? "image/*" : kind === "video" ? "video/*" : ".pdf,application/pdf";
 
   return (
     <div className="border rounded-md p-3 space-y-2">
       <p className="font-medium text-sm flex items-center gap-2"><Plus className="h-4 w-4" />Adicionar item</p>
-      <select value={kind} onChange={(e) => setKind(e.target.value as any)} className="w-full h-10 px-3 rounded-md border">
+      <select value={kind} onChange={(e) => { setKind(e.target.value as any); setFile(null); }} className="w-full h-10 px-3 rounded-md border">
         <option value="image">Imagem</option>
         <option value="video">Vídeo</option>
+        <option value="pdf">PDF</option>
+        <option value="link">Link externo</option>
       </select>
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título" className="w-full h-10 px-3 rounded-md border" />
       <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição" className="w-full min-h-[70px] p-3 rounded-md border" />
-      <input type="file" accept={kind === "image" ? "image/*" : "video/*"} onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm" />
-      <button type="button" disabled={!file || saving} onClick={async () => { if (!file) return; setSaving(true); await onAdd(file, kind, title, description); setTitle(""); setDescription(""); setFile(null); setSaving(false); }} className="px-3 py-2 text-sm rounded bg-primary text-primary-foreground">{saving ? "Salvando..." : "Adicionar"}</button>
+      {kind === "link" ? (
+        <input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} placeholder="https://..." className="w-full h-10 px-3 rounded-md border" />
+      ) : (
+        <input key={kind} type="file" accept={accepts} onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm" />
+      )}
+      <button
+        type="button"
+        disabled={(kind === "link" ? !externalUrl.trim() : !file) || saving}
+        onClick={async () => {
+          setSaving(true);
+          await onAdd({ kind, title, description, file, externalUrl });
+          setTitle("");
+          setDescription("");
+          setExternalUrl("");
+          setFile(null);
+          setSaving(false);
+        }}
+        className="px-3 py-2 text-sm rounded bg-primary text-primary-foreground"
+      >
+        {saving ? "Salvando..." : "Adicionar"}
+      </button>
     </div>
   );
 }
