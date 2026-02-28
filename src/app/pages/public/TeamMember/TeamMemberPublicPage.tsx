@@ -96,28 +96,30 @@ export function TeamMemberPublicPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
-      <header className="flex flex-row items-center gap-4 md:flex-col md:items-start border-b pb-8">
+      <header className="flex flex-row items-center gap-4 md:flex-col md:items-start">
         <div className="h-24 w-24 md:w-32 md:h-32 rounded-full overflow-hidden bg-muted border border-[#0F7A3E] border-2 ring-2 ring-[#0F7A3E]/20 shrink-0">
           {member.foto_url ? <img src={member.foto_url} alt={member.nome} className="w-full h-full object-cover" /> : null}
         </div>
         <div className="flex-1 space-y-2">
           <h1 className="text-2xl md:text-3xl font-bold">{member.nome}</h1>
           <p className="text-muted-foreground">{member.cargo || "Integrante"}</p>
-          {member.bio && <p>{member.bio}</p>}
-          <div className="flex flex-wrap gap-3 pt-2">
-            {links.map((item) => {
-              const Icon = item.icon;
-              return (
-                <a key={item.label} href={item.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-[#0F7A3E] hover:text-[#0b5f30] hover:underline transition-colors">
-                  <Icon className="w-4 h-4 text-[#0F7A3E]" /> {item.label}
-                </a>
-              );
-            })}
-          </div>
         </div>
       </header>
 
-      <div className="flex gap-2 border-b">
+      {member.bio && <p className="mt-4">{member.bio}</p>}
+
+      <div className="mt-4 flex flex-row items-center gap-6 overflow-x-auto whitespace-nowrap pb-1">
+        {links.map((item) => {
+          const Icon = item.icon;
+          return (
+            <a key={item.label} href={item.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-green-600 hover:text-green-700 hover:underline transition-colors flex-shrink-0">
+              <Icon className="w-4 h-4 text-green-600" /> {item.label}
+            </a>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 flex gap-2 border-b">
         {[
           ["curriculo", "Currículo"],
           ["materias", "Matérias"],
