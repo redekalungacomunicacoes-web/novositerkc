@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Save, ArrowLeft, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
-import { createProjeto, getProjeto, slugify, updateProjeto } from "@/lib/cms";
+import { getProjeto, slugify } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 import { uploadImageToStorage } from "@/lib/storage";
 
@@ -314,19 +314,23 @@ export function AdminProjetoForm() {
         },
       };
 
-      const res = isEditing && id ? await updateProjeto(id, payload) : await createProjeto(payload);
+      const projetoId = id ?? null;
+      const res = projetoId
+        ? await supabase.from("projetos").update(payload).eq("id", projetoId).select("*").single()
+        : await supabase.from("projetos").insert(payload).select("*").single();
 
       setLoading(false);
 
       if (res.error) {
-        alert(res.error.message);
+        const action = projetoId ? "atualizar" : "criar";
+        alert(`Erro ao ${action} projeto: ${res.error.message}`);
         return;
       }
 
       navigate("/admin/projetos");
     } catch (err: any) {
       setLoading(false);
-      alert(err?.message || "Erro ao salvar projeto.");
+      alert(`Erro ao salvar projeto: ${err?.message || "Falha inesperada."}`);
     }
   };
 
