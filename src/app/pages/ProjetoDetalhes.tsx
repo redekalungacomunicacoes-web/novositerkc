@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
-import { ArrowLeft, Calendar, X, Image as ImageIcon, Instagram, Youtube, Music2, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { ArrowLeft, Calendar, X, Image as ImageIcon, Instagram, Youtube, Music, ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { trackPageView } from "@/lib/analytics";
 
@@ -238,7 +238,7 @@ export function ProjetoDetalhes() {
     return [
       projeto.instagramUrl ? { key: "instagram", label: "Instagram", url: projeto.instagramUrl, icon: Instagram } : null,
       projeto.youtubeUrl ? { key: "youtube", label: "YouTube", url: projeto.youtubeUrl, icon: Youtube } : null,
-      projeto.spotifyUrl ? { key: "spotify", label: "Spotify", url: projeto.spotifyUrl, icon: Music2 } : null,
+      projeto.spotifyUrl ? { key: "spotify", label: "Spotify", url: projeto.spotifyUrl, icon: Music } : null,
     ].filter(Boolean) as { key: string; label: string; url: string; icon: typeof Instagram }[];
   }, [projeto]);
 
@@ -264,13 +264,56 @@ export function ProjetoDetalhes() {
       </section>
 
       <div className="max-w-6xl mx-auto px-4 py-10 space-y-10">
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
-          <div><h2 className="text-2xl font-semibold">Sobre o Projeto</h2><p className="mt-3 text-base text-gray-700">{projeto.descricaoCompleta}</p></div>
-          <div className="space-y-6">
-            {hasInfoCard ? (
-              <RKCCard><RKCCardContent><div className="text-lg font-semibold">Informações</div><div className="mt-4 space-y-4 text-sm text-gray-600">{projeto.anoLancamento ? <div className="flex items-center justify-between"><span className="inline-flex items-center gap-2"><Calendar className="w-4 h-4" />Ano de lançamento</span><span>{projeto.anoLancamento}</span></div> : null}{infoItems.length ? <div><div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Redes sociais</div><div className="flex flex-wrap items-center gap-4">{infoItems.map((item) => { const Icon = item.icon; return <a key={item.key} href={item.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-[#0F7A3E] hover:text-[#0C6132]"><Icon className="w-4 h-4" /><span>{item.label}</span></a>; })}</div></div> : null}</div></RKCCardContent></RKCCard>
-            ) : null}
-          </div>
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
+          <section>
+            <h2 className="text-2xl font-semibold">Sobre o Projeto</h2>
+            <p className="mt-3 text-base text-gray-700">{projeto.descricaoCompleta}</p>
+          </section>
+
+          {hasInfoCard ? (
+            <aside>
+              <RKCCard className="rounded-xl border p-4">
+                <RKCCardContent className="p-0">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Informações</h3>
+
+                  <div className="mt-4 space-y-4 text-sm text-gray-700">
+                    {projeto.anoLancamento ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="inline-flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-green-700" />
+                          Ano de fundação
+                        </span>
+                        <span className="font-medium">{projeto.anoLancamento}</span>
+                      </div>
+                    ) : null}
+
+                    {infoItems.length ? (
+                      <div>
+                        <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Redes sociais</p>
+                        <div className="space-y-2">
+                          {infoItems.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                              <a
+                                key={item.key}
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 text-green-700 hover:text-green-800 hover:underline"
+                              >
+                                <Icon className="h-4 w-4" />
+                                <span>{item.label}</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </RKCCardContent>
+              </RKCCard>
+            </aside>
+          ) : null}
         </div>
 
         <section>
