@@ -7,13 +7,10 @@ import {
   Image as ImageIcon,
   Plus,
   Trash2,
-  ChevronUp,
-  ChevronDown,
 } from "lucide-react";
 import { getProjeto, slugify } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 import { uploadImageToStorage } from "@/lib/storage";
-import { createThumbnail } from "@/lib/imageThumbnail";
 
 type ProjetoFormData = {
   title: string;
@@ -35,13 +32,9 @@ type ProjetoFormData = {
 
 type ProjectImageItem = {
   id: string;
-  project_id: string;
-  image_path: string;
-  thumb_path: string | null;
-  caption: string | null;
-  order_index: number;
-  is_public: boolean;
-  created_at: string;
+  projeto_id: string;
+  tipo: string;
+  url: string;
 };
 
 async function ensureUniqueProjetoSlug(baseSlug: string, currentId?: string) {
@@ -70,11 +63,6 @@ function normalizeOptionalUrl(value?: string) {
   if (!trimmed) return null;
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
-}
-
-function getStorageUrl(path: string) {
-  const { data } = supabase.storage.from("projetos").getPublicUrl(path);
-  return data.publicUrl;
 }
 
 function fileExtension(file: File) {
@@ -126,22 +114,21 @@ export function AdminProjetoForm() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [imagens, setImagens] = useState<ProjectImageItem[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [projectDbId, setProjectDbId] = useState<string | null>(id ?? null);
 
   const coverImage = watch("coverImage");
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
-  const canUseGallery = useMemo(() => !!id, [id]);
+  const canUseGallery = useMemo(() => !!projectDbId, [projectDbId]);
 
-  async function loadImages(projectId: string) {
+  async function loadGallery(projetoId: string) {
     const { data, error } = await supabase
-      .from("project_images")
-      .select(
-        "id, project_id, image_path, thumb_path, caption, order_index, is_public, created_at"
-      )
-      .eq("project_id", projectId)
-      .order("order_index", { ascending: true })
-      .order("created_at", { ascending: true });
+      .from("projeto_galeria")
+      .select("id, projeto_id, tipo, url")
+      .eq("projeto_id", projetoId)
+      .eq("tipo", "image")
+      .order("id", { ascending: true });
 
     if (error) {
       console.warn("Erro ao carregar imagens do projeto:", error.message);
@@ -195,7 +182,9 @@ export function AdminProjetoForm() {
         })),
       });
 
-      await loadImages(id);
+      setProjectDbId(p.id);
+
+      await loadGallery(p.id);
     })();
   }, [id, reset]);
 
@@ -223,27 +212,17 @@ export function AdminProjetoForm() {
   };
 
   const handleGalleryFilesChange = async (files?: FileList | null) => {
-    if (!id || !files?.length) return;
+    if (!projectDbId || !files?.length) return;
 
     setUploadingGallery(true);
     try {
-      const { data: maxData } = await supabase
-        .from("project_images")
-        .select("order_index")
-        .eq("project_id", id)
-        .order("order_index", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      let nextOrder = (maxData?.order_index ?? -1) + 1;
-
       for (let i = 0; i < files.length; i += 1) {
         const file = files[i];
         if (!file.type.startsWith("image/")) continue;
 
         const imageId = crypto.randomUUID();
         const ext = fileExtension(file);
-        const imagePath = `projects/${id}/images/${imageId}.${ext}`;
+        const imagePath = `projects/${projectDbId}/galeria/${imageId}.${ext}`;
 
         const { error: uploadError } = await supabase.storage
           .from("projetos")
@@ -254,47 +233,23 @@ export function AdminProjetoForm() {
           });
         if (uploadError) throw uploadError;
 
-        let thumbPath: string | null = null;
-        try {
-          const thumbBlob = await createThumbnail(file, 480, 0.78);
-          const thumbExt = thumbBlob.type.includes("webp") ? "webp" : "jpg";
-          thumbPath = `projects/${id}/images/thumbs/${imageId}.${thumbExt}`;
-
-          const { error: thumbError } = await supabase.storage
-            .from("projetos")
-            .upload(thumbPath, thumbBlob, {
-              upsert: true,
-              cacheControl: "31536000",
-              contentType: thumbBlob.type || "image/jpeg",
-            });
-
-          if (thumbError) {
-            console.warn("Falha ao gerar/upload thumbnail:", thumbError.message);
-            thumbPath = null;
-          }
-        } catch (thumbErr: any) {
-          console.warn(
-            "Falha ao processar thumbnail:",
-            thumbErr?.message || thumbErr
-          );
-        }
+        const { data: publicData } = supabase.storage
+          .from("projetos")
+          .getPublicUrl(imagePath);
 
         const { error: insertError } = await supabase
-          .from("project_images")
+          .from("projeto_galeria")
           .insert({
             id: imageId,
-            project_id: id,
-            image_path: imagePath,
-            thumb_path: thumbPath,
-            order_index: nextOrder,
-            is_public: true,
+            projeto_id: projectDbId,
+            tipo: "image",
+            url: publicData.publicUrl,
           });
 
         if (insertError) throw insertError;
-        nextOrder += 1;
       }
 
-      await loadImages(id);
+      await loadGallery(projectDbId);
     } catch (err: any) {
       alert(err?.message || "Erro ao enviar imagens para a galeria.");
     } finally {
@@ -303,54 +258,27 @@ export function AdminProjetoForm() {
     }
   };
 
-  const reorderImage = async (index: number, direction: -1 | 1) => {
-    if (!id) return;
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= imagens.length) return;
-
-    const current = imagens[index];
-    const target = imagens[targetIndex];
-
-    const { error: errorA } = await supabase
-      .from("project_images")
-      .update({ order_index: -1 })
-      .eq("id", current.id);
-    if (errorA) return alert(errorA.message);
-
-    const { error: errorB } = await supabase
-      .from("project_images")
-      .update({ order_index: current.order_index })
-      .eq("id", target.id);
-    if (errorB) return alert(errorB.message);
-
-    const { error: errorC } = await supabase
-      .from("project_images")
-      .update({ order_index: target.order_index })
-      .eq("id", current.id);
-    if (errorC) return alert(errorC.message);
-
-    await loadImages(id);
-  };
-
   const handleDeleteGalleryItem = async (item: ProjectImageItem) => {
-    if (!id) return;
+    if (!projectDbId) return;
     const ok = confirm("Remover esta imagem da galeria?");
     if (!ok) return;
 
-    const pathsToRemove = [item.image_path, item.thumb_path].filter(
-      Boolean
-    ) as string[];
-    if (pathsToRemove.length) {
-      await supabase.storage.from("projetos").remove(pathsToRemove);
+    const storagePrefix = "/storage/v1/object/public/projetos/";
+    const pathFromUrl = item.url.includes(storagePrefix)
+      ? item.url.split(storagePrefix)[1]
+      : null;
+
+    if (pathFromUrl) {
+      await supabase.storage.from("projetos").remove([pathFromUrl]);
     }
 
     const { error } = await supabase
-      .from("project_images")
+      .from("projeto_galeria")
       .delete()
       .eq("id", item.id);
     if (error) return alert(error.message);
 
-    await loadImages(id);
+    await loadGallery(projectDbId);
   };
 
   const onSubmit = async (form: ProjetoFormData) => {
@@ -358,7 +286,7 @@ export function AdminProjetoForm() {
     try {
       const publicado_transparencia = form.status !== "Planejamento";
       const baseSlug = slugify(form.title);
-      const uniqueSlug = await ensureUniqueProjetoSlug(baseSlug, id);
+      const uniqueSlug = await ensureUniqueProjetoSlug(baseSlug, projectDbId || undefined);
 
       const objetivos = (form.objectives || [])
         .map((o) => (o?.value || "").trim())
@@ -398,26 +326,19 @@ export function AdminProjetoForm() {
         },
       };
 
-      // ✅ FIX PRINCIPAL: UPDATE usa maybeSingle para não quebrar com 0/múltiplas linhas.
       let saved: any = null;
 
       if (id) {
+        if (!projectDbId) throw new Error("ID real do projeto não encontrado para atualização.");
+
         const { data, error } = await supabase
           .from("projetos")
           .update(payload)
-          .eq("id", id)
+          .eq("id", projectDbId)
           .select("*")
-          .maybeSingle();
+          .single();
 
         if (error) throw error;
-
-        if (!data) {
-          // Aqui é o caso clássico: o update não retornou 1 linha (0 ou múltiplas).
-          // Evita o crash e te dá uma mensagem clara.
-          throw new Error(
-            "Falha ao salvar: o update não retornou um único registro. Verifique se o ID do projeto está correto e se não há duplicidade/rota errada."
-          );
-        }
 
         saved = data;
       } else {
@@ -429,13 +350,14 @@ export function AdminProjetoForm() {
 
         if (error) throw error;
         saved = data;
+        setProjectDbId(saved.id);
       }
 
       // navegação
       if (id) {
         navigate("/admin/projetos");
       } else {
-        navigate(`/admin/projetos/${saved.id}`);
+        navigate(`/admin/projetos/editar/${saved.id}`);
       }
     } catch (err: any) {
       alert(`Erro ao salvar projeto: ${err?.message || "Falha inesperada."}`);
@@ -735,32 +657,14 @@ export function AdminProjetoForm() {
               {imagens.map((item, index) => (
                 <div key={item.id} className="rounded-xl border overflow-hidden">
                   <img
-                    src={getStorageUrl(item.thumb_path || item.image_path)}
-                    alt={item.caption || "Imagem"}
+                    src={item.url}
+                    alt={`Imagem ${index + 1}`}
                     className="w-full h-40 object-cover"
                     loading="lazy"
                   />
                   <div className="p-2 flex items-center justify-between gap-2">
-                    <div className="text-xs text-muted-foreground">
-                      #{item.order_index}
-                    </div>
+                    <div className="text-xs text-muted-foreground">Imagem {index + 1}</div>
                     <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => reorderImage(index, -1)}
-                        className="p-1 rounded border hover:bg-muted"
-                        disabled={index === 0}
-                      >
-                        <ChevronUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => reorderImage(index, 1)}
-                        className="p-1 rounded border hover:bg-muted"
-                        disabled={index === imagens.length - 1}
-                      >
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteGalleryItem(item)}

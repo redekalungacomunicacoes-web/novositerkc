@@ -8,10 +8,9 @@ import { trackPageView } from "@/lib/analytics";
 
 type ProjectImage = {
   id: string;
-  image_path: string;
-  thumb_path: string | null;
-  caption: string | null;
-  order_index: number;
+  projeto_id: string;
+  tipo: string;
+  url: string;
 };
 
 type ProjetoUI = {
@@ -37,9 +36,6 @@ type YoutubeVideo = {
 
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined;
 
-function publicStorageUrl(path: string) {
-  return supabase.storage.from("projetos").getPublicUrl(path).data.publicUrl;
-}
 
 function parseYoutubeUrl(url: string) {
   const fallback = { kind: "url" as const, sourceUrl: url };
@@ -199,14 +195,14 @@ export function ProjetoDetalhes() {
       }
 
       const { data: imagesData } = await supabase
-        .from("project_images")
-        .select("id, image_path, thumb_path, caption, order_index")
-        .eq("project_id", found.id)
-        .eq("is_public", true)
-        .order("order_index", { ascending: true });
+        .from("projeto_galeria")
+        .select("id, projeto_id, tipo, url")
+        .eq("projeto_id", found.id)
+        .eq("tipo", "image")
+        .order("id", { ascending: true });
 
       const imagens = (imagesData || []) as ProjectImage[];
-      const fallbackCapa = imagens[0] ? publicStorageUrl(imagens[0].image_path) : "";
+      const fallbackCapa = imagens[0]?.url || "";
 
       const mapped: ProjetoUI = {
         id: found.id,
@@ -285,7 +281,7 @@ export function ProjetoDetalhes() {
             <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-4">
               {projeto.imagens.map((item, index) => (
                 <button key={item.id} type="button" onClick={() => setSelectedImageIndex(index)} className="rounded-2xl overflow-hidden border text-left group">
-                  <img src={publicStorageUrl(item.thumb_path || item.image_path)} alt={item.caption || "Imagem do projeto"} className="h-36 md:h-40 w-full object-cover group-hover:scale-[1.02] transition-transform" loading="lazy" decoding="async" />
+                  <img src={item.url} alt="Imagem do projeto" className="h-36 md:h-40 w-full object-cover group-hover:scale-[1.02] transition-transform" loading="lazy" decoding="async" />
                 </button>
               ))}
             </div>
@@ -337,7 +333,7 @@ export function ProjetoDetalhes() {
             <button className="absolute top-2 right-2 p-2 rounded-full bg-white/90" onClick={() => setSelectedImageIndex(null)}><X className="w-4 h-4" /></button>
             <button className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedImageIndex((prev) => (prev === null ? prev : (prev - 1 + projeto.imagens.length) % projeto.imagens.length))}><ChevronLeft className="w-5 h-5" /></button>
             <button className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90" onClick={() => setSelectedImageIndex((prev) => (prev === null ? prev : (prev + 1) % projeto.imagens.length))}><ChevronRight className="w-5 h-5" /></button>
-            <img src={publicStorageUrl(selectedImage.image_path)} alt={selectedImage.caption || "Imagem"} className="w-full max-h-[80vh] object-contain rounded-2xl" />
+            <img src={selectedImage.url} alt="Imagem" className="w-full max-h-[80vh] object-contain rounded-2xl" />
           </div>
         </div>
       ) : null}
