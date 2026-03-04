@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Image as ImageIcon, Plus, Save, Trash2, Video } from "lucide-react";
+import { ArrowLeft, Image as ImageIcon, Save, Trash2, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/lib/supabase";
@@ -13,6 +13,7 @@ import {
   getProjetoGaleria,
   resolveProjectMediaUrl,
 } from "@/app/repositories/projectRepository";
+import { getVideoEmbedUrl, normalizeVideoUrl } from "@/lib/video";
 
 type ProjetoFormData = {
   titulo: string;
@@ -43,12 +44,6 @@ type ProjetoFoto = {
   url: string;
 };
 
-type ProjetoVideo = {
-  id: string;
-  projeto_id: string;
-  url: string;
-};
-
 type TabKey = "informacoes" | "fotos" | "videos";
 
 function normalizeOptionalUrl(value?: string) {
@@ -62,52 +57,6 @@ function fileExtension(file: File) {
   const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
   return ext || "jpg";
 }
-
-export function getEmbedUrl(url: string): string {
-  const raw = (url || "").trim();
-  if (!raw) return "";
-
-  try {
-    const parsed = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
-    const host = parsed.hostname.replace(/^www\./i, "").toLowerCase();
-
-    if (host === "youtu.be") {
-      const id = parsed.pathname.replace(/^\//, "").split("/")[0];
-      return id ? `https://www.youtube.com/embed/${id}` : "";
-    }
-
-    if (host.includes("youtube.com")) {
-      const queryId = parsed.searchParams.get("v");
-      if (queryId) return `https://www.youtube.com/embed/${queryId}`;
-
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      const shortsIndex = parts.findIndex((p) => p === "shorts" || p === "embed" || p === "live");
-      if (shortsIndex >= 0 && parts[shortsIndex + 1]) {
-        return `https://www.youtube.com/embed/${parts[shortsIndex + 1]}`;
-      }
-    }
-
-    if (host.includes("vimeo.com")) {
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      const id = parts.reverse().find((part) => /^\d+$/.test(part));
-      return id ? `https://player.vimeo.com/video/${id}` : "";
-    }
-
-    if (host.includes("drive.google.com")) {
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      const fileIndex = parts.findIndex((part) => part === "d");
-      const idFromPath = fileIndex >= 0 ? parts[fileIndex + 1] : "";
-      const idFromQuery = parsed.searchParams.get("id") || "";
-      const driveId = idFromPath || idFromQuery;
-      return driveId ? `https://drive.google.com/file/d/${driveId}/preview` : "";
-    }
-
-    return "";
-  } catch {
-    return "";
-  }
-}
-
 
 function toProjectStoragePath(value?: string | null) {
   const raw = (value || "").trim();
@@ -148,11 +97,8 @@ export function AdminProjetoForm() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-  const [isAddingVideo, setIsAddingVideo] = useState(false);
   const [projectDbId, setProjectDbId] = useState<string | null>(id || null);
   const [fotos, setFotos] = useState<ProjetoFoto[]>([]);
-  const [videos, setVideos] = useState<ProjetoVideo[]>([]);
-  const [videoUrlInput, setVideoUrlInput] = useState("");
 
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const photosInputRef = useRef<HTMLInputElement | null>(null);
@@ -172,23 +118,10 @@ export function AdminProjetoForm() {
     setFotos(((data || []) as ProjetoFoto[]).map((item) => ({ ...item, url: resolveProjectMediaUrl(item.url) })));
   };
 
-  const loadVideos = async (projetoId: string) => {
-    const { data, error } = await getProjetoGaleria(projetoId, "video");
-
-    if (error) {
-      toast.error(error.message || "Erro ao carregar vídeos.");
-      setVideos([]);
-      return;
-    }
-
-    setVideos((data || []) as ProjetoVideo[]);
-  };
-
   useEffect(() => {
     if (!id) {
       setProjectDbId(null);
       setFotos([]);
-      setVideos([]);
       return;
     }
 
@@ -217,7 +150,7 @@ export function AdminProjetoForm() {
       if (projeto.id) {
         const dbId = String(projeto.id);
         setProjectDbId(dbId);
-        await Promise.all([loadFotos(dbId), loadVideos(dbId)]);
+        await loadFotos(dbId);
       }
     })();
   }, [id, reset]);
@@ -308,59 +241,17 @@ export function AdminProjetoForm() {
     toast.success("Foto removida.");
   };
 
-  const addVideo = async () => {
-    if (!projectDbId || isAddingVideo) return;
-
-    const normalizedUrl = normalizeOptionalUrl(videoUrlInput);
-    if (!normalizedUrl) {
-      toast.error("Informe uma URL de vídeo válida.");
-      return;
-    }
-
-    const embed = getEmbedUrl(normalizedUrl);
-    if (!embed) {
-      toast.error("URL não suportada. Use YouTube, Vimeo ou Google Drive.");
-      return;
-    }
-
-    setIsAddingVideo(true);
-    try {
-      const videoId = crypto.randomUUID();
-      const { error } = await createProjetoMidia({
-        id: videoId,
-        projeto_id: projectDbId,
-        tipo: "video",
-        url: normalizedUrl,
-      });
-
-      if (error) throw error;
-
-      setVideoUrlInput("");
-      await loadVideos(projectDbId);
-      toast.success("Vídeo adicionado com sucesso.");
-    } catch (error: any) {
-      toast.error(error?.message || "Erro ao adicionar vídeo.");
-    } finally {
-      setIsAddingVideo(false);
-    }
-  };
-
-  const removeVideo = async (video: ProjetoVideo) => {
-    const { error } = await deleteProjetoMidia(video.id);
-    if (error) {
-      toast.error(error.message || "Erro ao remover vídeo.");
-      return;
-    }
-
-    setVideos((prev) => prev.filter((item) => item.id !== video.id));
-    toast.success("Vídeo removido.");
-  };
-
   const onSubmit = async (form: ProjetoFormData) => {
     if (isSaving) return;
 
     const parsedYear = Number.parseInt((form.anoFundacao || "").trim(), 10);
     const anoFundacao = Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999 ? parsedYear : null;
+
+    const normalizedVideoUrl = normalizeVideoUrl(form.youtubeUrl);
+    if (form.youtubeUrl.trim() && !normalizedVideoUrl) {
+      toast.error("URL de vídeo inválida.");
+      return;
+    }
 
     const payload = {
       titulo: form.titulo.trim(),
@@ -369,7 +260,7 @@ export function AdminProjetoForm() {
       capa_url: toProjectStoragePath(form.capaUrl),
       publicado_transparencia: form.status === "ativo",
       instagram_url: normalizeOptionalUrl(form.instagramUrl),
-      youtube_url: normalizeOptionalUrl(form.youtubeUrl),
+      youtube_url: normalizedVideoUrl,
       spotify_url: normalizeOptionalUrl(form.spotifyUrl),
     };
 
@@ -399,7 +290,7 @@ export function AdminProjetoForm() {
 
       const savedId = String(data.id);
       setProjectDbId(savedId);
-      await Promise.all([loadFotos(savedId), loadVideos(savedId)]);
+      await loadFotos(savedId);
       toast.success("Projeto salvo com sucesso.");
 
       if (!projectDbId) {
@@ -591,64 +482,43 @@ export function AdminProjetoForm() {
 
       {activeTab === "videos" && (
         <div className="space-y-4 rounded-2xl border p-5">
-          <div className="flex flex-col gap-3 md:flex-row">
+          <div>
+            <label className="text-sm font-medium">URL de vídeo (YouTube, Vimeo ou Google Drive)</label>
             <input
-              value={videoUrlInput}
-              onChange={(e) => setVideoUrlInput(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2"
-              placeholder="Cole URL do YouTube, Vimeo ou Drive"
-              disabled={!canManageMedia || isAddingVideo}
+              type="url"
+              {...register("youtubeUrl")}
+              className="mt-1 w-full rounded-lg border px-3 py-2"
+              placeholder="https://..."
             />
-            <button
-              type="button"
-              onClick={addVideo}
-              disabled={!canManageMedia || isAddingVideo}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Plus className="h-4 w-4" />
-              {isAddingVideo ? "Adicionando..." : "Adicionar vídeo"}
-            </button>
+            <p className="mt-2 text-xs text-muted-foreground">Este valor é salvo em <code>projetos.youtube_url</code> e usado na página pública.</p>
           </div>
 
-          {!canManageMedia && <p className="text-sm text-muted-foreground">Salve o projeto para habilitar cadastro de vídeos.</p>}
+          {(() => {
+            const embedUrl = getVideoEmbedUrl(watch("youtubeUrl"));
+            if (!watch("youtubeUrl")?.trim()) {
+              return <p className="text-sm text-muted-foreground">Nenhum vídeo configurado.</p>;
+            }
 
-          {videos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum vídeo cadastrado.</p>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {videos.map((video) => {
-                const embedUrl = getEmbedUrl(video.url);
+            if (!embedUrl) {
+              return (
+                <div className="flex aspect-video w-full max-w-2xl flex-col items-center justify-center gap-2 rounded-xl border text-sm text-muted-foreground">
+                  <Video className="h-5 w-5" />
+                  Prévia indisponível para esta URL.
+                </div>
+              );
+            }
 
-                return (
-                  <div key={video.id} className="group relative overflow-hidden rounded-xl border">
-                    {embedUrl ? (
-                      <iframe
-                        src={embedUrl}
-                        title={`Vídeo ${video.id}`}
-                        className="aspect-video w-full"
-                        loading="lazy"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    ) : (
-                      <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-                        <Video className="h-5 w-5" />
-                        Prévia indisponível
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => removeVideo(video)}
-                      className="absolute right-2 top-2 rounded-md bg-black/70 p-2 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            return (
+              <iframe
+                src={embedUrl}
+                title="Prévia de vídeo"
+                className="aspect-video w-full max-w-2xl rounded-xl border"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            );
+          })()}
         </div>
       )}
     </form>
