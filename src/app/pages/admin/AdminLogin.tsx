@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getHomeBannerUrl } from "@/lib/siteSettings";
+import { buildPublicStorageUrl, getFooterSettings } from "@/lib/footerSettings";
 import { supabase } from "@/lib/supabase";
 
 const LOGIN_BG_FALLBACK = "linear-gradient(140deg, #f5f5f5 0%, #e9ecef 100%)";
@@ -14,6 +15,8 @@ export function AdminLogin() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [useFallbackBackground, setUseFallbackBackground] = useState(false);
+  const [footerLogoUrl, setFooterLogoUrl] = useState<string | null>(null);
+  const [useLogoFallback, setUseLogoFallback] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -30,6 +33,37 @@ export function AdminLogin() {
     };
 
     void loadHomeBanner();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const resolveLogoUrl = (footerLogoPath: string | null | undefined, footerLogoUrl?: string | null) => {
+      if (footerLogoUrl && /^https?:\/\//i.test(footerLogoUrl)) return footerLogoUrl;
+      if (footerLogoPath && /^https?:\/\//i.test(footerLogoPath)) return footerLogoPath;
+      return buildPublicStorageUrl(footerLogoPath);
+    };
+
+    const loadFooterLogo = async () => {
+      try {
+        const settings = await getFooterSettings();
+        const settingsWithLogoUrl = settings as typeof settings & { footer_logo_url?: string | null };
+        const resolvedUrl = resolveLogoUrl(settings.footer_logo_path, settingsWithLogoUrl.footer_logo_url);
+
+        if (!active) return;
+        setFooterLogoUrl(resolvedUrl || null);
+        setUseLogoFallback(false);
+      } catch {
+        if (!active) return;
+        setFooterLogoUrl(null);
+      }
+    };
+
+    void loadFooterLogo();
 
     return () => {
       active = false;
@@ -81,7 +115,17 @@ export function AdminLogin() {
 
       <div className="auth-card relative z-10 w-full max-w-[440px] rounded-2xl border border-white/45 bg-white/92 p-6 shadow-2xl backdrop-blur-[2px] sm:p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-primary">RKC Admin</h1>
+          {footerLogoUrl && !useLogoFallback ? (
+            <div className="login-logo">
+              <img
+                src={footerLogoUrl}
+                alt="Logo"
+                onError={() => setUseLogoFallback(true)}
+              />
+            </div>
+          ) : (
+            <div className="login-logo-text text-2xl font-bold text-primary">RKC Admin</div>
+          )}
           <p className="text-muted-foreground mt-2">Entre com suas credenciais para acessar o painel.</p>
         </div>
 

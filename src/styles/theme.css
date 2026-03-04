@@ -219,6 +219,19 @@
   width: min(100%, 440px);
 }
 
+
+.login-logo {
+  display: flex;
+  justify-content: center;
+}
+
+.login-logo img {
+  height: 55px;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 10px;
+}
+
 @media (max-width: 640px) {
   .auth-bg {
     background: rgba(15, 20, 30, 0.4);
