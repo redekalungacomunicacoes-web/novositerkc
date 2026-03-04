@@ -6,6 +6,7 @@ import { RKCTag } from "@/app/components/RKCTag";
 import { ArrowRight, Calendar, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getSiteSettings, SiteSettings } from "@/lib/siteSettings";
+import { resolveProjectMediaUrl } from "@/app/repositories/projectRepository";
 
 type ProjetoHome = {
   id: string;
@@ -55,7 +56,7 @@ export function Home() {
 
       const projetosP = supabase
         .from("projetos")
-        .select("id, slug, titulo, resumo, descricao, capa_url, sort_order, publicado_transparencia, published_at, created_at")
+        .select("id, slug, titulo, resumo, descricao, capa_url, cover_card_path, sort_order, publicado_transparencia, published_at, created_at")
         .eq("publicado_transparencia", true)
         .order("sort_order", { ascending: true, nullsFirst: false })
         .order("published_at", { ascending: false, nullsFirst: false })
@@ -94,7 +95,7 @@ export function Home() {
               slug: p.slug,
               titulo: p.titulo || "",
               descricao: p.resumo || p.descricao || "",
-              imagem: p.capa_url || "",
+              imagem: resolveProjectMediaUrl(p.cover_card_path || p.capa_url),
               tag: "Projeto",
             }))
           );
