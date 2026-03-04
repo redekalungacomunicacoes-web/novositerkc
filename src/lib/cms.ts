@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { createProjeto as createProjetoRepo, deleteProjeto as deleteProjetoRepo, getProjetoById, listProjetosAdmin, updateProjeto as updateProjetoRepo } from "@/app/repositories/projectRepository";
 
 export type MateriaRow = {
   id: string;
@@ -68,21 +69,21 @@ export async function deleteMateria(id: string) {
 
 // ===== Projetos =====
 export async function listProjetos() {
-  return supabase.from("projetos").select("*").order("created_at", { ascending: false });
+  return listProjetosAdmin();
 }
 
 export async function getProjeto(id: string) {
-  return supabase.from("projetos").select("*").eq("id", id).single();
+  return getProjetoById(id);
 }
 
 export async function createProjeto(payload: Partial<ProjetoRow>) {
-  return supabase.from("projetos").insert(payload).select("*").single();
+  return createProjetoRepo(payload);
 }
 
 export async function updateProjeto(id: string, payload: Partial<ProjetoRow>) {
-  return supabase.from("projetos").update(payload).eq("id", id).select("*").single();
+  return updateProjetoRepo(id, payload);
 }
 
 export async function deleteProjeto(id: string) {
-  return supabase.from("projetos").delete().eq("id", id);
+  return deleteProjetoRepo(id);
 }

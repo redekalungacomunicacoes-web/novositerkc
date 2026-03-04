@@ -5,6 +5,14 @@ import { ArrowLeft, Image as ImageIcon, Plus, Save, Trash2, Video } from "lucide
 import { toast } from "sonner";
 
 import { supabase } from "@/lib/supabase";
+import {
+  PROJECTS_BUCKET,
+  createProjetoMidia,
+  deleteProjetoMidia,
+  getProjetoById,
+  getProjetoGaleria,
+  resolveProjectMediaUrl,
+} from "@/app/repositories/projectRepository";
 
 type ProjetoFormData = {
   titulo: string;
@@ -21,10 +29,9 @@ type ProjetoRecord = {
   id: string;
   titulo: string | null;
   descricao: string | null;
-  ano_fundacao: number | null;
-  ano_lancamento?: number | null;
+  ano_lancamento: number | null;
   capa_url: string | null;
-  status: "ativo" | "rascunho" | null;
+  publicado_transparencia: boolean | null;
   instagram_url: string | null;
   youtube_url: string | null;
   spotify_url: string | null;
@@ -33,13 +40,13 @@ type ProjetoRecord = {
 type ProjetoFoto = {
   id: string;
   projeto_id: string;
-  foto_url: string;
+  url: string;
 };
 
 type ProjetoVideo = {
   id: string;
   projeto_id: string;
-  video_url: string;
+  url: string;
 };
 
 type TabKey = "informacoes" | "fotos" | "videos";
@@ -101,8 +108,14 @@ export function getEmbedUrl(url: string): string {
   }
 }
 
-async function getProjetoForEdit(id: string) {
-  return supabase.from("projetos").select("*").eq("id", id).maybeSingle();
+
+function toProjectStoragePath(value?: string | null) {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  const marker = `/storage/v1/object/public/${PROJECTS_BUCKET}/`;
+  const markerIdx = raw.indexOf(marker);
+  if (markerIdx >= 0) return raw.slice(markerIdx + marker.length);
+  return raw;
 }
 
 export function AdminProjetoForm() {
@@ -148,11 +161,7 @@ export function AdminProjetoForm() {
   const canManageMedia = useMemo(() => Boolean(projectDbId), [projectDbId]);
 
   const loadFotos = async (projetoId: string) => {
-    const { data, error } = await supabase
-      .from("projeto_fotos")
-      .select("id, projeto_id, foto_url")
-      .eq("projeto_id", projetoId)
-      .order("id", { ascending: false });
+    const { data, error } = await getProjetoGaleria(projetoId, "image");
 
     if (error) {
       toast.error(error.message || "Erro ao carregar fotos.");
@@ -160,15 +169,11 @@ export function AdminProjetoForm() {
       return;
     }
 
-    setFotos((data || []) as ProjetoFoto[]);
+    setFotos(((data || []) as ProjetoFoto[]).map((item) => ({ ...item, url: resolveProjectMediaUrl(item.url) })));
   };
 
   const loadVideos = async (projetoId: string) => {
-    const { data, error } = await supabase
-      .from("projeto_videos")
-      .select("id, projeto_id, video_url")
-      .eq("projeto_id", projetoId)
-      .order("id", { ascending: false });
+    const { data, error } = await getProjetoGaleria(projetoId, "video");
 
     if (error) {
       toast.error(error.message || "Erro ao carregar vídeos.");
@@ -189,7 +194,7 @@ export function AdminProjetoForm() {
 
     (async () => {
       setIsLoadingProject(true);
-      const { data, error } = await getProjetoForEdit(id);
+      const { data, error } = await getProjetoById(id);
       setIsLoadingProject(false);
 
       if (error || !data) {
@@ -201,9 +206,9 @@ export function AdminProjetoForm() {
       reset({
         titulo: projeto.titulo || "",
         descricao: projeto.descricao || "",
-        anoFundacao: projeto.ano_fundacao ? String(projeto.ano_fundacao) : projeto.ano_lancamento ? String(projeto.ano_lancamento) : "",
-        capaUrl: projeto.capa_url || "",
-        status: projeto.status === "ativo" ? "ativo" : "rascunho",
+        anoFundacao: projeto.ano_lancamento ? String(projeto.ano_lancamento) : "",
+        capaUrl: resolveProjectMediaUrl(projeto.capa_url),
+        status: projeto.publicado_transparencia ? "ativo" : "rascunho",
         instagramUrl: projeto.instagram_url || "",
         youtubeUrl: projeto.youtube_url || "",
         spotifyUrl: projeto.spotify_url || "",
@@ -219,22 +224,25 @@ export function AdminProjetoForm() {
 
   const handleCoverUpload = async (file?: File) => {
     if (!file) return;
+    if (!projectDbId) {
+      toast.error("Salve o projeto antes de enviar a capa.");
+      return;
+    }
 
     setIsUploadingCover(true);
     try {
       const ext = fileExtension(file);
       const fileName = `${crypto.randomUUID()}.${ext}`;
-      const filePath = `projects/${projectDbId || "tmp"}/capas/${fileName}`;
+      const filePath = `projects/${projectDbId}/cover/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage.from("projetos").upload(filePath, file, {
+      const { error: uploadError } = await supabase.storage.from(PROJECTS_BUCKET).upload(filePath, file, {
         upsert: true,
         cacheControl: "31536000",
         contentType: file.type,
       });
       if (uploadError) throw uploadError;
 
-      const { data: publicData } = supabase.storage.from("projetos").getPublicUrl(filePath);
-      setValue("capaUrl", publicData.publicUrl, { shouldDirty: true, shouldValidate: true });
+      setValue("capaUrl", resolveProjectMediaUrl(filePath), { shouldDirty: true, shouldValidate: true });
       toast.success("Capa enviada com sucesso.");
     } catch (error: any) {
       toast.error(error?.message || "Erro ao enviar capa.");
@@ -255,20 +263,20 @@ export function AdminProjetoForm() {
 
         const fotoId = crypto.randomUUID();
         const ext = fileExtension(file);
-        const path = `projects/${projectDbId}/fotos/${fotoId}.${ext}`;
+        const path = `projects/${projectDbId}/gallery/${fotoId}.${ext}`;
 
-        const { error: uploadError } = await supabase.storage.from("projetos").upload(path, file, {
+        const { error: uploadError } = await supabase.storage.from(PROJECTS_BUCKET).upload(path, file, {
           upsert: true,
           cacheControl: "31536000",
           contentType: file.type,
         });
         if (uploadError) throw uploadError;
 
-        const { data: publicData } = supabase.storage.from("projetos").getPublicUrl(path);
-        const { error: insertError } = await supabase.from("projeto_fotos").insert({
+        const { error: insertError } = await createProjetoMidia({
           id: fotoId,
           projeto_id: projectDbId,
-          foto_url: publicData.publicUrl,
+          tipo: "image",
+          url: path,
         });
         if (insertError) throw insertError;
       }
@@ -286,12 +294,11 @@ export function AdminProjetoForm() {
   const removeFoto = async (foto: ProjetoFoto) => {
     if (!projectDbId) return;
 
-    const storagePrefix = "/storage/v1/object/public/projetos/";
-    const storagePath = foto.foto_url.includes(storagePrefix) ? foto.foto_url.split(storagePrefix)[1] : null;
+    const storagePath = toProjectStoragePath(foto.url);
 
-    if (storagePath) await supabase.storage.from("projetos").remove([storagePath]);
+    if (storagePath) await supabase.storage.from(PROJECTS_BUCKET).remove([storagePath]);
 
-    const { error } = await supabase.from("projeto_fotos").delete().eq("id", foto.id);
+    const { error } = await deleteProjetoMidia(foto.id);
     if (error) {
       toast.error(error.message || "Erro ao remover foto.");
       return;
@@ -319,10 +326,11 @@ export function AdminProjetoForm() {
     setIsAddingVideo(true);
     try {
       const videoId = crypto.randomUUID();
-      const { error } = await supabase.from("projeto_videos").insert({
+      const { error } = await createProjetoMidia({
         id: videoId,
         projeto_id: projectDbId,
-        video_url: normalizedUrl,
+        tipo: "video",
+        url: normalizedUrl,
       });
 
       if (error) throw error;
@@ -338,7 +346,7 @@ export function AdminProjetoForm() {
   };
 
   const removeVideo = async (video: ProjetoVideo) => {
-    const { error } = await supabase.from("projeto_videos").delete().eq("id", video.id);
+    const { error } = await deleteProjetoMidia(video.id);
     if (error) {
       toast.error(error.message || "Erro ao remover vídeo.");
       return;
@@ -357,9 +365,9 @@ export function AdminProjetoForm() {
     const payload = {
       titulo: form.titulo.trim(),
       descricao: form.descricao.trim() || null,
-      ano_fundacao: anoFundacao,
-      capa_url: form.capaUrl.trim() || null,
-      status: form.status,
+      ano_lancamento: anoFundacao,
+      capa_url: toProjectStoragePath(form.capaUrl),
+      publicado_transparencia: form.status === "ativo",
       instagram_url: normalizeOptionalUrl(form.instagramUrl),
       youtube_url: normalizeOptionalUrl(form.youtubeUrl),
       spotify_url: normalizeOptionalUrl(form.spotifyUrl),
@@ -566,7 +574,7 @@ export function AdminProjetoForm() {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
               {fotos.map((foto) => (
                 <div key={foto.id} className="group relative overflow-hidden rounded-xl border">
-                  <img src={foto.foto_url} alt="Foto do projeto" className="aspect-square w-full object-cover" loading="lazy" />
+                      <img src={foto.url} alt="Foto do projeto" className="aspect-square w-full object-cover" loading="lazy" />
                   <button
                     type="button"
                     onClick={() => removeFoto(foto)}
@@ -609,7 +617,7 @@ export function AdminProjetoForm() {
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
               {videos.map((video) => {
-                const embedUrl = getEmbedUrl(video.video_url);
+                const embedUrl = getEmbedUrl(video.url);
 
                 return (
                   <div key={video.id} className="group relative overflow-hidden rounded-xl border">
