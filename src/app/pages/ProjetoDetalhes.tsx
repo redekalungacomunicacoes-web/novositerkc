@@ -4,7 +4,7 @@ import { ProjectYouTubeGrid } from "@/app/components/ProjectYouTubeGrid";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
 import { ArrowLeft, Calendar, X, Image as ImageIcon, Instagram, Youtube, Music, ChevronLeft, ChevronRight } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { findProjetoPublicBySlugOrId, getProjetoGaleria, resolveProjectMediaUrl } from "@/app/repositories/projectRepository";
 import { trackPageView } from "@/lib/analytics";
 
 type ProjectImage = {
@@ -59,27 +59,7 @@ export function ProjetoDetalhes() {
 
     (async () => {
       setLoading(true);
-      const PUBLIC_FILTER = "publicado_transparencia.eq.true";
-
-      let found: any = null;
-      const bySlug = await supabase
-        .from("projetos")
-        .select("id, slug, titulo, resumo, descricao, capa_url, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia")
-        .eq("slug", paramValue)
-        .or(PUBLIC_FILTER)
-        .limit(1);
-
-      if (!bySlug.error && bySlug.data?.length) {
-        found = bySlug.data[0];
-      } else {
-        const byId = await supabase
-          .from("projetos")
-          .select("id, slug, titulo, resumo, descricao, capa_url, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia")
-          .eq("id", paramValue)
-          .or(PUBLIC_FILTER)
-          .limit(1);
-        if (!byId.error && byId.data?.length) found = byId.data[0];
-      }
+      const found = await findProjetoPublicBySlugOrId(paramValue);
 
       if (!found) {
         setProjeto(null);
@@ -87,23 +67,21 @@ export function ProjetoDetalhes() {
         return;
       }
 
-      const { data: imagesData } = await supabase
-        .from("projeto_galeria")
-        .select("id, projeto_id, tipo, url")
-        .eq("projeto_id", found.id)
-        .eq("tipo", "image")
-        .order("id", { ascending: true });
+      const { data: imagesData } = await getProjetoGaleria(found.id, "image");
 
-      const imagens = (imagesData || []) as ProjectImage[];
+      const imagens = ((imagesData || []) as ProjectImage[]).map((item) => ({
+        ...item,
+        url: resolveProjectMediaUrl(item.url),
+      }));
       const fallbackCapa = imagens[0]?.url || "";
 
       const mapped: ProjetoUI = {
         id: found.id,
-        slug: found.slug,
+        slug: found.slug || "",
         titulo: found.titulo || "",
         descricao: found.resumo || "",
         descricaoCompleta: found.descricao || found.resumo || "",
-        imagem: found.capa_url || fallbackCapa,
+        imagem: resolveProjectMediaUrl(found.capa_url) || fallbackCapa,
         tag: "Projeto",
         anoLancamento: found.ano_lancamento ?? null,
         instagramUrl: found.instagram_url ?? null,
