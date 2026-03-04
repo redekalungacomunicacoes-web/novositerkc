@@ -60,6 +60,14 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   };
 }
 
+export async function getHomeBannerUrl(): Promise<string | null> {
+  const settings = await getSiteSettings();
+  const bannerUrl = settings.home_banner_image_url?.trim();
+
+  // URL única do Banner (Home): pode ser URL digitada manualmente ou URL pública do upload salvo no admin.
+  return bannerUrl ? bannerUrl : null;
+}
+
 export async function updateSiteSettings(patch: Partial<SiteSettings>) {
   const { data, error } = await supabase
     .from("site_settings")

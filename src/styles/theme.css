@@ -201,3 +201,26 @@
     line-height: 1.5;
   }
 }
+/* Layout específico da autenticação do admin */
+.auth-login-page {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.auth-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 20, 30, 0.45);
+}
+
+.auth-card {
+  width: min(100%, 440px);
+}
+
+@media (max-width: 640px) {
+  .auth-bg {
+    background: rgba(15, 20, 30, 0.4);
+  }
+}

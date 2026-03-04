@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getHomeBannerUrl } from "@/lib/siteSettings";
 import { supabase } from "@/lib/supabase";
+
+const LOGIN_BG_FALLBACK = "linear-gradient(140deg, #f5f5f5 0%, #e9ecef 100%)";
 
 export function AdminLogin() {
   const navigate = useNavigate();
@@ -9,6 +12,38 @@ export function AdminLogin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [useFallbackBackground, setUseFallbackBackground] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHomeBanner = async () => {
+      try {
+        const url = await getHomeBannerUrl();
+        if (!active) return;
+        setBannerUrl(url);
+      } catch {
+        if (!active) return;
+        setBannerUrl(null);
+      }
+    };
+
+    void loadHomeBanner();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const pageStyle = useMemo(() => {
+    // Background usa a mesma origem do Banner (Home); se ausente/erro de carga, cai para gradiente padrão.
+    if (!bannerUrl || useFallbackBackground) {
+      return { backgroundImage: LOGIN_BG_FALLBACK };
+    }
+
+    return { backgroundImage: `url("${bannerUrl}")` };
+  }, [bannerUrl, useFallbackBackground]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,8 +63,23 @@ export function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-md bg-card p-8 rounded-xl shadow-lg border">
+    <div
+      className="auth-login-page min-h-screen flex items-center justify-center p-4 sm:p-6"
+      style={pageStyle}
+    >
+      {bannerUrl && !useFallbackBackground && (
+        <img
+          src={bannerUrl}
+          alt=""
+          aria-hidden="true"
+          className="hidden"
+          onError={() => setUseFallbackBackground(true)}
+        />
+      )}
+
+      <div className="auth-bg" aria-hidden="true" />
+
+      <div className="auth-card relative z-10 w-full max-w-[440px] rounded-2xl border border-white/45 bg-white/92 p-6 shadow-2xl backdrop-blur-[2px] sm:p-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-primary">RKC Admin</h1>
           <p className="text-muted-foreground mt-2">Entre com suas credenciais para acessar o painel.</p>
@@ -42,7 +92,7 @@ export function AdminLogin() {
               id="email"
               type="email"
               placeholder="seu@email.com"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-full rounded-md border border-input bg-background/95 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -54,7 +104,7 @@ export function AdminLogin() {
             <input
               id="password"
               type="password"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-full rounded-md border border-input bg-background/95 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -78,7 +128,7 @@ export function AdminLogin() {
         </form>
 
         <div className="mt-6 text-center text-sm">
-           <a href="/" className="text-muted-foreground hover:text-primary transition-colors">
+          <a href="/" className="text-muted-foreground hover:text-primary transition-colors">
             Voltar para o site
           </a>
         </div>
