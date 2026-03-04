@@ -8,6 +8,7 @@ import { RKCButton } from "@/app/components/RKCButton";
 import { RKCProjectsCarousel } from "@/app/components/RKCProjectsCarousel";
 
 import { supabase } from "@/lib/supabase";
+import { resolveProjectMediaUrl } from "@/app/repositories/projectRepository";
 
 type ProjetoUI = {
   id: string;
@@ -30,7 +31,7 @@ export function Projetos() {
 
       const { data, error } = await supabase
         .from("projetos")
-        .select("id, slug, titulo, resumo, descricao, capa_url, sort_order, publicado_transparencia, published_at, created_at")
+        .select("id, slug, titulo, resumo, descricao, capa_url, cover_card_path, sort_order, publicado_transparencia, published_at, created_at")
         // ✅ NÃO despublica nada: mantém exatamente sua regra pública
         .eq("publicado_transparencia", true)
         // ✅ ORDEM MANUAL PRIMEIRO (null vai pro final)
@@ -52,7 +53,7 @@ export function Projetos() {
         slug: p.slug,
         titulo: p.titulo || "",
         descricao: p.resumo || p.descricao || "",
-        imagem: p.capa_url || "",
+        imagem: resolveProjectMediaUrl(p.cover_card_path || p.capa_url),
         tag: "Projeto",
         ano: "—",
         status: "Ativo",

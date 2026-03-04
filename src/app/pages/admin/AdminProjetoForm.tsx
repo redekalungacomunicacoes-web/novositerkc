@@ -19,7 +19,8 @@ type ProjetoFormData = {
   titulo: string;
   descricao: string;
   anoFundacao: string;
-  capaUrl: string;
+  bannerUrl: string;
+  coverCardUrl: string;
   status: "ativo" | "rascunho";
   instagramUrl: string;
   youtubeUrl: string;
@@ -32,6 +33,7 @@ type ProjetoRecord = {
   descricao: string | null;
   ano_lancamento: number | null;
   capa_url: string | null;
+  cover_card_path: string | null;
   publicado_transparencia: boolean | null;
   instagram_url: string | null;
   youtube_url: string | null;
@@ -84,7 +86,8 @@ export function AdminProjetoForm() {
       titulo: "",
       descricao: "",
       anoFundacao: "",
-      capaUrl: "",
+      bannerUrl: "",
+      coverCardUrl: "",
       status: "rascunho",
       instagramUrl: "",
       youtubeUrl: "",
@@ -95,14 +98,17 @@ export function AdminProjetoForm() {
   const [activeTab, setActiveTab] = useState<TabKey>("informacoes");
   const [isLoadingProject, setIsLoadingProject] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [isUploadingCoverCard, setIsUploadingCoverCard] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [projectDbId, setProjectDbId] = useState<string | null>(id || null);
   const [fotos, setFotos] = useState<ProjetoFoto[]>([]);
 
-  const coverInputRef = useRef<HTMLInputElement | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
+  const coverCardInputRef = useRef<HTMLInputElement | null>(null);
   const photosInputRef = useRef<HTMLInputElement | null>(null);
-  const coverUrl = watch("capaUrl");
+  const bannerUrl = watch("bannerUrl");
+  const coverCardUrl = watch("coverCardUrl");
 
   const canManageMedia = useMemo(() => Boolean(projectDbId), [projectDbId]);
 
@@ -140,7 +146,8 @@ export function AdminProjetoForm() {
         titulo: projeto.titulo || "",
         descricao: projeto.descricao || "",
         anoFundacao: projeto.ano_lancamento ? String(projeto.ano_lancamento) : "",
-        capaUrl: resolveProjectMediaUrl(projeto.capa_url),
+        bannerUrl: resolveProjectMediaUrl(projeto.capa_url),
+        coverCardUrl: resolveProjectMediaUrl(projeto.cover_card_path),
         status: projeto.publicado_transparencia ? "ativo" : "rascunho",
         instagramUrl: projeto.instagram_url || "",
         youtubeUrl: projeto.youtube_url || "",
@@ -155,14 +162,14 @@ export function AdminProjetoForm() {
     })();
   }, [id, reset]);
 
-  const handleCoverUpload = async (file?: File) => {
+  const handleBannerUpload = async (file?: File) => {
     if (!file) return;
     if (!projectDbId) {
       toast.error("Salve o projeto antes de enviar a capa.");
       return;
     }
 
-    setIsUploadingCover(true);
+    setIsUploadingBanner(true);
     try {
       const ext = fileExtension(file);
       const fileName = `${crypto.randomUUID()}.${ext}`;
@@ -175,13 +182,43 @@ export function AdminProjetoForm() {
       });
       if (uploadError) throw uploadError;
 
-      setValue("capaUrl", resolveProjectMediaUrl(filePath), { shouldDirty: true, shouldValidate: true });
-      toast.success("Capa enviada com sucesso.");
+      setValue("bannerUrl", resolveProjectMediaUrl(filePath), { shouldDirty: true, shouldValidate: true });
+      toast.success("Banner enviado com sucesso.");
     } catch (error: any) {
-      toast.error(error?.message || "Erro ao enviar capa.");
+      toast.error(error?.message || "Erro ao enviar banner.");
     } finally {
-      setIsUploadingCover(false);
-      if (coverInputRef.current) coverInputRef.current.value = "";
+      setIsUploadingBanner(false);
+      if (bannerInputRef.current) bannerInputRef.current.value = "";
+    }
+  };
+
+  const handleCoverCardUpload = async (file?: File) => {
+    if (!file) return;
+    if (!projectDbId) {
+      toast.error("Salve o projeto antes de enviar a capa.");
+      return;
+    }
+
+    setIsUploadingCoverCard(true);
+    try {
+      const ext = fileExtension(file);
+      const fileName = `${crypto.randomUUID()}.${ext}`;
+      const filePath = `projects/${projectDbId}/cover-card/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage.from(PROJECTS_BUCKET).upload(filePath, file, {
+        upsert: true,
+        cacheControl: "31536000",
+        contentType: file.type,
+      });
+      if (uploadError) throw uploadError;
+
+      setValue("coverCardUrl", resolveProjectMediaUrl(filePath), { shouldDirty: true, shouldValidate: true });
+      toast.success("Capa do card enviada com sucesso.");
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao enviar capa do card.");
+    } finally {
+      setIsUploadingCoverCard(false);
+      if (coverCardInputRef.current) coverCardInputRef.current.value = "";
     }
   };
 
@@ -257,7 +294,8 @@ export function AdminProjetoForm() {
       titulo: form.titulo.trim(),
       descricao: form.descricao.trim() || null,
       ano_lancamento: anoFundacao,
-      capa_url: toProjectStoragePath(form.capaUrl),
+      capa_url: toProjectStoragePath(form.bannerUrl),
+      cover_card_path: toProjectStoragePath(form.coverCardUrl),
       publicado_transparencia: form.status === "ativo",
       instagram_url: normalizeOptionalUrl(form.instagramUrl),
       youtube_url: normalizedVideoUrl,
@@ -351,23 +389,50 @@ export function AdminProjetoForm() {
         <div className="space-y-6 rounded-2xl border p-5">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Capa do Projeto</h2>
+              <h2 className="font-semibold">Banner do Projeto</h2>
               <input
-                ref={coverInputRef}
+                ref={bannerInputRef}
                 type="file"
-                id="capa-projeto"
+                id="banner-projeto"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => handleCoverUpload(e.target.files?.[0])}
+                onChange={(e) => handleBannerUpload(e.target.files?.[0])}
               />
-              <label htmlFor="capa-projeto" className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted">
+              <label htmlFor="banner-projeto" className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted">
                 <ImageIcon className="h-4 w-4" />
-                {isUploadingCover ? "Enviando..." : "Enviar capa"}
+                {isUploadingBanner ? "Enviando..." : "Enviar banner"}
               </label>
             </div>
 
-            {coverUrl ? (
-              <img src={coverUrl} alt="Capa do projeto" className="h-56 w-full rounded-xl border object-cover" />
+            {bannerUrl ? (
+              <img src={bannerUrl} alt="Banner do projeto" className="h-56 w-full rounded-xl border object-cover" />
+            ) : (
+              <div className="flex h-56 w-full items-center justify-center rounded-xl border text-sm text-muted-foreground">Nenhum banner enviado.</div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold">Capa do Projeto</h2>
+                <p className="text-xs text-muted-foreground">Usada nos cards da Home e da listagem de Projetos.</p>
+              </div>
+              <input
+                ref={coverCardInputRef}
+                type="file"
+                id="cover-card-projeto"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleCoverCardUpload(e.target.files?.[0])}
+              />
+              <label htmlFor="cover-card-projeto" className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted">
+                <ImageIcon className="h-4 w-4" />
+                {isUploadingCoverCard ? "Enviando..." : "Enviar capa"}
+              </label>
+            </div>
+
+            {coverCardUrl ? (
+              <img src={coverCardUrl} alt="Capa do projeto para cards" className="h-56 w-full rounded-xl border object-cover" />
             ) : (
               <div className="flex h-56 w-full items-center justify-center rounded-xl border text-sm text-muted-foreground">Nenhuma capa enviada.</div>
             )}
@@ -425,8 +490,13 @@ export function AdminProjetoForm() {
             </div>
 
             <div>
-              <label className="text-sm font-medium">URL da Capa</label>
-              <input {...register("capaUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://..." />
+              <label className="text-sm font-medium">URL do Banner</label>
+              <input {...register("bannerUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://..." />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">URL da Capa (cards)</label>
+              <input {...register("coverCardUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://..." />
             </div>
           </div>
         </div>
