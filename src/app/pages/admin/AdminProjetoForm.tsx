@@ -1,31 +1,48 @@
-// src/app/pages/admin/Projetos/AdminProjetoForm.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Image as ImageIcon, Save, Trash2 } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Image as ImageIcon, Plus, Save, Trash2, Video } from "lucide-react";
+import { toast } from "sonner";
 
-import { ProjectYouTubeGrid } from "@/app/components/ProjectYouTubeGrid";
-import { slugify } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
-import { uploadImageToStorage } from "@/lib/storage";
 
 type ProjetoFormData = {
-  title: string;
-  description: string;
-  foundationYear: string;
-  status: "Ativo" | "Rascunho";
-  coverImage: string;
-  instagramUrl?: string;
-  youtubeUrl?: string;
-  spotifyUrl?: string;
+  titulo: string;
+  descricao: string;
+  anoFundacao: string;
+  capaUrl: string;
+  status: "ativo" | "rascunho";
+  instagramUrl: string;
+  youtubeUrl: string;
+  spotifyUrl: string;
 };
 
-type ProjetoGaleriaItem = {
+type ProjetoRecord = {
+  id: string;
+  titulo: string | null;
+  descricao: string | null;
+  ano_fundacao: number | null;
+  ano_lancamento?: number | null;
+  capa_url: string | null;
+  status: "ativo" | "rascunho" | null;
+  instagram_url: string | null;
+  youtube_url: string | null;
+  spotify_url: string | null;
+};
+
+type ProjetoFoto = {
   id: string;
   projeto_id: string;
-  tipo: string;
-  url: string;
+  foto_url: string;
 };
+
+type ProjetoVideo = {
+  id: string;
+  projeto_id: string;
+  video_url: string;
+};
+
+type TabKey = "informacoes" | "fotos" | "videos";
 
 function normalizeOptionalUrl(value?: string) {
   const trimmed = (value || "").trim();
@@ -39,36 +56,59 @@ function fileExtension(file: File) {
   return ext || "jpg";
 }
 
-async function getProjetoForEdit(param: string) {
-  const byId = await supabase.from("projetos").select("*").eq("id", param).maybeSingle();
-  if (!byId.error && byId.data) return { data: byId.data, error: null as any };
+export function getEmbedUrl(url: string): string {
+  const raw = (url || "").trim();
+  if (!raw) return "";
 
-  const bySlug = await supabase.from("projetos").select("*").eq("slug", param).maybeSingle();
-  if (bySlug.error) return { data: null, error: bySlug.error };
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    const host = parsed.hostname.replace(/^www\./i, "").toLowerCase();
 
-  return { data: bySlug.data || null, error: null as any };
+    if (host === "youtu.be") {
+      const id = parsed.pathname.replace(/^\//, "").split("/")[0];
+      return id ? `https://www.youtube.com/embed/${id}` : "";
+    }
+
+    if (host.includes("youtube.com")) {
+      const queryId = parsed.searchParams.get("v");
+      if (queryId) return `https://www.youtube.com/embed/${queryId}`;
+
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const shortsIndex = parts.findIndex((p) => p === "shorts" || p === "embed" || p === "live");
+      if (shortsIndex >= 0 && parts[shortsIndex + 1]) {
+        return `https://www.youtube.com/embed/${parts[shortsIndex + 1]}`;
+      }
+    }
+
+    if (host.includes("vimeo.com")) {
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const id = parts.reverse().find((part) => /^\d+$/.test(part));
+      return id ? `https://player.vimeo.com/video/${id}` : "";
+    }
+
+    if (host.includes("drive.google.com")) {
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const fileIndex = parts.findIndex((part) => part === "d");
+      const idFromPath = fileIndex >= 0 ? parts[fileIndex + 1] : "";
+      const idFromQuery = parsed.searchParams.get("id") || "";
+      const driveId = idFromPath || idFromQuery;
+      return driveId ? `https://drive.google.com/file/d/${driveId}/preview` : "";
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
 }
 
-async function ensureUniqueProjetoSlug(baseSlug: string, currentId?: string) {
-  let slug = baseSlug || `projeto-${Date.now()}`;
-  let i = 1;
-
-  while (true) {
-    const { data, error } = await supabase.from("projetos").select("id").eq("slug", slug).limit(1);
-    if (error) throw error;
-    if (!data || data.length === 0) return slug;
-    if (currentId && data[0]?.id === currentId) return slug;
-
-    i += 1;
-    slug = `${baseSlug}-${i}`;
-  }
+async function getProjetoForEdit(id: string) {
+  return supabase.from("projetos").select("*").eq("id", id).maybeSingle();
 }
 
 export function AdminProjetoForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const isEditing = !!id;
+  const isEditing = Boolean(id);
 
   const {
     register,
@@ -79,405 +119,530 @@ export function AdminProjetoForm() {
     watch,
   } = useForm<ProjetoFormData>({
     defaultValues: {
-      title: "",
-      description: "",
-      foundationYear: "",
-      status: "Rascunho",
-      coverImage: "",
+      titulo: "",
+      descricao: "",
+      anoFundacao: "",
+      capaUrl: "",
+      status: "rascunho",
       instagramUrl: "",
       youtubeUrl: "",
       spotifyUrl: "",
     },
   });
 
-  const [loading, setLoading] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [projectDbId, setProjectDbId] = useState<string | null>(null);
-  const [galeria, setGaleria] = useState<ProjetoGaleriaItem[]>([]);
-  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("informacoes");
+  const [isLoadingProject, setIsLoadingProject] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [isAddingVideo, setIsAddingVideo] = useState(false);
+  const [projectDbId, setProjectDbId] = useState<string | null>(id || null);
+  const [fotos, setFotos] = useState<ProjetoFoto[]>([]);
+  const [videos, setVideos] = useState<ProjetoVideo[]>([]);
+  const [videoUrlInput, setVideoUrlInput] = useState("");
 
-  const coverImage = watch("coverImage");
-  const youtubeUrl = watch("youtubeUrl");
   const coverInputRef = useRef<HTMLInputElement | null>(null);
-  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const photosInputRef = useRef<HTMLInputElement | null>(null);
+  const coverUrl = watch("capaUrl");
 
-  const canUseGallery = useMemo(() => !!projectDbId, [projectDbId]);
+  const canManageMedia = useMemo(() => Boolean(projectDbId), [projectDbId]);
 
-  async function loadGallery(projetoId: string) {
+  const loadFotos = async (projetoId: string) => {
     const { data, error } = await supabase
-      .from("projeto_galeria")
-      .select("id, projeto_id, tipo, url")
+      .from("projeto_fotos")
+      .select("id, projeto_id, foto_url")
       .eq("projeto_id", projetoId)
-      .eq("tipo", "image")
-      .order("id", { ascending: true });
+      .order("id", { ascending: false });
 
     if (error) {
-      console.warn("Erro ao carregar galeria:", error.message);
-      setGaleria([]);
+      toast.error(error.message || "Erro ao carregar fotos.");
+      setFotos([]);
       return;
     }
 
-    setGaleria((data || []) as ProjetoGaleriaItem[]);
-  }
+    setFotos((data || []) as ProjetoFoto[]);
+  };
+
+  const loadVideos = async (projetoId: string) => {
+    const { data, error } = await supabase
+      .from("projeto_videos")
+      .select("id, projeto_id, video_url")
+      .eq("projeto_id", projetoId)
+      .order("id", { ascending: false });
+
+    if (error) {
+      toast.error(error.message || "Erro ao carregar vídeos.");
+      setVideos([]);
+      return;
+    }
+
+    setVideos((data || []) as ProjetoVideo[]);
+  };
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setProjectDbId(null);
+      setFotos([]);
+      setVideos([]);
+      return;
+    }
 
     (async () => {
-      setLoading(true);
+      setIsLoadingProject(true);
       const { data, error } = await getProjetoForEdit(id);
-      setLoading(false);
+      setIsLoadingProject(false);
 
       if (error || !data) {
-        alert(error?.message || "Não foi possível carregar o projeto.");
+        toast.error(error?.message || "Não foi possível carregar o projeto.");
         return;
       }
 
-      const p: any = data;
+      const projeto = data as ProjetoRecord;
       reset({
-        title: p.titulo || "",
-        description: p.descricao || "",
-        foundationYear: p.ano_lancamento ? String(p.ano_lancamento) : "",
-        status: p.publicado_transparencia ? "Ativo" : "Rascunho",
-        coverImage: p.capa_url || "",
-        instagramUrl: p.instagram_url || "",
-        youtubeUrl: p.youtube_url || "",
-        spotifyUrl: p.spotify_url || "",
+        titulo: projeto.titulo || "",
+        descricao: projeto.descricao || "",
+        anoFundacao: projeto.ano_fundacao ? String(projeto.ano_fundacao) : projeto.ano_lancamento ? String(projeto.ano_lancamento) : "",
+        capaUrl: projeto.capa_url || "",
+        status: projeto.status === "ativo" ? "ativo" : "rascunho",
+        instagramUrl: projeto.instagram_url || "",
+        youtubeUrl: projeto.youtube_url || "",
+        spotifyUrl: projeto.spotify_url || "",
       });
 
-      if (p?.id) {
-        setProjectDbId(String(p.id));
-        await loadGallery(String(p.id));
-      } else {
-        setProjectDbId(null);
-        setGaleria([]);
+      if (projeto.id) {
+        const dbId = String(projeto.id);
+        setProjectDbId(dbId);
+        await Promise.all([loadFotos(dbId), loadVideos(dbId)]);
       }
     })();
   }, [id, reset]);
 
-  const handleCoverFileChange = async (file?: File) => {
+  const handleCoverUpload = async (file?: File) => {
     if (!file) return;
-    setUploadingCover(true);
+
+    setIsUploadingCover(true);
     try {
-      const { publicUrl } = await uploadImageToStorage({
-        bucket: "projetos",
-        folder: "capas",
-        file,
+      const ext = fileExtension(file);
+      const fileName = `${crypto.randomUUID()}.${ext}`;
+      const filePath = `projects/${projectDbId || "tmp"}/capas/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage.from("projetos").upload(filePath, file, {
         upsert: true,
-        validate: true,
+        cacheControl: "31536000",
+        contentType: file.type,
       });
-      setValue("coverImage", publicUrl, { shouldDirty: true, shouldValidate: true });
-    } catch (err: any) {
-      alert(err?.message || "Erro ao enviar imagem de capa.");
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage.from("projetos").getPublicUrl(filePath);
+      setValue("capaUrl", publicData.publicUrl, { shouldDirty: true, shouldValidate: true });
+      toast.success("Capa enviada com sucesso.");
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao enviar capa.");
     } finally {
-      setUploadingCover(false);
+      setIsUploadingCover(false);
       if (coverInputRef.current) coverInputRef.current.value = "";
     }
   };
 
-  const handleGalleryFilesChange = async (files?: FileList | null) => {
+  const handlePhotosUpload = async (files?: FileList | null) => {
     if (!projectDbId || !files?.length) return;
 
-    setUploadingGallery(true);
+    setIsUploadingPhotos(true);
     try {
       for (let i = 0; i < files.length; i += 1) {
         const file = files[i];
         if (!file.type.startsWith("image/")) continue;
 
-        const imageId = crypto.randomUUID();
+        const fotoId = crypto.randomUUID();
         const ext = fileExtension(file);
-        const imagePath = `projects/${projectDbId}/galeria/${imageId}.${ext}`;
+        const path = `projects/${projectDbId}/fotos/${fotoId}.${ext}`;
 
-        const { error: uploadError } = await supabase.storage.from("projetos").upload(imagePath, file, {
+        const { error: uploadError } = await supabase.storage.from("projetos").upload(path, file, {
           upsert: true,
           cacheControl: "31536000",
           contentType: file.type,
         });
         if (uploadError) throw uploadError;
 
-        const { data: publicData } = supabase.storage.from("projetos").getPublicUrl(imagePath);
-        const { error: insertError } = await supabase.from("projeto_galeria").insert({
-          id: imageId,
+        const { data: publicData } = supabase.storage.from("projetos").getPublicUrl(path);
+        const { error: insertError } = await supabase.from("projeto_fotos").insert({
+          id: fotoId,
           projeto_id: projectDbId,
-          tipo: "image",
-          url: publicData.publicUrl,
+          foto_url: publicData.publicUrl,
         });
         if (insertError) throw insertError;
       }
 
-      await loadGallery(projectDbId);
-    } catch (err: any) {
-      alert(err?.message || "Erro ao enviar imagens para a galeria.");
+      await loadFotos(projectDbId);
+      toast.success("Fotos adicionadas com sucesso.");
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao adicionar fotos.");
     } finally {
-      setUploadingGallery(false);
-      if (galleryInputRef.current) galleryInputRef.current.value = "";
+      setIsUploadingPhotos(false);
+      if (photosInputRef.current) photosInputRef.current.value = "";
     }
   };
 
-  const handleDeleteGalleryItem = async (item: ProjetoGaleriaItem) => {
+  const removeFoto = async (foto: ProjetoFoto) => {
     if (!projectDbId) return;
 
-    if (!confirm("Remover esta imagem da galeria?")) return;
-
     const storagePrefix = "/storage/v1/object/public/projetos/";
-    const pathFromUrl = item.url.includes(storagePrefix) ? item.url.split(storagePrefix)[1] : null;
-    if (pathFromUrl) {
-      await supabase.storage.from("projetos").remove([pathFromUrl]);
-    }
+    const storagePath = foto.foto_url.includes(storagePrefix) ? foto.foto_url.split(storagePrefix)[1] : null;
 
-    const { error } = await supabase.from("projeto_galeria").delete().eq("id", item.id);
+    if (storagePath) await supabase.storage.from("projetos").remove([storagePath]);
+
+    const { error } = await supabase.from("projeto_fotos").delete().eq("id", foto.id);
     if (error) {
-      alert(error.message);
+      toast.error(error.message || "Erro ao remover foto.");
       return;
     }
 
-    await loadGallery(projectDbId);
+    setFotos((prev) => prev.filter((item) => item.id !== foto.id));
+    toast.success("Foto removida.");
+  };
+
+  const addVideo = async () => {
+    if (!projectDbId || isAddingVideo) return;
+
+    const normalizedUrl = normalizeOptionalUrl(videoUrlInput);
+    if (!normalizedUrl) {
+      toast.error("Informe uma URL de vídeo válida.");
+      return;
+    }
+
+    const embed = getEmbedUrl(normalizedUrl);
+    if (!embed) {
+      toast.error("URL não suportada. Use YouTube, Vimeo ou Google Drive.");
+      return;
+    }
+
+    setIsAddingVideo(true);
+    try {
+      const videoId = crypto.randomUUID();
+      const { error } = await supabase.from("projeto_videos").insert({
+        id: videoId,
+        projeto_id: projectDbId,
+        video_url: normalizedUrl,
+      });
+
+      if (error) throw error;
+
+      setVideoUrlInput("");
+      await loadVideos(projectDbId);
+      toast.success("Vídeo adicionado com sucesso.");
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao adicionar vídeo.");
+    } finally {
+      setIsAddingVideo(false);
+    }
+  };
+
+  const removeVideo = async (video: ProjetoVideo) => {
+    const { error } = await supabase.from("projeto_videos").delete().eq("id", video.id);
+    if (error) {
+      toast.error(error.message || "Erro ao remover vídeo.");
+      return;
+    }
+
+    setVideos((prev) => prev.filter((item) => item.id !== video.id));
+    toast.success("Vídeo removido.");
   };
 
   const onSubmit = async (form: ProjetoFormData) => {
-    setLoading(true);
+    if (isSaving) return;
+
+    const parsedYear = Number.parseInt((form.anoFundacao || "").trim(), 10);
+    const anoFundacao = Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999 ? parsedYear : null;
+
+    const payload = {
+      titulo: form.titulo.trim(),
+      descricao: form.descricao.trim() || null,
+      ano_fundacao: anoFundacao,
+      capa_url: form.capaUrl.trim() || null,
+      status: form.status,
+      instagram_url: normalizeOptionalUrl(form.instagramUrl),
+      youtube_url: normalizeOptionalUrl(form.youtubeUrl),
+      spotify_url: normalizeOptionalUrl(form.spotifyUrl),
+    };
+
+    setIsSaving(true);
     try {
-      const nowISO = new Date().toISOString();
-      const publicado_transparencia = form.status === "Ativo";
-      const baseSlug = slugify(form.title);
-      const uniqueSlug = await ensureUniqueProjetoSlug(baseSlug, projectDbId || undefined);
-      const parsedYear = Number.parseInt((form.foundationYear || "").trim(), 10);
-      const yearNumber = Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999 ? parsedYear : null;
-
-      const payload: any = {
-        titulo: form.title,
-        slug: uniqueSlug,
-        descricao: form.description || null,
-        ano_lancamento: yearNumber,
-        capa_url: form.coverImage || null,
-        instagram_url: normalizeOptionalUrl(form.instagramUrl),
-        youtube_url: normalizeOptionalUrl(form.youtubeUrl),
-        spotify_url: normalizeOptionalUrl(form.spotifyUrl),
-        publicado_transparencia,
-        published_at: publicado_transparencia ? nowISO : null,
-      };
-
-      let saved: any = null;
-      let expectedId = projectDbId;
+      let data: { id: string } | null = null;
+      let error: any = null;
 
       if (projectDbId) {
-        const { data, error } = await supabase.from("projetos").update(payload).eq("id", projectDbId).select("id").maybeSingle();
-        if (error) throw error;
-        if (!data?.id) {
-          const fallbackById = await supabase.from("projetos").select("id").eq("id", projectDbId).maybeSingle();
-          if (fallbackById.error) throw fallbackById.error;
-          if (!fallbackById.data?.id) {
-            throw new Error("Sem permissão para ler o registro após salvar (RLS). Rode a migration de RLS.");
-          }
-          saved = fallbackById.data;
-        } else {
-          saved = data;
-        }
+        const response = await supabase.from("projetos").update(payload).eq("id", projectDbId).select("id").single();
+        data = response.data;
+        error = response.error;
       } else {
-        const { data, error } = await supabase.from("projetos").insert(payload).select("id").maybeSingle();
-        if (error) throw error;
-        saved = data;
-        if (!saved?.id) {
-          const bySlug = await supabase.from("projetos").select("id").eq("slug", uniqueSlug).maybeSingle();
-          if (bySlug.error) throw bySlug.error;
-          saved = bySlug.data;
-        }
-        if (saved?.id) {
-          expectedId = String(saved.id);
-          setProjectDbId(expectedId);
-        } else {
-          expectedId = null;
-        }
+        const response = await supabase
+          .from("projetos")
+          .insert({ ...payload, created_at: new Date().toISOString() })
+          .select("id")
+          .single();
+        data = response.data;
+        error = response.error;
       }
 
-      if (!saved) {
-        if (expectedId) {
-          const byId = await supabase.from("projetos").select("id, slug").eq("id", expectedId).maybeSingle();
-          if (byId.error) throw byId.error;
-          if (byId.data) saved = byId.data;
-        }
-
-        if (!saved) {
-          const bySlug = await supabase.from("projetos").select("id, slug").eq("slug", uniqueSlug).maybeSingle();
-          if (bySlug.error) throw bySlug.error;
-          if (bySlug.data) saved = bySlug.data;
-        }
+      if (error || !data?.id) {
+        toast.error(error?.message || "Erro ao salvar. Nenhum registro retornado pelo banco.");
+        return;
       }
 
-      if (!saved?.id) {
-        throw new Error("Projeto persistido, mas não foi possível confirmar o registro salvo (RLS/SELECT).");
-      }
-
-      const savedId = String(saved.id);
+      const savedId = String(data.id);
       setProjectDbId(savedId);
-      await loadGallery(savedId);
-      alert("Salvo com sucesso.");
+      await Promise.all([loadFotos(savedId), loadVideos(savedId)]);
+      toast.success("Projeto salvo com sucesso.");
 
       if (!projectDbId) {
-        const nextRoute = location.pathname.includes("/editar/")
-          ? `/admin/projetos/editar/${savedId}`
-          : `/admin/projetos/${savedId}`;
-        navigate(nextRoute, { replace: true });
+        navigate(`/admin/projetos/editar/${savedId}`, { replace: true });
       }
-    } catch (err: any) {
-      alert(`Erro ao salvar projeto: ${err?.message || "Falha inesperada."}`);
+    } catch (error: any) {
+      toast.error(error?.message || "Erro inesperado ao salvar projeto.");
     } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
+    <form onSubmit={handleSubmit(onSubmit)} className="mx-auto w-full max-w-7xl space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link to="/admin/projetos" className="p-2 hover:bg-muted rounded-full transition-colors">
-            <ArrowLeft className="w-5 h-5" />
+          <Link to="/admin/projetos" className="rounded-full p-2 transition-colors hover:bg-muted">
+            <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
             <h1 className="text-2xl font-semibold">{isEditing ? "Editar Projeto" : "Novo Projeto"}</h1>
-            <p className="text-sm text-muted-foreground">Gerencie os dados mínimos do projeto, galeria de imagens e vídeos.</p>
+            <p className="text-sm text-muted-foreground">Informações, fotos e vídeos no mesmo formulário.</p>
           </div>
         </div>
 
         <button
-          onClick={handleSubmit(onSubmit)}
-          disabled={loading}
-          className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-60"
+          type="submit"
+          disabled={isSaving || isLoadingProject}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <Save className="w-4 h-4" />
-          {loading ? "Salvando..." : "Salvar Alterações"}
+          <Save className="h-4 w-4" />
+          {isSaving ? "Salvando..." : "Salvar"}
         </button>
       </div>
 
-      <div className="rounded-xl border p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Capa do Projeto</h2>
-
-          <input
-            ref={coverInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            id="cover-input"
-            onChange={(e) => handleCoverFileChange(e.target.files?.[0])}
-          />
-
-          <label htmlFor="cover-input" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer hover:bg-muted">
-            <ImageIcon className="w-4 h-4" />
-            {uploadingCover ? "Enviando..." : "Enviar capa"}
-          </label>
-        </div>
-
-        {coverImage ? (
-          <img src={coverImage} alt="Capa" className="w-full h-56 object-cover rounded-lg border" />
-        ) : (
-          <div className="w-full h-56 rounded-lg border flex items-center justify-center text-sm text-muted-foreground">Nenhuma capa definida</div>
-        )}
-      </div>
-
-      <div className="rounded-xl border p-4 space-y-4">
-        <div>
-          <label className="text-sm font-medium">Título</label>
-          <input {...register("title", { required: "Título é obrigatório" })} className="w-full mt-1 px-3 py-2 rounded-lg border" />
-          {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title.message}</p>}
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Descrição (Sobre o Projeto)</label>
-          <textarea {...register("description")} className="w-full mt-1 px-3 py-2 rounded-lg border min-h-[120px]" />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Ano de fundação</label>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1000}
-            max={9999}
-            {...register("foundationYear")}
-            className="w-full mt-1 px-3 py-2 rounded-lg border"
-            placeholder="Ex.: 2008"
-          />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Status</label>
-          <select {...register("status")} className="w-full mt-1 px-3 py-2 rounded-lg border">
-            <option value="Ativo">Ativo</option>
-            <option value="Rascunho">Rascunho</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Instagram URL</label>
-          <input type="url" {...register("instagramUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://instagram.com/..." />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">YouTube URL</label>
-          <input type="url" {...register("youtubeUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://youtube.com/..." />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Spotify URL</label>
-          <input type="url" {...register("spotifyUrl")} className="w-full mt-1 px-3 py-2 rounded-lg border" placeholder="https://open.spotify.com/..." />
-        </div>
-
-        <div className="rounded-xl border p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Galeria de imagens</h3>
-
-            <input
-              ref={galleryInputRef}
-              type="file"
-              multiple
-              accept="image/*"
-              className="hidden"
-              id="gallery-input"
-              disabled={!canUseGallery}
-              onChange={(e) => handleGalleryFilesChange(e.target.files)}
-            />
-
-            <label
-              htmlFor="gallery-input"
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer hover:bg-muted ${
-                !canUseGallery ? "opacity-50 pointer-events-none" : ""
+      <div className="rounded-2xl border bg-card p-2">
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { key: "informacoes", label: "Informações" },
+            { key: "fotos", label: "Fotos" },
+            { key: "videos", label: "Vídeos" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key as TabKey)}
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === tab.key ? "bg-primary text-primary-foreground" : "hover:bg-muted"
               }`}
             >
-              <ImageIcon className="w-4 h-4" />
-              {uploadingGallery ? "Enviando..." : "Adicionar imagens"}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "informacoes" && (
+        <div className="space-y-6 rounded-2xl border p-5">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">Capa do Projeto</h2>
+              <input
+                ref={coverInputRef}
+                type="file"
+                id="capa-projeto"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleCoverUpload(e.target.files?.[0])}
+              />
+              <label htmlFor="capa-projeto" className="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted">
+                <ImageIcon className="h-4 w-4" />
+                {isUploadingCover ? "Enviando..." : "Enviar capa"}
+              </label>
+            </div>
+
+            {coverUrl ? (
+              <img src={coverUrl} alt="Capa do projeto" className="h-56 w-full rounded-xl border object-cover" />
+            ) : (
+              <div className="flex h-56 w-full items-center justify-center rounded-xl border text-sm text-muted-foreground">Nenhuma capa enviada.</div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="xl:col-span-2">
+              <label className="text-sm font-medium">Título *</label>
+              <input
+                {...register("titulo", { required: "Título é obrigatório" })}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+                placeholder="Digite o título do projeto"
+              />
+              {errors.titulo && <p className="mt-1 text-xs text-red-600">{errors.titulo.message}</p>}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Ano de Fundação</label>
+              <input
+                type="number"
+                min={1000}
+                max={9999}
+                {...register("anoFundacao")}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+                placeholder="2020"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Status</label>
+              <select {...register("status")} className="mt-1 w-full rounded-lg border px-3 py-2">
+                <option value="ativo">ativo</option>
+                <option value="rascunho">rascunho</option>
+              </select>
+            </div>
+
+            <div className="xl:col-span-4">
+              <label className="text-sm font-medium">Descrição (Sobre o Projeto)</label>
+              <textarea {...register("descricao")} className="mt-1 min-h-[140px] w-full rounded-lg border px-3 py-2" />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Instagram URL</label>
+              <input type="url" {...register("instagramUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://instagram.com/..." />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">YouTube URL</label>
+              <input type="url" {...register("youtubeUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://youtube.com/..." />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Spotify URL</label>
+              <input type="url" {...register("spotifyUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://open.spotify.com/..." />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">URL da Capa</label>
+              <input {...register("capaUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://..." />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "fotos" && (
+        <div className="space-y-4 rounded-2xl border p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-semibold">Fotos do Projeto</h2>
+            <input
+              ref={photosInputRef}
+              type="file"
+              id="fotos-projeto"
+              className="hidden"
+              accept="image/*"
+              multiple
+              disabled={!canManageMedia}
+              onChange={(e) => handlePhotosUpload(e.target.files)}
+            />
+            <label
+              htmlFor="fotos-projeto"
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                canManageMedia ? "cursor-pointer hover:bg-muted" : "cursor-not-allowed opacity-60"
+              }`}
+            >
+              <ImageIcon className="h-4 w-4" />
+              {isUploadingPhotos ? "Enviando..." : "Adicionar fotos"}
             </label>
           </div>
 
-          {!canUseGallery && <p className="text-sm text-muted-foreground">Salve o projeto primeiro para habilitar upload da galeria.</p>}
+          {!canManageMedia && <p className="text-sm text-muted-foreground">Salve o projeto para habilitar upload de fotos.</p>}
 
-          {galeria.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma imagem na galeria ainda.</p>
+          {fotos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma foto cadastrada.</p>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {galeria.map((item, index) => (
-                <div key={item.id} className="rounded-xl border overflow-hidden">
-                  <img src={item.url} alt={`Imagem ${index + 1}`} className="w-full h-40 object-cover" loading="lazy" />
-                  <div className="p-2 flex items-center justify-between gap-2">
-                    <div className="text-xs text-muted-foreground">Imagem {index + 1}</div>
-                    <button type="button" onClick={() => handleDeleteGalleryItem(item)} className="p-1 rounded border hover:bg-muted">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+              {fotos.map((foto) => (
+                <div key={foto.id} className="group relative overflow-hidden rounded-xl border">
+                  <img src={foto.foto_url} alt="Foto do projeto" className="aspect-square w-full object-cover" loading="lazy" />
+                  <button
+                    type="button"
+                    onClick={() => removeFoto(foto)}
+                    className="absolute right-2 top-2 rounded-md bg-black/70 p-2 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               ))}
             </div>
           )}
         </div>
+      )}
 
-        <div className="rounded-xl border p-4">
-          <ProjectYouTubeGrid
-            youtubeUrl={youtubeUrl}
-            heading="Galeria de vídeos (YouTube)"
-            emptyMessage="Informe o YouTube URL para carregar vídeos."
-          />
+      {activeTab === "videos" && (
+        <div className="space-y-4 rounded-2xl border p-5">
+          <div className="flex flex-col gap-3 md:flex-row">
+            <input
+              value={videoUrlInput}
+              onChange={(e) => setVideoUrlInput(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Cole URL do YouTube, Vimeo ou Drive"
+              disabled={!canManageMedia || isAddingVideo}
+            />
+            <button
+              type="button"
+              onClick={addVideo}
+              disabled={!canManageMedia || isAddingVideo}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Plus className="h-4 w-4" />
+              {isAddingVideo ? "Adicionando..." : "Adicionar vídeo"}
+            </button>
+          </div>
+
+          {!canManageMedia && <p className="text-sm text-muted-foreground">Salve o projeto para habilitar cadastro de vídeos.</p>}
+
+          {videos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum vídeo cadastrado.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {videos.map((video) => {
+                const embedUrl = getEmbedUrl(video.video_url);
+
+                return (
+                  <div key={video.id} className="group relative overflow-hidden rounded-xl border">
+                    {embedUrl ? (
+                      <iframe
+                        src={embedUrl}
+                        title={`Vídeo ${video.id}`}
+                        className="aspect-video w-full"
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+                        <Video className="h-5 w-5" />
+                        Prévia indisponível
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => removeVideo(video)}
+                      className="absolute right-2 top-2 rounded-md bg-black/70 p-2 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      </div>
-    </div>
+      )}
+    </form>
   );
 }
