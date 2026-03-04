@@ -6,6 +6,7 @@ import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
 import { ArrowLeft, Calendar, X, Image as ImageIcon, Instagram, Youtube, Music, ChevronLeft, ChevronRight } from "lucide-react";
 import { findProjetoPublicBySlugOrId, getProjetoGaleria, resolveProjectMediaUrl } from "@/app/repositories/projectRepository";
 import { trackPageView } from "@/lib/analytics";
+import { getVideoEmbedUrl, isYouTubeCollectionUrl, normalizeVideoUrl } from "@/lib/video";
 
 type ProjectImage = {
   id: string;
@@ -85,7 +86,7 @@ export function ProjetoDetalhes() {
         tag: "Projeto",
         anoLancamento: found.ano_lancamento ?? null,
         instagramUrl: found.instagram_url ?? null,
-        youtubeUrl: found.youtube_url ?? null,
+        youtubeUrl: normalizeVideoUrl(found.youtube_url) ?? null,
         spotifyUrl: found.spotify_url ?? null,
         imagens,
       };
@@ -196,7 +197,32 @@ export function ProjetoDetalhes() {
 
         {projeto.youtubeUrl ? (
           <section>
-            <ProjectYouTubeGrid youtubeUrl={projeto.youtubeUrl} showOpenLink className="space-y-0" />
+            {(() => {
+              const embedUrl = getVideoEmbedUrl(projeto.youtubeUrl);
+              if (embedUrl) {
+                return (
+                  <>
+                    <h2 className="text-2xl font-semibold">Vídeo</h2>
+                    <div className="mt-4 rounded-xl overflow-hidden border">
+                      <iframe
+                        src={embedUrl}
+                        title="Vídeo do projeto"
+                        className="w-full aspect-video"
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  </>
+                );
+              }
+
+              if (isYouTubeCollectionUrl(projeto.youtubeUrl)) {
+                return <ProjectYouTubeGrid youtubeUrl={projeto.youtubeUrl} showOpenLink className="space-y-0" />;
+              }
+
+              return null;
+            })()}
           </section>
         ) : null}
 
