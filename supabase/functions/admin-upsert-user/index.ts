@@ -49,7 +49,37 @@ Deno.serve(async (req) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const normalizedRoles = [...new Set((roles || []).map((r) => String(r).trim().toLowerCase()).filter(Boolean))];
+    const normalizedRoles = [...new Set(
+      (roles || []).map((r) => String(r).trim().toLowerCase()).filter(Boolean)
+    )];
+
+    const { data: equipeAtual, error: equipeAtualErr } = await admin
+      .from("equipe")
+      .select("id,nome,user_id,email_login")
+      .eq("id", equipe_id)
+      .single();
+
+    if (equipeAtualErr || !equipeAtual) {
+      return json({ ok: false, error: "Integrante não encontrado na tabela equipe." }, 404);
+    }
+
+    const { data: emailOwner, error: emailOwnerErr } = await admin
+      .from("equipe")
+      .select("id,nome,email_login,user_id")
+      .eq("email_login", normalizedEmail)
+      .neq("id", equipe_id)
+      .maybeSingle();
+
+    if (emailOwnerErr) {
+      return json({ ok: false, error: `Falha ao verificar email_login: ${emailOwnerErr.message}` }, 400);
+    }
+
+    if (emailOwner) {
+      return json({
+        ok: false,
+        error: `Este email de login já está vinculado ao integrante "${emailOwner.nome}".`,
+      }, 400);
+    }
 
     let userId: string | null = null;
 
@@ -78,10 +108,10 @@ Deno.serve(async (req) => {
       }
     } else {
       if (!password) {
-        return json(
-          { ok: false, error: "Usuário não existe ainda. Informe uma senha para criar o acesso." },
-          400
-        );
+        return json({
+          ok: false,
+          error: "Usuário não existe ainda. Informe uma senha para criar o acesso.",
+        }, 400);
       }
 
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -98,17 +128,7 @@ Deno.serve(async (req) => {
     }
 
     if (!userId) {
-      return json({ ok: false, error: "Não foi possível resolver o user_id" }, 400);
-    }
-
-    const { data: equipeRow, error: equipeFindErr } = await admin
-      .from("equipe")
-      .select("id,user_id,email_login,nome")
-      .eq("id", equipe_id)
-      .single();
-
-    if (equipeFindErr || !equipeRow) {
-      return json({ ok: false, error: "Integrante não encontrado na tabela equipe." }, 404);
+      return json({ ok: false, error: "Não foi possível resolver o user_id." }, 400);
     }
 
     const { error: equipeErr } = await admin
@@ -146,10 +166,10 @@ Deno.serve(async (req) => {
       const missingRoles = normalizedRoles.filter((r) => !foundNames.has(r));
 
       if (missingRoles.length) {
-        return json(
-          { ok: false, error: `Roles não encontradas na tabela roles: ${missingRoles.join(", ")}` },
-          400
-        );
+        return json({
+          ok: false,
+          error: `Roles não encontradas na tabela roles: ${missingRoles.join(", ")}`,
+        }, 400);
       }
 
       const inserts = (roleRows || []).map((r) => ({
