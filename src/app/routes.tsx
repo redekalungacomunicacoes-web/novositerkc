@@ -1,6 +1,6 @@
 import { Navigate, createBrowserRouter, redirect } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { getCurrentUserRoles, hasAdminPanelRole } from "@/lib/rbac";
+import { FINANCE_MODULE_ROLES, getCurrentUserRoles, hasAdminPanelRole, hasAnyRole } from "@/lib/rbac";
 
 import { RootLayout } from "@/app/layouts/RootLayout";
 import { AdminLayout } from "@/app/layouts/AdminLayout";
@@ -30,21 +30,16 @@ import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
 import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
 import { AdminPerfil } from "@/app/pages/admin/AdminPerfil";
 import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
-import { Dashboard as FinanceiroDashboard, Fundos as FinanceiroFundos, FundoDetalhes as FinanceiroFundoDetalhes, Projetos as FinanceiroProjetos, ProjetoDetalhes as FinanceiroProjetoDetalhes } from "@/app/pages/admin/Financeiro";
+import { financeiroRoutes } from "@/app/pages/admin/Financeiro/routes";
 
 // ✅ NOVO: Admin Quem Somos
 import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
 
-type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
+type RoleName = "admin_alfa" | "admin" | "editor" | "autor" | "financeiro";
 
 async function getMyRoles(): Promise<RoleName[]> {
   const { roles } = await getCurrentUserRoles();
   return roles as RoleName[];
-}
-
-function hasAnyRole(userRoles: RoleName[], required: RoleName[]) {
-  if (userRoles.includes("admin_alfa")) return true;
-  return required.some((r) => userRoles.includes(r));
 }
 
 async function adminRootLoader() {
@@ -101,14 +96,11 @@ export const router = createBrowserRouter([
           // ✅ Newsletter (admin/editor)
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
 
-          { path: "financeiro", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
-          { path: "financeiro/dashboard", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
-          { path: "financeiro/fundos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroFundos },
-          { path: "financeiro/fundos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroFundoDetalhes },
-          { path: "financeiro/projetos", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetos },
-          { path: "financeiro/projetos/:id", loader: requireRoles(["admin", "editor"]), Component: FinanceiroProjetoDetalhes },
-          { path: "financeiro/movimentacoes", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
-          { path: "financeiro/relatorios", loader: requireRoles(["admin", "editor"]), Component: FinanceiroDashboard },
+          {
+            path: "financeiro",
+            loader: requireRoles([...FINANCE_MODULE_ROLES]),
+            children: financeiroRoutes.map((route) => ({ ...route, loader: requireRoles([...FINANCE_MODULE_ROLES]) })),
+          },
 
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
           { path: "configuracoes", loader: requireRoles(["admin_alfa"]), Component: AdminConfiguracoes },

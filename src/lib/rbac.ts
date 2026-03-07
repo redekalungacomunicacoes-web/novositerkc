@@ -1,7 +1,9 @@
 import { supabase } from "./supabase";
 
-export const ADMIN_PANEL_ROLES = ["admin_alfa", "admin", "editor", "autor"] as const;
+export const ADMIN_PANEL_ROLES = ["admin_alfa", "admin", "editor", "autor", "financeiro"] as const;
 export type RoleName = (typeof ADMIN_PANEL_ROLES)[number];
+
+export const FINANCE_MODULE_ROLES = ["admin_alfa", "admin", "financeiro"] as const;
 
 export type RoleRow = { id: string; name: string };
 
@@ -43,6 +45,11 @@ export async function getCurrentUserRoles(): Promise<{ roles: string[]; error: s
 
 export function hasAdminPanelRole(roles: string[]) {
   return roles.some((role) => ADMIN_PANEL_ROLES.includes(role as RoleName));
+}
+
+export function hasAnyRole(roles: string[], requiredRoles: readonly string[]) {
+  if (roles.includes("admin_alfa")) return true;
+  return requiredRoles.some((role) => roles.includes(role));
 }
 
 export async function addRoleToUser(userId: string, roleName: string) {
