@@ -28,6 +28,7 @@ import { AdminUsuarios } from "@/app/pages/admin/AdminUsuarios";
 import { AdminConfiguracoes } from "@/app/pages/admin/AdminConfiguracoes";
 import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
 import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
+import { AdminPerfil } from "@/app/pages/admin/AdminPerfil";
 import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
 import { Dashboard as FinanceiroDashboard, Fundos as FinanceiroFundos, FundoDetalhes as FinanceiroFundoDetalhes, Projetos as FinanceiroProjetos, ProjetoDetalhes as FinanceiroProjetoDetalhes } from "@/app/pages/admin/Financeiro";
 
@@ -92,6 +93,7 @@ export const router = createBrowserRouter([
           { path: "equipe", loader: requireRoles(["admin", "editor"]), Component: AdminEquipe },
           { path: "equipe/novo", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
           { path: "equipe/editar/:id", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
+          { path: "perfil", loader: requireRoles(["autor"]), Component: AdminPerfil },
 
           // ✅ NOVO: Quem Somos (admin/editor)
           { path: "quem-somos", loader: requireRoles(["admin", "editor"]), Component: AdminQuemSomos },
