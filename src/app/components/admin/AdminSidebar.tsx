@@ -30,6 +30,7 @@ type SidebarLink = {
 export const adminLinks: SidebarLink[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, allow: ["admin_alfa", "admin", "editor", "autor"] },
   { href: "/admin/materias", label: "Matérias", icon: FileText, allow: ["admin_alfa", "admin", "editor", "autor"] },
+  { href: "/admin/perfil", label: "Perfil", icon: Users, allow: ["autor"] },
   { href: "/admin/projetos", label: "Projetos", icon: FolderOpen, allow: ["admin_alfa", "admin", "editor"] },
   { href: "/admin/equipe", label: "Equipe", icon: Users2, allow: ["admin_alfa", "admin", "editor"] },
   { href: "/admin/quem-somos", label: "Quem Somos", icon: Info, allow: ["admin_alfa", "admin", "editor"] },

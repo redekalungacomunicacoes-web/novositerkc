@@ -63,9 +63,18 @@ async function uploadToBucket(bucket: string, path: string, file: Blob, contentT
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
-export function AdminEquipeForm() {
+type AdminEquipeFormMode = "admin" | "self";
+
+type AdminEquipeFormProps = {
+  mode?: AdminEquipeFormMode;
+  memberId?: string;
+};
+
+export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormProps = {}) {
   const { id } = useParams();
-  const isEditing = !!id && id !== "novo";
+  const isSelfMode = mode === "self";
+  const resolvedId = isSelfMode ? memberId : id;
+  const isEditing = !!resolvedId && resolvedId !== "novo";
   const navigate = useNavigate();
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
@@ -122,16 +131,18 @@ export function AdminEquipeForm() {
 
   useEffect(() => {
     (async () => {
-      const postsRes = await supabase.from("materias").select("id, titulo, slug, status").order("created_at", { ascending: false }).limit(100);
-      if (postsRes.error) setPostsError("TODO: tabela materias indisponível, vinculação de matérias desativada.");
-      else setPostOptions((postsRes.data || []) as PostOption[]);
+      if (!isSelfMode) {
+        const postsRes = await supabase.from("materias").select("id, titulo, slug, status").order("created_at", { ascending: false }).limit(100);
+        if (postsRes.error) setPostsError("TODO: tabela materias indisponível, vinculação de matérias desativada.");
+        else setPostOptions((postsRes.data || []) as PostOption[]);
+      }
 
-      if (!isEditing || !id) return;
+      if (!isEditing || !resolvedId) return;
       setLoading(true);
       const { data, error } = await supabase
         .from("equipe")
         .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, order_index, foto_url, avatar_path, avatar_thumb_path, email_login")
-        .eq("id", id)
+        .eq("id", resolvedId)
         .single();
       setLoading(false);
       if (error || !data) return alert(error?.message || "Não foi possível carregar o membro.");
@@ -153,11 +164,13 @@ export function AdminEquipeForm() {
       setCurrentOrderIndex(data.order_index ?? 1);
       setSlugTouched(true);
 
-      const relRes = await supabase.from("team_member_posts").select("post_id").eq("member_id", id);
-      if (!relRes.error) setSelectedPosts((relRes.data || []).map((r: any) => r.post_id));
-      await loadPortfolio(id);
+      if (!isSelfMode) {
+        const relRes = await supabase.from("team_member_posts").select("post_id").eq("member_id", resolvedId);
+        if (!relRes.error) setSelectedPosts((relRes.data || []).map((r: any) => r.post_id));
+        await loadPortfolio(resolvedId);
+      }
     })();
-  }, [id, isEditing, reset]);
+  }, [resolvedId, isEditing, isSelfMode, reset]);
 
   useEffect(() => {
     return () => {
@@ -209,11 +222,12 @@ export function AdminEquipeForm() {
         updated_at: new Date().toISOString(),
       };
 
-      let equipeId = id as string;
-      if (isEditing && id) {
-        const res = await supabase.from("equipe").update(payload).eq("id", id);
+      let equipeId = resolvedId as string;
+      if (isEditing && resolvedId) {
+        const res = await supabase.from("equipe").update(payload).eq("id", resolvedId);
         if (res.error) throw res.error;
       } else {
+        if (isSelfMode) throw new Error("Perfil próprio precisa estar vinculado a um integrante existente.");
         const res = await supabase.from("equipe").insert(payload).select("id").single();
         if (res.error) throw res.error;
         equipeId = res.data.id;
@@ -256,18 +270,20 @@ export function AdminEquipeForm() {
         }
       }
 
-      const { error: delErr } = await supabase.from("team_member_posts").delete().eq("member_id", equipeId);
-      if (delErr) throw delErr;
-      if (selectedPosts.length) {
-        const rows = selectedPosts.map((postId) => ({ member_id: equipeId, post_id: postId }));
-        const { error: insErr } = await supabase.from("team_member_posts").insert(rows);
-        if (insErr) throw insErr;
+      if (!isSelfMode) {
+        const { error: delErr } = await supabase.from("team_member_posts").delete().eq("member_id", equipeId);
+        if (delErr) throw delErr;
+        if (selectedPosts.length) {
+          const rows = selectedPosts.map((postId) => ({ member_id: equipeId, post_id: postId }));
+          const { error: insErr } = await supabase.from("team_member_posts").insert(rows);
+          if (insErr) throw insErr;
+        }
       }
 
       const email = (v.email_login || "").trim();
       const pass = (v.senha_login || "").trim();
-      if (pass && pass.length < 6) throw new Error("A senha precisa ter no mínimo 6 caracteres.");
-      if (email) {
+      if (!isSelfMode && pass && pass.length < 6) throw new Error("A senha precisa ter no mínimo 6 caracteres.");
+      if (!isSelfMode && email) {
         const roles: string[] = [];
         if (v.permissoes.admin) roles.push("admin");
         if (v.permissoes.editor) roles.push("editor");
@@ -289,7 +305,7 @@ export function AdminEquipeForm() {
       }
 
       alert("Integrante salvo com sucesso.");
-      navigate("/admin/equipe");
+      navigate(isSelfMode ? "/admin/perfil" : "/admin/equipe");
     } catch (e: any) {
       alert(e?.message || "Erro ao salvar integrante.");
     } finally {
@@ -298,7 +314,7 @@ export function AdminEquipeForm() {
   };
 
   const handlePortfolioUpload = async (params: { kind: "image" | "video" | "pdf" | "link"; title: string; description: string; file?: File | null; externalUrl?: string }) => {
-    const memberId = id;
+    const memberId = resolvedId;
     if (!memberId) return alert("Salve o integrante antes de adicionar portfólio.");
 
     const { kind, title, description, file, externalUrl } = params;
@@ -339,13 +355,13 @@ export function AdminEquipeForm() {
 
   const movePortfolio = async (index: number, direction: -1 | 1) => {
     const next = index + direction;
-    if (next < 0 || next >= portfolio.length || !id) return;
+    if (next < 0 || next >= portfolio.length || !resolvedId) return;
     const ordered = [...portfolio];
     [ordered[index], ordered[next]] = [ordered[next], ordered[index]];
     for (let i = 0; i < ordered.length; i++) {
       await supabase.from("team_member_portfolio").update({ order_index: i }).eq("id", ordered[i].id);
     }
-    await loadPortfolio(id);
+    await loadPortfolio(resolvedId);
   };
 
   const postsByStatus = useMemo(() => postOptions.filter((p) => p.status !== "archived"), [postOptions]);
@@ -354,14 +370,14 @@ export function AdminEquipeForm() {
     <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link to="/admin/equipe" className="p-2 hover:bg-muted rounded-full transition-colors"><ArrowLeft className="h-5 w-5 text-muted-foreground" /></Link>
+          <Link to={isSelfMode ? "/admin" : "/admin/equipe"} className="p-2 hover:bg-muted rounded-full transition-colors"><ArrowLeft className="h-5 w-5 text-muted-foreground" /></Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">{isEditing ? "Editar Membro" : "Novo Membro"}</h1>
-            <p className="text-muted-foreground text-sm">Perfil público estilo Instagram + matérias + portfólio.</p>
+            <h1 className="text-2xl font-bold tracking-tight">{isSelfMode ? "Perfil" : isEditing ? "Editar Membro" : "Novo Membro"}</h1>
+            <p className="text-muted-foreground text-sm">{isSelfMode ? "Edite aqui apenas seu próprio perfil público." : "Perfil público estilo Instagram + matérias + portfólio."}</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={() => navigate("/admin/equipe")} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
+          <button type="button" onClick={() => navigate(isSelfMode ? "/admin" : "/admin/equipe")} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
           <button onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md" disabled={loading}><Save className="h-4 w-4" />{loading ? "Salvando..." : "Salvar"}</button>
         </div>
       </div>
@@ -389,6 +405,7 @@ export function AdminEquipeForm() {
             </div>
           </div>
 
+          {!isSelfMode && (
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Matérias vinculadas</h3>
             {postsError && <p className="text-xs text-amber-600">{postsError}</p>}
@@ -406,7 +423,9 @@ export function AdminEquipeForm() {
               {!postsByStatus.length && <p className="text-xs text-muted-foreground">Nenhuma matéria disponível.</p>}
             </div>
           </div>
+          )}
 
+          {!isSelfMode && (
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Portfólio</h3>
             {!isEditing && <p className="text-xs text-muted-foreground">Salve o integrante para liberar upload do portfólio.</p>}
@@ -423,16 +442,18 @@ export function AdminEquipeForm() {
                     <p className="font-medium text-sm">{item.title || "Sem título"}</p>
                     <p className="text-xs text-muted-foreground">{item.kind} · ordem {item.order_index}</p>
                   </div>
-                  <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={item.is_public} onChange={async () => { await supabase.from("team_member_portfolio").update({ is_public: !item.is_public }).eq("id", item.id); if (id) loadPortfolio(id); }} />Público</label>
+                  <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={item.is_public} onChange={async () => { await supabase.from("team_member_portfolio").update({ is_public: !item.is_public }).eq("id", item.id); if (resolvedId) loadPortfolio(resolvedId); }} />Público</label>
                   <button type="button" onClick={() => movePortfolio(idx, -1)} className="p-2 border rounded"><ArrowUp className="h-3 w-3" /></button>
                   <button type="button" onClick={() => movePortfolio(idx, 1)} className="p-2 border rounded"><ArrowDown className="h-3 w-3" /></button>
-                  <button type="button" onClick={async () => { if (!confirm("Remover item?")) return; await supabase.from("team_member_portfolio").delete().eq("id", item.id); if (id) loadPortfolio(id); }} className="p-2 border rounded text-red-600"><Trash2 className="h-3 w-3" /></button>
+                  <button type="button" onClick={async () => { if (!confirm("Remover item?")) return; await supabase.from("team_member_portfolio").delete().eq("id", item.id); if (resolvedId) loadPortfolio(resolvedId); }} className="p-2 border rounded text-red-600"><Trash2 className="h-3 w-3" /></button>
                 </div>
               ))}
               {portfolio.length === 0 && <p className="text-xs text-muted-foreground">Sem itens no portfólio.</p>}
             </div>
           </div>
+          )}
 
+          {!isSelfMode && (
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Acesso ao Painel</h3>
             <input type="email" {...register("email_login")} className="w-full h-10 px-3 rounded-md border" placeholder="email@dominio.com" />
@@ -441,15 +462,16 @@ export function AdminEquipeForm() {
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("permissoes.editor")} />Editor</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("permissoes.autor")} />Autor</label>
           </div>
+          )}
         </div>
 
         <div className="space-y-6">
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
-            <label className="flex items-center justify-between text-sm">Ativo <input type="checkbox" {...register("ativo")} /></label>
+            {!isSelfMode && <label className="flex items-center justify-between text-sm">Ativo <input type="checkbox" {...register("ativo")} /></label>}
             <label className="flex items-center justify-between text-sm">Publicar perfil <input type="checkbox" {...register("is_public")} /></label>
-            <input type="number" min={1} {...register("order_index", { setValueAs: (value) => (value === "" || value == null ? undefined : Number(value)), validate: (value) => value == null || (Number.isInteger(value) && value >= 1) || "Ordem deve ser um inteiro >= 1" })} className="w-full h-10 px-3 rounded-md border" placeholder="Ordem" />
-            {errors.order_index && <span className="text-destructive text-xs">{errors.order_index.message}</span>}
+            {!isSelfMode && <input type="number" min={1} {...register("order_index", { setValueAs: (value) => (value === "" || value == null ? undefined : Number(value)), validate: (value) => value == null || (Number.isInteger(value) && value >= 1) || "Ordem deve ser um inteiro >= 1" })} className="w-full h-10 px-3 rounded-md border" placeholder="Ordem" />}
+            {!isSelfMode && errors.order_index && <span className="text-destructive text-xs">{errors.order_index.message}</span>}
             <a href={`/equipe/${watch("slug") || ""}`} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">Abrir perfil público</a>
           </div>
 
