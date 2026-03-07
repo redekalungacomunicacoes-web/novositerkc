@@ -252,24 +252,25 @@ export function AdminEquipeForm() {
       const email = (v.email_login || "").trim();
       const pass = (v.senha_login || "").trim();
       if (pass && pass.length < 6) throw new Error("A senha precisa ter no mínimo 6 caracteres.");
-      if (email && pass) {
-        const roles: string[] = [];
-        if (v.permissoes.admin) roles.push("admin");
-        if (v.permissoes.editor) roles.push("editor");
-        if (v.permissoes.autor) roles.push("autor");
-        if (!roles.length) roles.push("autor");
-        const { data, error } = await supabase.functions.invoke("admin-upsert-user", { body: { equipe_id: equipeId, email, password: pass, roles } });
-        if (error) throw error;
-        if (data?.ok === false) throw new Error(data?.error || "Falha ao criar usuário.");
-      }
+      if (email) {
+  const roles: string[] = [];
+  if (v.permissoes.admin) roles.push("admin");
+  if (v.permissoes.editor) roles.push("editor");
+  if (v.permissoes.autor) roles.push("autor");
+  if (!roles.length) roles.push("autor");
 
-      navigate("/admin/equipe");
-    } catch (e: any) {
-      alert(e?.message || "Erro ao salvar membro.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, error } = await supabase.functions.invoke("admin-upsert-user", {
+    body: {
+      equipe_id: equipeId,
+      email,
+      password: pass || undefined,
+      roles,
+    },
+  });
+
+  if (error) throw error;
+  if (data?.ok === false) throw new Error(data?.error || "Falha ao criar/atualizar usuário.");
+}
 
   const handlePortfolioUpload = async (params: { kind: "image" | "video" | "pdf" | "link"; title: string; description: string; file?: File | null; externalUrl?: string }) => {
     const memberId = id;
