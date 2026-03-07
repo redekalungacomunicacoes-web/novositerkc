@@ -1,19 +1,18 @@
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FolderKanban, CircleDollarSign } from 'lucide-react';
 
 export function Navigation() {
   const location = useLocation();
 
   const isActive = (path: string) => {
-    if (path === '/' && location.pathname === '/') return true;
-    if (path !== '/' && location.pathname.startsWith(path)) return true;
+    if (location.pathname.startsWith(path)) return true;
     return false;
   };
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/admin/financeiro/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/admin/financeiro/projetos', label: 'Projetos', icon: FolderKanban },
-    { path: '/admin/financeiro', label: 'Fundos', icon: CircleDollarSign },
+    { path: '/admin/financeiro/fundos', label: 'Fundos', icon: CircleDollarSign },
   ];
 
   return (

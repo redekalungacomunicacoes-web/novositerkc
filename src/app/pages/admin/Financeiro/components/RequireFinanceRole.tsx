@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { getCurrentUserRoles } from "@/lib/rbac";
+import { FINANCE_MODULE_ROLES, getCurrentUserRoles, hasAnyRole } from "@/lib/rbac";
 
 export function RequireFinanceRole({ children }: { children: React.ReactNode }) {
   const [roles, setRoles] = useState<string[]>([]);
@@ -18,10 +18,7 @@ export function RequireFinanceRole({ children }: { children: React.ReactNode }) 
 
   if (loading) return null;
 
-  const allowed =
-    roles.includes("admin_alfa") ||
-    roles.includes("admin") ||
-    roles.includes("financeiro");
+  const allowed = hasAnyRole(roles, FINANCE_MODULE_ROLES);
 
   if (!allowed) {
     return <Navigate to="/admin" replace />;
