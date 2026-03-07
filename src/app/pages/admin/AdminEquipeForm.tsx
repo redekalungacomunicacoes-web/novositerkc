@@ -97,22 +97,28 @@ export function AdminEquipeForm() {
   }, [nome, setValue, slugTouched]);
 
   async function loadPortfolio(memberId: string) {
-    const { data, error } = await supabase.functions.invoke("admin-upsert-user", {
-  body: {
-    equipe_id: equipeId,
-    email,
-    password: pass || undefined,
-    roles,
-  },
-});
+    const { data, error } = await supabase
+      .from("team_member_portfolio")
+      .select("id,member_id,kind,title,description,file_url,thumb_url,order_index,is_public,created_at")
+      .eq("member_id", memberId)
+      .order("order_index", { ascending: true })
+      .order("created_at", { ascending: true });
 
-if (error) {
-  throw new Error(error.message || "Falha ao chamar admin-upsert-user");
-}
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
-if (data?.ok === false) {
-  throw new Error(data.error || "Falha ao criar/atualizar usuário.");
-}
+    setPortfolio((data || []) as PortfolioItem[]);
+  }
+
+  function getInvokeErrorMessage(error: unknown, data: any, fallback: string) {
+    const base = error instanceof Error ? error.message : "";
+    if (data?.error) return String(data.error);
+    if (base.includes("non-2xx") && data?.message) return String(data.message);
+    if (base) return base;
+    return fallback;
+  }
 
   useEffect(() => {
     (async () => {
@@ -277,9 +283,8 @@ if (data?.ok === false) {
           },
         });
 
-        if (error) throw error;
-        if (data?.ok === false) {
-          throw new Error(data?.error || "Falha ao criar/atualizar usuário.");
+        if (error || data?.ok === false) {
+          throw new Error(getInvokeErrorMessage(error, data, "Falha ao criar/atualizar usuário."));
         }
       }
 
@@ -431,7 +436,7 @@ if (data?.ok === false) {
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Acesso ao Painel</h3>
             <input type="email" {...register("email_login")} className="w-full h-10 px-3 rounded-md border" placeholder="email@dominio.com" />
-            <input type="password" {...register("senha_login")} className="w-full h-10 px-3 rounded-md border" placeholder="Senha" />
+            <input type="password" {...register("senha_login")} className="w-full h-10 px-3 rounded-md border" placeholder="Senha (opcional na edição)" />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("permissoes.admin")} />Admin</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("permissoes.editor")} />Editor</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("permissoes.autor")} />Autor</label>

@@ -15,6 +15,11 @@ type Payload = {
   roles?: string[];
 };
 
+type AuthUser = {
+  id: string;
+  email?: string | null;
+};
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -22,9 +27,31 @@ function json(data: unknown, status = 200) {
   });
 }
 
+async function findAuthUserByEmail(admin: ReturnType<typeof createClient>, normalizedEmail: string) {
+  let page = 1;
+
+  while (true) {
+    const res = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (res.error) {
+      return { user: null, error: `Falha ao listar usuários auth: ${res.error.message}` };
+    }
+
+    const users = (res.data.users || []) as AuthUser[];
+    const match = users.find((u) => (u.email || "").trim().toLowerCase() === normalizedEmail);
+    if (match) return { user: match, error: null };
+
+    if (users.length < 1000) return { user: null, error: null };
+    page += 1;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return json({ ok: false, error: "Método não permitido." }, 405);
   }
 
   try {
@@ -40,26 +67,28 @@ Deno.serve(async (req) => {
     });
 
     const body: Payload = await req.json();
-    const { equipe_id, email, password, roles = [] } = body;
+    const equipe_id = body?.equipe_id;
+    const password = body?.password?.trim();
+    const normalizedEmail = (body?.email || "").trim().toLowerCase();
+    const normalizedRoles = [...new Set((body?.roles || []).map((r) => String(r).trim().toLowerCase()).filter(Boolean))];
 
-    if (!equipe_id) return json({ ok: false, error: "equipe_id é obrigatório" }, 400);
-    if (!email) return json({ ok: false, error: "email é obrigatório" }, 400);
-    if (password && String(password).length < 6) {
-      return json({ ok: false, error: "password deve ter no mínimo 6 caracteres" }, 400);
+    if (!equipe_id) return json({ ok: false, error: "equipe_id é obrigatório." }, 400);
+    if (!normalizedEmail) return json({ ok: false, error: "email é obrigatório." }, 400);
+    if (password && password.length < 6) {
+      return json({ ok: false, error: "password deve ter no mínimo 6 caracteres." }, 400);
     }
-
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedRoles = [...new Set(
-      (roles || []).map((r) => String(r).trim().toLowerCase()).filter(Boolean)
-    )];
 
     const { data: equipeAtual, error: equipeAtualErr } = await admin
       .from("equipe")
       .select("id,nome,user_id,email_login")
       .eq("id", equipe_id)
-      .single();
+      .maybeSingle();
 
-    if (equipeAtualErr || !equipeAtual) {
+    if (equipeAtualErr) {
+      return json({ ok: false, error: `Falha ao buscar integrante: ${equipeAtualErr.message}` }, 400);
+    }
+
+    if (!equipeAtual) {
       return json({ ok: false, error: "Integrante não encontrado na tabela equipe." }, 404);
     }
 
@@ -75,43 +104,29 @@ Deno.serve(async (req) => {
     }
 
     if (emailOwner) {
-      return json({
-        ok: false,
-        error: `Este email de login já está vinculado ao integrante "${emailOwner.nome}".`,
-      }, 400);
-    }
-
-    let userId: string | null = null;
-
-    const listRes = await admin.auth.admin.listUsers();
-    if (listRes.error) {
-      return json({ ok: false, error: `Falha ao listar usuários: ${listRes.error.message}` }, 400);
-    }
-
-    const existingUser = (listRes.data.users || []).find(
-      (u) => (u.email || "").trim().toLowerCase() === normalizedEmail
-    );
-
-    if (existingUser) {
-      userId = existingUser.id;
-
-      const updatePayload: { email?: string; password?: string; email_confirm?: boolean } = {
-        email: normalizedEmail,
-        email_confirm: true,
-      };
-
-      if (password) updatePayload.password = password;
-
-      const { error: updateErr } = await admin.auth.admin.updateUserById(userId, updatePayload);
-      if (updateErr) {
-        return json({ ok: false, error: `Falha ao atualizar usuário auth: ${updateErr.message}` }, 400);
-      }
-    } else {
-      if (!password) {
-        return json({
+      return json(
+        {
           ok: false,
-          error: "Usuário não existe ainda. Informe uma senha para criar o acesso.",
-        }, 400);
+          error: `Este email de login já está vinculado ao integrante \"${emailOwner.nome}\" (id: ${emailOwner.id}).`,
+        },
+        409,
+      );
+    }
+
+    const foundUser = await findAuthUserByEmail(admin, normalizedEmail);
+    if (foundUser.error) return json({ ok: false, error: foundUser.error }, 400);
+
+    let userId = foundUser.user?.id || null;
+
+    if (!userId) {
+      if (!password) {
+        return json(
+          {
+            ok: false,
+            error: "Usuário não existe no Auth. Informe uma senha para criar o acesso.",
+          },
+          400,
+        );
       }
 
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -125,11 +140,21 @@ Deno.serve(async (req) => {
       }
 
       userId = created.user?.id || null;
+    } else {
+      const updatePayload: { email?: string; password?: string; email_confirm?: boolean } = {
+        email: normalizedEmail,
+        email_confirm: true,
+      };
+
+      if (password) updatePayload.password = password;
+
+      const { error: updateErr } = await admin.auth.admin.updateUserById(userId, updatePayload);
+      if (updateErr) {
+        return json({ ok: false, error: `Falha ao atualizar usuário auth: ${updateErr.message}` }, 400);
+      }
     }
 
-    if (!userId) {
-      return json({ ok: false, error: "Não foi possível resolver o user_id." }, 400);
-    }
+    if (!userId) return json({ ok: false, error: "Não foi possível resolver o user_id." }, 500);
 
     const { error: equipeErr } = await admin
       .from("equipe")
@@ -143,20 +168,13 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: `Falha ao atualizar equipe: ${equipeErr.message}` }, 400);
     }
 
-    const { error: delErr } = await admin
-      .from("user_roles")
-      .delete()
-      .eq("user_id", userId);
-
+    const { error: delErr } = await admin.from("user_roles").delete().eq("user_id", userId);
     if (delErr) {
       return json({ ok: false, error: `Falha ao limpar roles: ${delErr.message}` }, 400);
     }
 
     if (normalizedRoles.length) {
-      const { data: roleRows, error: rolesErr } = await admin
-        .from("roles")
-        .select("id,name")
-        .in("name", normalizedRoles);
+      const { data: roleRows, error: rolesErr } = await admin.from("roles").select("id,name").in("name", normalizedRoles);
 
       if (rolesErr) {
         return json({ ok: false, error: `Falha ao buscar roles: ${rolesErr.message}` }, 400);
@@ -164,16 +182,12 @@ Deno.serve(async (req) => {
 
       const foundNames = new Set((roleRows || []).map((r) => r.name));
       const missingRoles = normalizedRoles.filter((r) => !foundNames.has(r));
-
       if (missingRoles.length) {
-        return json({
-          ok: false,
-          error: `Roles não encontradas na tabela roles: ${missingRoles.join(", ")}`,
-        }, 400);
+        return json({ ok: false, error: `Roles não encontradas: ${missingRoles.join(", ")}` }, 400);
       }
 
       const inserts = (roleRows || []).map((r) => ({
-        user_id: userId!,
+        user_id: userId,
         role_id: r.id,
         created_at: new Date().toISOString(),
       }));
