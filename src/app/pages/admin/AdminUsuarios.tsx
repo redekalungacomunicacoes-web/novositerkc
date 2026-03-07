@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Plus, Trash2, Edit, Shield } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { addRoleToUser, listRoles, listUserRoles, removeRoleFromUser, RoleRow } from "@/lib/rbac";
+import { addRoleToUser, listRoles, removeRoleFromUser, RoleRow } from "@/lib/rbac";
 
 type UIUser = {
   user_id: string;
+  equipe_id: string;
   name: string;
   email: string;
   role: string;
-  status: "Ativo";
+  status: "Ativo" | "Inativo";
 };
 
 export function AdminUsuarios() {
@@ -20,38 +21,54 @@ export function AdminUsuarios() {
   async function load() {
     setLoading(true);
 
-    const [rolesRes, urRes] = await Promise.all([
+    const [rolesRes, equipeRes] = await Promise.all([
       listRoles(),
-      listUserRoles(),
+      supabase
+        .from("equipe")
+        .select(`
+          id,
+          nome,
+          email_login,
+          ativo,
+          user_id,
+          user_roles (
+            role_id,
+            roles (
+              name
+            )
+          )
+        `)
+        .not("email_login", "is", null)
+        .order("nome", { ascending: true }),
     ]);
 
-    if (!rolesRes.error && rolesRes.data) setRoles(rolesRes.data as RoleRow[]);
-
-    if (!urRes.error && urRes.data) {
-      // agrupa por user_id
-      const grouped = new Map<string, string[]>();
-      for (const row of urRes.data as any[]) {
-        const uid = row.user_id as string;
-        const roleName = row.role?.name || row.role_name || row.role || "—";
-        const arr = grouped.get(uid) || [];
-        if (roleName && roleName !== "—") arr.push(roleName);
-        grouped.set(uid, arr);
-      }
-
-      const ui: UIUser[] = Array.from(grouped.entries()).map(([uid, rnames]) => {
-        const short = uid.slice(0, 8);
-        return {
-          user_id: uid,
-          name: short,
-          email: uid,
-          role: rnames.length ? rnames.join(", ") : "—",
-          status: "Ativo",
-        };
-      });
-
-      setUsers(ui);
+    if (!rolesRes.error && rolesRes.data) {
+      setRoles(rolesRes.data as RoleRow[]);
     }
 
+    if (equipeRes.error) {
+      alert(equipeRes.error.message);
+      setLoading(false);
+      return;
+    }
+
+    const ui: UIUser[] = (equipeRes.data || []).map((row: any) => {
+      const roleNames =
+        (row.user_roles || [])
+          .map((ur: any) => ur.roles?.name)
+          .filter(Boolean);
+
+      return {
+        equipe_id: row.id,
+        user_id: row.user_id || "",
+        name: row.nome || "—",
+        email: row.email_login || "—",
+        role: roleNames.length ? roleNames.join(", ") : "—",
+        status: row.ativo ? "Ativo" : "Inativo",
+      };
+    });
+
+    setUsers(ui);
     setLoading(false);
   }
 
@@ -63,34 +80,23 @@ export function AdminUsuarios() {
     const needle = q.trim().toLowerCase();
     if (!needle) return users;
     return users.filter((u) =>
-      u.user_id.toLowerCase().includes(needle) ||
+      u.name.toLowerCase().includes(needle) ||
+      u.email.toLowerCase().includes(needle) ||
       u.role.toLowerCase().includes(needle)
     );
   }, [users, q]);
 
   const handleNewUser = async () => {
-    const userId = prompt("025ff445-197c-41ea-8c08-b4f7e2e79c38");
-    if (!userId) return;
-
-    const roleName = prompt(
-      "Digite a role para atribuir (ex: admin, editor, autor):\n\nRoles disponíveis: " +
-        (roles.length ? roles.map((r) => r.name).join(", ") : "carregando...")
-    );
-    if (!roleName) return;
-
-    const res = await addRoleToUser(userId.trim(), roleName.trim());
-    if (res.error) {
-      alert(res.error.message);
-      return;
-    }
-    await load();
+    alert("Crie o acesso pela tela de Equipe > Editar integrante.");
   };
 
   const handleEdit = async (userId: string) => {
-    const action = prompt(
-      "Digite: add ou remove\nDepois você vai escolher a role.\n\nExemplo: add",
-      "add"
-    );
+    if (!userId) {
+      alert("Este integrante ainda não está vinculado a um usuário Auth.");
+      return;
+    }
+
+    const action = prompt("Digite: add ou remove", "add");
     if (!action) return;
 
     const roleName = prompt(
@@ -105,16 +111,28 @@ export function AdminUsuarios() {
       alert(res.error.message);
       return;
     }
+
     await load();
   };
 
   const handleDelete = async (userId: string) => {
+    if (!userId) {
+      alert("Este integrante não possui user_id vinculado.");
+      return;
+    }
+
     if (!confirm("Remover todas as roles deste usuário?")) return;
-    const { error } = await supabase.from("user_roles").delete().eq("user_id", userId);
+
+    const { error } = await supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId);
+
     if (error) {
       alert(error.message);
       return;
     }
+
     await load();
   };
 
@@ -142,7 +160,7 @@ export function AdminUsuarios() {
             placeholder="Buscar usuários..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="w-full rounded-md border border-input bg-background pl-9 pr-4 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="w-full rounded-md border border-input bg-background pl-9 pr-4 py-2 text-sm"
           />
         </div>
       </div>
@@ -166,7 +184,7 @@ export function AdminUsuarios() {
                 <tr><td className="px-6 py-4 text-muted-foreground" colSpan={5}>Nenhum usuário encontrado.</td></tr>
               ) : (
                 filtered.map((user) => (
-                  <tr key={user.user_id} className="hover:bg-muted/50 transition-colors">
+                  <tr key={user.equipe_id} className="hover:bg-muted/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-foreground flex items-center gap-3">
                       <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
                         {user.name.charAt(0)}
@@ -181,19 +199,16 @@ export function AdminUsuarios() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        user.status === 'Ativo' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                      }`}>
+                      <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-800">
                         {user.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => handleEdit(user.user_id)} className="p-2 hover:bg-muted rounded-full text-blue-600 hover:text-blue-700 transition-colors" title="Editar">
+                        <button onClick={() => handleEdit(user.user_id)} className="p-2 hover:bg-muted rounded-full text-blue-600" title="Editar">
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleDelete(user.user_id)} className="p-2 hover:bg-muted rounded-full text-red-600 hover:text-red-700 transition-colors" title="Excluir">
+                        <button onClick={() => handleDelete(user.user_id)} className="p-2 hover:bg-muted rounded-full text-red-600" title="Excluir">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
