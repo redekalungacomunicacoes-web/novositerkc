@@ -97,13 +97,22 @@ export function AdminEquipeForm() {
   }, [nome, setValue, slugTouched]);
 
   async function loadPortfolio(memberId: string) {
-    const { data, error } = await supabase
-      .from("team_member_portfolio")
-      .select("id, member_id, kind, title, description, file_url, thumb_url, order_index, is_public, created_at")
-      .eq("member_id", memberId)
-      .order("order_index", { ascending: true });
-    if (!error) setPortfolio((data || []) as PortfolioItem[]);
-  }
+    const { data, error } = await supabase.functions.invoke("admin-upsert-user", {
+  body: {
+    equipe_id: equipeId,
+    email,
+    password: pass || undefined,
+    roles,
+  },
+});
+
+if (error) {
+  throw new Error(error.message || "Falha ao chamar admin-upsert-user");
+}
+
+if (data?.ok === false) {
+  throw new Error(data.error || "Falha ao criar/atualizar usuário.");
+}
 
   useEffect(() => {
     (async () => {
