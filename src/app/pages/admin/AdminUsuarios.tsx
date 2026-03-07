@@ -8,13 +8,12 @@ type UIUser = {
   equipe_id: string;
   name: string;
   email: string;
-  role: string;
+  roles: string[];
   status: "Ativo" | "Inativo";
 };
 
 type UserRoleRow = {
   user_id: string;
-  role_id: string;
   roles?: {
     name?: string;
   } | null;
@@ -36,20 +35,13 @@ export function AdminUsuarios() {
         .select("id,nome,email_login,ativo,user_id")
         .not("email_login", "is", null)
         .order("nome", { ascending: true }),
-
-      supabase
-        .from("user_roles")
-        .select(`
-          user_id,
-          role_id,
-          roles (
-            name
-          )
-        `),
+      supabase.from("user_roles").select("user_id,roles(name)"),
     ]);
 
-    if (!rolesRes.error && rolesRes.data) {
-      setRoles(rolesRes.data as RoleRow[]);
+    if (rolesRes.error) {
+      alert(`Erro ao carregar roles: ${rolesRes.error.message}`);
+    } else {
+      setRoles((rolesRes.data || []) as RoleRow[]);
     }
 
     if (equipeRes.error) {
@@ -71,9 +63,9 @@ export function AdminUsuarios() {
       const roleName = row.roles?.name;
       if (!uid || !roleName) continue;
 
-      const arr = rolesByUser.get(uid) || [];
-      arr.push(roleName);
-      rolesByUser.set(uid, arr);
+      const current = rolesByUser.get(uid) || [];
+      if (!current.includes(roleName)) current.push(roleName);
+      rolesByUser.set(uid, current);
     }
 
     const ui: UIUser[] = (equipeRes.data || []).map((row: any) => ({
@@ -81,7 +73,7 @@ export function AdminUsuarios() {
       user_id: row.user_id || "",
       name: row.nome || "—",
       email: row.email_login || "—",
-      role: row.user_id ? (rolesByUser.get(row.user_id)?.join(", ") || "—") : "—",
+      roles: row.user_id ? rolesByUser.get(row.user_id) || [] : [],
       status: row.ativo ? "Ativo" : "Inativo",
     }));
 
@@ -90,16 +82,17 @@ export function AdminUsuarios() {
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return users;
-    return users.filter((u) =>
-      u.name.toLowerCase().includes(needle) ||
-      u.email.toLowerCase().includes(needle) ||
-      u.role.toLowerCase().includes(needle)
+    return users.filter(
+      (u) =>
+        u.name.toLowerCase().includes(needle) ||
+        u.email.toLowerCase().includes(needle) ||
+        u.roles.join(", ").toLowerCase().includes(needle),
     );
   }, [users, q]);
 
@@ -117,13 +110,13 @@ export function AdminUsuarios() {
     if (!action) return;
 
     const roleName = prompt(
-      "Role (ex: admin, editor, autor):\n\nRoles disponíveis: " +
-        (roles.length ? roles.map((r) => r.name).join(", ") : "carregando...")
+      `Role (ex: admin, editor, autor):\n\nRoles disponíveis: ${roles.length ? roles.map((r) => r.name).join(", ") : "carregando..."}`,
     );
     if (!roleName) return;
 
+    const normalizedRole = roleName.trim().toLowerCase();
     const fn = action.toLowerCase().startsWith("r") ? removeRoleFromUser : addRoleToUser;
-    const res = await fn(userId, roleName.trim());
+    const res = await fn(userId, normalizedRole);
 
     if (res.error) {
       alert(res.error.message);
@@ -141,10 +134,7 @@ export function AdminUsuarios() {
 
     if (!confirm("Remover todas as roles deste usuário?")) return;
 
-    const { error } = await supabase
-      .from("user_roles")
-      .delete()
-      .eq("user_id", userId);
+    const { error } = await supabase.from("user_roles").delete().eq("user_id", userId);
 
     if (error) {
       alert(error.message);
@@ -159,9 +149,7 @@ export function AdminUsuarios() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Usuários</h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie quem tem acesso ao painel administrativo.
-          </p>
+          <p className="text-muted-foreground mt-1">Gerencie quem tem acesso ao painel administrativo.</p>
         </div>
         <button
           onClick={handleNewUser}
@@ -223,7 +211,7 @@ export function AdminUsuarios() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <Shield className="h-3 w-3 text-muted-foreground" />
-                        {user.role}
+                        {user.roles.length ? user.roles.join(", ") : "—"}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -234,14 +222,18 @@ export function AdminUsuarios() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => handleEdit(user.user_id)}
+                          onClick={() => {
+                            void handleEdit(user.user_id);
+                          }}
                           className="p-2 hover:bg-muted rounded-full text-blue-600"
                           title="Editar"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(user.user_id)}
+                          onClick={() => {
+                            void handleDelete(user.user_id);
+                          }}
                           className="p-2 hover:bg-muted rounded-full text-red-600"
                           title="Excluir"
                         >

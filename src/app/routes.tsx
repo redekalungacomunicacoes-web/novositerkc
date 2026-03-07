@@ -1,5 +1,6 @@
 import { Navigate, createBrowserRouter, redirect } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { getCurrentUserRoles, hasAdminPanelRole } from "@/lib/rbac";
 
 import { RootLayout } from "@/app/layouts/RootLayout";
 import { AdminLayout } from "@/app/layouts/AdminLayout";
@@ -36,17 +37,8 @@ import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
 
 async function getMyRoles(): Promise<RoleName[]> {
-  const { data: sessionRes } = await supabase.auth.getSession();
-  const session = sessionRes.session;
-  if (!session) return [];
-
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role:roles(name)")
-    .eq("user_id", session.user.id);
-
-  if (error) return [];
-  return (data || []).map((r: any) => r?.role?.name).filter(Boolean) as RoleName[];
+  const { roles } = await getCurrentUserRoles();
+  return roles as RoleName[];
 }
 
 function hasAnyRole(userRoles: RoleName[], required: RoleName[]) {
@@ -59,7 +51,7 @@ async function adminRootLoader() {
   if (!data.session) throw redirect("/admin/login");
 
   const roles = await getMyRoles();
-  if (!roles.length) throw redirect("/admin/login");
+  if (!hasAdminPanelRole(roles)) throw redirect("/admin/login");
 
   return { roles };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { getCurrentUserRoles, hasAdminPanelRole } from "@/lib/rbac";
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -10,48 +11,36 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     async function check() {
-      const { data } = await supabase.auth.getSession();
+      setLoading(true);
+
+      const { data, error } = await supabase.auth.getSession();
       const session = data.session;
-
-      if (!session) {
-        if (mounted) {
-          setOk(false);
-          setLoading(false);
-        }
-        return;
-      }
-
-      const userId = session.user.id;
-
-      const { data: rolesData, error } = await supabase
-        .from("user_roles")
-        .select("role:roles(name)")
-        .eq("user_id", userId);
 
       if (!mounted) return;
 
-      if (error) {
+      if (error || !session) {
         setOk(false);
         setLoading(false);
         return;
       }
 
-      const roleNames = (rolesData || [])
-        .map((r: any) => r?.role?.name)
-        .filter(Boolean);
+      const rolesRes = await getCurrentUserRoles();
+      if (!mounted) return;
 
-      const allowed = roleNames.some((r: string) =>
-        ["admin_alfa", "admin", "editor", "autor"].includes(r)
-      );
+      if (rolesRes.error) {
+        setOk(false);
+        setLoading(false);
+        return;
+      }
 
-      setOk(allowed);
+      setOk(hasAdminPanelRole(rolesRes.roles));
       setLoading(false);
     }
 
-    check();
+    void check();
 
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      check();
+      void check();
     });
 
     return () => {
@@ -60,7 +49,10 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (loading) return null;
+  if (loading) {
+    return <div className="p-6 text-sm text-muted-foreground">Validando autenticação...</div>;
+  }
+
   if (!ok) return <Navigate to="/admin/login" replace />;
 
   return <>{children}</>;

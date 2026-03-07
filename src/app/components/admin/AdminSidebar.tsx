@@ -16,6 +16,7 @@ import {
 
 import { supabase } from "@/lib/supabase";
 import logoRKC from "@/assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png";
+import { getCurrentUserRoles } from "@/lib/rbac";
 
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor";
 
@@ -26,13 +27,7 @@ type SidebarLink = {
   allow: RoleName[];
 };
 
-type UserRoleRow = {
-  role: {
-    name: RoleName;
-  } | null;
-};
-
-const links: SidebarLink[] = [
+export const adminLinks: SidebarLink[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, allow: ["admin_alfa", "admin", "editor", "autor"] },
   { href: "/admin/materias", label: "Matérias", icon: FileText, allow: ["admin_alfa", "admin", "editor", "autor"] },
   { href: "/admin/projetos", label: "Projetos", icon: FolderOpen, allow: ["admin_alfa", "admin", "editor"] },
@@ -44,10 +39,16 @@ const links: SidebarLink[] = [
   { href: "/admin/configuracoes", label: "Configurações", icon: Settings, allow: ["admin_alfa"] },
 ];
 
+function filterLinksByRoles(roles: string[]) {
+  if (!roles.length) return [];
+  if (roles.includes("admin_alfa")) return adminLinks;
+  return adminLinks.filter((link) => link.allow.some((role) => roles.includes(role)));
+}
+
 export function AdminSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [roles, setRoles] = useState<RoleName[]>([]);
+  const [roles, setRoles] = useState<string[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(true);
 
   useEffect(() => {
@@ -55,33 +56,8 @@ export function AdminSidebar() {
 
     async function loadRoles() {
       setLoadingRoles(true);
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData.session;
-
-      if (!session) {
-        if (mounted) {
-          setRoles([]);
-          setLoadingRoles(false);
-        }
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role:roles(name)")
-        .eq("user_id", session.user.id);
-
+      const { roles: userRoles } = await getCurrentUserRoles();
       if (!mounted) return;
-
-      if (error) {
-        setRoles([]);
-        setLoadingRoles(false);
-        return;
-      }
-
-      const userRoles = (data as UserRoleRow[] | null)
-        ?.map((row) => row.role?.name)
-        .filter((name): name is RoleName => Boolean(name)) ?? [];
 
       setRoles(userRoles);
       setLoadingRoles(false);
@@ -89,27 +65,17 @@ export function AdminSidebar() {
 
     void loadRoles();
 
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      void loadRoles();
+    });
+
     return () => {
       mounted = false;
+      sub.subscription.unsubscribe();
     };
   }, []);
 
-  const visibleLinks = useMemo(() => {
-    if (!roles.length) return [];
-
-    const filtered = roles.includes("admin_alfa")
-      ? links
-      : links.filter((link) => link.allow.some((role) => roles.includes(role)));
-
-    const canViewTeam = roles.some((role) => ["admin_alfa", "admin", "editor"].includes(role));
-    if (canViewTeam && !filtered.some((link) => link.href === "/admin/equipe")) {
-      const teamLink = links.find((link) => link.href === "/admin/equipe");
-      if (teamLink) return [...filtered, teamLink];
-    }
-
-    return filtered;
-  }, [roles]);
-
+  const visibleLinks = useMemo(() => filterLinksByRoles(roles), [roles]);
   const pathname = location.pathname;
 
   async function handleLogout() {
@@ -124,11 +90,7 @@ export function AdminSidebar() {
       </div>
 
       <div className="px-6 py-3 border-b border-sidebar-border text-xs text-muted-foreground">
-        {loadingRoles ? (
-          <span>Carregando permissões...</span>
-        ) : (
-          <span>Permissões: {roles.length ? roles.join(", ") : "—"}</span>
-        )}
+        {loadingRoles ? <span>Carregando permissões...</span> : <span>Permissões: {roles.length ? roles.join(", ") : "—"}</span>}
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">
@@ -166,4 +128,8 @@ export function AdminSidebar() {
       </div>
     </aside>
   );
+}
+
+export function useVisibleAdminLinks(userRoles: string[]) {
+  return filterLinksByRoles(userRoles);
 }
