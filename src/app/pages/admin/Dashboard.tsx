@@ -15,7 +15,7 @@ type DashboardCounts = {
 type DashboardAnalytics = {
   siteTotal: number | null;
   lastDaysTotal: number | null;
-  daily: Array<{ day: string; total: number; site: number; materias: number; projetos: number }>;
+  daily: Array<{ date: string; day: string; site: number; materias: number }>;
   topMaterias: Array<{ id: string; titulo: string; slug: string; views: number }>;
   topProjetos: Array<{ id: string; titulo: string; slug: string; views: number }>;
 };
@@ -82,6 +82,44 @@ function isForbiddenError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { code?: string; message?: string };
   return candidate.code === "42501" || candidate.code === "PGRST301" || (candidate.message || "").toLowerCase().includes("acesso negado");
+}
+
+function formatDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function buildDailySeries(rawDaily: unknown, days = 14): DashboardAnalytics["daily"] {
+  const safeDays = Math.max(1, days);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const rawMap = new Map<string, { site: number; materias: number }>();
+  if (Array.isArray(rawDaily)) {
+    for (const item of rawDaily) {
+      const date = typeof item?.day === "string" ? item.day.slice(0, 10) : "";
+      if (!date) continue;
+
+      rawMap.set(date, {
+        site: toNullableNumber(item?.site) ?? 0,
+        materias: toNullableNumber(item?.materias) ?? 0,
+      });
+    }
+  }
+
+  return Array.from({ length: safeDays }, (_, index) => {
+    const date = new Date(now);
+    date.setDate(now.getDate() - (safeDays - 1 - index));
+    const key = formatDateKey(date);
+    const day = key.slice(5);
+    const values = rawMap.get(key);
+
+    return {
+      date: key,
+      day,
+      site: values?.site ?? 0,
+      materias: values?.materias ?? 0,
+    };
+  });
 }
 
 export function Dashboard() {
@@ -171,7 +209,7 @@ export function Dashboard() {
         const forbidden = isForbiddenError(error);
         setAnalyticsState({
           siteViews: forbidden ? "forbidden" : "error",
-          lineChart: forbidden ? "forbidden" : "error",
+          lineChart: "ok",
           topMaterias: forbidden ? "forbidden" : "error",
           topProjetos: forbidden ? "forbidden" : "error",
         });
@@ -196,10 +234,12 @@ export function Dashboard() {
           const fallbackAnalytics: DashboardAnalytics = { ...EMPTY_ANALYTICS };
           const fallbackState: AnalyticsBlockState = {
             siteViews: "forbidden",
-            lineChart: "forbidden",
+            lineChart: "ok",
             topMaterias: "forbidden",
             topProjetos: "forbidden",
           };
+
+          fallbackAnalytics.daily = buildDailySeries([], 14);
 
           if (siteViewsRes.status === "fulfilled" && !siteViewsRes.value.error) {
             fallbackAnalytics.siteTotal = siteViewsRes.value.count ?? 0;
@@ -246,7 +286,7 @@ export function Dashboard() {
           setAnalyticsState(fallbackState);
         } else {
           console.warn("[dashboard] Falha ao carregar analytics:", error.message);
-          setAnalytics(EMPTY_ANALYTICS);
+          setAnalytics({ ...EMPTY_ANALYTICS, daily: buildDailySeries([], 14) });
         }
 
         setLoadingAnalytics(false);
@@ -257,15 +297,7 @@ export function Dashboard() {
       const nextAnalytics: DashboardAnalytics = {
         siteTotal: toNullableNumber(raw.site_total),
         lastDaysTotal: toNullableNumber(raw.last_days_total),
-        daily: Array.isArray(raw.daily)
-          ? raw.daily.map((item: any) => ({
-              day: typeof item.day === "string" ? item.day.slice(5) : "",
-              total: toNullableNumber(item.total) ?? 0,
-              site: toNullableNumber(item.site) ?? 0,
-              materias: toNullableNumber(item.materias) ?? 0,
-              projetos: toNullableNumber(item.projetos) ?? 0,
-            }))
-          : [],
+        daily: buildDailySeries(raw.daily, 14),
         topMaterias: Array.isArray(raw.top_materias)
           ? raw.top_materias.map((item: any) => ({
               id: item.id,
@@ -340,25 +372,18 @@ export function Dashboard() {
           <h3 className="font-semibold">Visualizações por dia (últimos 14 dias)</h3>
           <p className="text-sm text-muted-foreground mt-1">Total no período: {loadingAnalytics ? "..." : analytics.lastDaysTotal ?? "—"}</p>
 
-          {analyticsState.lineChart !== "ok" ? (
-            <div className="h-72 mt-4 flex items-center justify-center text-sm text-muted-foreground border rounded-md">
-              {analyticsState.lineChart === "forbidden" ? "Sem permissão para carregar o gráfico." : "Falha ao carregar o gráfico."}
-            </div>
-          ) : (
-            <div className="h-72 mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analytics.daily} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="total" stroke="#0F7A3E" strokeWidth={3} dot={false} name="Total" />
-                  <Line type="monotone" dataKey="materias" stroke="#2FA866" strokeWidth={2} dot={false} name="Matérias" />
-                  <Line type="monotone" dataKey="projetos" stroke="#EAB308" strokeWidth={2} dot={false} name="Projetos" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+          <div className="h-72 mt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={analytics.daily} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="site" stroke="#0F7A3E" strokeWidth={3} dot={false} name="Visitas no site" />
+                <Line type="monotone" dataKey="materias" stroke="#2FA866" strokeWidth={2} dot={false} name="Visitas em matérias" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         <div className="rounded-xl border bg-card p-6">
