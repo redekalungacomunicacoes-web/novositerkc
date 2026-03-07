@@ -12,6 +12,14 @@ type UIUser = {
   status: "Ativo" | "Inativo";
 };
 
+type UserRoleRow = {
+  user_id: string;
+  role_id: string;
+  roles?: {
+    name?: string;
+  } | null;
+};
+
 export function AdminUsuarios() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
@@ -21,25 +29,23 @@ export function AdminUsuarios() {
   async function load() {
     setLoading(true);
 
-    const [rolesRes, equipeRes] = await Promise.all([
+    const [rolesRes, equipeRes, userRolesRes] = await Promise.all([
       listRoles(),
       supabase
         .from("equipe")
-        .select(`
-          id,
-          nome,
-          email_login,
-          ativo,
-          user_id,
-          user_roles (
-            role_id,
-            roles (
-              name
-            )
-          )
-        `)
+        .select("id,nome,email_login,ativo,user_id")
         .not("email_login", "is", null)
         .order("nome", { ascending: true }),
+
+      supabase
+        .from("user_roles")
+        .select(`
+          user_id,
+          role_id,
+          roles (
+            name
+          )
+        `),
     ]);
 
     if (!rolesRes.error && rolesRes.data) {
@@ -47,26 +53,37 @@ export function AdminUsuarios() {
     }
 
     if (equipeRes.error) {
-      alert(equipeRes.error.message);
+      alert(`Erro ao carregar equipe: ${equipeRes.error.message}`);
       setLoading(false);
       return;
     }
 
-    const ui: UIUser[] = (equipeRes.data || []).map((row: any) => {
-      const roleNames =
-        (row.user_roles || [])
-          .map((ur: any) => ur.roles?.name)
-          .filter(Boolean);
+    if (userRolesRes.error) {
+      alert(`Erro ao carregar permissões: ${userRolesRes.error.message}`);
+      setLoading(false);
+      return;
+    }
 
-      return {
-        equipe_id: row.id,
-        user_id: row.user_id || "",
-        name: row.nome || "—",
-        email: row.email_login || "—",
-        role: roleNames.length ? roleNames.join(", ") : "—",
-        status: row.ativo ? "Ativo" : "Inativo",
-      };
-    });
+    const rolesByUser = new Map<string, string[]>();
+
+    for (const row of (userRolesRes.data || []) as UserRoleRow[]) {
+      const uid = row.user_id;
+      const roleName = row.roles?.name;
+      if (!uid || !roleName) continue;
+
+      const arr = rolesByUser.get(uid) || [];
+      arr.push(roleName);
+      rolesByUser.set(uid, arr);
+    }
+
+    const ui: UIUser[] = (equipeRes.data || []).map((row: any) => ({
+      equipe_id: row.id,
+      user_id: row.user_id || "",
+      name: row.nome || "—",
+      email: row.email_login || "—",
+      role: row.user_id ? (rolesByUser.get(row.user_id)?.join(", ") || "—") : "—",
+      status: row.ativo ? "Ativo" : "Inativo",
+    }));
 
     setUsers(ui);
     setLoading(false);
@@ -107,6 +124,7 @@ export function AdminUsuarios() {
 
     const fn = action.toLowerCase().startsWith("r") ? removeRoleFromUser : addRoleToUser;
     const res = await fn(userId, roleName.trim());
+
     if (res.error) {
       alert(res.error.message);
       return;
@@ -141,7 +159,9 @@ export function AdminUsuarios() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Usuários</h1>
-          <p className="text-muted-foreground mt-1">Gerencie quem tem acesso ao painel administrativo.</p>
+          <p className="text-muted-foreground mt-1">
+            Gerencie quem tem acesso ao painel administrativo.
+          </p>
         </div>
         <button
           onClick={handleNewUser}
@@ -179,9 +199,17 @@ export function AdminUsuarios() {
             </thead>
             <tbody className="divide-y divide-border">
               {loading ? (
-                <tr><td className="px-6 py-4 text-muted-foreground" colSpan={5}>Carregando...</td></tr>
+                <tr>
+                  <td className="px-6 py-4 text-muted-foreground" colSpan={5}>
+                    Carregando...
+                  </td>
+                </tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="px-6 py-4 text-muted-foreground" colSpan={5}>Nenhum usuário encontrado.</td></tr>
+                <tr>
+                  <td className="px-6 py-4 text-muted-foreground" colSpan={5}>
+                    Nenhum usuário encontrado.
+                  </td>
+                </tr>
               ) : (
                 filtered.map((user) => (
                   <tr key={user.equipe_id} className="hover:bg-muted/50 transition-colors">
@@ -205,10 +233,18 @@ export function AdminUsuarios() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => handleEdit(user.user_id)} className="p-2 hover:bg-muted rounded-full text-blue-600" title="Editar">
+                        <button
+                          onClick={() => handleEdit(user.user_id)}
+                          className="p-2 hover:bg-muted rounded-full text-blue-600"
+                          title="Editar"
+                        >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleDelete(user.user_id)} className="p-2 hover:bg-muted rounded-full text-red-600" title="Excluir">
+                        <button
+                          onClick={() => handleDelete(user.user_id)}
+                          className="p-2 hover:bg-muted rounded-full text-red-600"
+                          title="Excluir"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
