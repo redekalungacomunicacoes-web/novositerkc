@@ -9,15 +9,49 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    (async () => {
+    async function check() {
       const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setOk(!!data.session);
-      setLoading(false);
-    })();
+      const session = data.session;
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setOk(!!session);
+      if (!session) {
+        if (mounted) {
+          setOk(false);
+          setLoading(false);
+        }
+        return;
+      }
+
+      const userId = session.user.id;
+
+      const { data: rolesData, error } = await supabase
+        .from("user_roles")
+        .select("role:roles(name)")
+        .eq("user_id", userId);
+
+      if (!mounted) return;
+
+      if (error) {
+        setOk(false);
+        setLoading(false);
+        return;
+      }
+
+      const roleNames = (rolesData || [])
+        .map((r: any) => r?.role?.name)
+        .filter(Boolean);
+
+      const allowed = roleNames.some((r: string) =>
+        ["admin_alfa", "admin", "editor", "autor"].includes(r)
+      );
+
+      setOk(allowed);
+      setLoading(false);
+    }
+
+    check();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      check();
     });
 
     return () => {
@@ -26,7 +60,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (loading) return null; // mantém layout sem piscar (você pode por um loader depois)
+  if (loading) return null;
   if (!ok) return <Navigate to="/admin/login" replace />;
 
   return <>{children}</>;
