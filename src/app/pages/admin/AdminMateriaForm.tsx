@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Save, ArrowLeft, Image as ImageIcon, Trash2 } from "lucide-react";
-import { createMateria, getMateria, slugify, updateMateria } from "@/lib/cms";
+import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Bold, Italic } from "lucide-react";
+import { createMateria, getMateria, MateriaContentBlock, MateriaTextBlockType, slugify, updateMateria } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 type EquipeOption = {
   id: string;
@@ -25,6 +23,8 @@ type MateriaFormData = {
   date: string;
   content: string;
   coverImage: string;
+  hashtags: string;
+  audioUrl: string;
   status: "published" | "draft" | "archived";
 };
 
@@ -37,7 +37,7 @@ type MateriaGaleriaItem = {
   created_at?: string;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+type TextBlock = Extract<MateriaContentBlock, { type: "paragraph" | "heading" | "quote" | "highlight" }>;
 
 function safeFilename(name: string) {
   return (
@@ -49,6 +49,77 @@ function safeFilename(name: string) {
       .replace(/^-|-$/g, "")
       .toLowerCase() || `arquivo-${Date.now()}`
   );
+}
+
+function uid(prefix = "block") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeHashtags(input: string): string[] {
+  return Array.from(
+    new Set(
+      input
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+        .map((tag) => {
+          const clean = tag.replace(/^#+/, "").replace(/\s+/g, "").toLowerCase();
+          return clean ? `#${clean}` : "";
+        })
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeBlocks(raw: any): MateriaContentBlock[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((block: any) => {
+      if (!block || typeof block !== "object") return null;
+      if (block.type === "image") {
+        if (!block.url) return null;
+        return {
+          id: block.id || uid("img"),
+          type: "image" as const,
+          url: String(block.url),
+          caption: block.caption ? String(block.caption) : "",
+          credit: block.credit ? String(block.credit) : "",
+        };
+      }
+
+      if (["paragraph", "heading", "quote", "highlight"].includes(block.type)) {
+        return {
+          id: block.id || uid("txt"),
+          type: block.type as TextBlock["type"],
+          text: block.text ? String(block.text) : "",
+          size: block.size === "sm" || block.size === "lg" ? block.size : "md",
+          author: block.author ? String(block.author) : "",
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean) as MateriaContentBlock[];
+}
+
+function buildLegacyHtml(blocks: MateriaContentBlock[]) {
+  return blocks
+    .map((block) => {
+      if (block.type === "image") {
+        const caption = block.caption ? `<figcaption>${block.caption}</figcaption>` : "";
+        return `<figure><img src="${block.url}" alt="${block.caption || "Imagem da matéria"}"/>${caption}</figure>`;
+      }
+
+      if (block.type === "heading") return `<h2>${block.text || ""}</h2>`;
+      if (block.type === "quote") {
+        const author = block.author ? `<cite>${block.author}</cite>` : "";
+        return `<blockquote><p>${block.text || ""}</p>${author}</blockquote>`;
+      }
+      if (block.type === "highlight") return `<aside>${block.text || ""}</aside>`;
+      return `<p>${block.text || ""}</p>`;
+    })
+    .join("\n");
 }
 
 async function uploadToStorage(params: {
@@ -94,8 +165,6 @@ async function ensureUniqueMateriaSlug(baseSlug: string, currentId?: string) {
   }
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export function AdminMateriaForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -117,9 +186,11 @@ export function AdminMateriaForm() {
       title: "",
       subtitle: "",
       authorId: "",
-      category: "",
+      category: "Cultura",
       content: "",
       coverImage: "",
+      hashtags: "",
+      audioUrl: "",
     },
   });
 
@@ -127,21 +198,23 @@ export function AdminMateriaForm() {
   const [equipe, setEquipe] = useState<EquipeOption[]>([]);
   const [loadingEquipe, setLoadingEquipe] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
 
-  // Galeria
   const [galeria, setGaleria] = useState<MateriaGaleriaItem[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+
+  const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
+  const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
 
   const coverUrl = watch("coverImage");
   const selectedAuthorId = watch("authorId");
 
   const coverInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
-  // Galeria só disponível após a matéria ter sido salva (tem id)
   const canUseGallery = useMemo(() => !!id, [id]);
 
-  // ── Load equipe ──────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       setLoadingEquipe(true);
@@ -166,20 +239,17 @@ export function AdminMateriaForm() {
         .order("nome", { ascending: true });
 
       if (fallbackError) {
-        console.error("Erro ao carregar integrantes da equipe:", detailedError.message, fallbackError.message);
         alert(`Não foi possível carregar os integrantes da equipe. ${fallbackError.message}`);
         setEquipe([]);
         setLoadingEquipe(false);
         return;
       }
 
-      console.warn("Consulta detalhada da equipe falhou; usando fallback por nome:", detailedError.message);
       setEquipe((fallbackData || []) as EquipeOption[]);
       setLoadingEquipe(false);
     })();
   }, []);
 
-  // ── Load matéria (edição) ────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
 
@@ -194,29 +264,25 @@ export function AdminMateriaForm() {
       }
 
       const d: any = data;
+      const parsedBlocks = normalizeBlocks(d.content_blocks || d.contentBlocks);
 
+      setBlocks(parsedBlocks);
       reset({
         title: d.titulo || "",
         subtitle: d.resumo || "",
         authorId: d.autor_equipe_id || d.autor_id || "",
-        category: (d.tags && d.tags[0]) ? d.tags[0] : "",
-        date: (d.published_at
-          ? new Date(d.published_at)
-          : new Date(d.created_at)
-        )
-          .toISOString()
-          .split("T")[0],
+        category: (d.tags && d.tags[0]) ? d.tags[0] : "Cultura",
+        date: (d.published_at ? new Date(d.published_at) : new Date(d.created_at)).toISOString().split("T")[0],
         content: d.conteudo || "",
         coverImage: d.capa_url || "",
         status: d.status || "draft",
+        hashtags: Array.isArray(d.hashtags) ? d.hashtags.join(", ") : "",
+        audioUrl: d.audio_url || "",
       });
 
       await loadGaleria(id);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, reset]);
-
-  // ── Galeria helpers ──────────────────────────────────────────────────────────
 
   async function loadGaleria(materiaId: string) {
     const { data, error } = await supabase
@@ -227,7 +293,6 @@ export function AdminMateriaForm() {
       .order("created_at", { ascending: true });
 
     if (error) {
-      console.warn("Erro ao carregar galeria:", error.message);
       setGaleria([]);
       return;
     }
@@ -243,12 +308,10 @@ export function AdminMateriaForm() {
       const baseOrder = galeria.length;
 
       for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-
         const { publicUrl } = await uploadToStorage({
           bucket: "materias",
           folder: `galeria/${id}`,
-          file,
+          file: files[i],
           upsert: false,
         });
 
@@ -273,20 +336,13 @@ export function AdminMateriaForm() {
 
   const handleDeleteGalleryItem = async (itemId: string) => {
     if (!id) return;
-    const ok = confirm("Remover esta foto da galeria?");
-    if (!ok) return;
+    if (!confirm("Remover esta foto da galeria?")) return;
 
     const { error } = await supabase.from("materia_galeria").delete().eq("id", itemId);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    if (error) return alert(error.message);
 
     await loadGaleria(id);
   };
-
-  // ── Cover upload ─────────────────────────────────────────────────────────────
 
   const handleCoverUpload = async (file?: File) => {
     if (!file) return;
@@ -309,7 +365,104 @@ export function AdminMateriaForm() {
     }
   };
 
-  // ── Submit ───────────────────────────────────────────────────────────────────
+  const handleAudioUpload = async (file?: File) => {
+    if (!file) return;
+
+    setUploadingAudio(true);
+    try {
+      const { publicUrl } = await uploadToStorage({
+        bucket: "materias",
+        folder: "audios",
+        file,
+        upsert: false,
+      });
+
+      setValue("audioUrl", publicUrl, { shouldDirty: true, shouldValidate: true });
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar áudio.");
+    } finally {
+      setUploadingAudio(false);
+      if (audioInputRef.current) audioInputRef.current.value = "";
+    }
+  };
+
+  const addBlock = (type: MateriaTextBlockType | "image") => {
+    if (type === "image") {
+      setBlocks((prev) => [...prev, { id: uid("img"), type: "image", url: "", caption: "", credit: "" }]);
+      return;
+    }
+
+    setBlocks((prev) => [...prev, { id: uid("txt"), type, text: "", size: "md", author: "" }]);
+  };
+
+  const updateBlock = (id: string, patch: Partial<MateriaContentBlock>) => {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } as MateriaContentBlock : b)));
+  };
+
+  const removeBlock = (blockId: string) => setBlocks((prev) => prev.filter((b) => b.id !== blockId));
+
+  const moveBlock = (index: number, direction: -1 | 1) => {
+    setBlocks((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const clone = [...prev];
+      const [item] = clone.splice(index, 1);
+      clone.splice(target, 0, item);
+      return clone;
+    });
+  };
+
+  const handleUploadBlockImage = async (blockId: string, file?: File) => {
+    if (!file) return;
+
+    setUploadingBlockImageId(blockId);
+    try {
+      const { publicUrl } = await uploadToStorage({
+        bucket: "materias",
+        folder: `blocos/${id || "draft"}`,
+        file,
+        upsert: false,
+      });
+      updateBlock(blockId, { url: publicUrl });
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar imagem do bloco.");
+    } finally {
+      setUploadingBlockImageId(null);
+    }
+  };
+
+  const applyInlineTag = (blockId: string, tag: "strong" | "em") => {
+    const el = document.getElementById(`block-text-${blockId}`) as HTMLTextAreaElement | null;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const value = el.value || "";
+    const selected = value.slice(start, end) || "texto";
+    const wrapped = `<${tag}>${selected}</${tag}>`;
+    const next = `${value.slice(0, start)}${wrapped}${value.slice(end)}`;
+    updateBlock(blockId, { text: next });
+  };
+
+  const submitWithCompat = async (payload: any) => {
+    const response = isEditing && id
+      ? await updateMateria(id, payload)
+      : await createMateria(payload);
+
+    if (!response.error) return response;
+
+    const msg = response.error.message || "";
+    const missingColumnError =
+      /column .* does not exist/i.test(msg) ||
+      /could not find .*column/i.test(msg) ||
+      /schema cache/i.test(msg);
+
+    if (!missingColumnError) return response;
+
+    const { content_blocks, hashtags, audio_url, ...legacyPayload } = payload;
+    return isEditing && id
+      ? await updateMateria(id, legacyPayload)
+      : await createMateria(legacyPayload);
+  };
 
   const onSubmit = async (data: MateriaFormData) => {
     setLoading(true);
@@ -317,15 +470,20 @@ export function AdminMateriaForm() {
       const tags = data.category ? [data.category] : [];
       const baseSlug = slugify(data.title);
       const uniqueSlug = await ensureUniqueMateriaSlug(baseSlug, id);
-
       const autor = equipe.find((p) => p.id === data.authorId);
       const autor_nome = autor?.nome || null;
+
+      const sanitizedBlocks = normalizeBlocks(blocks);
+      const legacyContent = sanitizedBlocks.length > 0 ? buildLegacyHtml(sanitizedBlocks) : (data.content || null);
 
       const payload: any = {
         titulo: data.title,
         slug: uniqueSlug,
         resumo: data.subtitle || null,
-        conteudo: data.content || null,
+        conteudo: legacyContent,
+        content_blocks: sanitizedBlocks.length ? sanitizedBlocks : null,
+        hashtags: normalizeHashtags(data.hashtags),
+        audio_url: data.audioUrl || null,
         capa_url: data.coverImage || null,
         tags,
         status: data.status,
@@ -335,14 +493,8 @@ export function AdminMateriaForm() {
         autor_nome,
       };
 
-      const res = isEditing && id
-        ? await updateMateria(id, payload)
-        : await createMateria(payload);
-
-      if (res.error) {
-        alert(res.error.message);
-        return;
-      }
+      const res = await submitWithCompat(payload);
+      if (res.error) return alert(res.error.message);
 
       navigate("/admin/materias");
     } catch (err: any) {
@@ -352,42 +504,23 @@ export function AdminMateriaForm() {
     }
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────────
-
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/admin/materias" className="p-2 hover:bg-muted rounded-full transition-colors">
             <ArrowLeft className="h-5 w-5 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              {isEditing ? "Editar Matéria" : "Nova Matéria"}
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight">{isEditing ? "Editar Matéria" : "Nova Matéria"}</h1>
             <p className="text-muted-foreground text-sm">
-              {isEditing
-                ? "Atualize os detalhes da publicação."
-                : "Preencha os campos para criar uma nova publicação."}
+              {isEditing ? "Atualize os detalhes da publicação." : "Preencha os campos para criar uma nova publicação."}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => navigate("/admin/materias")}
-            className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors"
-            disabled={loading}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSubmit(onSubmit)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm"
-            disabled={loading}
-          >
+          <button type="button" onClick={() => navigate("/admin/materias")} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
+          <button onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
             <Save className="h-4 w-4" />
             {loading ? "Salvando..." : "Salvar"}
           </button>
@@ -395,119 +528,130 @@ export function AdminMateriaForm() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* ── Coluna principal ── */}
         <div className="lg:col-span-2 space-y-6">
-
-          {/* Informações Principais */}
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Informações Principais</h3>
-
             <div className="space-y-2">
               <label className="text-sm font-medium">Título</label>
-              <input
-                {...register("title", { required: "Título é obrigatório" })}
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                placeholder="Digite o título da matéria"
-              />
-              {errors.title && (
-                <span className="text-destructive text-xs">{errors.title.message}</span>
-              )}
+              <input {...register("title", { required: "Título é obrigatório" })} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="Digite o título da matéria" />
+              {errors.title && <span className="text-destructive text-xs">{errors.title.message}</span>}
             </div>
-
             <div className="space-y-2">
               <label className="text-sm font-medium">Subtítulo (Linha fina)</label>
-              <textarea
-                {...register("subtitle")}
-                className="w-full h-20 p-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none"
-                placeholder="Um breve resumo que aparece abaixo do título"
-              />
+              <textarea {...register("subtitle")} className="w-full h-20 p-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none" placeholder="Um breve resumo que aparece abaixo do título" />
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Autor</label>
-                <select
-                  {...register("authorId")}
-                  className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                >
-                  <option value="">
-                    {loadingEquipe
-                      ? "Carregando equipe..."
-                      : equipe.length
-                      ? "Selecione um autor..."
-                      : "Nenhum integrante cadastrado"}
-                  </option>
-                  {equipe.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome}{p.cargo ? ` — ${p.cargo}` : ""}
-                    </option>
-                  ))}
+                <select {...register("authorId")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                  <option value="">{loadingEquipe ? "Carregando equipe..." : equipe.length ? "Selecione um autor..." : "Nenhum integrante cadastrado"}</option>
+                  {equipe.map((p) => <option key={p.id} value={p.id}>{p.nome}{p.cargo ? ` — ${p.cargo}` : ""}</option>)}
                 </select>
-                {selectedAuthorId && (
-                  <p className="text-xs text-muted-foreground">
-                    Autor: <b>{equipe.find((p) => p.id === selectedAuthorId)?.nome || "—"}</b>
-                  </p>
-                )}
+                {selectedAuthorId && <p className="text-xs text-muted-foreground">Autor: <b>{equipe.find((p) => p.id === selectedAuthorId)?.nome || "—"}</b></p>}
               </div>
-
               <div className="space-y-2">
                 <label className="text-sm font-medium">Data de Publicação</label>
-                <input
-                  type="date"
-                  {...register("date")}
-                  className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                />
+                <input type="date" {...register("date")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
               </div>
             </div>
           </div>
 
-          {/* Conteúdo */}
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Conteúdo</h3>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Texto da Matéria</label>
+            <div className="flex items-center justify-between border-b pb-4 mb-4">
+              <h3 className="font-semibold text-lg">Conteúdo em blocos</h3>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => addBlock("paragraph")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Parágrafo</button>
+                <button type="button" onClick={() => addBlock("heading")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Subtítulo</button>
+                <button type="button" onClick={() => addBlock("quote")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Citação</button>
+                <button type="button" onClick={() => addBlock("highlight")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Destaque</button>
+                <button type="button" onClick={() => addBlock("image")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Imagem</button>
+              </div>
+            </div>
+
+            {blocks.length === 0 ? (
+              <div className="border-2 border-dashed rounded-lg p-6 text-sm text-muted-foreground">
+                Nenhum bloco ainda. Use os botões acima para montar a matéria em formato de blog.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {blocks.map((block, index) => (
+                  <div key={block.id} className="border rounded-lg p-4 space-y-3 bg-background/60">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{block.type}</div>
+                      <div className="flex gap-1">
+                        <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === 0} onClick={() => moveBlock(index, -1)}><ChevronUp className="w-3 h-3" /></button>
+                        <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)}><ChevronDown className="w-3 h-3" /></button>
+                        <button type="button" className="p-1 rounded border hover:bg-destructive/10" onClick={() => removeBlock(block.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
+                      </div>
+                    </div>
+
+                    {block.type === "image" ? (
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <input value={block.url || ""} onChange={(e) => updateBlock(block.id, { url: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="https://..." />
+                          <label className="px-3 h-10 inline-flex items-center rounded-md border text-sm cursor-pointer hover:bg-muted">
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleUploadBlockImage(block.id, e.target.files?.[0])} />
+                            {uploadingBlockImageId === block.id ? "Enviando..." : "Upload"}
+                          </label>
+                        </div>
+                        {block.url ? <img src={block.url} alt="Preview" className="w-full max-h-56 object-cover rounded-md border" /> : null}
+                        <input value={block.caption || ""} onChange={(e) => updateBlock(block.id, { caption: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Legenda (opcional)" />
+                        <input value={block.credit || ""} onChange={(e) => updateBlock(block.id, { credit: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Crédito (opcional)" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button type="button" onClick={() => applyInlineTag(block.id, "strong")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Bold className="w-3 h-3" /> Negrito</button>
+                          <button type="button" onClick={() => applyInlineTag(block.id, "em")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Italic className="w-3 h-3" /> Itálico</button>
+                          <select value={block.size || "md"} onChange={(e) => updateBlock(block.id, { size: e.target.value as TextBlock["size"] })} className="h-8 px-2 rounded-md border text-xs">
+                            <option value="sm">Texto pequeno</option>
+                            <option value="md">Texto normal</option>
+                            <option value="lg">Texto grande</option>
+                          </select>
+                        </div>
+
+                        <textarea
+                          id={`block-text-${block.id}`}
+                          value={block.text || ""}
+                          onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+                          className="w-full min-h-[120px] p-3 rounded-md border font-mono text-sm"
+                          placeholder={block.type === "heading" ? "Subtítulo da seção" : "Texto do bloco"}
+                        />
+
+                        {block.type === "quote" && (
+                          <input
+                            value={block.author || ""}
+                            onChange={(e) => updateBlock(block.id, { author: e.target.value })}
+                            className="w-full h-10 px-3 rounded-md border"
+                            placeholder="Autor/Fonte da citação (opcional)"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-2 pt-3 border-t">
+              <label className="text-sm font-medium">Conteúdo legado (fallback)</label>
               <textarea
-                {...register("content", { required: "Conteúdo é obrigatório" })}
-                className="w-full min-h-[400px] p-4 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-mono text-sm leading-relaxed"
-                placeholder="Escreva o conteúdo da matéria aqui usando Markdown ou HTML simples..."
+                {...register("content")}
+                className="w-full min-h-[140px] p-3 rounded-md border bg-background text-sm"
+                placeholder="Se necessário, mantenha aqui o conteúdo HTML legado para compatibilidade."
               />
-              {errors.content && (
-                <span className="text-destructive text-xs">{errors.content.message}</span>
-              )}
-              <p className="text-xs text-muted-foreground text-right">Suporta HTML básico.</p>
             </div>
           </div>
 
-          {/* Galeria de Fotos */}
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <div>
                 <h3 className="font-semibold text-lg">Galeria de Fotos</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {canUseGallery
-                    ? "Adicione fotos que ilustram esta matéria."
-                    : "Salve a matéria primeiro para liberar a galeria."}
-                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{canUseGallery ? "Adicione fotos que ilustram esta matéria." : "Salve a matéria primeiro para liberar a galeria."}</p>
               </div>
 
-              <input
-                ref={galleryInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                className="hidden"
-                id="gallery-input"
-                disabled={!canUseGallery}
-                onChange={(e) => handleGalleryFilesChange(e.target.files)}
-              />
-
-              <label
-                htmlFor="gallery-input"
-                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors ${
-                  !canUseGallery ? "opacity-40 pointer-events-none" : ""
-                }`}
-              >
+              <input ref={galleryInputRef} type="file" multiple accept="image/*" className="hidden" id="gallery-input" disabled={!canUseGallery} onChange={(e) => handleGalleryFilesChange(e.target.files)} />
+              <label htmlFor="gallery-input" className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors ${!canUseGallery ? "opacity-40 pointer-events-none" : ""}`}>
                 <ImageIcon className="w-4 h-4" />
                 {uploadingGallery ? "Enviando..." : "Adicionar fotos"}
               </label>
@@ -522,21 +666,10 @@ export function AdminMateriaForm() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {galeria.map((item) => (
                   <div key={item.id} className="rounded-xl border overflow-hidden group relative">
-                    <img
-                      src={item.url}
-                      alt="Foto da matéria"
-                      className="w-full h-40 object-cover"
-                    />
+                    <img src={item.url} alt="Foto da matéria" className="w-full h-40 object-cover" />
                     <div className="p-2 flex items-center justify-between bg-background">
-                      <span className="text-xs text-muted-foreground truncate">
-                        {item.legenda || "Sem legenda"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteGalleryItem(item.id)}
-                        className="p-1.5 rounded-lg border hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
-                        title="Remover foto"
-                      >
+                      <span className="text-xs text-muted-foreground truncate">{item.legenda || "Sem legenda"}</span>
+                      <button type="button" onClick={() => handleDeleteGalleryItem(item.id)} className="p-1.5 rounded-lg border hover:bg-destructive/10 hover:border-destructive/30 transition-colors" title="Remover foto">
                         <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </button>
                     </div>
@@ -547,31 +680,20 @@ export function AdminMateriaForm() {
           </div>
         </div>
 
-        {/* ── Coluna lateral ── */}
         <div className="space-y-6">
-
-          {/* Publicação */}
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
-
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
-              <select
-                {...register("status")}
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              >
+              <select {...register("status")} className="w-full h-10 px-3 rounded-md border bg-background">
                 <option value="draft">Rascunho</option>
                 <option value="published">Publicado</option>
                 <option value="archived">Arquivado</option>
               </select>
             </div>
-
             <div className="space-y-2">
               <label className="text-sm font-medium">Categoria</label>
-              <select
-                {...register("category")}
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-              >
+              <select {...register("category")} className="w-full h-10 px-3 rounded-md border bg-background">
                 <option value="Cultura">Cultura</option>
                 <option value="Política">Política</option>
                 <option value="Educação">Educação</option>
@@ -580,53 +702,39 @@ export function AdminMateriaForm() {
                 <option value="Agenda">Agenda</option>
               </select>
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Hashtags</label>
+              <input {...register("hashtags")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="#quilombo, #cultura, #reportagem" />
+              <p className="text-xs text-muted-foreground">Separe por vírgula. Normalização automática no salvamento.</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Áudio da matéria</label>
+              <input {...register("audioUrl")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
+              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors">
+                <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={(e) => handleAudioUpload(e.target.files?.[0])} />
+                <Plus className="w-4 h-4" />
+                {uploadingAudio ? "Enviando áudio..." : "Upload de áudio"}
+              </label>
+            </div>
           </div>
 
-          {/* Capa */}
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-2">
               <h3 className="font-semibold text-lg">Capa da Matéria</h3>
 
-              <input
-                ref={coverInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                id="cover-input"
-                onChange={(e) => handleCoverUpload(e.target.files?.[0])}
-              />
-
-              <label
-                htmlFor="cover-input"
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors"
-              >
+              <input ref={coverInputRef} type="file" accept="image/*" className="hidden" id="cover-input" onChange={(e) => handleCoverUpload(e.target.files?.[0])} />
+              <label htmlFor="cover-input" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors">
                 <ImageIcon className="w-4 h-4" />
                 {uploadingCover ? "Enviando..." : "Enviar capa"}
               </label>
             </div>
 
-            {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt="Capa"
-                className="w-full h-44 object-cover rounded-lg border"
-              />
-            ) : (
-              <div className="w-full h-44 rounded-lg border-2 border-dashed flex items-center justify-center text-sm text-muted-foreground">
-                Nenhuma capa definida
-              </div>
-            )}
-
+            {coverUrl ? <img src={coverUrl} alt="Capa" className="w-full h-44 object-cover rounded-lg border" /> : <div className="w-full h-44 rounded-lg border-2 border-dashed flex items-center justify-center text-sm text-muted-foreground">Nenhuma capa definida</div>}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
-              <input
-                {...register("coverImage")}
-                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                placeholder="https://..."
-              />
+              <input {...register("coverImage")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
             </div>
           </div>
-
         </div>
       </div>
     </div>
