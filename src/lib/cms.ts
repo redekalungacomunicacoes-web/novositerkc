@@ -9,12 +9,34 @@ export type MateriaRow = {
   slug: string;
   resumo: string | null;
   conteudo: string | null;
+  content_blocks?: MateriaContentBlock[] | null;
+  hashtags?: string[] | null;
+  audio_url?: string | null;
   capa_url: string | null;
   autor_nome: string | null;
   tags: string[];
   status: "draft" | "published" | "archived";
   published_at: string | null;
 };
+
+export type MateriaTextBlockType = "paragraph" | "heading" | "quote" | "highlight";
+export type MateriaTextSize = "sm" | "md" | "lg";
+
+export type MateriaContentBlock =
+  | {
+      id: string;
+      type: MateriaTextBlockType;
+      text: string;
+      size?: MateriaTextSize;
+      author?: string;
+    }
+  | {
+      id: string;
+      type: "image";
+      url: string;
+      caption?: string;
+      credit?: string;
+    };
 
 export type ProjetoRow = {
   meta?: any;
