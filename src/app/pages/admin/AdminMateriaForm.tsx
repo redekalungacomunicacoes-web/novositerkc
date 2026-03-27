@@ -88,6 +88,19 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
         };
       }
 
+      if (block.type === "image-text") {
+        return {
+          id: block.id || uid("imgtxt"),
+          type: "image-text" as const,
+          url: String(block.url || ""),
+          text: String(block.text || ""),
+          caption: block.caption || "",
+          credit: block.credit || "",
+          align: block.align === "right" ? "right" : "left",
+          width: ["sm", "md", "lg"].includes(block.width) ? block.width : "md",
+        };
+      }
+
       if (["paragraph", "heading", "quote", "highlight"].includes(block.type)) {
         return {
           id: block.id || uid("txt"),
@@ -109,6 +122,10 @@ function buildLegacyHtml(blocks: MateriaContentBlock[]) {
       if (block.type === "image") {
         const caption = block.caption ? `<figcaption>${block.caption}</figcaption>` : "";
         return `<figure><img src="${block.url}" alt="${block.caption || "Imagem da matéria"}"/>${caption}</figure>`;
+      }
+      if (block.type === "image-text") {
+        const caption = block.caption ? `<figcaption>${block.caption}</figcaption>` : "";
+        return `<section><figure><img src="${block.url}" alt="${block.caption || "Imagem da matéria"}"/>${caption}</figure><div>${block.text || ""}</div></section>`;
       }
 
       if (block.type === "heading") return `<h2>${block.text || ""}</h2>`;
@@ -386,9 +403,14 @@ export function AdminMateriaForm() {
     }
   };
 
-  const addBlock = (type: MateriaTextBlockType | "image") => {
+  const addBlock = (type: MateriaTextBlockType | "image" | "image-text") => {
     if (type === "image") {
       setBlocks((prev) => [...prev, { id: uid("img"), type: "image", url: "", caption: "", credit: "" }]);
+      return;
+    }
+
+    if (type === "image-text") {
+      setBlocks((prev) => [...prev, { id: uid("imgtxt"), type: "image-text", url: "", text: "", caption: "", credit: "", align: "left", width: "md" }]);
       return;
     }
 
@@ -559,6 +581,7 @@ export function AdminMateriaForm() {
                 <button type="button" onClick={() => addBlock("quote")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Citação</button>
                 <button type="button" onClick={() => addBlock("highlight")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Destaque</button>
                 <button type="button" onClick={() => addBlock("image")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Imagem</button>
+                <button type="button" onClick={() => addBlock("image-text")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Imagem + Texto</button>
               </div>
             </div>
 
@@ -591,6 +614,53 @@ export function AdminMateriaForm() {
                         {block.url ? <img src={block.url} alt="Preview" className="w-full max-h-56 object-cover rounded-md border" /> : null}
                         <input value={block.caption || ""} onChange={(e) => updateBlock(block.id, { caption: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Legenda (opcional)" />
                         <input value={block.credit || ""} onChange={(e) => updateBlock(block.id, { credit: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Crédito (opcional)" />
+                      </div>
+                    ) : block.type === "image-text" ? (
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <input value={block.url || ""} onChange={(e) => updateBlock(block.id, { url: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="https://..." />
+                          <label className="px-3 h-10 inline-flex items-center rounded-md border text-sm cursor-pointer hover:bg-muted">
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleUploadBlockImage(block.id, e.target.files?.[0])} />
+                            {uploadingBlockImageId === block.id ? "Enviando..." : "Upload"}
+                          </label>
+                        </div>
+
+                        <div className={`flex flex-col md:flex-row gap-4 ${block.align === "right" ? "md:flex-row-reverse" : ""}`}>
+                          <figure className={`${block.width === "sm" ? "md:w-[30%]" : block.width === "lg" ? "md:w-[50%]" : "md:w-[40%]"} w-full`}>
+                            {block.url ? (
+                              <img src={block.url} alt={block.caption || "Preview"} className="w-full max-h-56 object-cover rounded-md border" />
+                            ) : (
+                              <div className="w-full h-40 rounded-md border-2 border-dashed flex items-center justify-center text-xs text-muted-foreground">Sem imagem</div>
+                            )}
+                            {(block.caption || block.credit) ? (
+                              <figcaption className="text-xs text-muted-foreground mt-2">
+                                {block.caption || ""}
+                                {block.caption && block.credit ? " • " : ""}
+                                {block.credit ? `Crédito: ${block.credit}` : ""}
+                              </figcaption>
+                            ) : null}
+                          </figure>
+                          <div className="flex-1 text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: block.text || "<p>Texto ao lado da imagem</p>" }} />
+                        </div>
+
+                        <textarea
+                          id={`block-text-${block.id}`}
+                          value={block.text || ""}
+                          onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+                          className="w-full min-h-[120px] p-3 rounded-md border font-mono text-sm"
+                          placeholder="Texto ao lado da imagem"
+                        />
+                        <input value={block.caption || ""} onChange={(e) => updateBlock(block.id, { caption: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Legenda (opcional)" />
+                        <input value={block.credit || ""} onChange={(e) => updateBlock(block.id, { credit: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Crédito (opcional)" />
+                        <select value={block.align || "left"} onChange={(e) => updateBlock(block.id, { align: e.target.value === "right" ? "right" : "left" })} className="w-full h-10 px-3 rounded-md border bg-background">
+                          <option value="left">Imagem à esquerda</option>
+                          <option value="right">Imagem à direita</option>
+                        </select>
+                        <select value={block.width || "md"} onChange={(e) => updateBlock(block.id, { width: e.target.value === "sm" || e.target.value === "lg" ? e.target.value : "md" })} className="w-full h-10 px-3 rounded-md border bg-background">
+                          <option value="sm">Pequena</option>
+                          <option value="md">Média</option>
+                          <option value="lg">Grande</option>
+                        </select>
                       </div>
                     ) : (
                       <div className="space-y-2">
