@@ -13,6 +13,7 @@ export type MateriaRow = {
   hashtags?: string[] | null;
   audio_url?: string | null;
   capa_url: string | null;
+  banner_url?: string | null;
   autor_nome: string | null;
   tags: string[];
   status: "draft" | "published" | "archived";

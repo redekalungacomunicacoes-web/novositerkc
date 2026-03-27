@@ -23,6 +23,7 @@ type MateriaFormData = {
   date: string;
   content: string;
   coverImage: string;
+  bannerImage: string;
   hashtags: string;
   audioUrl: string;
   status: "published" | "draft" | "archived";
@@ -240,6 +241,7 @@ export function AdminMateriaForm() {
       category: "Cultura",
       content: "",
       coverImage: "",
+      bannerImage: "",
       hashtags: "",
       audioUrl: "",
     },
@@ -249,6 +251,7 @@ export function AdminMateriaForm() {
   const [equipe, setEquipe] = useState<EquipeOption[]>([]);
   const [loadingEquipe, setLoadingEquipe] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [selectedAudioFileName, setSelectedAudioFileName] = useState("");
 
@@ -259,9 +262,11 @@ export function AdminMateriaForm() {
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
 
   const coverUrl = watch("coverImage");
+  const bannerUrl = watch("bannerImage");
   const selectedAuthorId = watch("authorId");
 
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
@@ -327,6 +332,7 @@ export function AdminMateriaForm() {
         date: (d.published_at ? new Date(d.published_at) : new Date(d.created_at)).toISOString().split("T")[0],
         content: d.conteudo || "",
         coverImage: d.capa_url || "",
+        bannerImage: d.banner_url || "",
         status: d.status || "draft",
         hashtags: Array.isArray(d.hashtags) ? d.hashtags.join(", ") : "",
         audioUrl: d.audio_url || "",
@@ -475,6 +481,27 @@ export function AdminMateriaForm() {
     }
   };
 
+  const handleBannerUpload = async (file?: File) => {
+    if (!file) return;
+
+    setUploadingBanner(true);
+    try {
+      const { publicUrl } = await uploadToStorage({
+        bucket: "materias",
+        folder: "banners",
+        file,
+        upsert: true,
+      });
+
+      setValue("bannerImage", publicUrl, { shouldDirty: true, shouldValidate: true });
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar imagem de banner.");
+    } finally {
+      setUploadingBanner(false);
+      if (bannerInputRef.current) bannerInputRef.current.value = "";
+    }
+  };
+
   const addBlock = (type: MateriaTextBlockType | "image" | "image-text") => {
     if (type === "image") {
       setBlocks((prev) => [...prev, { id: uid("img"), type: "image", url: "", caption: "", credit: "" }]);
@@ -546,7 +573,7 @@ export function AdminMateriaForm() {
 
     if (!/column .* does not exist/i.test(response.error.message || "")) return response;
 
-    const { content_blocks, hashtags, audio_url, ...legacyPayload } = payload;
+    const { content_blocks, hashtags, audio_url, banner_url, ...legacyPayload } = payload;
     return isEditing && id
       ? await updateMateria(id, legacyPayload)
       : await createMateria(legacyPayload);
@@ -573,6 +600,7 @@ export function AdminMateriaForm() {
         hashtags: normalizeHashtags(data.hashtags),
         audio_url: data.audioUrl || null,
         capa_url: data.coverImage || null,
+        banner_url: data.bannerImage || null,
         tags,
         status: data.status,
         published_at: data.status === "published" ? new Date(data.date).toISOString() : null,
@@ -867,9 +895,33 @@ export function AdminMateriaForm() {
             </div>
 
             {coverUrl ? <img src={coverUrl} alt="Capa" className="w-full h-44 object-cover rounded-lg border" /> : <div className="w-full h-44 rounded-lg border-2 border-dashed flex items-center justify-center text-sm text-muted-foreground">Nenhuma capa definida</div>}
+            <p className="text-xs text-muted-foreground">
+              Usada na listagem e nos cards. Recomendado: formato quadrado 1:1 (ex.: 800x800 ou 960x960).
+            </p>
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
               <input {...register("coverImage")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
+            </div>
+          </div>
+
+          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b pb-4 mb-2">
+              <h3 className="font-semibold text-lg">Banner da Matéria</h3>
+
+              <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" id="banner-input" onChange={(e) => handleBannerUpload(e.target.files?.[0])} />
+              <label htmlFor="banner-input" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors">
+                <ImageIcon className="w-4 h-4" />
+                {uploadingBanner ? "Enviando..." : "Enviar banner"}
+              </label>
+            </div>
+
+            {bannerUrl ? <img src={bannerUrl} alt="Banner" className="w-full h-44 object-cover rounded-lg border" /> : <div className="w-full h-44 rounded-lg border-2 border-dashed flex items-center justify-center text-sm text-muted-foreground">Nenhum banner definido</div>}
+            <p className="text-xs text-muted-foreground">
+              Usado no topo da matéria publicada. Recomendado: formato horizontal (ex.: 1600x900, 1440x810 ou 1280x720).
+            </p>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
+              <input {...register("bannerImage")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
             </div>
           </div>
         </div>
