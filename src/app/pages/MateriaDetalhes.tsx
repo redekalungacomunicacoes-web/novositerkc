@@ -384,26 +384,40 @@ export function MateriaDetalhes() {
 
   return (
     <div>
-      <section className="relative h-[70vh] flex items-end overflow-hidden">
+      <section className="relative min-h-[32rem] sm:min-h-[36rem] md:min-h-[40rem] flex items-stretch overflow-hidden">
         <div className="absolute inset-0">
           <img src={m.imagem} alt={m.titulo} className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/70 to-black/35" />
         </div>
 
-        <div className="relative z-10 w-full pb-16">
-          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-            <Link to="/materias" className="inline-flex items-center gap-2 text-white/90 hover:text-white mb-6 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              Voltar para Matérias
-            </Link>
+        <div className="relative z-10 w-full">
+          <div className="mx-auto flex w-full max-w-5xl flex-col px-4 sm:px-6 lg:px-8 py-8 sm:py-10 md:py-12">
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+              <Link to="/materias" className="inline-flex items-center gap-2 text-white/90 hover:text-white transition-colors">
+                <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+                <span className="leading-snug">Voltar para Matérias</span>
+              </Link>
+              <RKCTag variant="yellow" className="max-w-full">{m.categoria}</RKCTag>
+            </div>
 
-            <RKCTag variant="yellow" className="mb-4">{m.categoria}</RKCTag>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 leading-tight max-w-3xl break-words">
+            <h1
+              className="font-bold text-white leading-[1.1] max-w-4xl break-words"
+              style={{ fontSize: "clamp(1.95rem, 4.6vw, 4rem)" }}
+            >
               {m.titulo}
             </h1>
-            <p className="text-xl text-white/90 mb-6 leading-relaxed max-w-2xl">{m.resumo}</p>
-            <div className="flex items-center gap-6 text-white/80">
-              <div className="flex items-center gap-2">
+
+            {!!m.resumo && (
+              <p
+                className="mt-4 text-white/90 leading-relaxed max-w-3xl break-words"
+                style={{ fontSize: "clamp(1rem, 2.2vw, 1.35rem)" }}
+              >
+                {m.resumo}
+              </p>
+            )}
+
+            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-white/85">
+              <div className="flex min-w-0 items-center gap-2">
                 <User className="w-5 h-5" />
                 <Link to={publicAuthorHref} className="hover:underline font-medium">{publicAuthorName}</Link>
               </div>
