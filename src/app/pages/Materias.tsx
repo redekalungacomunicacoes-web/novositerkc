@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RKCCard, RKCCardImage, RKCCardContent } from '@/app/components/RKCCard';
 import { RKCTag } from '@/app/components/RKCTag';
-import { Calendar, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 type MateriaRow = {
@@ -94,9 +93,6 @@ export function Materias() {
     return materiasUI.filter((m) => m.categoria === categoriaFiltro);
   }, [materiasUI, categoriaFiltro]);
 
-  const materiaDestaque = materiasFiltradas[0];
-  const materiasSecundarias = materiasFiltradas.slice(1);
-
   return (
     <div>
       {/* Hero Section */}
@@ -149,49 +145,9 @@ export function Materias() {
             <div className="text-gray-500">Nenhuma matéria publicada ainda.</div>
           ) : (
             <>
-              {/* Matéria Destaque */}
-              {materiaDestaque && (
-                <div className="mb-12">
-                  <Link to={`/materias/${materiaDestaque.slug || materiaDestaque.id}`}>
-                    <RKCCard variant="featured" className="hover:scale-[1.01] transition-transform">
-                      <div className="grid lg:grid-cols-2 gap-0">
-                        <RKCCardImage
-                          src={materiaDestaque.imagem}
-                          alt={materiaDestaque.titulo}
-                          aspectRatio="square"
-                        />
-                        <RKCCardContent className="flex flex-col justify-between p-8 lg:p-12">
-                          <div>
-                            <RKCTag variant="orange" className="mb-4">
-                              {materiaDestaque.categoria}
-                            </RKCTag>
-                            <h2 className="text-3xl lg:text-4xl font-bold text-[#2E2E2E] mb-4 leading-tight">
-                              {materiaDestaque.titulo}
-                            </h2>
-                            <p className="text-lg text-gray-600 mb-6 leading-relaxed">
-                              {materiaDestaque.resumo}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
-                            <div className="flex items-center gap-1">
-                              <User className="w-4 h-4" />
-                              {materiaDestaque.autor}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {materiaDestaque.data}
-                            </div>
-                          </div>
-                        </RKCCardContent>
-                      </div>
-                    </RKCCard>
-                  </Link>
-                </div>
-              )}
-
               {/* Grid de Matérias */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {materiasSecundarias.map((materia) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                {materiasFiltradas.map((materia) => (
                   <Link key={materia.id} to={`/materias/${materia.slug || materia.id}`}>
                     <RKCCard className="h-full hover:scale-[1.02] transition-transform">
                       <RKCCardImage src={materia.imagem} alt={materia.titulo} />
