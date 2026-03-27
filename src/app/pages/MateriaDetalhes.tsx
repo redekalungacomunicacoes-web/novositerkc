@@ -3,10 +3,10 @@ import { Link, useParams } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardImage, RKCCardContent } from "@/app/components/RKCCard";
-import { ArrowLeft, Calendar, User, Share2, Facebook, Instagram, Mail, Eye, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ArrowLeft, Calendar, User, Share2, Facebook, Instagram, Mail, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { MateriaContentBlock } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
-import { getPublicContentViewCount, trackPageView } from "@/lib/analytics";
+import { trackPageView } from "@/lib/analytics";
 
 type MateriaUI = {
   id: string;
@@ -44,6 +44,9 @@ function getEquipeHref(author: MateriaUI["autorPerfil"]) {
   if (!author) return "";
   return author.slug ? `/equipe/${author.slug}` : `/equipe/id/${author.id}`;
 }
+
+const PUBLIC_AUTHOR_FALLBACK_NAME = "Rede Calunga Comunicações";
+const PUBLIC_AUTHOR_FALLBACK_HREF = "/quem-somos";
 
 function getTeamAvatarThumbUrl(path?: string | null) {
   if (!path) return null;
@@ -196,7 +199,6 @@ export function MateriaDetalhes() {
   const [loading, setLoading] = useState(true);
   const [materia, setMateria] = useState<MateriaUI | null>(null);
   const [outrasMateria, setOutrasMateria] = useState<Array<{ id: string; slug: string; titulo: string; imagem: string; categoria: string }>>([]);
-  const [viewCount, setViewCount] = useState<number | null>(null);
   const [galeria, setGaleria] = useState<MateriaGaleriaItem[]>([]);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(null);
 
@@ -221,7 +223,6 @@ export function MateriaDetalhes() {
 
     (async () => {
       setLoading(true);
-      setViewCount(null);
       let found: any = null;
 
       const bySlug = await supabase
@@ -319,9 +320,6 @@ export function MateriaDetalhes() {
         contentSlug: mapped.slug,
       });
 
-      const freshCount = await getPublicContentViewCount({ pageType: "materia", contentId: mapped.id, contentSlug: mapped.slug });
-      setViewCount(freshCount);
-
       const { data: rel, error: relErr } = await supabase
         .from("materias")
         .select("id, slug, titulo, capa_url, tags, published_at, created_at, status")
@@ -353,6 +351,8 @@ export function MateriaDetalhes() {
   const normalizedAudioUrl = (m.audioUrl || "").trim();
   const hasValidAudioUrl = /^https?:\/\//i.test(normalizedAudioUrl);
   const activeGalleryItem = activeGalleryIndex !== null ? galeria[activeGalleryIndex] : null;
+  const publicAuthorName = (m.autorPerfil?.nome || m.autor || "").trim() || PUBLIC_AUTHOR_FALLBACK_NAME;
+  const publicAuthorHref = m.autorPerfil ? getEquipeHref(m.autorPerfil) : PUBLIC_AUTHOR_FALLBACK_HREF;
 
   useEffect(() => {
     if (activeGalleryIndex === null) return;
@@ -405,10 +405,9 @@ export function MateriaDetalhes() {
             <div className="flex items-center gap-6 text-white/80">
               <div className="flex items-center gap-2">
                 <User className="w-5 h-5" />
-                {m.autorPerfil ? <Link to={getEquipeHref(m.autorPerfil)} className="hover:underline font-medium">{m.autor}</Link> : <span>{m.autor}</span>}
+                <Link to={publicAuthorHref} className="hover:underline font-medium">{publicAuthorName}</Link>
               </div>
               <div className="flex items-center gap-2"><Calendar className="w-5 h-5" /><span>{m.data}</span></div>
-              <div className="flex items-center gap-2"><Eye className="w-5 h-5" /><span>{viewCount ?? "—"} visualizações</span></div>
             </div>
           </div>
         </div>
@@ -500,10 +499,10 @@ export function MateriaDetalhes() {
                         </div>
                       </Link>
                     ) : (
-                      <div className="flex items-start gap-4">
+                      <Link to={PUBLIC_AUTHOR_FALLBACK_HREF} className="flex items-start gap-4 group">
                         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center flex-shrink-0"><User className="w-8 h-8 text-white" /></div>
-                        <div><h4 className="font-bold text-lg text-[#2E2E2E] mb-2">{m.autor}</h4></div>
-                      </div>
+                        <div><h4 className="font-bold text-lg text-[#2E2E2E] mb-2 group-hover:underline">{publicAuthorName}</h4></div>
+                      </Link>
                     )}
                   </RKCCardContent>
                 </RKCCard>
