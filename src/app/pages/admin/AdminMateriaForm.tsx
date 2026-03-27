@@ -144,22 +144,56 @@ async function uploadToStorage(params: {
   folder: string;
   file: File;
   upsert?: boolean;
+  timeoutMs?: number;
 }) {
-  const { bucket, folder, file, upsert = true } = params;
+  const { bucket, folder, file, upsert = true, timeoutMs } = params;
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
   const base = safeFilename(file.name.replace(/\.[^/.]+$/, ""));
   const path = `${folder}/${Date.now()}-${base}.${ext}`;
 
-  const { error: upError } = await supabase.storage
-    .from(bucket)
-    .upload(path, file, { upsert, contentType: file.type });
+  console.log("[uploadToStorage] Iniciando upload", {
+    bucket,
+    folder,
+    path,
+    fileName: file.name,
+    fileType: file.type,
+    fileSize: file.size,
+    timeoutMs: timeoutMs ?? null,
+  });
 
-  if (upError) throw upError;
+  try {
+    const uploadPromise = supabase.storage
+      .from(bucket)
+      .upload(path, file, { upsert, contentType: file.type || undefined });
 
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  if (!data?.publicUrl) throw new Error("Não foi possível obter a URL pública.");
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      if (!timeoutMs) return;
+      setTimeout(() => {
+        reject(new Error("O envio do arquivo demorou mais que o esperado. Tente novamente."));
+      }, timeoutMs);
+    });
 
-  return { publicUrl: data.publicUrl, path };
+    const { data: uploadData, error: upError } = await (timeoutMs
+      ? Promise.race([uploadPromise, timeoutPromise])
+      : uploadPromise);
+
+    console.log("[uploadToStorage] Resposta do upload", { path, uploadData, upError });
+
+    if (upError) {
+      throw new Error(
+        `Falha no upload para ${bucket}/${path}: ${upError.message || "erro desconhecido"}`
+      );
+    }
+
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    console.log("[uploadToStorage] Resposta do getPublicUrl", { path, data });
+    if (!data?.publicUrl) throw new Error("Não foi possível obter a URL pública.");
+
+    return { publicUrl: data.publicUrl, path };
+  } catch (err) {
+    console.error("[uploadToStorage] Erro no fluxo de upload", { bucket, folder, path, err });
+    throw err;
+  }
 }
 
 async function ensureUniqueMateriaSlug(baseSlug: string, currentId?: string) {
@@ -216,6 +250,7 @@ export function AdminMateriaForm() {
   const [loadingEquipe, setLoadingEquipe] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+  const [selectedAudioFileName, setSelectedAudioFileName] = useState("");
 
   const [galeria, setGaleria] = useState<MateriaGaleriaItem[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
@@ -383,19 +418,56 @@ export function AdminMateriaForm() {
   };
 
   const handleAudioUpload = async (file?: File) => {
-    if (!file) return;
-
     setUploadingAudio(true);
     try {
+      setSelectedAudioFileName("");
+
+      if (!file) {
+        alert("Nenhum arquivo de áudio foi selecionado.");
+        return;
+      }
+
+      const allowedAudioTypes = new Set([
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/wav",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/x-m4a",
+      ]);
+      const maxAudioSizeBytes = 20 * 1024 * 1024;
+
+      console.log("[audio-upload] Início do upload de áudio", {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      });
+
+      if (!allowedAudioTypes.has(file.type)) {
+        alert("Formato de áudio não suportado. Use MP3, WAV, OGG ou M4A.");
+        return;
+      }
+
+      if (file.size > maxAudioSizeBytes) {
+        alert("Arquivo muito grande. O tamanho máximo permitido é 20MB.");
+        return;
+      }
+
+      setSelectedAudioFileName(file.name);
+
       const { publicUrl } = await uploadToStorage({
         bucket: "materias",
         folder: "audios",
         file,
         upsert: false,
+        timeoutMs: 45000,
       });
 
       setValue("audioUrl", publicUrl, { shouldDirty: true, shouldValidate: true });
+      console.log("[audio-upload] Upload concluído com sucesso", { publicUrl });
     } catch (err: any) {
+      console.error("[audio-upload] Erro no upload de áudio", err);
+      setSelectedAudioFileName("");
       alert(err?.message || "Erro ao enviar áudio.");
     } finally {
       setUploadingAudio(false);
@@ -774,11 +846,12 @@ export function AdminMateriaForm() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Áudio da matéria</label>
               <input {...register("audioUrl")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
-              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors">
-                <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={(e) => handleAudioUpload(e.target.files?.[0])} />
+              <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${uploadingAudio ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-muted"}`}>
+                <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" disabled={uploadingAudio} onChange={(e) => handleAudioUpload(e.target.files?.[0])} />
                 <Plus className="w-4 h-4" />
                 {uploadingAudio ? "Enviando áudio..." : "Upload de áudio"}
               </label>
+              {!!selectedAudioFileName && <p className="text-xs text-muted-foreground">Arquivo selecionado: {selectedAudioFileName}</p>}
             </div>
           </div>
 
