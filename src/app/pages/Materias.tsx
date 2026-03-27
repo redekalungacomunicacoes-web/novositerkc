@@ -11,6 +11,7 @@ type MateriaRow = {
   resumo: string | null;
   capa_url: string | null;
   banner_url?: string | null;
+  audio_url?: string | null;
   autor_nome: string | null;
   tags: string[] | null;
   published_at: string | null;
@@ -35,7 +36,7 @@ export function Materias() {
 
       const { data, error } = await supabase
         .from('materias')
-        .select('id, slug, titulo, resumo, capa_url, banner_url, autor_nome, tags, published_at, created_at, status')
+        .select('id, slug, titulo, resumo, capa_url, banner_url, audio_url, autor_nome, tags, published_at, created_at, status')
         .eq('status', 'published')
         .order('published_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
@@ -47,7 +48,7 @@ export function Materias() {
       if (shouldFallbackSelect) {
         const fallback = await supabase
           .from('materias')
-          .select('id, slug, titulo, resumo, capa_url, autor_nome, tags, published_at, created_at, status')
+          .select('id, slug, titulo, resumo, capa_url, banner_url, autor_nome, tags, published_at, created_at, status')
           .eq('status', 'published')
           .order('published_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false });
@@ -79,6 +80,7 @@ export function Materias() {
         autor: m.autor_nome || 'RKC',
         data: formatDateBR(m.published_at || m.created_at),
         categoria,
+        audioUrl: m.audio_url || null,
       };
     });
   }, [materias]);
@@ -146,29 +148,45 @@ export function Materias() {
           ) : (
             <>
               {/* Grid de Matérias */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {materiasFiltradas.map((materia) => (
-                  <Link key={materia.id} to={`/materias/${materia.slug || materia.id}`}>
-                    <RKCCard className="h-full hover:scale-[1.02] transition-transform">
-                      <RKCCardImage src={materia.imagem} alt={materia.titulo} />
-                      <RKCCardContent>
+                  <RKCCard key={materia.id} className="h-full flex flex-col">
+                    <Link to={`/materias/${materia.slug || materia.id}`} className="block hover:opacity-95 transition-opacity">
+                      <RKCCardImage src={materia.imagem} alt={materia.titulo} aspectRatio="square" />
+                    </Link>
+                    <RKCCardContent className="flex-1 p-4 md:p-5 space-y-3">
+                      <div>
                         <RKCTag variant="green" className="mb-3">
                           {materia.categoria}
                         </RKCTag>
-                        <h3 className="font-bold text-xl mb-3 text-[#2E2E2E] line-clamp-2">
+                      </div>
+                      <Link to={`/materias/${materia.slug || materia.id}`} className="block">
+                        <h3 className="font-bold text-lg md:text-xl text-[#2E2E2E] line-clamp-2 hover:text-[#0F7A3E] transition-colors">
                           {materia.titulo}
                         </h3>
-                        <p className="text-sm text-gray-600 mb-4 leading-relaxed line-clamp-3">
-                          {materia.resumo}
-                        </p>
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
-                          <span>{materia.autor}</span>
-                          <span>•</span>
-                          <span>{materia.data}</span>
+                      </Link>
+                      <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">
+                        {materia.resumo}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>{materia.autor}</span>
+                        <span>•</span>
+                        <span>{materia.data}</span>
+                      </div>
+                      {materia.audioUrl ? (
+                        <div className="pt-1">
+                          <p className="text-xs font-medium text-gray-500 mb-1">Ouça a matéria</p>
+                          <audio controls preload="none" className="w-full">
+                            <source src={materia.audioUrl} />
+                            Seu navegador não suporta áudio.
+                          </audio>
                         </div>
-                      </RKCCardContent>
-                    </RKCCard>
-                  </Link>
+                      ) : null}
+                      <Link to={`/materias/${materia.slug || materia.id}`} className="inline-flex text-sm font-semibold text-[#0F7A3E] hover:underline">
+                        Abrir matéria
+                      </Link>
+                    </RKCCardContent>
+                  </RKCCard>
                 ))}
               </div>
             </>
