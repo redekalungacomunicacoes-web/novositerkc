@@ -327,6 +327,8 @@ export function MateriaDetalhes() {
 
   const m = materia || fallbackMateria;
   const hasBlocks = m.contentBlocks.length > 0;
+  const normalizedAudioUrl = (m.audioUrl || "").trim();
+  const hasValidAudioUrl = /^https?:\/\//i.test(normalizedAudioUrl);
 
   return (
     <div>
@@ -386,11 +388,11 @@ export function MateriaDetalhes() {
                 </div>
               )}
 
-              {m.audioUrl && (
+              {hasValidAudioUrl && (
                 <div className="mt-8 p-4 rounded-xl border bg-gray-50">
                   <h3 className="font-semibold text-base text-[#2E2E2E] mb-2">Ouça esta matéria</h3>
                   <audio controls preload="none" className="w-full">
-                    <source src={m.audioUrl} />
+                    <source src={normalizedAudioUrl} />
                     Seu navegador não suporta áudio.
                   </audio>
                 </div>
