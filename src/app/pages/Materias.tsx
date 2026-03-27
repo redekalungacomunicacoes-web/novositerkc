@@ -11,6 +11,7 @@ type MateriaRow = {
   titulo: string;
   resumo: string | null;
   capa_url: string | null;
+  banner_url?: string | null;
   autor_nome: string | null;
   tags: string[] | null;
   published_at: string | null;
@@ -35,20 +36,35 @@ export function Materias() {
 
       const { data, error } = await supabase
         .from('materias')
-        .select('id, slug, titulo, resumo, capa_url, autor_nome, tags, published_at, created_at, status')
+        .select('id, slug, titulo, resumo, capa_url, banner_url, autor_nome, tags, published_at, created_at, status')
         .eq('status', 'published')
         .order('published_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
 
+      const shouldFallbackSelect = !!error && /column .* does not exist/i.test(error.message || '');
+      let safeData = data;
+      let safeError = error;
+
+      if (shouldFallbackSelect) {
+        const fallback = await supabase
+          .from('materias')
+          .select('id, slug, titulo, resumo, capa_url, autor_nome, tags, published_at, created_at, status')
+          .eq('status', 'published')
+          .order('published_at', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false });
+        safeData = fallback.data;
+        safeError = fallback.error;
+      }
+
       setLoading(false);
 
-      if (error) {
-        console.error(error);
+      if (safeError) {
+        console.error(safeError);
         setMaterias([]);
         return;
       }
 
-      setMaterias((data || []) as MateriaRow[]);
+      setMaterias((safeData || []) as MateriaRow[]);
     })();
   }, []);
 
@@ -60,7 +76,7 @@ export function Materias() {
         slug: m.slug,
         titulo: m.titulo,
         resumo: m.resumo || '',
-        imagem: m.capa_url || 'https://images.unsplash.com/photo-1579308343343-6557a756d515?auto=format&fit=crop&w=1200&q=80',
+        imagem: m.capa_url || m.banner_url || 'https://images.unsplash.com/photo-1579308343343-6557a756d515?auto=format&fit=crop&w=1200&q=80',
         autor: m.autor_nome || 'RKC',
         data: formatDateBR(m.published_at || m.created_at),
         categoria,

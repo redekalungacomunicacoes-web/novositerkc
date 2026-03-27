@@ -227,7 +227,7 @@ export function MateriaDetalhes() {
 
       const bySlug = await supabase
         .from("materias")
-        .select("id, slug, titulo, resumo, capa_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
+        .select("id, slug, titulo, resumo, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
         .eq("slug", paramValue)
         .eq("status", "published")
         .limit(1);
@@ -237,13 +237,35 @@ export function MateriaDetalhes() {
       } else {
         const byId = await supabase
           .from("materias")
-          .select("id, slug, titulo, resumo, capa_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
+          .select("id, slug, titulo, resumo, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
           .eq("id", paramValue)
           .eq("status", "published")
           .limit(1);
 
         if (!byId.error && byId.data && byId.data.length > 0) {
           found = byId.data[0];
+        } else if (byId.error && /column .* does not exist/i.test(byId.error.message || "")) {
+          const byIdFallback = await supabase
+            .from("materias")
+            .select("id, slug, titulo, resumo, capa_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
+            .eq("id", paramValue)
+            .eq("status", "published")
+            .limit(1);
+          if (!byIdFallback.error && byIdFallback.data && byIdFallback.data.length > 0) {
+            found = byIdFallback.data[0];
+          }
+        }
+      }
+
+      if (!found && bySlug.error && /column .* does not exist/i.test(bySlug.error.message || "")) {
+        const bySlugFallback = await supabase
+          .from("materias")
+          .select("id, slug, titulo, resumo, capa_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
+          .eq("slug", paramValue)
+          .eq("status", "published")
+          .limit(1);
+        if (!bySlugFallback.error && bySlugFallback.data && bySlugFallback.data.length > 0) {
+          found = bySlugFallback.data[0];
         }
       }
 
@@ -285,12 +307,13 @@ export function MateriaDetalhes() {
         }
       }
 
+      const heroImage = found.banner_url || found.capa_url || "";
       const mapped: MateriaUI = {
         id: found.id,
         slug: found.slug,
         titulo: found.titulo || "",
         resumo: found.resumo || "",
-        imagem: found.capa_url || "",
+        imagem: heroImage,
         autor: authorProfile?.nome || found.autor_nome || "",
         data: formatDateBR(found.published_at || found.created_at),
         categoria: (found.tags && found.tags[0]) ? found.tags[0] : "Geral",
@@ -397,7 +420,6 @@ export function MateriaDetalhes() {
                 <ArrowLeft className="w-4 h-4 flex-shrink-0" />
                 <span className="leading-snug">Voltar para Matérias</span>
               </Link>
-              <RKCTag variant="yellow" className="max-w-full">{m.categoria}</RKCTag>
             </div>
 
             <h1
@@ -422,6 +444,7 @@ export function MateriaDetalhes() {
                 <Link to={publicAuthorHref} className="hover:underline font-medium">{publicAuthorName}</Link>
               </div>
               <div className="flex items-center gap-2"><Calendar className="w-5 h-5" /><span>{m.data}</span></div>
+              <RKCTag variant="yellow">{m.categoria}</RKCTag>
             </div>
           </div>
         </div>
