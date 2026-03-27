@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardImage, RKCCardContent } from "@/app/components/RKCCard";
-import { ArrowLeft, Calendar, User, Share2, Facebook, Instagram, Mail, Eye } from "lucide-react";
+import { ArrowLeft, Calendar, User, Share2, Facebook, Instagram, Mail, Eye, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { MateriaContentBlock } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 import { getPublicContentViewCount, trackPageView } from "@/lib/analytics";
@@ -29,6 +29,15 @@ type MateriaUI = {
     bio: string | null;
     foto: string | null;
   } | null;
+};
+
+type MateriaGaleriaItem = {
+  id: string;
+  materia_id: string;
+  url: string;
+  legenda: string | null;
+  ordem: number | null;
+  created_at: string | null;
 };
 
 function getEquipeHref(author: MateriaUI["autorPerfil"]) {
@@ -188,6 +197,8 @@ export function MateriaDetalhes() {
   const [materia, setMateria] = useState<MateriaUI | null>(null);
   const [outrasMateria, setOutrasMateria] = useState<Array<{ id: string; slug: string; titulo: string; imagem: string; categoria: string }>>([]);
   const [viewCount, setViewCount] = useState<number | null>(null);
+  const [galeria, setGaleria] = useState<MateriaGaleriaItem[]>([]);
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(null);
 
   const fallbackMateria = useMemo<MateriaUI>(() => ({
     id: "",
@@ -239,6 +250,7 @@ export function MateriaDetalhes() {
         setLoading(false);
         setMateria(null);
         setOutrasMateria([]);
+        setGaleria([]);
         return;
       }
 
@@ -290,6 +302,16 @@ export function MateriaDetalhes() {
 
       setMateria(mapped);
 
+      const { data: galeriaData, error: galeriaError } = await supabase
+        .from("materia_galeria")
+        .select("id, materia_id, url, legenda, ordem, created_at")
+        .eq("materia_id", found.id)
+        .order("ordem", { ascending: true, nullsFirst: true })
+        .order("created_at", { ascending: true });
+
+      setGaleria(!galeriaError && Array.isArray(galeriaData) ? (galeriaData as MateriaGaleriaItem[]) : []);
+      setActiveGalleryIndex(null);
+
       await trackPageView({
         pageType: "materia",
         path: `/materias/${mapped.slug || mapped.id}`,
@@ -327,8 +349,38 @@ export function MateriaDetalhes() {
 
   const m = materia || fallbackMateria;
   const hasBlocks = m.contentBlocks.length > 0;
+  const hasGallery = galeria.length > 0;
   const normalizedAudioUrl = (m.audioUrl || "").trim();
   const hasValidAudioUrl = /^https?:\/\//i.test(normalizedAudioUrl);
+  const activeGalleryItem = activeGalleryIndex !== null ? galeria[activeGalleryIndex] : null;
+
+  useEffect(() => {
+    if (activeGalleryIndex === null) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveGalleryIndex(null);
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        setActiveGalleryIndex((current) => {
+          if (current === null || galeria.length === 0) return null;
+          return current === 0 ? galeria.length - 1 : current - 1;
+        });
+      }
+
+      if (event.key === "ArrowRight") {
+        setActiveGalleryIndex((current) => {
+          if (current === null || galeria.length === 0) return null;
+          return current === galeria.length - 1 ? 0 : current + 1;
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeGalleryIndex, galeria.length]);
 
   return (
     <div>
@@ -388,6 +440,29 @@ export function MateriaDetalhes() {
                 </div>
               )}
 
+              {hasGallery && (
+                <section className="mt-10 pt-6 border-t border-gray-200">
+                  <h3 className="font-semibold text-base text-[#2E2E2E] mb-4">Galeria de fotos</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    {galeria.map((item, index) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setActiveGalleryIndex(index)}
+                        className="group relative overflow-hidden rounded-xl border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
+                        aria-label={`Abrir imagem ${index + 1} da galeria`}
+                      >
+                        <img
+                          src={item.url}
+                          alt={item.legenda || `Imagem ${index + 1} da galeria da matéria`}
+                          className="w-full h-40 sm:h-44 md:h-40 lg:h-36 object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {hasValidAudioUrl && (
                 <div className="mt-8 p-4 rounded-xl border bg-gray-50">
                   <h3 className="font-semibold text-base text-[#2E2E2E] mb-2">Ouça esta matéria</h3>
@@ -437,6 +512,56 @@ export function MateriaDetalhes() {
           )}
         </div>
       </article>
+
+      {activeGalleryItem && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 p-4 sm:p-8 flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setActiveGalleryIndex(null)}
+        >
+          <div className="relative w-full max-w-5xl" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setActiveGalleryIndex(null)}
+              className="absolute -top-12 right-0 text-white/90 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded"
+              aria-label="Fechar galeria"
+            >
+              <X className="w-7 h-7" />
+            </button>
+
+            {galeria.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveGalleryIndex((current) => (current === null || current === 0 ? galeria.length - 1 : current - 1))}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-10 rounded-full bg-black/50 hover:bg-black/70 text-white p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                  aria-label="Imagem anterior"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveGalleryIndex((current) => (current === null || current === galeria.length - 1 ? 0 : current + 1))}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-10 rounded-full bg-black/50 hover:bg-black/70 text-white p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                  aria-label="Próxima imagem"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            <img
+              src={activeGalleryItem.url}
+              alt={activeGalleryItem.legenda || "Imagem ampliada da galeria"}
+              className="w-full max-h-[80vh] object-contain rounded-xl"
+            />
+            {activeGalleryItem.legenda && (
+              <p className="text-center text-white/90 text-sm mt-3">{activeGalleryItem.legenda}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <section className="py-16 bg-gradient-to-br from-[#0F7A3E] to-[#2FA866]">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
