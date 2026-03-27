@@ -72,6 +72,19 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
         };
       }
 
+      if (block.type === "image-text") {
+        return {
+          id: block.id || `imgtxt-${idx}`,
+          type: "image-text" as const,
+          url: String(block.url || ""),
+          text: String(block.text || ""),
+          caption: block.caption ? String(block.caption) : "",
+          credit: block.credit ? String(block.credit) : "",
+          align: block.align === "right" ? "right" : "left",
+          width: ["sm", "md", "lg"].includes(block.width) ? block.width : "md",
+        };
+      }
+
       if (["paragraph", "heading", "quote", "highlight"].includes(block.type)) {
         return {
           id: block.id || `text-${idx}`,
@@ -106,6 +119,28 @@ function renderBlock(block: MateriaContentBlock) {
           </figcaption>
         )}
       </figure>
+    );
+  }
+
+  if (block.type === "image-text") {
+    const widthClass = block.width === "sm" ? "md:w-[30%]" : block.width === "lg" ? "md:w-[50%]" : "md:w-[40%]";
+    return (
+      <div key={block.id} className={`my-8 flex gap-6 flex-col md:flex-row ${block.align === "right" ? "md:flex-row-reverse" : ""}`}>
+        <figure className={`w-full ${widthClass}`}>
+          <img src={block.url} alt={block.caption || "Imagem da matéria"} className="w-full rounded-xl border object-cover" />
+          {(block.caption || block.credit) && (
+            <figcaption className="text-sm text-gray-500 mt-2">
+              {block.caption || ""}
+              {block.caption && block.credit ? " • " : ""}
+              {block.credit ? `Crédito: ${block.credit}` : ""}
+            </figcaption>
+          )}
+        </figure>
+        <div
+          className="flex-1 text-gray-700 leading-relaxed [&>p]:mb-4 [&>h2]:font-bold [&>h2]:text-[#0F7A3E]"
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.text || "") }}
+        />
+      </div>
     );
   }
 

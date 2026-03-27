@@ -36,6 +36,16 @@ export type MateriaContentBlock =
       url: string;
       caption?: string;
       credit?: string;
+    }
+  | {
+      id: string;
+      type: "image-text";
+      url: string;
+      text: string;
+      caption?: string;
+      credit?: string;
+      align?: "left" | "right";
+      width?: "sm" | "md" | "lg";
     };
 
 export type ProjetoRow = {
