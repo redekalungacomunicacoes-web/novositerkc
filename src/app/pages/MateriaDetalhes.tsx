@@ -188,10 +188,26 @@ function renderBlock(block: MateriaContentBlock) {
             </figcaption>
           )}
         </figure>
-        <div
-          className="flex-1 text-gray-700 leading-relaxed [&>p]:mb-4 [&>h2]:font-bold [&>h2]:text-[#0F7A3E]"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.text || "") }}
-        />
+        <div className="flex-1 text-gray-700 leading-relaxed [&>h2]:font-bold [&>h2]:text-[#0F7A3E]">
+          {(() => {
+            const normalizedText = String(block.text || "").replace(/\r\n/g, "\n").trim();
+            if (!normalizedText) return null;
+
+            const paragraphs = normalizedText
+              .split(/\n\s*\n/)
+              .map((part) => part.trim())
+              .filter(Boolean);
+
+            return (
+              <div className="space-y-4 leading-relaxed">
+                {paragraphs.map((paragraph, paragraphIndex) => {
+                  const htmlWithLineBreaks = sanitizeHtml(paragraph).replace(/\n/g, "<br />");
+                  return <p key={`imgtxt-p-${paragraphIndex}`} dangerouslySetInnerHTML={{ __html: htmlWithLineBreaks }} />;
+                })}
+              </div>
+            );
+          })()}
+        </div>
       </div>
     );
   }
