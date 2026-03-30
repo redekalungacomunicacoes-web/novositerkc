@@ -192,13 +192,13 @@ export function AdminSidebar() {
             <Link
               key={`${link.href}-${link.label}`}
               to={link.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+              className={`group flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium border-l-4 transition-colors ${
                 isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  ? "bg-green-50 border-green-600 text-green-700"
+                  : "border-transparent text-gray-600 hover:bg-green-50 hover:text-green-700"
               }`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4 text-current" />
               {link.label}
             </Link>
           );
@@ -210,9 +210,9 @@ export function AdminSidebar() {
           onClick={() => {
             void handleLogout();
           }}
-          className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+          className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-4 w-4 text-current" />
           Sair
         </button>
       </div>
