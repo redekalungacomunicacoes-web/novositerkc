@@ -49,6 +49,63 @@ type MateriaGaleriaItem = {
 };
 
 type TextBlock = Extract<MateriaContentBlock, { type: "paragraph" | "heading" | "quote" | "highlight" }>;
+type BlockType = MateriaContentBlock["type"];
+
+const blockStyles: Record<
+  BlockType,
+  {
+    border: string;
+    bg: string;
+    badge: string;
+    button: string;
+  }
+> = {
+  paragraph: {
+    border: "border-gray-300",
+    bg: "bg-gray-50",
+    badge: "bg-gray-200 text-gray-700",
+    button: "bg-gray-100 hover:bg-gray-200",
+  },
+  heading: {
+    border: "border-green-600",
+    bg: "bg-green-50",
+    badge: "bg-green-600 text-white",
+    button: "bg-green-100 hover:bg-green-200",
+  },
+  quote: {
+    border: "border-yellow-500",
+    bg: "bg-yellow-50",
+    badge: "bg-yellow-500 text-white",
+    button: "bg-yellow-100 hover:bg-yellow-200",
+  },
+  highlight: {
+    border: "border-lime-500",
+    bg: "bg-lime-50",
+    badge: "bg-lime-500 text-white",
+    button: "bg-lime-100 hover:bg-lime-200",
+  },
+  image: {
+    border: "border-blue-500",
+    bg: "bg-blue-50",
+    badge: "bg-blue-500 text-white",
+    button: "bg-blue-100 hover:bg-blue-200",
+  },
+  "image-text": {
+    border: "border-emerald-700",
+    bg: "bg-emerald-50",
+    badge: "bg-emerald-700 text-white",
+    button: "bg-emerald-100 hover:bg-emerald-200",
+  },
+};
+
+const blockTypeLabels: Record<BlockType, string> = {
+  paragraph: "Parágrafo",
+  heading: "Subtítulo",
+  quote: "Citação",
+  highlight: "Destaque",
+  image: "Imagem",
+  "image-text": "Imagem + Texto",
+};
 
 function safeFilename(name: string) {
   return (
@@ -747,12 +804,12 @@ export function AdminMateriaForm() {
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <h3 className="font-semibold text-lg">Conteúdo em blocos</h3>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => addBlock("paragraph")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Parágrafo</button>
-                <button type="button" onClick={() => addBlock("heading")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Subtítulo</button>
-                <button type="button" onClick={() => addBlock("quote")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Citação</button>
-                <button type="button" onClick={() => addBlock("highlight")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Destaque</button>
-                <button type="button" onClick={() => addBlock("image")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Imagem</button>
-                <button type="button" onClick={() => addBlock("image-text")} className="px-2 py-1 text-xs rounded-md border hover:bg-muted">+ Imagem + Texto</button>
+                <button type="button" onClick={() => addBlock("paragraph")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.paragraph.button}`}>+ Parágrafo</button>
+                <button type="button" onClick={() => addBlock("heading")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.heading.button}`}>+ Subtítulo</button>
+                <button type="button" onClick={() => addBlock("quote")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.quote.button}`}>+ Citação</button>
+                <button type="button" onClick={() => addBlock("highlight")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.highlight.button}`}>+ Destaque</button>
+                <button type="button" onClick={() => addBlock("image")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.image.button}`}>+ Imagem</button>
+                <button type="button" onClick={() => addBlock("image-text")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles["image-text"].button}`}>+ Imagem + Texto</button>
               </div>
             </div>
 
@@ -763,9 +820,14 @@ export function AdminMateriaForm() {
             ) : (
               <div className="space-y-4">
                 {blocks.map((block, index) => (
-                  <div key={block.id} className="border rounded-lg p-4 space-y-3 bg-background/60">
+                  <div
+                    key={block.id}
+                    className={`rounded-lg p-4 space-y-3 border-l-4 transition-colors ${blockStyles[block.type].border} ${blockStyles[block.type].bg}`}
+                  >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{block.type}</div>
+                      <div className={`text-xs px-2 py-1 rounded font-medium ${blockStyles[block.type].badge}`}>
+                        {blockTypeLabels[block.type]}
+                      </div>
                       <div className="flex gap-1">
                         <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === 0} onClick={() => moveBlock(index, -1)}><ChevronUp className="w-3 h-3" /></button>
                         <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)}><ChevronDown className="w-3 h-3" /></button>
