@@ -26,6 +26,7 @@ type MateriaFormData = {
   bannerImage: string;
   hashtags: string;
   audioUrl: string;
+  photoCredits: string;
   status: "published" | "draft" | "archived";
 };
 
@@ -244,6 +245,7 @@ export function AdminMateriaForm() {
       bannerImage: "",
       hashtags: "",
       audioUrl: "",
+      photoCredits: "",
     },
   });
 
@@ -336,6 +338,7 @@ export function AdminMateriaForm() {
         status: d.status || "draft",
         hashtags: Array.isArray(d.hashtags) ? d.hashtags.join(", ") : "",
         audioUrl: d.audio_url || "",
+        photoCredits: d.photo_credits || "",
       });
 
       await loadGaleria(id);
@@ -573,7 +576,7 @@ export function AdminMateriaForm() {
 
     if (!/column .* does not exist/i.test(response.error.message || "")) return response;
 
-    const { content_blocks, hashtags, audio_url, banner_url, ...legacyPayload } = payload;
+    const { content_blocks, hashtags, audio_url, banner_url, photo_credits, ...legacyPayload } = payload;
     return isEditing && id
       ? await updateMateria(id, legacyPayload)
       : await createMateria(legacyPayload);
@@ -599,6 +602,7 @@ export function AdminMateriaForm() {
         content_blocks: sanitizedBlocks.length ? sanitizedBlocks : null,
         hashtags: normalizeHashtags(data.hashtags),
         audio_url: data.audioUrl || null,
+        photo_credits: data.photoCredits || null,
         capa_url: data.coverImage || null,
         banner_url: data.bannerImage || null,
         tags,
@@ -841,6 +845,16 @@ export function AdminMateriaForm() {
                 ))}
               </div>
             )}
+
+            <div className="space-y-2 pt-1">
+              <label className="text-sm font-medium">Créditos das fotos</label>
+              <input
+                {...register("photoCredits")}
+                className="w-full h-10 px-3 rounded-md border bg-background"
+                placeholder="Ex: João Silva, Maria Souza"
+              />
+              <p className="text-xs text-muted-foreground">Será exibido abaixo da galeria na matéria publicada.</p>
+            </div>
           </div>
         </div>
 

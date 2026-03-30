@@ -21,6 +21,7 @@ type MateriaUI = {
   contentBlocks: MateriaContentBlock[];
   hashtags: string[];
   audioUrl: string;
+  photoCredits: string;
   autorPerfil: {
     id: string;
     slug: string | null;
@@ -298,6 +299,7 @@ export function MateriaDetalhes() {
     contentBlocks: [],
     hashtags: [],
     audioUrl: "",
+    photoCredits: "",
     autorPerfil: null,
   }), []);
 
@@ -310,7 +312,7 @@ export function MateriaDetalhes() {
 
       const bySlug = await supabase
         .from("materias")
-        .select("id, slug, titulo, resumo, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
+        .select("id, slug, titulo, resumo, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, photo_credits, published_at, created_at, status")
         .eq("slug", paramValue)
         .eq("status", "published")
         .limit(1);
@@ -320,7 +322,7 @@ export function MateriaDetalhes() {
       } else {
         const byId = await supabase
           .from("materias")
-          .select("id, slug, titulo, resumo, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
+          .select("id, slug, titulo, resumo, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, photo_credits, published_at, created_at, status")
           .eq("id", paramValue)
           .eq("status", "published")
           .limit(1);
@@ -329,8 +331,8 @@ export function MateriaDetalhes() {
           found = byId.data[0];
         } else if (byId.error && /column .* does not exist/i.test(byId.error.message || "")) {
           const byIdFallback = await supabase
-            .from("materias")
-            .select("id, slug, titulo, resumo, capa_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
+        .from("materias")
+        .select("id, slug, titulo, resumo, capa_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, published_at, created_at, status")
             .eq("id", paramValue)
             .eq("status", "published")
             .limit(1);
@@ -404,6 +406,7 @@ export function MateriaDetalhes() {
         contentBlocks: normalizeBlocks(found.content_blocks),
         hashtags: Array.isArray(found.hashtags) ? found.hashtags.filter(Boolean) : [],
         audioUrl: found.audio_url || "",
+        photoCredits: found.photo_credits || "",
         autorPerfil: authorProfile,
       };
 
@@ -456,6 +459,8 @@ export function MateriaDetalhes() {
   const hasGallery = galeria.length > 0;
   const normalizedAudioUrl = (m.audioUrl || "").trim();
   const hasValidAudioUrl = /^https?:\/\//i.test(normalizedAudioUrl);
+  const normalizedPhotoCredits = (m.photoCredits || "").trim();
+  const hasPhotoCredits = normalizedPhotoCredits.length > 0;
   const activeGalleryItem = activeGalleryIndex !== null ? galeria[activeGalleryIndex] : null;
   const publicAuthorName = (m.autorPerfil?.nome || m.autor || "").trim() || PUBLIC_AUTHOR_FALLBACK_NAME;
   const publicAuthorHref = m.autorPerfil ? getEquipeHref(m.autorPerfil) : PUBLIC_AUTHOR_FALLBACK_HREF;
@@ -580,6 +585,12 @@ export function MateriaDetalhes() {
                     ))}
                   </div>
                 </section>
+              )}
+
+              {hasGallery && hasPhotoCredits && (
+                <div className="mt-4 text-sm text-gray-500">
+                  <strong>Fotos:</strong> {normalizedPhotoCredits}
+                </div>
               )}
 
               {hasValidAudioUrl && (

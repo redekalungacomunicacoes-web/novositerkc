@@ -12,6 +12,7 @@ export type MateriaRow = {
   content_blocks?: MateriaContentBlock[] | null;
   hashtags?: string[] | null;
   audio_url?: string | null;
+  photo_credits?: string | null;
   capa_url: string | null;
   banner_url?: string | null;
   autor_nome: string | null;
