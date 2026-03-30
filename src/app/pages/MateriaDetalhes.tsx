@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
 import { RKCTag } from "@/app/components/RKCTag";
@@ -45,7 +45,7 @@ function getEquipeHref(author: MateriaUI["autorPerfil"]) {
   return author.slug ? `/equipe/${author.slug}` : `/equipe/id/${author.id}`;
 }
 
-const PUBLIC_AUTHOR_FALLBACK_NAME = "Rede Calunga Comunicações";
+const PUBLIC_AUTHOR_FALLBACK_NAME = "Rede Kalunga Comunicações";
 const PUBLIC_AUTHOR_FALLBACK_HREF = "/quem-somos";
 
 function getTeamAvatarThumbUrl(path?: string | null) {
@@ -66,6 +66,46 @@ function sanitizeHtml(input: string) {
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
     .replace(/on\w+\s*=\s*"[^"]*"/gi, "")
     .replace(/on\w+\s*=\s*'[^']*'/gi, "");
+}
+
+function hasHtmlContent(text?: string | null) {
+  if (!text) return false;
+  return /<\/?[a-z][\s\S]*>/i.test(text);
+}
+
+function renderTextWithParagraphs(text?: string | null) {
+  if (!text) return null;
+  const normalized = String(text).replace(/\r\n/g, "\n").trim();
+  if (!normalized) return null;
+
+  const paragraphs = normalized.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+  if (paragraphs.length === 0) return null;
+
+  return paragraphs.map((paragraph, index) => (
+    <p key={`p-${index}`} className="text-lg text-gray-700 leading-relaxed mb-6">
+      {paragraph.split("\n").map((line, lineIndex, lines) => (
+        <Fragment key={`l-${lineIndex}`}>
+          {line}
+          {lineIndex < lines.length - 1 ? <br /> : null}
+        </Fragment>
+      ))}
+    </p>
+  ));
+}
+
+function renderLegacyContent(text?: string | null) {
+  if (!text) return null;
+  if (hasHtmlContent(text)) {
+    return (
+      <div
+        className="article-content text-gray-700 leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(text) }}
+        style={{ fontSize: "1.125rem", lineHeight: "1.8" }}
+      />
+    );
+  }
+
+  return <div className="article-content">{renderTextWithParagraphs(text)}</div>;
 }
 
 function normalizeBlocks(raw: any): MateriaContentBlock[] {
@@ -157,6 +197,14 @@ function renderBlock(block: MateriaContentBlock) {
   }
 
   if (block.type === "heading") {
+    if (!hasHtmlContent(block.text || "")) {
+      return (
+        <h2 key={block.id} className={`font-bold text-[#0F7A3E] mt-10 mb-4 ${textSizeClass(block.size)} whitespace-pre-line`}>
+          {block.text || ""}
+        </h2>
+      );
+    }
+
     return (
       <h2
         key={block.id}
@@ -167,6 +215,15 @@ function renderBlock(block: MateriaContentBlock) {
   }
 
   if (block.type === "quote") {
+    if (!hasHtmlContent(block.text || "")) {
+      return (
+        <blockquote key={block.id} className="my-6 border-l-4 border-[#0F7A3E] pl-4 italic text-gray-700">
+          <p className={`${textSizeClass(block.size)} whitespace-pre-line`}>{block.text || ""}</p>
+          {block.author ? <cite className="block mt-2 text-sm not-italic text-gray-500">— {block.author}</cite> : null}
+        </blockquote>
+      );
+    }
+
     return (
       <blockquote key={block.id} className="my-6 border-l-4 border-[#0F7A3E] pl-4 italic text-gray-700">
         <p className={textSizeClass(block.size)} dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.text || "") }} />
@@ -176,6 +233,14 @@ function renderBlock(block: MateriaContentBlock) {
   }
 
   if (block.type === "highlight") {
+    if (!hasHtmlContent(block.text || "")) {
+      return (
+        <aside key={block.id} className="my-6 border-l-4 border-[#F2B705] bg-[#FDF8E5] text-[#5f4b00] pl-4 py-3 pr-3 rounded-r-lg ml-2">
+          <p className={`${textSizeClass(block.size)} mb-0 whitespace-pre-line`}>{block.text || ""}</p>
+        </aside>
+      );
+    }
+
     return (
       <aside key={block.id} className="my-6 border-l-4 border-[#F2B705] bg-[#FDF8E5] text-[#5f4b00] pl-4 py-3 pr-3 rounded-r-lg ml-2">
         <p className={`${textSizeClass(block.size)} mb-0`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.text || "") }} />
@@ -183,13 +248,15 @@ function renderBlock(block: MateriaContentBlock) {
     );
   }
 
-  return (
-    <p
-      key={block.id}
-      className={`${textSizeClass(block.size)} text-gray-700 leading-relaxed mb-6`}
-      dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.text || "") }}
-    />
-  );
+  if (!hasHtmlContent(block.text || "")) {
+    return (
+      <div key={block.id}>
+        {renderTextWithParagraphs(block.text || "")}
+      </div>
+    );
+  }
+
+  return <p key={block.id} className={`${textSizeClass(block.size)} text-gray-700 leading-relaxed mb-6`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.text || "") }} />;
 }
 
 export function MateriaDetalhes() {
@@ -461,7 +528,7 @@ export function MateriaDetalhes() {
                 {hasBlocks ? (
                   <div className="article-content">{m.contentBlocks.map((block) => renderBlock(block))}</div>
                 ) : (
-                  <div className="article-content text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(m.conteudo) }} style={{ fontSize: "1.125rem", lineHeight: "1.8" }} />
+                  renderLegacyContent(m.conteudo)
                 )}
               </div>
 
@@ -625,18 +692,6 @@ export function MateriaDetalhes() {
           </div>
         </div>
       </section>
-
-      <style>{`
-        .article-content p:first-child::first-letter {
-          font-size: 3.5rem;
-          font-weight: 700;
-          line-height: 1;
-          float: left;
-          margin-right: 0.5rem;
-          margin-top: 0.1rem;
-          color: #0F7A3E;
-        }
-      `}</style>
     </div>
   );
 }
