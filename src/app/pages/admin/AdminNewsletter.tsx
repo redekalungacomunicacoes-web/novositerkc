@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Plus, Send, Mail, Users, RefreshCw, Trash2, Eye, Settings } from "lucide-react";
 import { NewsletterEmailConfig } from "./newsletter/NewsletterEmailConfig";
+import { errorText, invokeNewsletter } from "./newsletter/api";
 
 type Subscriber = {
   id: string;
@@ -31,6 +32,7 @@ type MateriaLite = {
   titulo: string;
   resumo?: string | null;
   slug?: string | null;
+  cover_image?: string | null;
 };
 
 function toBR(d?: string | null) {
@@ -84,6 +86,7 @@ export function AdminNewsletter() {
   const [testEmail, setTestEmail] = useState("");
   const [sendingAll, setSendingAll] = useState(false);
   const [sendLog, setSendLog] = useState<string | null>(null);
+  const [adminError, setAdminError] = useState<string | null>(null);
 
   async function loadSubscribers() {
     setSubsLoading(true);
@@ -93,6 +96,7 @@ export function AdminNewsletter() {
       .order("created_at", { ascending: false })
       .limit(1000);
 
+    if (error) setAdminError(error.message);
     if (!error && data) setSubs(data as any);
     setSubsLoading(false);
   }
@@ -105,6 +109,7 @@ export function AdminNewsletter() {
       .order("created_at", { ascending: false })
       .limit(200);
 
+    if (error) setAdminError(error.message);
     if (!error && data) {
       const normalized = (data as any[]).map((c) => ({
         ...c,
@@ -121,10 +126,11 @@ export function AdminNewsletter() {
 
     const { data, error } = await supabase
       .from("materias")
-      .select("id,titulo,resumo,slug")
+      .select("id,titulo,resumo,slug,cover_image")
       .order("created_at", { ascending: false })
       .limit(200);
 
+    if (error) setAdminError(error.message);
     if (!error && data) setMaterias(data as any);
     setMateriasLoading(false);
   }
@@ -202,14 +208,17 @@ export function AdminNewsletter() {
         : `${form.site_url}/materias/${m.id}`;
 
       finalHtml = `
-        <h3 style="margin:0 0 8px;">${m.titulo}</h3>
-        ${m.resumo ? `<p style="margin:0 0 14px; color:#333;">${m.resumo}</p>` : ""}
-        <p style="margin:0;">
-          <a href="${link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block; padding:10px 14px; background:#0F7A3E; color:#fff; text-decoration:none; border-radius:10px;">
-            Ler matéria
-          </a>
-        </p>
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111;">
+          <h3 style="margin:0 0 8px;">${m.titulo}</h3>
+          ${m.cover_image ? `<img src="${m.cover_image}" alt="${m.titulo}" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 12px;"/>` : ""}
+          ${m.resumo ? `<p style="margin:0 0 14px; color:#333;">${m.resumo}</p>` : ""}
+          <p style="margin:0;">
+            <a href="${link}" target="_blank" rel="noopener noreferrer"
+               style="display:inline-block; padding:10px 14px; background:#0F7A3E; color:#fff; text-decoration:none; border-radius:10px;">
+              Ler matéria
+            </a>
+          </p>
+        </div>
       `;
     } else {
       if (!finalHtml.trim()) {
@@ -279,31 +288,23 @@ export function AdminNewsletter() {
     setSendingTest(true);
     setSendLog(null);
 
-    const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
-      body: {
-        mode: "test",
-        campaign_id: selectedCampaign.id,
-        test_email: testEmail.trim().toLowerCase(),
-      },
-      headers: { "x-newsletter-key": import.meta.env.VITE_NEWSLETTER_ADMIN_KEY as string },
+    const res = await invokeNewsletter<{ sent: number; failed: number; message?: string }>("newsletter-send-test", {
+      campaign_id: selectedCampaign.id,
+      test_email: testEmail.trim().toLowerCase(),
     });
 
-    if (error) {
-      setSendLog(`❌ ${error.message}`);
+    if (!res.ok) {
+      setSendLog(`❌ ${errorText(res.error)}`);
       setSendingTest(false);
       await loadCampaigns();
       return;
     }
 
-    try {
-      const sent = Number((data as any)?.sent || 0);
-      const failed = Number((data as any)?.failed || 0);
-      setSendLog(`✅ Teste concluído. Enviados: ${sent} | Falhas: ${failed}`);
-    } catch (e: any) {
-      setSendLog(`❌ ${e?.message || String(e)}`);
-    } finally {
-      setSendingTest(false);
-    }
+    const sent = Number(res.data?.sent || 0);
+    const failed = Number(res.data?.failed || 0);
+    const msg = res.data?.message || "Teste enviado com sucesso.";
+    setSendLog(`✅ ${msg} Enviados: ${sent} | Falhas: ${failed}`);
+    setSendingTest(false);
 
     await loadCampaigns();
   }
@@ -321,31 +322,23 @@ export function AdminNewsletter() {
     setSendingAll(true);
     setSendLog("Iniciando envio para todos inscritos...");
 
-    const { data, error } = await supabase.functions.invoke("newsletter-send-campaign", {
-      body: {
-        mode: "all",
-        campaign_id: selectedCampaign.id,
-      },
-      headers: { "x-newsletter-key": import.meta.env.VITE_NEWSLETTER_ADMIN_KEY as string },
+    const res = await invokeNewsletter<{ status: string; sent: number; failed: number; errors: string[] }>("newsletter-send-campaign", {
+      campaign_id: selectedCampaign.id,
     });
 
-    if (error) {
-      setSendLog(`❌ ${error.message}`);
+    if (!res.ok) {
+      setSendLog(`❌ ${errorText(res.error)}`);
       setSendingAll(false);
       await loadCampaigns();
       return;
     }
 
-    try {
-      const status = String((data as any)?.status || "—");
-      const sent = Number((data as any)?.sent || 0);
-      const failed = Number((data as any)?.failed || 0);
-      setSendLog(`✅ Concluído. Status: ${status} | Enviados: ${sent} | Falhas: ${failed}`);
-    } catch (e: any) {
-      setSendLog(`❌ ${e?.message || String(e)}`);
-    } finally {
-      setSendingAll(false);
-    }
+    const status = String(res.data?.status || "—");
+    const sent = Number(res.data?.sent || 0);
+    const failed = Number(res.data?.failed || 0);
+    const firstError = res.data?.errors?.[0];
+    setSendLog(`✅ Concluído. Status: ${status} | Enviados: ${sent} | Falhas: ${failed}${firstError ? ` | Exemplo de erro: ${firstError}` : ""}`);
+    setSendingAll(false);
 
     await loadCampaigns();
   }
@@ -384,6 +377,12 @@ export function AdminNewsletter() {
           )}
         </div>
       </div>
+
+      {adminError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Erro ao carregar dados da newsletter: {adminError}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2">
