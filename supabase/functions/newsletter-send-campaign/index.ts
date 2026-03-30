@@ -1,268 +1,150 @@
 import { handleCors, corsHeaders } from "../_shared/cors.ts";
-import { sendMail } from "../_shared/smtp.ts";
+import { failure, getSmtpSettings, isValidEmail, renderMateriaHtml, sendSmtpMail, success, validateSmtpPayload } from "../_shared/newsletter.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
 
-type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
-type Mode = "test" | "all";
+type CampaignStatus = "draft" | "sent" | "failed" | "sending";
 
 function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
-function isEmail(v: string) {
-  const s = (v || "").trim().toLowerCase();
-  return s.includes("@") && s.includes(".");
-}
-
-function isUuid(v: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    .test(v);
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
-  const adminKey = req.headers.get("x-newsletter-key") || "";
-  const expected = Deno.env.get("NEWSLETTER_ADMIN_KEY") || "";
-  if (!expected || adminKey !== expected) {
-    return new Response(JSON.stringify({ ok: false, error: "Forbidden" }), {
-      status: 403,
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify(failure("method_not_allowed", "Método não permitido.")), {
+      status: 405,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   try {
-    if (req.method !== "POST") {
-      return json(405, { ok: false, error: "Method not allowed" });
-    }
-
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return json(400, { ok: false, error: "Invalid JSON body" });
+      return new Response(JSON.stringify(failure("invalid_body", "Body inválido.")), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Você pode:
-    // A) Criar + disparar (create_campaign: true)
-    // B) Disparar existente (campaign_id)
-    const createCampaign = Boolean((body as any).create_campaign);
-
-    const requestedMode = String((body as any).mode || "all");
-    const mode: Mode = requestedMode === "test" ? "test" : "all";
-    const test_email = (body as any).test_email
-      ? String((body as any).test_email).trim().toLowerCase()
-      : null;
-
-    if (mode === "test" && (!test_email || !isEmail(test_email))) {
-      return json(400, { ok: false, error: "Missing/invalid test_email" });
+    const campaignId = String((body as Record<string, unknown>).campaign_id || "").trim();
+    if (!campaignId) {
+      return new Response(JSON.stringify(failure("missing_campaign_id", "campaign_id é obrigatório.")), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    const settingsRes = await getSmtpSettings();
+    if (!settingsRes.ok) return new Response(JSON.stringify(settingsRes), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    const validSettings = validateSmtpPayload(settingsRes.data!);
+    if (!validSettings.ok) return new Response(JSON.stringify(validSettings), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const sb = supabaseAdmin();
 
-    // -----------------------------
-    // 1) Determina campanha
-    // -----------------------------
-    let campaignId: string | null = null;
-
-    if (createCampaign) {
-      const type = String((body as any).type || "custom"); // opcional
-      const title = String((body as any).title || "Campanha sem título").trim();
-      const subject = String((body as any).subject || "").trim();
-      const content_html = String(
-        (body as any).content_html || (body as any).html || "",
-      ).trim();
-      const materia_id = (body as any).materia_id
-        ? String((body as any).materia_id)
-        : null;
-
-      if (!subject || !content_html) {
-        return json(400, {
-          ok: false,
-          error: "Missing subject/content_html",
-        });
-      }
-
-      const { data: camp, error: campErr } = await sb
-        .from("newsletter_campaigns")
-        .insert({
-          type,
-          title,
-          subject,
-          content_html,
-          materia_id,
-          mode: "custom", // sua coluna mode é TEXT (não enum)
-          status: "draft" as CampaignStatus,
-          sent_count: 0,
-          fail_count: 0,
-        })
-        .select("id,status")
-        .single();
-
-      if (campErr) return json(400, { ok: false, error: campErr.message });
-
-      campaignId = camp.id;
-    } else {
-      const cid = String((body as any).campaign_id || "").trim();
-      if (!cid || !isUuid(cid)) {
-        return json(400, { ok: false, error: "Missing/invalid campaign_id" });
-      }
-      campaignId = cid;
-    }
-
-    // -----------------------------
-    // 2) Carrega campanha (sempre)
-    // -----------------------------
-    const { data: campaign, error: loadErr } = await sb
+    const { data: campaign, error: campaignErr } = await sb
       .from("newsletter_campaigns")
-      .select("id,title,subject,content_html,status,sent_count,fail_count")
+      .select("id,title,subject,mode,materia_id,content_html,status,sent_count,fail_count")
       .eq("id", campaignId)
       .single();
 
-    if (loadErr) return json(400, { ok: false, error: loadErr.message });
-
-    const status = campaign.status as CampaignStatus;
-    if (!["draft", "scheduled", "sending", "sent", "failed"].includes(status)) {
-      return json(400, {
-        ok: false,
-        error: `Invalid campaign status stored: ${String(status)}`,
-      });
+    if (campaignErr || !campaign) {
+      return new Response(JSON.stringify(failure("campaign_not_found", "Campanha não encontrada.", campaignErr?.message)), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Evita reenvio
-    if (status === "sent") {
-      return json(409, {
-        ok: false,
-        error: "Campaign already sent",
-        campaign: { id: campaign.id, status },
+    if (campaign.status === "sent") {
+      return new Response(JSON.stringify(failure("campaign_already_sent", "Esta campanha já foi enviada.")), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    let finalHtml = String(campaign.content_html || "").trim();
+    if (campaign.mode === "materia") {
+      if (!campaign.materia_id) {
+        return new Response(JSON.stringify(failure("missing_materia_id", "Campanha por matéria sem materia_id.")), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const { data: materia, error: materiaErr } = await sb
+        .from("materias")
+        .select("id,titulo,resumo,slug,cover_image")
+        .eq("id", campaign.materia_id)
+        .single();
+
+      if (materiaErr || !materia) {
+        return new Response(JSON.stringify(failure("materia_not_found", "Matéria vinculada não foi encontrada.", materiaErr?.message)), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const siteUrl = Deno.env.get("SITE_URL") || "https://kalungacomunicacoes.org";
+      const path = materia.slug ? `/materias/${materia.slug}` : `/materias/${materia.id}`;
+      finalHtml = renderMateriaHtml({
+        title: materia.titulo,
+        summary: materia.resumo,
+        cover_image: materia.cover_image,
+        link: `${siteUrl}${path}`,
       });
+
+      await sb.from("newsletter_campaigns").update({ content_html: finalHtml, updated_at: new Date().toISOString() }).eq("id", campaign.id);
     }
 
     const subject = String(campaign.subject || "").trim();
-    const html = String(campaign.content_html || "").trim();
-
-    if (!subject || !html) {
-      return json(400, {
-        ok: false,
-        error: "Campaign subject/content_html empty",
-        campaign: { id: campaign.id },
-      });
+    if (!subject || !finalHtml) {
+      return new Response(JSON.stringify(failure("campaign_invalid", "Campanha sem assunto ou HTML final.")), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // -----------------------------
-    // 3) Lista destinatários
-    // -----------------------------
-    let recipients: string[] = [];
+    const { data: recipientsRows, error: recErr } = await sb
+      .from("newsletter_subscribers")
+      .select("email")
+      .eq("status", "active");
 
-    if (mode === "test") {
-      recipients = [test_email!];
-    } else {
-      const { data: subs, error: subErr } = await sb
-        .from("newsletter_subscribers")
-        .select("email")
-        .eq("status", "active");
-
-      if (subErr) return json(400, { ok: false, error: subErr.message });
-
-      recipients = (subs || [])
-        .map((s: any) => String(s.email || "").trim().toLowerCase())
-        .filter((e: string) => isEmail(e));
+    if (recErr) {
+      return new Response(JSON.stringify(failure("recipients_load_failed", "Erro ao carregar destinatários.", recErr.message)), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // rate limit simples (config por secret)
-    const delayMs = Number(Deno.env.get("NEWSLETTER_DELAY_MS") || 150);
-    const max = Number(Deno.env.get("NEWSLETTER_MAX") || 5000);
-    recipients = recipients.slice(0, max);
+    const recipients = (recipientsRows || [])
+      .map((row) => String(row.email || "").trim().toLowerCase())
+      .filter((email) => isValidEmail(email));
 
     if (recipients.length === 0) {
-      await sb
-        .from("newsletter_campaigns")
-        .update({ status: "failed" as CampaignStatus })
-        .eq("id", campaign.id);
-
-      return json(409, {
-        ok: false,
-        error: "No recipients found",
-        campaign_id: campaign.id,
-      });
+      await sb.from("newsletter_campaigns").update({ status: "failed" as CampaignStatus, updated_at: new Date().toISOString() }).eq("id", campaign.id);
+      return new Response(JSON.stringify(failure("no_recipients", "Não há destinatários ativos para esta campanha.")), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // -----------------------------
-    // 4) Marca como sending
-    // -----------------------------
-    const { error: updSendingErr } = await sb
-      .from("newsletter_campaigns")
-      .update({
-        status: "sending" as CampaignStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", campaign.id);
+    await sb.from("newsletter_campaigns").update({ status: "sending" as CampaignStatus, updated_at: new Date().toISOString() }).eq("id", campaign.id);
 
-    if (updSendingErr) {
-      return json(400, { ok: false, error: updSendingErr.message });
-    }
+    const limit = Math.max(1, Math.min(settingsRes.data!.max_per_send || 5000, 20000));
+    const delay = Math.max(0, settingsRes.data!.delay_ms || 0);
+    const recipientsLimited = recipients.slice(0, limit);
 
-    // -----------------------------
-    // 5) Envia
-    // -----------------------------
     let sent = 0;
     let failed = 0;
     const errors: string[] = [];
 
-    for (const to of recipients) {
+    for (const email of recipientsLimited) {
       try {
-        await sendMail({ to, subject, html });
-        sent++;
-      } catch (e) {
-        failed++;
-        errors.push(`${to}: ${String((e as any)?.message || e)}`);
+        await sendSmtpMail(settingsRes.data!, { to: email, subject, html: finalHtml });
+        sent += 1;
+      } catch (error) {
+        failed += 1;
+        const typed = error as { message?: string; details?: string };
+        errors.push(`${email}: ${typed.message || "Erro SMTP"}${typed.details ? ` (${typed.details})` : ""}`);
       }
-      if (delayMs > 0) await sleep(delayMs);
+      if (delay > 0) await sleep(delay);
     }
 
-    // -----------------------------
-    // 6) Finaliza campanha
-    // -----------------------------
-    const finalStatus: CampaignStatus = failed > 0 ? "failed" : "sent";
+    const status: CampaignStatus = failed > 0 ? "failed" : "sent";
 
-    const { error: finErr } = await sb
+    await sb
       .from("newsletter_campaigns")
       .update({
-        status: finalStatus,
-        sent_count: Number(campaign.sent_count || 0) + sent,
-        fail_count: Number(campaign.fail_count || 0) + failed,
+        status,
+        sent_count: sent,
+        fail_count: failed,
         updated_at: new Date().toISOString(),
       })
       .eq("id", campaign.id);
 
-    if (finErr) {
-      return json(500, {
-        ok: false,
-        error: finErr.message,
-        campaign_id: campaign.id,
-        sent,
-        failed,
-        errors,
-      });
-    }
-
-    return json(200, {
-      ok: true,
-      campaign_id: campaign.id,
-      status: finalStatus,
-      mode,
-      total: recipients.length,
-      sent,
-      failed,
-      errors,
+    return new Response(JSON.stringify(success({ campaign_id: campaign.id, sent, failed, status, errors })), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    return json(500, { ok: false, error: String((e as any)?.message || e) });
+  } catch (error) {
+    return new Response(JSON.stringify(failure("internal_error", "Erro interno ao enviar campanha.", String((error as { message?: string })?.message || error))), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
