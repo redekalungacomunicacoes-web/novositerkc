@@ -69,6 +69,13 @@ export type ProjetoRow = {
   published_at: string | null;
 };
 
+export type MateriaCategoriaRow = {
+  id: string;
+  nome: string;
+  slug: string | null;
+  created_at: string;
+};
+
 export function slugify(input: string) {
   return (input || "")
     .toLowerCase()
@@ -78,6 +85,32 @@ export function slugify(input: string) {
     .trim()
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
+}
+
+function dedupeAndSortCategoryNames(names: string[]) {
+  return Array.from(new Set(names.map((name) => name.trim()).filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+  );
+}
+
+async function ensureUniqueMateriaCategoriaSlug(baseSlug: string) {
+  const root = baseSlug || `categoria-${Date.now()}`;
+  let slug = root;
+  let i = 1;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("materia_categorias")
+      .select("id")
+      .eq("slug", slug)
+      .limit(1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) return slug;
+
+    i += 1;
+    slug = `${root}-${i}`;
+  }
 }
 
 // ===== Materias =====
@@ -99,6 +132,46 @@ export async function updateMateria(id: string, payload: Partial<MateriaRow>) {
 
 export async function deleteMateria(id: string) {
   return supabase.from("materias").delete().eq("id", id);
+}
+
+export async function listMateriaCategorias() {
+  return supabase.from("materia_categorias").select("id, nome, slug, created_at").order("nome", { ascending: true });
+}
+
+export async function createMateriaCategoria(nome: string) {
+  const nomeNormalizado = nome.trim();
+  const slug = await ensureUniqueMateriaCategoriaSlug(slugify(nomeNormalizado));
+
+  return supabase
+    .from("materia_categorias")
+    .insert({ nome: nomeNormalizado, slug })
+    .select("id, nome, slug, created_at")
+    .single();
+}
+
+export async function listMateriaCategoriasFromTags() {
+  const { data, error } = await supabase.from("materias").select("tags");
+  if (error) return { data: null, error };
+
+  const names = dedupeAndSortCategoryNames(
+    (data || [])
+      .map((item: any) => (Array.isArray(item?.tags) ? item.tags[0] : ""))
+      .filter(Boolean)
+  );
+
+  return { data: names, error: null };
+}
+
+export async function listMateriaCategoryNames() {
+  const categoriasRes = await listMateriaCategorias();
+  const tabelaNames = (categoriasRes.data || []).map((categoria) => categoria.nome);
+  const tagsRes = await listMateriaCategoriasFromTags();
+  const tagNames = tagsRes.data || [];
+
+  return {
+    data: dedupeAndSortCategoryNames([...tabelaNames, ...tagNames]),
+    error: categoriasRes.error,
+  };
 }
 
 // ===== Projetos =====

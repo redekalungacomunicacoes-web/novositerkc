@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Search, Edit, Trash2, Eye } from "lucide-react";
-import { deleteMateria, listMaterias, MateriaRow } from "@/lib/cms";
+import { createMateriaCategoria, deleteMateria, listMateriaCategoryNames, listMaterias, MateriaRow } from "@/lib/cms";
 
 function statusLabel(status: MateriaRow["status"]) {
   if (status === "published") return "Publicado";
@@ -11,13 +11,18 @@ function statusLabel(status: MateriaRow["status"]) {
 
 export function AdminMaterias() {
   const [materias, setMaterias] = useState<MateriaRow[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState("Todas");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
   async function load() {
     setLoading(true);
-    const { data, error } = await listMaterias();
+    const [{ data, error }, categoriesRes] = await Promise.all([listMaterias(), listMateriaCategoryNames()]);
     if (!error && data) setMaterias(data as MateriaRow[]);
+    setCategories(categoriesRes.data || []);
     setLoading(false);
   }
 
@@ -27,13 +32,59 @@ export function AdminMaterias() {
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return materias;
-    return materias.filter((m) =>
-      (m.titulo || "").toLowerCase().includes(needle) ||
-      (m.resumo || "").toLowerCase().includes(needle) ||
-      (m.tags || []).join(" ").toLowerCase().includes(needle)
+    return materias.filter((m) => {
+      const category = (m.tags && m.tags[0]) ? m.tags[0] : "";
+      const matchesCategory = activeCategory === "Todas" || category === activeCategory;
+      if (!matchesCategory) return false;
+      if (!needle) return true;
+      return (m.titulo || "").toLowerCase().includes(needle) ||
+        (m.resumo || "").toLowerCase().includes(needle) ||
+        (m.tags || []).join(" ").toLowerCase().includes(needle);
+    });
+  }, [activeCategory, materias, q]);
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      alert("Informe o nome da nova categoria.");
+      return;
+    }
+
+    const duplicated = categories.some(
+      (category) => category.localeCompare(name, "pt-BR", { sensitivity: "base" }) === 0
     );
-  }, [materias, q]);
+    if (duplicated) {
+      alert("Essa categoria já existe.");
+      return;
+    }
+
+    setAddingCategory(true);
+    try {
+      const { data, error } = await createMateriaCategoria(name);
+      if (error) {
+        if ((error as any).code === "23505") {
+          alert("Essa categoria já existe.");
+          return;
+        }
+        if (/materia_categorias/i.test(error.message || "") && /does not exist/i.test(error.message || "")) {
+          alert("A tabela de categorias ainda não existe. Execute o SQL de criação e tente novamente.");
+          return;
+        }
+        alert(error.message || "Não foi possível criar a categoria.");
+        return;
+      }
+
+      const nextName = data?.nome || name;
+      const nextOptions = [...categories, nextName].sort((a, b) =>
+        a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+      );
+      setCategories(nextOptions);
+      setActiveCategory(nextName);
+      setNewCategoryName("");
+    } finally {
+      setAddingCategory(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir esta matéria?")) return;
@@ -71,6 +122,42 @@ export function AdminMaterias() {
             onChange={(e) => setQ(e.target.value)}
             className="w-full rounded-md border border-input bg-background pl-9 pr-4 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
+        </div>
+      </div>
+
+      <div className="bg-card p-4 rounded-lg border shadow-sm space-y-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {["Todas", ...categories].map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setActiveCategory(category)}
+              className={`px-3 py-1.5 text-sm rounded-full border whitespace-nowrap transition-colors ${
+                activeCategory === category
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background hover:bg-muted"
+              }`}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            className="w-full h-10 px-3 rounded-md border bg-background"
+            placeholder="+ Adicionar categoria"
+          />
+          <button
+            type="button"
+            onClick={handleAddCategory}
+            disabled={addingCategory}
+            className="inline-flex items-center justify-center gap-2 rounded-md border px-4 h-10 text-sm hover:bg-muted disabled:opacity-60"
+          >
+            <Plus className="h-4 w-4" />
+            {addingCategory ? "Salvando..." : "Adicionar categoria"}
+          </button>
         </div>
       </div>
 

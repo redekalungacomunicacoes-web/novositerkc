@@ -2,7 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Bold, Italic } from "lucide-react";
-import { createMateria, getMateria, MateriaContentBlock, MateriaTextBlockType, slugify, updateMateria } from "@/lib/cms";
+import {
+  createMateria,
+  createMateriaCategoria,
+  getMateria,
+  listMateriaCategoryNames,
+  MateriaContentBlock,
+  MateriaTextBlockType,
+  slugify,
+  updateMateria
+} from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 
 type EquipeOption = {
@@ -239,7 +248,7 @@ export function AdminMateriaForm() {
       title: "",
       subtitle: "",
       authorId: "",
-      category: "Cultura",
+      category: "",
       content: "",
       coverImage: "",
       bannerImage: "",
@@ -256,6 +265,9 @@ export function AdminMateriaForm() {
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [selectedAudioFileName, setSelectedAudioFileName] = useState("");
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
 
   const [galeria, setGaleria] = useState<MateriaGaleriaItem[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
@@ -266,6 +278,7 @@ export function AdminMateriaForm() {
   const coverUrl = watch("coverImage");
   const bannerUrl = watch("bannerImage");
   const selectedAuthorId = watch("authorId");
+  const selectedCategory = watch("category");
 
   const coverInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -273,6 +286,17 @@ export function AdminMateriaForm() {
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const canUseGallery = useMemo(() => !!id, [id]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await listMateriaCategoryNames();
+      const options = data || [];
+      setCategoryOptions(options);
+      if (!watch("category") && options.length > 0) {
+        setValue("category", options[0], { shouldDirty: false });
+      }
+    })();
+  }, [setValue, watch]);
 
   useEffect(() => {
     (async () => {
@@ -330,7 +354,7 @@ export function AdminMateriaForm() {
         title: d.titulo || "",
         subtitle: d.resumo || "",
         authorId: d.autor_equipe_id || d.autor_id || "",
-        category: (d.tags && d.tags[0]) ? d.tags[0] : "Cultura",
+        category: (d.tags && d.tags[0]) ? d.tags[0] : (categoryOptions[0] || ""),
         date: (d.published_at ? new Date(d.published_at) : new Date(d.created_at)).toISOString().split("T")[0],
         content: d.conteudo || "",
         coverImage: d.capa_url || "",
@@ -343,7 +367,7 @@ export function AdminMateriaForm() {
 
       await loadGaleria(id);
     })();
-  }, [id, reset]);
+  }, [categoryOptions, id, reset]);
 
   async function loadGaleria(materiaId: string) {
     const { data, error } = await supabase
@@ -360,6 +384,49 @@ export function AdminMateriaForm() {
 
     setGaleria((data || []) as MateriaGaleriaItem[]);
   }
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      alert("Informe o nome da nova categoria.");
+      return;
+    }
+
+    const duplicated = categoryOptions.some(
+      (category) => category.localeCompare(name, "pt-BR", { sensitivity: "base" }) === 0
+    );
+    if (duplicated) {
+      alert("Essa categoria já existe.");
+      return;
+    }
+
+    setAddingCategory(true);
+    try {
+      const { data, error } = await createMateriaCategoria(name);
+      if (error) {
+        if ((error as any).code === "23505") {
+          alert("Essa categoria já existe.");
+          return;
+        }
+        if (/materia_categorias/i.test(error.message || "") && /does not exist/i.test(error.message || "")) {
+          alert("A tabela de categorias ainda não existe. Execute o SQL de criação e tente novamente.");
+          return;
+        }
+        alert(error.message || "Não foi possível criar a categoria.");
+        return;
+      }
+
+      const nextName = data?.nome || name;
+      const nextOptions = [...categoryOptions, nextName].sort((a, b) =>
+        a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+      );
+      setCategoryOptions(nextOptions);
+      setValue("category", nextName, { shouldDirty: true, shouldValidate: true });
+      setNewCategoryName("");
+    } finally {
+      setAddingCategory(false);
+    }
+  };
 
   const handleGalleryFilesChange = async (files?: FileList | null) => {
     if (!id || !files || files.length === 0) return;
@@ -872,13 +939,28 @@ export function AdminMateriaForm() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Categoria</label>
               <select {...register("category")} className="w-full h-10 px-3 rounded-md border bg-background">
-                <option value="Cultura">Cultura</option>
-                <option value="Política">Política</option>
-                <option value="Educação">Educação</option>
-                <option value="Meio Ambiente">Meio Ambiente</option>
-                <option value="Projetos">Projetos</option>
-                <option value="Agenda">Agenda</option>
+                {!selectedCategory ? <option value="">Selecione uma categoria</option> : null}
+                {categoryOptions.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
               </select>
+              <div className="flex gap-2">
+                <input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md border bg-background"
+                  placeholder="Nova categoria"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCategory}
+                  className="inline-flex items-center gap-2 px-3 h-10 text-sm rounded-md border hover:bg-muted disabled:opacity-60"
+                  disabled={addingCategory}
+                >
+                  <Plus className="w-4 h-4" />
+                  {addingCategory ? "Salvando..." : "Nova"}
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Hashtags</label>
