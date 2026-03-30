@@ -30,6 +30,7 @@ import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
 import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
 import { AdminPerfil } from "@/app/pages/admin/AdminPerfil";
 import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
+import { AdminTarefas } from "@/app/pages/admin/AdminTarefas";
 import { financeiroRoutes } from "@/app/pages/admin/Financeiro/routes";
 
 // ✅ NOVO: Admin Quem Somos
@@ -95,6 +96,9 @@ export const router = createBrowserRouter([
 
           // ✅ Newsletter (admin/editor)
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
+
+          // ✅ Tarefas da equipe (admin/editor/autor)
+          { path: "tarefas", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminTarefas },
 
           {
             path: "financeiro",
