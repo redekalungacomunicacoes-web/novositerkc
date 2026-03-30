@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   Landmark,
+  ListTodo,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,6 +75,12 @@ export const adminLinks: SidebarLink[] = [
     label: "Newsletter",
     icon: Mail,
     allow: ["admin_alfa", "admin", "editor"],
+  },
+  {
+    href: "/admin/tarefas",
+    label: "Tarefas",
+    icon: ListTodo,
+    allow: ["admin_alfa", "admin", "editor", "autor"],
   },
   {
     href: "/admin/financeiro",
