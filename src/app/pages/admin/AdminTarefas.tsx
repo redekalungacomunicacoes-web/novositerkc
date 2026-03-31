@@ -1,70 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CalendarDays, ChevronLeft, ChevronRight, Clock3, Filter, ListChecks } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Bell, CalendarDays, ChevronLeft, ChevronRight, Paperclip, Plus, X } from "lucide-react";
 
-import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
-
-type RoleName = "admin_alfa" | "admin" | "editor" | "autor" | "financeiro";
-type TaskScope = "mine" | "all";
-
-type TaskRow = {
-  id: string;
-  titulo: string;
-  descricao: string | null;
-  responsavel_id: string | null;
-  status: string | null;
-  prioridade: string | null;
-  prazo: string | null;
-  created_at: string;
-};
-
-type TeamMember = {
-  id: string;
-  nome: string;
-  user_id: string | null;
-};
+import { supabase } from "@/lib/supabase";
+import {
+  createExternalAttachment,
+  createTask,
+  fetchNotifications,
+  fetchTasksInRange,
+  fetchTeamProfiles,
+  markNotificationAsRead,
+  uploadTaskAttachment,
+} from "./tasksService";
+import type { Notification, Task, TaskFormValues, TeamProfile } from "./tasksTypes";
 
 const WEEK_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-function normalizeDateOnly(value: Date | string) {
-  const date = typeof value === "string" ? new Date(value) : value;
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function parsePrazoToDate(value: string | null) {
-  if (!value) return null;
-  const normalized = value.includes("T") ? new Date(value) : new Date(`${value}T00:00:00`);
-  if (Number.isNaN(normalized.getTime())) return null;
-  return normalizeDateOnly(normalized);
-}
-
 function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function isTaskCompleted(status: string | null) {
-  const normalized = `${status ?? ""}`.trim().toLowerCase();
-  return ["concluida", "concluído", "concluido", "done", "completed", "finalizada", "finalizado"].includes(normalized);
-}
-
-function getMonthLabel(monthDate: Date) {
-  return monthDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-}
-
-function getUrgencyLabel(daysDiff: number) {
-  if (daysDiff < 0) return `Atrasada há ${Math.abs(daysDiff)} ${Math.abs(daysDiff) === 1 ? "dia" : "dias"}`;
-  if (daysDiff === 0) return "Vence hoje";
-  if (daysDiff === 1) return "Vence amanhã";
-  return `Vence em ${daysDiff} dias`;
-}
-
-function getUrgencyClass(daysDiff: number) {
-  if (daysDiff < 0) return "bg-red-50 text-red-700 border-red-200";
-  if (daysDiff === 0) return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-sky-50 text-sky-700 border-sky-200";
+  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
 }
 
 function buildCalendarDays(monthDate: Date) {
@@ -80,384 +33,353 @@ function buildCalendarDays(monthDate: Date) {
   });
 }
 
-function canViewAllTasks(roles: RoleName[]) {
-  return roles.includes("admin") || roles.includes("admin_alfa");
+function monthRange(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { start: toDateKey(start), end: toDateKey(end) };
+}
+
+function emptyForm(date: Date): TaskFormValues {
+  return {
+    titulo: "",
+    descricao: "",
+    data_tarefa: toDateKey(date),
+    hora_inicio: "",
+    hora_fim: "",
+    prioridade: "media",
+    status: "pendente",
+    assigned_to: "",
+    external_link: "",
+    external_attachment_link: "",
+  };
+}
+
+function validate(values: TaskFormValues) {
+  if (!values.titulo.trim()) return "O título é obrigatório.";
+  if (!values.data_tarefa) return "A data é obrigatória.";
+  if (!values.assigned_to) return "Selecione um responsável.";
+  if (values.hora_inicio && values.hora_fim && values.hora_fim < values.hora_inicio) {
+    return "A hora de fim deve ser maior que a hora de início.";
+  }
+  if (values.external_link && !/^https?:\/\//.test(values.external_link)) {
+    return "O link externo da tarefa deve começar com http:// ou https://.";
+  }
+  if (values.external_attachment_link && !/^https?:\/\//.test(values.external_attachment_link)) {
+    return "O link de anexo deve começar com http:// ou https://.";
+  }
+  return null;
 }
 
 export function AdminTarefas() {
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [roles, setRoles] = useState<RoleName[]>([]);
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState(() => normalizeDateOnly(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
-  const [selectedDate, setSelectedDate] = useState(() => normalizeDateOnly(new Date()));
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [month, setMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const [scope, setScope] = useState<TaskScope>("mine");
-  const [selectedResponsible, setSelectedResponsible] = useState<string>("all");
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [profiles, setProfiles] = useState<TeamProfile[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [form, setForm] = useState<TaskFormValues>(emptyForm(new Date()));
 
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      setError(null);
+  const unreadCount = useMemo(() => notifications.filter((item) => !item.lida).length, [notifications]);
+  const calendarDays = useMemo(() => buildCalendarDays(month), [month]);
 
-      const [{ data: authData }, rolesRes, tasksRes, teamRes] = await Promise.all([
-        supabase.auth.getSession(),
-        getCurrentUserRoles(),
-        supabase
-          .from("tarefas")
-          .select("id,titulo,descricao,responsavel_id,status,prioridade,prazo,created_at")
-          .order("prazo", { ascending: true, nullsFirst: false })
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("equipe")
-          .select("id,nome,user_id")
-          .eq("ativo", true)
-          .order("nome", { ascending: true }),
-      ]);
-
-      const userId = authData.session?.user.id ?? null;
-      setCurrentUserId(userId);
-
-      if (rolesRes.error) {
-        setError(rolesRes.error);
-      } else {
-        const normalizedRoles = [...new Set((rolesRes.roles || []).map((role) => role.trim().toLowerCase()))] as RoleName[];
-        setRoles(normalizedRoles);
-      }
-
-      if (tasksRes.error) {
-        setError(tasksRes.error.message);
-      } else {
-        setTasks((tasksRes.data || []) as TaskRow[]);
-      }
-
-      if (teamRes.error) {
-        setError(teamRes.error.message);
-      } else {
-        setTeamMembers((teamRes.data || []) as TeamMember[]);
-      }
-
-      setLoading(false);
+  const taskCountByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const task of tasks) {
+      map.set(task.data_tarefa, (map.get(task.data_tarefa) ?? 0) + 1);
     }
-
-    void loadData();
-  }, []);
-
-  const teamByUserId = useMemo(() => {
-    return new Map(teamMembers.filter((member) => member.user_id).map((member) => [member.user_id as string, member.nome]));
-  }, [teamMembers]);
-
-  const isAdminView = canViewAllTasks(roles);
-
-  const visibleTasks = useMemo(() => {
-    let filtered = [...tasks];
-
-    if (scope === "mine" && currentUserId) {
-      filtered = filtered.filter((task) => task.responsavel_id === currentUserId);
-    }
-
-    if (scope === "all" && selectedResponsible !== "all") {
-      filtered = filtered.filter((task) => task.responsavel_id === selectedResponsible);
-    }
-
-    return filtered;
-  }, [tasks, scope, currentUserId, selectedResponsible]);
-
-  const tasksWithDeadline = useMemo(() => {
-    return visibleTasks
-      .map((task) => ({
-        ...task,
-        prazoDate: parsePrazoToDate(task.prazo),
-      }))
-      .filter((task) => task.prazoDate !== null)
-      .sort((a, b) => (a.prazoDate as Date).getTime() - (b.prazoDate as Date).getTime());
-  }, [visibleTasks]);
-
-  const tasksPerDay = useMemo(() => {
-    const map = new Map<string, typeof tasksWithDeadline>();
-
-    for (const task of tasksWithDeadline) {
-      const key = toDateKey(task.prazoDate as Date);
-      map.set(key, [...(map.get(key) || []), task]);
-    }
-
     return map;
-  }, [tasksWithDeadline]);
+  }, [tasks]);
 
-  const selectedDayTasks = useMemo(() => {
-    return tasksPerDay.get(toDateKey(selectedDate)) || [];
-  }, [tasksPerDay, selectedDate]);
+  const selectedDateKey = toDateKey(selectedDate);
+  const tasksOfDay = useMemo(() => tasks.filter((task) => task.data_tarefa === selectedDateKey), [tasks, selectedDateKey]);
 
-  const today = normalizeDateOnly(new Date());
+  async function loadAll(referenceMonth: Date, userId: string, canManageTasks: boolean) {
+    const { start, end } = monthRange(referenceMonth);
+    const [taskRows, profileRows, notificationRows] = await Promise.all([
+      fetchTasksInRange(start, end, userId, canManageTasks),
+      fetchTeamProfiles(),
+      fetchNotifications(userId, canManageTasks),
+    ]);
 
-  const tasksDueToday = useMemo(
-    () => tasksWithDeadline.filter((task) => !isTaskCompleted(task.status) && toDateKey(task.prazoDate as Date) === toDateKey(today)),
-    [tasksWithDeadline, today],
-  );
-
-  const tasksNext7Days = useMemo(() => {
-    return tasksWithDeadline.filter((task) => {
-      if (isTaskCompleted(task.status)) return false;
-      const diff = Math.ceil(((task.prazoDate as Date).getTime() - today.getTime()) / 86_400_000);
-      return diff >= 1 && diff <= 7;
-    });
-  }, [tasksWithDeadline, today]);
-
-  const tasksOverdue = useMemo(() => {
-    return tasksWithDeadline.filter((task) => {
-      if (isTaskCompleted(task.status)) return false;
-      return (task.prazoDate as Date).getTime() < today.getTime();
-    });
-  }, [tasksWithDeadline, today]);
-
-  const calendarDays = useMemo(() => buildCalendarDays(selectedMonth), [selectedMonth]);
-
-  function moveMonth(delta: number) {
-    setSelectedMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+    setTasks(taskRows);
+    setProfiles(profileRows);
+    setNotifications(notificationRows);
   }
 
-  const selectedTask = useMemo(() => visibleTasks.find((task) => task.id === selectedTaskId) || null, [visibleTasks, selectedTaskId]);
+  useEffect(() => {
+    async function bootstrap() {
+      try {
+        setLoading(true);
+        const [{ data: sessionData }, roleResult] = await Promise.all([supabase.auth.getSession(), getCurrentUserRoles()]);
+        const userId = sessionData.session?.user.id;
+        if (!userId) throw new Error("Sessão inválida. Faça login novamente.");
 
-  function renderTaskCard(task: (typeof tasksWithDeadline)[number]) {
-    const dueDate = task.prazoDate as Date;
-    const diff = Math.ceil((dueDate.getTime() - today.getTime()) / 86_400_000);
-    const responsibleName = task.responsavel_id ? teamByUserId.get(task.responsavel_id) : null;
+        const roles = roleResult.roles.map((role) => role.toLowerCase());
+        const canManageTasks = roles.includes("admin_alfa") || roles.includes("admin");
 
-    return (
-      <button
-        key={task.id}
-        type="button"
-        onClick={() => setSelectedTaskId(task.id)}
-        className="w-full rounded-lg border border-border bg-white p-3 text-left hover:bg-muted/40 transition"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="font-semibold text-sm text-foreground">{task.titulo}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {dueDate.toLocaleDateString("pt-BR")} • {responsibleName || "Sem responsável"}
-            </p>
-          </div>
-          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${getUrgencyClass(diff)}`}>
-            {getUrgencyLabel(diff)}
-          </span>
-        </div>
-      </button>
-    );
+        setCurrentUserId(userId);
+        setCanManage(canManageTasks);
+
+        await loadAll(month, userId, canManageTasks);
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : "Falha ao carregar módulo de tarefas.";
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void bootstrap();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    void loadAll(month, currentUserId, canManage).catch((caught) => {
+      const message = caught instanceof Error ? caught.message : "Falha ao recarregar calendário.";
+      setError(message);
+    });
+  }, [month]);
+
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, data_tarefa: selectedDateKey }));
+  }, [selectedDateKey]);
+
+  async function handleCreateTask(event: FormEvent) {
+    event.preventDefault();
+    if (!canManage) {
+      setError("Somente admin alpha/admin pode criar e atribuir tarefas.");
+      return;
+    }
+
+    const validation = validate(form);
+    if (validation) {
+      setError(validation);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      const taskId = await createTask({
+        titulo: form.titulo.trim(),
+        descricao: form.descricao.trim() || null,
+        data_tarefa: form.data_tarefa,
+        hora_inicio: form.hora_inicio || null,
+        hora_fim: form.hora_fim || null,
+        prioridade: form.prioridade,
+        status: form.status,
+        assigned_to: form.assigned_to,
+        created_by: currentUserId,
+        external_link: form.external_link.trim() || null,
+      });
+
+      if (form.external_attachment_link.trim()) {
+        await createExternalAttachment(taskId, form.external_attachment_link.trim(), currentUserId);
+      }
+
+      for (const file of files) {
+        await uploadTaskAttachment(taskId, file, currentUserId);
+      }
+
+      await loadAll(month, currentUserId, canManage);
+      setForm(emptyForm(selectedDate));
+      setFiles([]);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Não foi possível salvar a tarefa.";
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleMarkRead(notificationId: string) {
+    try {
+      await markNotificationAsRead(notificationId);
+      setNotifications((prev) => prev.map((item) => (item.id === notificationId ? { ...item, lida: true } : item)));
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Não foi possível marcar notificação como lida.";
+      setError(message);
+    }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <ListChecks className="h-7 w-7 text-primary" />
-            Dashboard de Tarefas
+          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            <CalendarDays className="h-7 w-7 text-primary" /> Calendário Administrativo
           </h1>
-          <p className="text-muted-foreground mt-1">Calendário mensal, prazos e foco em execução da equipe.</p>
+          <p className="text-muted-foreground">Planejamento da equipe com tarefas por data, anexos e notificações.</p>
         </div>
 
-        <div className="rounded-lg border bg-card px-3 py-2 flex flex-col sm:flex-row gap-2 sm:items-center">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Filter className="h-4 w-4" />
-            Filtros
-          </div>
-
-          <select
-            value={scope}
-            onChange={(event) => setScope(event.target.value as TaskScope)}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="mine">Minhas tarefas</option>
-            {isAdminView && <option value="all">Todas as tarefas</option>}
-          </select>
-
-          {isAdminView && scope === "all" ? (
-            <select
-              value={selectedResponsible}
-              onChange={(event) => setSelectedResponsible(event.target.value)}
-              className="h-9 rounded-md border bg-background px-3 text-sm"
-            >
-              <option value="all">Todos responsáveis</option>
-              {teamMembers
-                .filter((member) => member.user_id)
-                .map((member) => (
-                  <option key={member.id} value={member.user_id as string}>
-                    {member.nome}
-                  </option>
-                ))}
-            </select>
-          ) : null}
+        <div className="rounded-xl border bg-card p-3">
+          <button type="button" className="relative inline-flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm font-medium">
+            <Bell className="h-4 w-4" /> Notificações
+            {unreadCount > 0 ? (
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs text-white">{unreadCount}</span>
+            ) : null}
+          </button>
         </div>
       </div>
 
-      {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">Erro ao carregar tarefas: {error}</div>
-      ) : null}
+      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
-        <section className="rounded-xl border bg-card p-4 sm:p-5">
+        <section className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => moveMonth(-1)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border bg-background hover:bg-muted/60"
-              aria-label="Mês anterior"
-            >
+            <button type="button" onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="rounded-md border p-2">
               <ChevronLeft className="h-4 w-4" />
             </button>
-
-            <p className="font-semibold text-lg capitalize flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-primary" />
-              {getMonthLabel(selectedMonth)}
-            </p>
-
-            <button
-              type="button"
-              onClick={() => moveMonth(1)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border bg-background hover:bg-muted/60"
-              aria-label="Próximo mês"
-            >
+            <p className="text-lg font-semibold capitalize">{month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
+            <button type="button" onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="rounded-md border p-2">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
           <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
-            {WEEK_DAYS.map((day) => (
-              <div key={day}>{day}</div>
+            {WEEK_DAYS.map((item) => (
+              <div key={item}>{item}</div>
             ))}
           </div>
 
           <div className="mt-2 grid grid-cols-7 gap-2">
             {calendarDays.map((day) => {
-              const isCurrentMonth = day.getMonth() === selectedMonth.getMonth();
-              const dayKey = toDateKey(day);
-              const tasksCount = (tasksPerDay.get(dayKey) || []).length;
-              const isSelected = dayKey === toDateKey(selectedDate);
-              const isToday = dayKey === toDateKey(today);
+              const key = toDateKey(day);
+              const count = taskCountByDate.get(key) ?? 0;
+              const selected = key === selectedDateKey;
 
               return (
                 <button
-                  key={dayKey}
+                  key={key}
                   type="button"
-                  onClick={() => setSelectedDate(normalizeDateOnly(day))}
-                  className={`rounded-lg border p-2 min-h-20 text-left transition ${
-                    isSelected
-                      ? "border-primary bg-primary/10"
-                      : tasksCount > 0
-                        ? "border-sky-200 bg-sky-50/80 hover:bg-sky-100/70"
-                        : "border-border bg-background hover:bg-muted/50"
-                  } ${!isCurrentMonth ? "opacity-50" : ""}`}
+                  onClick={() => {
+                    setSelectedDate(day);
+                    setIsDrawerOpen(true);
+                  }}
+                  className={`min-h-[84px] rounded-xl border p-2 text-left ${selected ? "border-primary bg-primary/10" : "bg-background hover:bg-muted/40"}`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${isToday ? "text-primary" : "text-foreground"}`}>{day.getDate()}</span>
-                    {tasksCount > 0 ? (
-                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-100 px-1.5 text-[10px] font-semibold text-sky-700">
-                        {tasksCount}
-                      </span>
-                    ) : null}
+                    <span className="text-sm font-semibold">{day.getDate()}</span>
+                    {count > 0 ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{count}</span> : null}
                   </div>
-                  {tasksCount > 0 ? <span className="mt-2 block h-1.5 w-1.5 rounded-full bg-sky-600" /> : null}
                 </button>
               );
             })}
           </div>
-
-          <div className="mt-5 rounded-lg border bg-muted/20 p-3">
-            <h3 className="font-semibold text-sm">Tarefas em {selectedDate.toLocaleDateString("pt-BR")}</h3>
-            <div className="mt-3 space-y-2">
-              {selectedDayTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhuma tarefa com prazo nesta data.</p>
-              ) : (
-                selectedDayTasks.map((task) => renderTaskCard(task))
-              )}
-            </div>
-          </div>
         </section>
 
-        <aside className="space-y-4">
-          <div className="rounded-xl border bg-card p-4">
-            <h3 className="font-semibold">Resumo visual</h3>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div className="rounded-lg bg-amber-50 p-3 text-center">
-                <p className="text-xs text-amber-700">Hoje</p>
-                <p className="text-xl font-bold text-amber-800">{tasksDueToday.length}</p>
-              </div>
-              <div className="rounded-lg bg-sky-50 p-3 text-center">
-                <p className="text-xs text-sky-700">7 dias</p>
-                <p className="text-xl font-bold text-sky-800">{tasksNext7Days.length}</p>
-              </div>
-              <div className="rounded-lg bg-red-50 p-3 text-center">
-                <p className="text-xs text-red-700">Atrasadas</p>
-                <p className="text-xl font-bold text-red-800">{tasksOverdue.length}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-card p-4">
-            <h3 className="font-semibold text-amber-800 flex items-center gap-2">
-              <Clock3 className="h-4 w-4" />
-              Vence hoje
-            </h3>
-            <div className="mt-3 space-y-2">
-              {tasksDueToday.length ? tasksDueToday.map((task) => renderTaskCard(task)) : <p className="text-sm text-muted-foreground">Nenhuma tarefa vencendo hoje.</p>}
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-card p-4">
-            <h3 className="font-semibold text-sky-800">Próximas do vencimento</h3>
-            <div className="mt-3 space-y-2">
-              {tasksNext7Days.length ? tasksNext7Days.map((task) => renderTaskCard(task)) : <p className="text-sm text-muted-foreground">Sem tarefas para os próximos 7 dias.</p>}
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-card p-4">
-            <h3 className="font-semibold text-red-800 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              Atrasadas
-            </h3>
-            <div className="mt-3 space-y-2">
-              {tasksOverdue.length ? tasksOverdue.map((task) => renderTaskCard(task)) : <p className="text-sm text-muted-foreground">Sem tarefas atrasadas.</p>}
-            </div>
+        <aside className="rounded-xl border bg-card p-4">
+          <h2 className="mb-3 text-base font-semibold">Notificações da equipe</h2>
+          <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
+            {notifications.length === 0 ? <p className="text-sm text-muted-foreground">Sem notificações.</p> : null}
+            {notifications.map((notification) => (
+              <article key={notification.id} className={`rounded-lg border p-3 ${notification.lida ? "bg-background" : "bg-blue-50"}`}>
+                <p className="text-sm font-semibold">{notification.titulo}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{notification.recipient?.nome || notification.recipient?.email || "Destinatário"} • {notification.tasks?.titulo ?? "Tarefa"} • {notification.tasks?.data_tarefa ?? "Sem data"}</p>
+                <p className="mt-2 text-sm">{notification.mensagem}</p>
+                {!notification.lida ? (
+                  <button type="button" onClick={() => void handleMarkRead(notification.id)} className="mt-2 text-xs font-medium text-blue-700">
+                    Marcar como lida
+                  </button>
+                ) : null}
+              </article>
+            ))}
           </div>
         </aside>
       </div>
 
-      {loading ? <p className="text-sm text-muted-foreground">Carregando tarefas...</p> : null}
-
-      {selectedTask ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-lg rounded-xl border bg-white p-5 shadow-xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold">{selectedTask.titulo}</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Prazo: {selectedTask.prazo ? parsePrazoToDate(selectedTask.prazo)?.toLocaleDateString("pt-BR") : "Sem prazo"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTaskId(null)}
-                className="rounded-md border px-2 py-1 text-sm hover:bg-muted"
-              >
-                Fechar
+      {isDrawerOpen ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+          <div className="h-full w-full max-w-2xl overflow-auto bg-white p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Tarefas de {selectedDate.toLocaleDateString("pt-BR")}</h2>
+              <button type="button" onClick={() => setIsDrawerOpen(false)} className="rounded-md border p-2">
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mt-4 space-y-2 text-sm">
-              <p><span className="font-medium">Status:</span> {selectedTask.status || "—"}</p>
-              <p><span className="font-medium">Prioridade:</span> {selectedTask.prioridade || "—"}</p>
-              <p><span className="font-medium">Responsável:</span> {selectedTask.responsavel_id ? teamByUserId.get(selectedTask.responsavel_id) || "—" : "—"}</p>
-              <p><span className="font-medium">Criada em:</span> {new Date(selectedTask.created_at).toLocaleDateString("pt-BR")}</p>
-              <p><span className="font-medium">Descrição:</span></p>
-              <p className="rounded-md border bg-muted/20 p-3">{selectedTask.descricao || "Sem descrição."}</p>
+            <div className="space-y-3">
+              {tasksOfDay.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma tarefa para esta data.</p> : null}
+              {tasksOfDay.map((task) => (
+                <article key={task.id} className="rounded-lg border p-3">
+                  <p className="font-semibold">{task.titulo}</p>
+                  <p className="text-xs text-muted-foreground">{task.hora_inicio ?? "--:--"} - {task.hora_fim ?? "--:--"} • {task.prioridade} • {task.status}</p>
+                  <p className="mt-1 text-sm">{task.descricao || "Sem descrição"}</p>
+                  {task.external_link ? <a className="mt-2 block text-xs text-blue-700" href={task.external_link} target="_blank" rel="noreferrer">Link externo</a> : null}
+                  {(task.task_attachments ?? []).length > 0 ? (
+                    <ul className="mt-2 space-y-1 text-xs">
+                      {(task.task_attachments ?? []).map((attachment) => (
+                        <li key={attachment.id} className="flex items-center gap-1 text-muted-foreground">
+                          <Paperclip className="h-3 w-3" />
+                          {attachment.external_url ? (
+                            <a href={attachment.external_url} target="_blank" rel="noreferrer" className="text-blue-700">{attachment.external_url}</a>
+                          ) : (
+                            <span>{attachment.file_name} ({attachment.mime_type || "arquivo"})</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              ))}
             </div>
+
+            {canManage ? (
+              <form onSubmit={handleCreateTask} className="mt-6 space-y-3 rounded-xl border bg-muted/20 p-4">
+                <h3 className="flex items-center gap-2 text-base font-semibold"><Plus className="h-4 w-4" /> Nova tarefa</h3>
+                <input className="w-full rounded-md border bg-white p-2 text-sm" placeholder="Título" value={form.titulo} onChange={(event) => setForm((prev) => ({ ...prev, titulo: event.target.value }))} />
+                <textarea className="w-full rounded-md border bg-white p-2 text-sm" placeholder="Descrição" value={form.descricao} onChange={(event) => setForm((prev) => ({ ...prev, descricao: event.target.value }))} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" className="rounded-md border bg-white p-2 text-sm" value={form.data_tarefa} onChange={(event) => setForm((prev) => ({ ...prev, data_tarefa: event.target.value }))} />
+                  <select className="rounded-md border bg-white p-2 text-sm" value={form.assigned_to} onChange={(event) => setForm((prev) => ({ ...prev, assigned_to: event.target.value }))}>
+                    <option value="">Responsável</option>
+                    {profiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>{profile.nome || profile.email || profile.id}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="time" className="rounded-md border bg-white p-2 text-sm" value={form.hora_inicio} onChange={(event) => setForm((prev) => ({ ...prev, hora_inicio: event.target.value }))} />
+                  <input type="time" className="rounded-md border bg-white p-2 text-sm" value={form.hora_fim} onChange={(event) => setForm((prev) => ({ ...prev, hora_fim: event.target.value }))} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <select className="rounded-md border bg-white p-2 text-sm" value={form.prioridade} onChange={(event) => setForm((prev) => ({ ...prev, prioridade: event.target.value as TaskFormValues["prioridade"] }))}>
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                    <option value="urgente">Urgente</option>
+                  </select>
+                  <select className="rounded-md border bg-white p-2 text-sm" value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as TaskFormValues["status"] }))}>
+                    <option value="pendente">Pendente</option>
+                    <option value="em_andamento">Em andamento</option>
+                    <option value="concluida">Concluída</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </div>
+                <input className="w-full rounded-md border bg-white p-2 text-sm" placeholder="Link externo da tarefa (opcional)" value={form.external_link} onChange={(event) => setForm((prev) => ({ ...prev, external_link: event.target.value }))} />
+                <input className="w-full rounded-md border bg-white p-2 text-sm" placeholder="Link para anexo (opcional)" value={form.external_attachment_link} onChange={(event) => setForm((prev) => ({ ...prev, external_attachment_link: event.target.value }))} />
+                <input type="file" multiple className="w-full rounded-md border bg-white p-2 text-sm" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
+                <button disabled={saving} type="submit" className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+                  {saving ? "Salvando..." : "Salvar tarefa"}
+                </button>
+              </form>
+            ) : (
+              <p className="mt-6 rounded-lg border bg-amber-50 p-3 text-sm text-amber-800">Você tem acesso apenas para visualização das tarefas e notificações destinadas a você.</p>
+            )}
           </div>
         </div>
       ) : null}
+
+      {loading ? <p className="text-sm text-muted-foreground">Carregando dados do calendário...</p> : null}
     </div>
   );
 }
