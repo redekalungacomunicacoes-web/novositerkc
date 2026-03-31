@@ -13,7 +13,9 @@ function inferAttachmentType(file: File): AttachmentType {
 
 export async function fetchTeamProfiles() {
   const { data, error } = await supabase.from("profiles").select("id,nome,email,ativo").eq("ativo", true).order("nome");
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(`Não foi possível carregar integrantes em public.profiles: ${error.message}`);
+  }
   return (data ?? []) as TeamProfile[];
 }
 
@@ -38,7 +40,7 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
 
 export async function createTask(payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">) {
   const { data, error } = await supabase.from("tasks").insert(payload).select("id").single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`Erro ao inserir tarefa: ${error.message}`);
   return data.id as string;
 }
 
@@ -51,7 +53,7 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
     upsert: false,
     contentType: file.type,
   });
-  if (uploadError) throw new Error(uploadError.message);
+  if (uploadError) throw new Error(`Erro no upload para storage: ${uploadError.message}`);
 
   const metadata: Omit<TaskAttachment, "id" | "created_at"> = {
     task_id: taskId,
@@ -66,7 +68,7 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
   };
 
   const { error: insertError } = await supabase.from("task_attachments").insert(metadata);
-  if (insertError) throw new Error(insertError.message);
+  if (insertError) throw new Error(`Arquivo enviado, mas falhou ao salvar metadados: ${insertError.message}`);
 }
 
 export async function createExternalAttachment(taskId: string, url: string, uploadedBy: string) {
@@ -77,7 +79,7 @@ export async function createExternalAttachment(taskId: string, url: string, uplo
     uploaded_by: uploadedBy,
   };
   const { error } = await supabase.from("task_attachments").insert(payload);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`Erro ao salvar anexo externo: ${error.message}`);
 }
 
 export async function fetchNotifications(userId: string, canManage: boolean) {

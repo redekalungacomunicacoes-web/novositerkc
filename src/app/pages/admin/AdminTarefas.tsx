@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Bell, CalendarDays, ChevronLeft, ChevronRight, Paperclip, Plus, X } from "lucide-react";
+import { Bell, CalendarDays } from "lucide-react";
 
 import { getCurrentUserRoles } from "@/lib/rbac";
 import { supabase } from "@/lib/supabase";
+import { TasksCalendarGrid, TasksDrawer } from "./tasksComponents";
 import {
   createExternalAttachment,
   createTask,
@@ -13,8 +14,6 @@ import {
   uploadTaskAttachment,
 } from "./tasksService";
 import type { Notification, Task, TaskFormValues, TeamProfile } from "./tasksTypes";
-
-const WEEK_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function toDateKey(date: Date) {
   return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
@@ -58,15 +57,9 @@ function validate(values: TaskFormValues) {
   if (!values.titulo.trim()) return "O título é obrigatório.";
   if (!values.data_tarefa) return "A data é obrigatória.";
   if (!values.assigned_to) return "Selecione um responsável.";
-  if (values.hora_inicio && values.hora_fim && values.hora_fim < values.hora_inicio) {
-    return "A hora de fim deve ser maior que a hora de início.";
-  }
-  if (values.external_link && !/^https?:\/\//.test(values.external_link)) {
-    return "O link externo da tarefa deve começar com http:// ou https://.";
-  }
-  if (values.external_attachment_link && !/^https?:\/\//.test(values.external_attachment_link)) {
-    return "O link de anexo deve começar com http:// ou https://.";
-  }
+  if (values.hora_inicio && values.hora_fim && values.hora_fim < values.hora_inicio) return "A hora de fim deve ser maior que a hora de início.";
+  if (values.external_link && !/^https?:\/\//.test(values.external_link)) return "O link externo da tarefa deve começar com http:// ou https://.";
+  if (values.external_attachment_link && !/^https?:\/\//.test(values.external_attachment_link)) return "O link de anexo deve começar com http:// ou https://.";
   return null;
 }
 
@@ -74,8 +67,15 @@ export function AdminTarefas() {
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [tasksDayLoading, setTasksDayLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [teamError, setTeamError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
   const [month, setMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -92,26 +92,42 @@ export function AdminTarefas() {
 
   const taskCountByDate = useMemo(() => {
     const map = new Map<string, number>();
-    for (const task of tasks) {
-      map.set(task.data_tarefa, (map.get(task.data_tarefa) ?? 0) + 1);
-    }
+    for (const task of tasks) map.set(task.data_tarefa, (map.get(task.data_tarefa) ?? 0) + 1);
     return map;
   }, [tasks]);
 
   const selectedDateKey = toDateKey(selectedDate);
-  const tasksOfDay = useMemo(() => tasks.filter((task) => task.data_tarefa === selectedDateKey), [tasks, selectedDateKey]);
+  const tasksOfDay = useMemo(
+    () => [...tasks.filter((task) => task.data_tarefa === selectedDateKey)].sort((a, b) => (a.hora_inicio ?? "23:59").localeCompare(b.hora_inicio ?? "23:59")),
+    [tasks, selectedDateKey],
+  );
 
-  async function loadAll(referenceMonth: Date, userId: string, canManageTasks: boolean) {
-    const { start, end } = monthRange(referenceMonth);
-    const [taskRows, profileRows, notificationRows] = await Promise.all([
-      fetchTasksInRange(start, end, userId, canManageTasks),
-      fetchTeamProfiles(),
-      fetchNotifications(userId, canManageTasks),
-    ]);
+  async function refreshTasksAndNotifications(referenceMonth: Date, userId: string, canManageTasks: boolean) {
+    setCalendarLoading(true);
+    try {
+      const { start, end } = monthRange(referenceMonth);
+      const [taskRows, notificationRows] = await Promise.all([fetchTasksInRange(start, end, userId, canManageTasks), fetchNotifications(userId, canManageTasks)]);
+      setTasks(taskRows);
+      setNotifications(notificationRows);
+    } finally {
+      setCalendarLoading(false);
+    }
+  }
 
-    setTasks(taskRows);
-    setProfiles(profileRows);
-    setNotifications(notificationRows);
+  async function loadProfiles() {
+    setTeamLoading(true);
+    setTeamError(null);
+    try {
+      const team = await fetchTeamProfiles();
+      setProfiles(team);
+    } catch (caught) {
+      console.error("Erro ao carregar equipe", caught);
+      const message = caught instanceof Error ? caught.message : "Falha ao carregar integrantes.";
+      setTeamError(message);
+      setProfiles([]);
+    } finally {
+      setTeamLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -128,10 +144,10 @@ export function AdminTarefas() {
         setCurrentUserId(userId);
         setCanManage(canManageTasks);
 
-        await loadAll(month, userId, canManageTasks);
+        await Promise.all([refreshTasksAndNotifications(month, userId, canManageTasks), loadProfiles()]);
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "Falha ao carregar módulo de tarefas.";
-        setError(message);
+        setGlobalError(message);
       } finally {
         setLoading(false);
       }
@@ -142,33 +158,39 @@ export function AdminTarefas() {
 
   useEffect(() => {
     if (!currentUserId) return;
-    void loadAll(month, currentUserId, canManage).catch((caught) => {
+    void refreshTasksAndNotifications(month, currentUserId, canManage).catch((caught) => {
       const message = caught instanceof Error ? caught.message : "Falha ao recarregar calendário.";
-      setError(message);
+      setGlobalError(message);
     });
-  }, [month]);
+  }, [month, currentUserId, canManage]);
 
   useEffect(() => {
     setForm((prev) => ({ ...prev, data_tarefa: selectedDateKey }));
   }, [selectedDateKey]);
 
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+    setTasksDayLoading(calendarLoading);
+  }, [calendarLoading, isDrawerOpen, selectedDateKey]);
+
   async function handleCreateTask(event: FormEvent) {
     event.preventDefault();
+    setSaveError(null);
+    setSaveSuccess(null);
+
     if (!canManage) {
-      setError("Somente admin alpha/admin pode criar e atribuir tarefas.");
+      setSaveError("Somente admin alpha/admin pode criar e atribuir tarefas.");
       return;
     }
 
     const validation = validate(form);
     if (validation) {
-      setError(validation);
+      setSaveError(validation);
       return;
     }
 
     try {
       setSaving(true);
-      setError(null);
-
       const taskId = await createTask({
         titulo: form.titulo.trim(),
         descricao: form.descricao.trim() || null,
@@ -182,20 +204,34 @@ export function AdminTarefas() {
         external_link: form.external_link.trim() || null,
       });
 
+      let attachmentWarning: string | null = null;
+
       if (form.external_attachment_link.trim()) {
-        await createExternalAttachment(taskId, form.external_attachment_link.trim(), currentUserId);
+        try {
+          await createExternalAttachment(taskId, form.external_attachment_link.trim(), currentUserId);
+        } catch (attachmentError) {
+          console.error("Erro ao vincular link externo", attachmentError);
+          attachmentWarning = "Tarefa salva, mas houve erro ao vincular o link de anexo.";
+        }
       }
 
       for (const file of files) {
-        await uploadTaskAttachment(taskId, file, currentUserId);
+        try {
+          await uploadTaskAttachment(taskId, file, currentUserId);
+        } catch (uploadError) {
+          console.error("Erro de upload de anexo", uploadError);
+          attachmentWarning = "Tarefa salva, mas um ou mais anexos não foram enviados.";
+        }
       }
 
-      await loadAll(month, currentUserId, canManage);
+      await refreshTasksAndNotifications(month, currentUserId, canManage);
       setForm(emptyForm(selectedDate));
       setFiles([]);
+      setSaveSuccess(attachmentWarning ?? "Tarefa salva com sucesso.");
     } catch (caught) {
+      console.error("Erro ao salvar tarefa", caught);
       const message = caught instanceof Error ? caught.message : "Não foi possível salvar a tarefa.";
-      setError(message);
+      setSaveError(message);
     } finally {
       setSaving(false);
     }
@@ -207,7 +243,7 @@ export function AdminTarefas() {
       setNotifications((prev) => prev.map((item) => (item.id === notificationId ? { ...item, lida: true } : item)));
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Não foi possível marcar notificação como lida.";
-      setError(message);
+      setGlobalError(message);
     }
   }
 
@@ -215,79 +251,48 @@ export function AdminTarefas() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-            <CalendarDays className="h-7 w-7 text-primary" /> Calendário Administrativo
+          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-slate-900">
+            <CalendarDays className="h-7 w-7 text-emerald-700" /> Calendário Administrativo
           </h1>
-          <p className="text-muted-foreground">Planejamento da equipe com tarefas por data, anexos e notificações.</p>
+          <p className="text-slate-600">Planejamento da equipe com tarefas por data, anexos e notificações.</p>
         </div>
 
-        <div className="rounded-xl border bg-card p-3">
-          <button type="button" className="relative inline-flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm font-medium">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <button type="button" className="relative inline-flex items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
             <Bell className="h-4 w-4" /> Notificações
-            {unreadCount > 0 ? (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs text-white">{unreadCount}</span>
-            ) : null}
+            {unreadCount > 0 ? <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-xs text-white">{unreadCount}</span> : null}
           </button>
         </div>
       </div>
 
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {globalError ? <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{globalError}</div> : null}
 
       <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
-        <section className="rounded-xl border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <button type="button" onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="rounded-md border p-2">
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <p className="text-lg font-semibold capitalize">{month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
-            <button type="button" onClick={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="rounded-md border p-2">
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
+        <TasksCalendarGrid
+          calendarDays={calendarDays}
+          month={month}
+          selectedDateKey={selectedDateKey}
+          taskCountByDate={taskCountByDate}
+          onSelectDate={(day) => {
+            setSelectedDate(day);
+            setIsDrawerOpen(true);
+          }}
+          onPrevMonth={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+          onNextMonth={() => setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+          isLoading={calendarLoading}
+        />
 
-          <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
-            {WEEK_DAYS.map((item) => (
-              <div key={item}>{item}</div>
-            ))}
-          </div>
-
-          <div className="mt-2 grid grid-cols-7 gap-2">
-            {calendarDays.map((day) => {
-              const key = toDateKey(day);
-              const count = taskCountByDate.get(key) ?? 0;
-              const selected = key === selectedDateKey;
-
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setSelectedDate(day);
-                    setIsDrawerOpen(true);
-                  }}
-                  className={`min-h-[84px] rounded-xl border p-2 text-left ${selected ? "border-primary bg-primary/10" : "bg-background hover:bg-muted/40"}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">{day.getDate()}</span>
-                    {count > 0 ? <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{count}</span> : null}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <aside className="rounded-xl border bg-card p-4">
-          <h2 className="mb-3 text-base font-semibold">Notificações da equipe</h2>
+        <aside className="rounded-xl border border-slate-200 bg-white p-4">
+          <h2 className="mb-3 text-base font-semibold text-slate-900">Notificações da equipe</h2>
           <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
-            {notifications.length === 0 ? <p className="text-sm text-muted-foreground">Sem notificações.</p> : null}
+            {notifications.length === 0 ? <p className="text-sm text-slate-500">Sem notificações.</p> : null}
             {notifications.map((notification) => (
-              <article key={notification.id} className={`rounded-lg border p-3 ${notification.lida ? "bg-background" : "bg-blue-50"}`}>
-                <p className="text-sm font-semibold">{notification.titulo}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{notification.recipient?.nome || notification.recipient?.email || "Destinatário"} • {notification.tasks?.titulo ?? "Tarefa"} • {notification.tasks?.data_tarefa ?? "Sem data"}</p>
-                <p className="mt-2 text-sm">{notification.mensagem}</p>
+              <article key={notification.id} className={`rounded-lg border p-3 ${notification.lida ? "border-slate-200 bg-white" : "border-emerald-200 bg-emerald-50"}`}>
+                <p className="text-sm font-semibold text-slate-900">{notification.titulo}</p>
+                <p className="mt-1 text-xs text-slate-600">{notification.recipient?.nome || notification.recipient?.email || "Destinatário"} • {notification.tasks?.titulo ?? "Tarefa"} • {notification.tasks?.data_tarefa ?? "Sem data"}</p>
+                <p className="mt-2 text-sm text-slate-700">{notification.mensagem}</p>
                 {!notification.lida ? (
-                  <button type="button" onClick={() => void handleMarkRead(notification.id)} className="mt-2 text-xs font-medium text-blue-700">
+                  <button type="button" onClick={() => void handleMarkRead(notification.id)} className="mt-2 text-xs font-semibold text-emerald-700 underline">
                     Marcar como lida
                   </button>
                 ) : null}
@@ -297,89 +302,27 @@ export function AdminTarefas() {
         </aside>
       </div>
 
-      {isDrawerOpen ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-          <div className="h-full w-full max-w-2xl overflow-auto bg-white p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Tarefas de {selectedDate.toLocaleDateString("pt-BR")}</h2>
-              <button type="button" onClick={() => setIsDrawerOpen(false)} className="rounded-md border p-2">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+      <TasksDrawer
+        isOpen={isDrawerOpen}
+        selectedDate={selectedDate}
+        tasksOfDay={tasksOfDay}
+        canManage={canManage}
+        teamLoading={teamLoading}
+        teamError={teamError}
+        isSaving={saving}
+        saveSuccess={saveSuccess}
+        form={form}
+        profiles={profiles}
+        files={files}
+        saveError={saveError}
+        tasksDayLoading={tasksDayLoading}
+        onClose={() => setIsDrawerOpen(false)}
+        onSubmit={(event) => void handleCreateTask(event)}
+        onFormChange={(values) => setForm((prev) => ({ ...prev, ...values }))}
+        onFilesChange={setFiles}
+      />
 
-            <div className="space-y-3">
-              {tasksOfDay.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma tarefa para esta data.</p> : null}
-              {tasksOfDay.map((task) => (
-                <article key={task.id} className="rounded-lg border p-3">
-                  <p className="font-semibold">{task.titulo}</p>
-                  <p className="text-xs text-muted-foreground">{task.hora_inicio ?? "--:--"} - {task.hora_fim ?? "--:--"} • {task.prioridade} • {task.status}</p>
-                  <p className="mt-1 text-sm">{task.descricao || "Sem descrição"}</p>
-                  {task.external_link ? <a className="mt-2 block text-xs text-blue-700" href={task.external_link} target="_blank" rel="noreferrer">Link externo</a> : null}
-                  {(task.task_attachments ?? []).length > 0 ? (
-                    <ul className="mt-2 space-y-1 text-xs">
-                      {(task.task_attachments ?? []).map((attachment) => (
-                        <li key={attachment.id} className="flex items-center gap-1 text-muted-foreground">
-                          <Paperclip className="h-3 w-3" />
-                          {attachment.external_url ? (
-                            <a href={attachment.external_url} target="_blank" rel="noreferrer" className="text-blue-700">{attachment.external_url}</a>
-                          ) : (
-                            <span>{attachment.file_name} ({attachment.mime_type || "arquivo"})</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-
-            {canManage ? (
-              <form onSubmit={handleCreateTask} className="mt-6 space-y-3 rounded-xl border bg-muted/20 p-4">
-                <h3 className="flex items-center gap-2 text-base font-semibold"><Plus className="h-4 w-4" /> Nova tarefa</h3>
-                <input className="w-full rounded-md border bg-white p-2 text-sm" placeholder="Título" value={form.titulo} onChange={(event) => setForm((prev) => ({ ...prev, titulo: event.target.value }))} />
-                <textarea className="w-full rounded-md border bg-white p-2 text-sm" placeholder="Descrição" value={form.descricao} onChange={(event) => setForm((prev) => ({ ...prev, descricao: event.target.value }))} />
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="date" className="rounded-md border bg-white p-2 text-sm" value={form.data_tarefa} onChange={(event) => setForm((prev) => ({ ...prev, data_tarefa: event.target.value }))} />
-                  <select className="rounded-md border bg-white p-2 text-sm" value={form.assigned_to} onChange={(event) => setForm((prev) => ({ ...prev, assigned_to: event.target.value }))}>
-                    <option value="">Responsável</option>
-                    {profiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>{profile.nome || profile.email || profile.id}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="time" className="rounded-md border bg-white p-2 text-sm" value={form.hora_inicio} onChange={(event) => setForm((prev) => ({ ...prev, hora_inicio: event.target.value }))} />
-                  <input type="time" className="rounded-md border bg-white p-2 text-sm" value={form.hora_fim} onChange={(event) => setForm((prev) => ({ ...prev, hora_fim: event.target.value }))} />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <select className="rounded-md border bg-white p-2 text-sm" value={form.prioridade} onChange={(event) => setForm((prev) => ({ ...prev, prioridade: event.target.value as TaskFormValues["prioridade"] }))}>
-                    <option value="baixa">Baixa</option>
-                    <option value="media">Média</option>
-                    <option value="alta">Alta</option>
-                    <option value="urgente">Urgente</option>
-                  </select>
-                  <select className="rounded-md border bg-white p-2 text-sm" value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as TaskFormValues["status"] }))}>
-                    <option value="pendente">Pendente</option>
-                    <option value="em_andamento">Em andamento</option>
-                    <option value="concluida">Concluída</option>
-                    <option value="cancelada">Cancelada</option>
-                  </select>
-                </div>
-                <input className="w-full rounded-md border bg-white p-2 text-sm" placeholder="Link externo da tarefa (opcional)" value={form.external_link} onChange={(event) => setForm((prev) => ({ ...prev, external_link: event.target.value }))} />
-                <input className="w-full rounded-md border bg-white p-2 text-sm" placeholder="Link para anexo (opcional)" value={form.external_attachment_link} onChange={(event) => setForm((prev) => ({ ...prev, external_attachment_link: event.target.value }))} />
-                <input type="file" multiple className="w-full rounded-md border bg-white p-2 text-sm" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
-                <button disabled={saving} type="submit" className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
-                  {saving ? "Salvando..." : "Salvar tarefa"}
-                </button>
-              </form>
-            ) : (
-              <p className="mt-6 rounded-lg border bg-amber-50 p-3 text-sm text-amber-800">Você tem acesso apenas para visualização das tarefas e notificações destinadas a você.</p>
-            )}
-          </div>
-        </div>
-      ) : null}
-
-      {loading ? <p className="text-sm text-muted-foreground">Carregando dados do calendário...</p> : null}
+      {loading ? <p className="text-sm text-slate-500">Carregando dados do calendário...</p> : null}
     </div>
   );
 }
