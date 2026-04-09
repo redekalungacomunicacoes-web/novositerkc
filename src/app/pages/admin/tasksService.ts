@@ -12,27 +12,61 @@ function inferAttachmentType(file: File): AttachmentType {
 }
 
 export async function fetchTeamProfiles() {
-  const { data, error } = await supabase.from("profiles").select("id,nome,email,ativo").eq("ativo", true).order("nome");
-  if (error) {
-    throw new Error(`Não foi possível carregar integrantes em public.profiles: ${error.message}`);
+  const equipeQuery = await supabase
+    .from("equipe")
+    .select("id,user_id,nome,email_login,ativo,is_active")
+    .order("nome", { ascending: true });
+
+  if (!equipeQuery.error) {
+    const mapped = (equipeQuery.data ?? [])
+      .filter((member) => !!member.user_id)
+      .filter((member) => (member.is_active ?? member.ativo ?? true) === true)
+      .map(
+        (member) =>
+          ({
+            id: member.user_id as string,
+            equipe_id: member.id as string,
+            nome: member.nome ?? null,
+            email: member.email_login ?? null,
+            ativo: true,
+          }) satisfies TeamProfile,
+      );
+
+    if (mapped.length > 0) return mapped;
   }
-  return (data ?? []) as TeamProfile[];
+
+  const profilesQuery = await supabase.from("profiles").select("id,nome,email,ativo").eq("ativo", true).order("nome");
+  if (profilesQuery.error) {
+    throw new Error(`Não foi possível carregar integrantes em equipe/profiles: ${profilesQuery.error.message}`);
+  }
+  return (profilesQuery.data ?? []) as TeamProfile[];
 }
 
 export async function fetchTasksInRange(startDate: string, endDate: string, userId: string, canManage: boolean) {
-  let query = supabase
+  const buildQuery = (includeProfileRelations: boolean) => {
+    const selectWithRelations =
+      "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,prioridade,status,assigned_to,created_by,external_link,mentions,created_at,updated_at,assigned_profile:profiles!tasks_assigned_to_fkey(nome,email),created_profile:profiles!tasks_created_by_fkey(nome,email),task_attachments(*)";
+    const selectPlain = "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,prioridade,status,assigned_to,created_by,external_link,mentions,created_at,updated_at,task_attachments(*)";
+
+    let query = supabase
     .from("tasks")
-    .select(
-      "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,prioridade,status,assigned_to,created_by,external_link,mentions,created_at,updated_at,assigned_profile:profiles!tasks_assigned_to_fkey(nome,email),created_profile:profiles!tasks_created_by_fkey(nome,email),task_attachments(*)",
-    )
-    .gte("data_tarefa", startDate)
-    .lte("data_tarefa", endDate)
-    .order("data_tarefa", { ascending: true })
-    .order("hora_inicio", { ascending: true, nullsFirst: false });
+      .select(includeProfileRelations ? selectWithRelations : selectPlain)
+      .gte("data_tarefa", startDate)
+      .lte("data_tarefa", endDate)
+      .order("data_tarefa", { ascending: true })
+      .order("hora_inicio", { ascending: true, nullsFirst: false });
 
-  if (!canManage) query = query.eq("assigned_to", userId);
+    if (!canManage) query = query.eq("assigned_to", userId);
+    return query;
+  };
 
-  const { data, error } = await query;
+  let { data, error } = await buildQuery(true);
+  if (error && /relationship|tasks_.*_fkey|profiles/i.test(error.message)) {
+    const fallbackResult = await buildQuery(false);
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
+
   if (error) throw new Error(error.message);
   return ((data ?? []) as Partial<Task>[]).map((task) => ({
     ...task,
@@ -128,15 +162,28 @@ export async function createExternalAttachment(taskId: string, url: string, uplo
 }
 
 export async function fetchNotifications(userId: string, canManage: boolean) {
-  let query = supabase
-    .from("notifications")
-    .select("id,user_id,task_id,tipo,titulo,mensagem,lida,created_at,read_at,tasks(titulo,data_tarefa,assigned_to),recipient:profiles!notifications_user_id_fkey(nome,email)")
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const buildQuery = (withRecipientRelation: boolean) => {
+    const selectWithRecipient =
+      "id,user_id,task_id,tipo,titulo,mensagem,lida,created_at,read_at,tasks(titulo,data_tarefa,assigned_to),recipient:profiles!notifications_user_id_fkey(nome,email)";
+    const selectWithoutRecipient = "id,user_id,task_id,tipo,titulo,mensagem,lida,created_at,read_at,tasks(titulo,data_tarefa,assigned_to)";
 
-  if (!canManage) query = query.eq("user_id", userId);
+    let query = supabase
+      .from("notifications")
+      .select(withRecipientRelation ? selectWithRecipient : selectWithoutRecipient)
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-  const { data, error } = await query;
+    if (!canManage) query = query.eq("user_id", userId);
+    return query;
+  };
+
+  let { data, error } = await buildQuery(true);
+  if (error && /relationship|notifications_user_id_fkey|profiles/i.test(error.message)) {
+    const fallbackResult = await buildQuery(false);
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
+
   if (error) throw new Error(error.message);
   return (data ?? []) as Notification[];
 }

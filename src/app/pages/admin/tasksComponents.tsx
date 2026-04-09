@@ -10,6 +10,7 @@ const fieldClass =
 
 export function TasksCalendarGrid({
   calendarDays,
+  monthStartOffset,
   month,
   selectedDateKey,
   taskCountByDate,
@@ -19,6 +20,7 @@ export function TasksCalendarGrid({
   isLoading,
 }: {
   calendarDays: Date[];
+  monthStartOffset: number;
   month: Date;
   selectedDateKey: string;
   taskCountByDate: Map<string, number>;
@@ -46,6 +48,9 @@ export function TasksCalendarGrid({
       </div>
 
       <div className="mt-2 grid grid-cols-7 gap-2">
+        {Array.from({ length: monthStartOffset }).map((_, index) => (
+          <div key={`offset-${index}`} aria-hidden="true" className="min-h-[90px]" />
+        ))}
         {calendarDays.map((day) => {
           const key = `${day.getFullYear()}-${`${day.getMonth() + 1}`.padStart(2, "0")}-${`${day.getDate()}`.padStart(2, "0")}`;
           const count = taskCountByDate.get(key) ?? 0;
@@ -95,6 +100,7 @@ export function TasksDrawer({
   saveSuccess,
   form,
   profiles,
+  profileNameById,
   files,
   saveError,
   tasksDayLoading,
@@ -115,6 +121,7 @@ export function TasksDrawer({
   saveSuccess: string | null;
   form: TaskFormValues;
   profiles: TeamProfile[];
+  profileNameById: Map<string, string>;
   files: File[];
   saveError: string | null;
   tasksDayLoading: boolean;
@@ -166,9 +173,15 @@ export function TasksDrawer({
                     ) : null}
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-slate-600">{task.hora_inicio ?? "--:--"} - {task.hora_fim ?? "--:--"} • {task.assigned_profile?.nome || task.assigned_profile?.email || "Sem responsável"}</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {task.hora_inicio ?? "--:--"} - {task.hora_fim ?? "--:--"} • {profileNameById.get(task.assigned_to ?? "") || task.assigned_profile?.nome || task.assigned_profile?.email || "Sem responsável"}
+                </p>
                 <p className="mt-2 line-clamp-2 text-sm text-slate-700">{task.descricao || "Sem descrição"}</p>
-                {task.mentions.length > 0 ? <p className="mt-2 text-xs text-slate-600">Menções: {task.mentions.join(", ")}</p> : null}
+                {task.mentions.length > 0 ? (
+                  <p className="mt-2 text-xs text-slate-600">
+                    Menções: {task.mentions.map((mentionId) => profileNameById.get(mentionId) || mentionId).join(", ")}
+                  </p>
+                ) : null}
                 {(task.task_attachments ?? []).length > 0 ? (
                   <ul className="mt-2 space-y-1 text-xs text-slate-600">
                     {(task.task_attachments ?? []).map((attachment) => (
@@ -212,7 +225,7 @@ export function TasksDrawer({
                 <select id="task-assigned" className={fieldClass} value={form.assigned_to} onChange={(event) => onFormChange({ assigned_to: event.target.value })} disabled={teamLoading} required>
                   <option value="">{teamLoading ? "Carregando equipe..." : "Selecione"}</option>
                   {profiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>{profile.nome || profile.email || profile.id}</option>
+                    <option key={profile.id} value={profile.id}>{profile.nome || profile.email || "Usuário sem nome"}</option>
                   ))}
                 </select>
                 {!teamLoading && profiles.length === 0 ? <p className="mt-1 text-xs text-amber-700">Nenhum integrante ativo cadastrado.</p> : null}
@@ -234,7 +247,7 @@ export function TasksDrawer({
               >
                 {profiles.map((profile) => (
                   <option key={`mention-${profile.id}`} value={profile.id}>
-                    {profile.nome || profile.email || profile.id}
+                    {profile.nome || profile.email || "Usuário sem nome"}
                   </option>
                 ))}
               </select>
