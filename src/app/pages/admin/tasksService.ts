@@ -23,7 +23,7 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
   let query = supabase
     .from("tasks")
     .select(
-      "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,prioridade,status,assigned_to,created_by,external_link,created_at,updated_at,assigned_profile:profiles!tasks_assigned_to_fkey(nome,email),created_profile:profiles!tasks_created_by_fkey(nome,email),task_attachments(*)",
+      "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,prioridade,status,assigned_to,created_by,external_link,mentions,created_at,updated_at,assigned_profile:profiles!tasks_assigned_to_fkey(nome,email),created_profile:profiles!tasks_created_by_fkey(nome,email),task_attachments(*)",
     )
     .gte("data_tarefa", startDate)
     .lte("data_tarefa", endDate)
@@ -34,14 +34,59 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-
-  return (data ?? []) as Task[];
+  return ((data ?? []) as Partial<Task>[]).map((task) => ({
+    ...task,
+    mentions: Array.isArray(task.mentions) ? task.mentions.filter((id): id is string => typeof id === "string") : [],
+  })) as Task[];
 }
 
 export async function createTask(payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">) {
-  const { data, error } = await supabase.from("tasks").insert(payload).select("id").single();
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert({
+      ...payload,
+      id: crypto.randomUUID(),
+      mentions: [...new Set(payload.mentions ?? [])],
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(`Erro ao inserir tarefa: ${error.message}`);
   return data.id as string;
+}
+
+export async function updateTask(
+  taskId: string,
+  payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">,
+) {
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      ...payload,
+      mentions: [...new Set(payload.mentions ?? [])],
+    })
+    .eq("id", taskId);
+  if (error) throw new Error(`Erro ao atualizar tarefa: ${error.message}`);
+}
+
+export async function deleteTask(taskId: string) {
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+  if (error) throw new Error(`Erro ao excluir tarefa: ${error.message}`);
+}
+
+export async function isDuplicateTask(payload: Pick<Task, "id" | "titulo" | "data_tarefa" | "hora_inicio" | "hora_fim" | "assigned_to">) {
+  let query = supabase
+    .from("tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("titulo", payload.titulo)
+    .eq("data_tarefa", payload.data_tarefa)
+    .eq("assigned_to", payload.assigned_to ?? "");
+  if (payload.hora_inicio) query = query.eq("hora_inicio", payload.hora_inicio);
+  if (payload.hora_fim) query = query.eq("hora_fim", payload.hora_fim);
+  if (payload.id) query = query.neq("id", payload.id);
+
+  const { count, error } = await query;
+  if (error) throw new Error(`Erro ao validar duplicidade da tarefa: ${error.message}`);
+  return (count ?? 0) > 0;
 }
 
 export async function uploadTaskAttachment(taskId: string, file: File, uploadedBy: string) {
@@ -99,4 +144,29 @@ export async function fetchNotifications(userId: string, canManage: boolean) {
 export async function markNotificationAsRead(notificationId: string) {
   const { error } = await supabase.from("notifications").update({ lida: true, read_at: new Date().toISOString() }).eq("id", notificationId);
   if (error) throw new Error(error.message);
+}
+
+export async function notifyUsers(task: Pick<Task, "id" | "titulo" | "data_tarefa" | "assigned_to" | "mentions">, actorUserId: string, action: "created" | "updated") {
+  const userIds = [...new Set([task.assigned_to, ...(task.mentions ?? [])].filter(Boolean) as string[])];
+  if (userIds.length === 0) return;
+
+  const payload = {
+    taskId: task.id,
+    actorUserId,
+    userIds,
+    action,
+    taskTitle: task.titulo,
+    taskDate: task.data_tarefa,
+  };
+
+  const response = await fetch("/api/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Falha ao notificar usuários (${response.status}): ${body || response.statusText}`);
+  }
 }

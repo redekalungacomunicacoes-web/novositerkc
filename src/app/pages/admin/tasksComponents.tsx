@@ -1,4 +1,4 @@
-import { Paperclip, Plus, X } from "lucide-react";
+import { Paperclip, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { FormEvent } from "react";
 
 import { cn } from "@/app/components/ui/utils";
@@ -102,6 +102,8 @@ export function TasksDrawer({
   onSubmit,
   onFormChange,
   onFilesChange,
+  onEditTask,
+  onDeleteTask,
 }: {
   isOpen: boolean;
   selectedDate: Date;
@@ -120,6 +122,8 @@ export function TasksDrawer({
   onSubmit: (event: FormEvent) => void;
   onFormChange: (values: Partial<TaskFormValues>) => void;
   onFilesChange: (newFiles: File[]) => void;
+  onEditTask: (task: Task) => void;
+  onDeleteTask: (taskId: string) => void;
 }) {
   if (!isOpen) return null;
 
@@ -150,10 +154,21 @@ export function TasksDrawer({
                   <div className="flex flex-wrap items-center gap-1">
                     <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium", priorityBadgeClass[task.prioridade])}>{task.prioridade}</span>
                     <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium", statusBadgeClass[task.status])}>{task.status.replace("_", " ")}</span>
+                    {canManage ? (
+                      <>
+                        <button type="button" className="rounded-md border border-slate-300 bg-white p-1 text-slate-700 hover:bg-slate-100" onClick={() => onEditTask(task)} aria-label="Editar tarefa">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" className="rounded-md border border-rose-300 bg-white p-1 text-rose-700 hover:bg-rose-50" onClick={() => onDeleteTask(task.id)} aria-label="Excluir tarefa">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
                 <p className="mt-1 text-xs text-slate-600">{task.hora_inicio ?? "--:--"} - {task.hora_fim ?? "--:--"} • {task.assigned_profile?.nome || task.assigned_profile?.email || "Sem responsável"}</p>
                 <p className="mt-2 line-clamp-2 text-sm text-slate-700">{task.descricao || "Sem descrição"}</p>
+                {task.mentions.length > 0 ? <p className="mt-2 text-xs text-slate-600">Menções: {task.mentions.join(", ")}</p> : null}
                 {(task.task_attachments ?? []).length > 0 ? (
                   <ul className="mt-2 space-y-1 text-xs text-slate-600">
                     {(task.task_attachments ?? []).map((attachment) => (
@@ -171,7 +186,7 @@ export function TasksDrawer({
 
         {canManage ? (
           <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
-            <h3 className="flex items-center gap-2 text-base font-semibold text-emerald-900"><Plus className="h-4 w-4" /> Nova tarefa</h3>
+            <h3 className="flex items-center gap-2 text-base font-semibold text-emerald-900"><Plus className="h-4 w-4" /> {form.id ? "Editar tarefa" : "Nova tarefa"}</h3>
 
             {saveError ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-sm text-rose-700">Erro ao salvar: {saveError}</p> : null}
             {saveSuccess ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-700">{saveSuccess}</p> : null}
@@ -202,6 +217,28 @@ export function TasksDrawer({
                 </select>
                 {!teamLoading && profiles.length === 0 ? <p className="mt-1 text-xs text-amber-700">Nenhum integrante ativo cadastrado.</p> : null}
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="task-mentions" className="mb-1 block text-sm font-medium text-slate-700">Menções</label>
+              <select
+                id="task-mentions"
+                className={fieldClass}
+                multiple
+                value={form.mentions}
+                onChange={(event) => {
+                  const mentionIds = Array.from(event.target.selectedOptions, (option) => option.value);
+                  onFormChange({ mentions: [...new Set(mentionIds)] });
+                }}
+                disabled={teamLoading}
+              >
+                {profiles.map((profile) => (
+                  <option key={`mention-${profile.id}`} value={profile.id}>
+                    {profile.nome || profile.email || profile.id}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">Use Ctrl/Cmd para selecionar mais de um integrante.</p>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -253,7 +290,7 @@ export function TasksDrawer({
             </div>
 
             <button disabled={isSaving} type="submit" className="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-70">
-              {isSaving ? "Salvando..." : "Salvar tarefa"}
+              {isSaving ? "Salvando..." : form.id ? "Atualizar tarefa" : "Salvar tarefa"}
             </button>
           </form>
         ) : (

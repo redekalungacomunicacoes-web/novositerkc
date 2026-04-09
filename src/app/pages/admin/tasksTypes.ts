@@ -35,6 +35,7 @@ export type Task = {
   assigned_to: string | null;
   created_by: string | null;
   external_link: string | null;
+  mentions: string[];
   created_at: string;
   updated_at: string;
   assigned_profile?: { nome: string | null; email: string | null } | null;
@@ -61,6 +62,7 @@ export type Notification = {
 };
 
 export type TaskFormValues = {
+  id?: string;
   titulo: string;
   descricao: string;
   data_tarefa: string;
@@ -69,6 +71,7 @@ export type TaskFormValues = {
   prioridade: TaskPriority;
   status: TaskStatus;
   assigned_to: string;
+  mentions: string[];
   external_link: string;
   external_attachment_link: string;
 };

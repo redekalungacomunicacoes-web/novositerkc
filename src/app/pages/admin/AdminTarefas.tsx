@@ -7,10 +7,14 @@ import { TasksCalendarGrid, TasksDrawer } from "./tasksComponents";
 import {
   createExternalAttachment,
   createTask,
+  deleteTask,
   fetchNotifications,
   fetchTasksInRange,
   fetchTeamProfiles,
+  isDuplicateTask,
   markNotificationAsRead,
+  notifyUsers,
+  updateTask,
   uploadTaskAttachment,
 } from "./tasksService";
 import type { Notification, Task, TaskFormValues, TeamProfile } from "./tasksTypes";
@@ -40,6 +44,7 @@ function monthRange(date: Date) {
 
 function emptyForm(date: Date): TaskFormValues {
   return {
+    id: undefined,
     titulo: "",
     descricao: "",
     data_tarefa: toDateKey(date),
@@ -48,6 +53,7 @@ function emptyForm(date: Date): TaskFormValues {
     prioridade: "media",
     status: "pendente",
     assigned_to: "",
+    mentions: [],
     external_link: "",
     external_attachment_link: "",
   };
@@ -57,6 +63,7 @@ function validate(values: TaskFormValues) {
   if (!values.titulo.trim()) return "O título é obrigatório.";
   if (!values.data_tarefa) return "A data é obrigatória.";
   if (!values.assigned_to) return "Selecione um responsável.";
+  if (values.mentions.some((mention) => mention === values.assigned_to)) return "Não inclua o responsável também nas menções.";
   if (values.hora_inicio && values.hora_fim && values.hora_fim < values.hora_inicio) return "A hora de fim deve ser maior que a hora de início.";
   if (values.external_link && !/^https?:\/\//.test(values.external_link)) return "O link externo da tarefa deve começar com http:// ou https://.";
   if (values.external_attachment_link && !/^https?:\/\//.test(values.external_attachment_link)) return "O link de anexo deve começar com http:// ou https://.";
@@ -92,13 +99,17 @@ export function AdminTarefas() {
 
   const taskCountByDate = useMemo(() => {
     const map = new Map<string, number>();
-    for (const task of tasks) map.set(task.data_tarefa, (map.get(task.data_tarefa) ?? 0) + 1);
+    const uniqueById = new Map(tasks.map((task) => [task.id, task]));
+    for (const task of uniqueById.values()) map.set(task.data_tarefa, (map.get(task.data_tarefa) ?? 0) + 1);
     return map;
   }, [tasks]);
 
   const selectedDateKey = toDateKey(selectedDate);
   const tasksOfDay = useMemo(
-    () => [...tasks.filter((task) => task.data_tarefa === selectedDateKey)].sort((a, b) => (a.hora_inicio ?? "23:59").localeCompare(b.hora_inicio ?? "23:59")),
+    () =>
+      [...new Map(tasks.filter((task) => task.data_tarefa === selectedDateKey).map((task) => [task.id, task])).values()].sort((a, b) =>
+        (a.hora_inicio ?? "23:59").localeCompare(b.hora_inicio ?? "23:59"),
+      ),
     [tasks, selectedDateKey],
   );
 
@@ -119,7 +130,7 @@ export function AdminTarefas() {
     setTeamError(null);
     try {
       const team = await fetchTeamProfiles();
-      setProfiles(team);
+      setProfiles([...new Map(team.map((profile) => [profile.id, profile])).values()]);
     } catch (caught) {
       console.error("Erro ao carregar equipe", caught);
       const message = caught instanceof Error ? caught.message : "Falha ao carregar integrantes.";
@@ -191,7 +202,7 @@ export function AdminTarefas() {
 
     try {
       setSaving(true);
-      const taskId = await createTask({
+      const payload = {
         titulo: form.titulo.trim(),
         descricao: form.descricao.trim() || null,
         data_tarefa: form.data_tarefa,
@@ -201,8 +212,29 @@ export function AdminTarefas() {
         status: form.status,
         assigned_to: form.assigned_to,
         created_by: currentUserId,
+        mentions: [...new Set(form.mentions)].filter((id) => id !== form.assigned_to),
         external_link: form.external_link.trim() || null,
+      } as const;
+
+      const hasDuplicate = await isDuplicateTask({
+        id: form.id ?? "",
+        titulo: payload.titulo,
+        data_tarefa: payload.data_tarefa,
+        hora_inicio: payload.hora_inicio,
+        hora_fim: payload.hora_fim,
+        assigned_to: payload.assigned_to,
       });
+      if (hasDuplicate) {
+        setSaveError("Já existe uma tarefa igual para esta data/horário e responsável.");
+        return;
+      }
+
+      let taskId = form.id ?? "";
+      if (form.id) {
+        await updateTask(form.id, payload);
+      } else {
+        taskId = await createTask(payload);
+      }
 
       let attachmentWarning: string | null = null;
 
@@ -224,16 +256,60 @@ export function AdminTarefas() {
         }
       }
 
+      try {
+        await notifyUsers(
+          { id: taskId, titulo: payload.titulo, data_tarefa: payload.data_tarefa, assigned_to: payload.assigned_to, mentions: payload.mentions },
+          currentUserId,
+          form.id ? "updated" : "created",
+        );
+      } catch (notifyError) {
+        console.warn("Falha ao enviar notificação via /api/notify", notifyError);
+      }
+
       await refreshTasksAndNotifications(month, currentUserId, canManage);
       setForm(emptyForm(selectedDate));
       setFiles([]);
-      setSaveSuccess(attachmentWarning ?? "Tarefa salva com sucesso.");
+      setSaveSuccess(attachmentWarning ?? (form.id ? "Tarefa atualizada com sucesso." : "Tarefa salva com sucesso."));
     } catch (caught) {
       console.error("Erro ao salvar tarefa", caught);
       const message = caught instanceof Error ? caught.message : "Não foi possível salvar a tarefa.";
       setSaveError(message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  function handleEditTask(task: Task) {
+    setForm({
+      id: task.id,
+      titulo: task.titulo,
+      descricao: task.descricao ?? "",
+      data_tarefa: task.data_tarefa,
+      hora_inicio: task.hora_inicio ?? "",
+      hora_fim: task.hora_fim ?? "",
+      prioridade: task.prioridade,
+      status: task.status,
+      assigned_to: task.assigned_to ?? "",
+      mentions: task.mentions ?? [],
+      external_link: task.external_link ?? "",
+      external_attachment_link: "",
+    });
+  }
+
+  async function handleDeleteTask(taskId: string) {
+    if (!canManage) return;
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      await deleteTask(taskId);
+      await refreshTasksAndNotifications(month, currentUserId, canManage);
+      if (form.id === taskId) {
+        setForm(emptyForm(selectedDate));
+      }
+      setSaveSuccess("Tarefa excluída com sucesso.");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Não foi possível excluir a tarefa.";
+      setSaveError(message);
     }
   }
 
@@ -320,6 +396,8 @@ export function AdminTarefas() {
         onSubmit={(event) => void handleCreateTask(event)}
         onFormChange={(values) => setForm((prev) => ({ ...prev, ...values }))}
         onFilesChange={setFiles}
+        onEditTask={handleEditTask}
+        onDeleteTask={(taskId) => void handleDeleteTask(taskId)}
       />
 
       {loading ? <p className="text-sm text-slate-500">Carregando dados do calendário...</p> : null}
