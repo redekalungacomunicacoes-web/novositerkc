@@ -24,14 +24,11 @@ function toDateKey(date: Date) {
 }
 
 function buildCalendarDays(monthDate: Date) {
-  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const startOffset = firstDay.getDay();
-  const startDate = new Date(firstDay);
-  startDate.setDate(firstDay.getDate() - startOffset);
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + index);
+  const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const monthEndDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+  return Array.from({ length: monthEndDay }, (_, index) => {
+    const date = new Date(monthStart);
+    date.setDate(index + 1);
     return date;
   });
 }
@@ -96,6 +93,11 @@ export function AdminTarefas() {
 
   const unreadCount = useMemo(() => notifications.filter((item) => !item.lida).length, [notifications]);
   const calendarDays = useMemo(() => buildCalendarDays(month), [month]);
+  const monthStartOffset = useMemo(() => new Date(month.getFullYear(), month.getMonth(), 1).getDay(), [month]);
+  const profileNameById = useMemo(
+    () => new Map(profiles.map((profile) => [profile.id, profile.nome || profile.email || "Usuário sem nome"])),
+    [profiles],
+  );
 
   const taskCountByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -346,6 +348,7 @@ export function AdminTarefas() {
       <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
         <TasksCalendarGrid
           calendarDays={calendarDays}
+          monthStartOffset={monthStartOffset}
           month={month}
           selectedDateKey={selectedDateKey}
           taskCountByDate={taskCountByDate}
@@ -365,7 +368,10 @@ export function AdminTarefas() {
             {notifications.map((notification) => (
               <article key={notification.id} className={`rounded-lg border p-3 ${notification.lida ? "border-slate-200 bg-white" : "border-emerald-200 bg-emerald-50"}`}>
                 <p className="text-sm font-semibold text-slate-900">{notification.titulo}</p>
-                <p className="mt-1 text-xs text-slate-600">{notification.recipient?.nome || notification.recipient?.email || "Destinatário"} • {notification.tasks?.titulo ?? "Tarefa"} • {notification.tasks?.data_tarefa ?? "Sem data"}</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {notification.recipient?.nome || notification.recipient?.email || profileNameById.get(notification.user_id) || "Destinatário"} • {notification.tasks?.titulo ?? "Tarefa"} •{" "}
+                  {notification.tasks?.data_tarefa ?? "Sem data"}
+                </p>
                 <p className="mt-2 text-sm text-slate-700">{notification.mensagem}</p>
                 {!notification.lida ? (
                   <button type="button" onClick={() => void handleMarkRead(notification.id)} className="mt-2 text-xs font-semibold text-emerald-700 underline">
@@ -389,6 +395,7 @@ export function AdminTarefas() {
         saveSuccess={saveSuccess}
         form={form}
         profiles={profiles}
+        profileNameById={profileNameById}
         files={files}
         saveError={saveError}
         tasksDayLoading={tasksDayLoading}

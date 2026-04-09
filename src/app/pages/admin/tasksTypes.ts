@@ -4,6 +4,7 @@ export type AttachmentType = "link" | "foto" | "pdf" | "video" | "documento" | "
 
 export type TeamProfile = {
   id: string;
+  equipe_id?: string | null;
   nome: string | null;
   email: string | null;
   ativo: boolean;
