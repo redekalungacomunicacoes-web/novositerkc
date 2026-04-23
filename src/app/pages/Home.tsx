@@ -230,18 +230,29 @@ export function Home() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {projetos.map((projeto) => (
-              <Link key={projeto.id} to={`/projetos/${projeto.slug}`}>
-                <RKCCard className="h-full hover:scale-[1.02] transition-transform">
-                  <RKCCardImage src={projeto.imagem} alt={projeto.titulo} />
-                  <RKCCardContent>
-                    <RKCTag variant="green" className="mb-3">
+              <RKCCard
+                key={projeto.id}
+                className="h-full flex flex-col hover:scale-[1.02] transition-transform"
+              >
+                <Link to={`/projetos/${projeto.slug}`} className="block">
+                  <RKCCardImage src={projeto.imagem} alt={projeto.titulo} className="aspect-[16/10]" />
+                </Link>
+
+                <RKCCardContent className="flex flex-1 flex-col items-center text-center justify-center gap-3 p-4 md:p-5">
+                  {projeto.tag ? (
+                    <RKCTag variant="green">
                       {projeto.tag}
                     </RKCTag>
-                    <h3 className="font-bold text-lg mb-2 text-[#2E2E2E]">{projeto.titulo}</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">{projeto.descricao}</p>
-                  </RKCCardContent>
+                  ) : null}
+                  <h3 className="font-bold text-lg text-[#2E2E2E] line-clamp-2">{projeto.titulo}</h3>
+                  <Link
+                    to={`/projetos/${projeto.slug}`}
+                    className="inline-flex items-center justify-center rounded-lg bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0C6232] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
+                  >
+                    Conheça o projeto
+                  </Link>
+                </RKCCardContent>
                 </RKCCard>
-              </Link>
             ))}
           </div>
 
