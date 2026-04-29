@@ -10,7 +10,6 @@ import {
   deleteTask,
   fetchNotifications,
   fetchTasksInRange,
-  fetchTeamProfiles,
   isDuplicateTask,
   markNotificationAsRead,
   notifyUsers,
@@ -85,7 +84,7 @@ export function AdminTarefas() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [profiles, setProfiles] = useState<TeamProfile[]>([]);
+  const [users, setUsers] = useState<TeamProfile[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [form, setForm] = useState<TaskFormValues>(emptyForm(new Date()));
@@ -93,10 +92,7 @@ export function AdminTarefas() {
   const unreadCount = useMemo(() => notifications.filter((item) => !item.lida).length, [notifications]);
   const calendarDays = useMemo(() => buildCalendarDays(month), [month]);
   const monthStartOffset = useMemo(() => new Date(month.getFullYear(), month.getMonth(), 1).getDay(), [month]);
-  const profileNameById = useMemo(
-    () => new Map(profiles.map((profile) => [profile.id, profile.nome || profile.email || "Usuário sem nome"])),
-    [profiles],
-  );
+  const userNameById = useMemo(() => new Map(users.map((user) => [user.id, user.nome || user.email || "Usuário sem nome"])), [users]);
 
   const taskCountByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -126,17 +122,28 @@ export function AdminTarefas() {
     }
   }
 
-  async function loadProfiles() {
+  async function fetchEquipe() {
+    const { data, error } = await supabase.from("equipe").select("id, nome, email").order("nome");
+
+    if (error) {
+      console.error("Erro ao buscar equipe:", error);
+      return [];
+    }
+
+    return data;
+  }
+
+  async function loadUsers() {
     setTeamLoading(true);
     setTeamError(null);
     try {
-      const team = await fetchTeamProfiles();
-      setProfiles([...new Map(team.map((profile) => [profile.id, profile])).values()]);
+      const equipe = await fetchEquipe();
+      setUsers([...new Map(equipe.map((user) => [user.id, user as TeamProfile])).values()]);
     } catch (caught) {
       console.error("Erro ao carregar equipe", caught);
       const message = caught instanceof Error ? caught.message : "Falha ao carregar integrantes.";
       setTeamError(message);
-      setProfiles([]);
+      setUsers([]);
     } finally {
       setTeamLoading(false);
     }
@@ -156,7 +163,7 @@ export function AdminTarefas() {
         setCurrentUserId(userId);
         setCanManage(canManageTasks);
 
-        await Promise.all([refreshTasksAndNotifications(month, userId, canManageTasks), loadProfiles()]);
+        await Promise.all([refreshTasksAndNotifications(month, userId, canManageTasks), loadUsers()]);
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "Falha ao carregar módulo de tarefas.";
         setGlobalError(message);
@@ -369,7 +376,7 @@ export function AdminTarefas() {
               <article key={notification.id} className={`rounded-lg border p-3 ${notification.lida ? "border-slate-200 bg-white" : "border-emerald-200 bg-emerald-50"}`}>
                 <p className="text-sm font-semibold text-slate-900">{notification.titulo}</p>
                 <p className="mt-1 text-xs text-slate-600">
-                  {notification.recipient?.nome || notification.recipient?.email || profileNameById.get(notification.user_id) || "Destinatário"} • {notification.tasks?.titulo ?? "Tarefa"} •{" "}
+                  {notification.recipient?.nome || notification.recipient?.email || userNameById.get(notification.user_id) || "Destinatário"} • {notification.tasks?.titulo ?? "Tarefa"} •{" "}
                   {notification.tasks?.data_tarefa ?? "Sem data"}
                 </p>
                 <p className="mt-2 text-sm text-slate-700">{notification.mensagem}</p>
@@ -394,8 +401,8 @@ export function AdminTarefas() {
         isSaving={saving}
         saveSuccess={saveSuccess}
         form={form}
-        profiles={profiles}
-        profileNameById={profileNameById}
+        users={users}
+        userNameById={userNameById}
         files={files}
         saveError={saveError}
         tasksDayLoading={tasksDayLoading}
