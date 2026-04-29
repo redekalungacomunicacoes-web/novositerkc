@@ -330,6 +330,7 @@ export function AdminMateriaForm() {
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
   const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
+  const [activeBlock, setActiveBlock] = useState<number | null>(0);
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
 
   const coverUrl = watch("coverImage");
@@ -630,24 +631,46 @@ export function AdminMateriaForm() {
   };
 
   const addBlock = (type: MateriaTextBlockType | "image" | "image-text") => {
-    if (type === "image") {
-      setBlocks((prev) => [...prev, { id: uid("img"), type: "image", url: "", caption: "", credit: "" }]);
-      return;
-    }
+    setBlocks((prev) => {
+      const newIndex = prev.length;
+      let newBlock: MateriaContentBlock;
 
-    if (type === "image-text") {
-      setBlocks((prev) => [...prev, { id: uid("imgtxt"), type: "image-text", url: "", text: "", caption: "", credit: "", align: "left", width: "md" }]);
-      return;
-    }
+      if (type === "image") {
+        newBlock = { id: uid("img"), type: "image", url: "", caption: "", credit: "" };
+      } else if (type === "image-text") {
+        newBlock = { id: uid("imgtxt"), type: "image-text", url: "", text: "", caption: "", credit: "", align: "left", width: "md" };
+      } else {
+        newBlock = { id: uid("txt"), type, text: "", size: "md", author: "" };
+      }
 
-    setBlocks((prev) => [...prev, { id: uid("txt"), type, text: "", size: "md", author: "" }]);
+      setActiveBlock(newIndex);
+      setTimeout(() => {
+        document.getElementById(`block-${newIndex}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
+
+      return [...prev, newBlock];
+    });
   };
 
   const updateBlock = (id: string, patch: Partial<MateriaContentBlock>) => {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } as MateriaContentBlock : b)));
   };
 
-  const removeBlock = (blockId: string) => setBlocks((prev) => prev.filter((b) => b.id !== blockId));
+  const removeBlock = (blockId: string) => {
+    setBlocks((prev) => {
+      const removedIndex = prev.findIndex((b) => b.id === blockId);
+      const next = prev.filter((b) => b.id !== blockId);
+
+      setActiveBlock((current) => {
+        if (current === null || current === -1 || removedIndex === -1) return current;
+        if (current === removedIndex) return next.length ? Math.min(removedIndex, next.length - 1) : null;
+        if (current > removedIndex) return current - 1;
+        return current;
+      });
+
+      return next;
+    });
+  };
 
   const moveBlock = (index: number, direction: -1 | 1) => {
     setBlocks((prev) => {
@@ -812,6 +835,14 @@ export function AdminMateriaForm() {
                 <button type="button" onClick={() => addBlock("image-text")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles["image-text"].button}`}>+ Imagem + Texto</button>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setActiveBlock(null)} className="px-3 py-1.5 text-xs rounded-md border hover:bg-muted transition-colors">
+                Recolher todos
+              </button>
+              <button type="button" onClick={() => setActiveBlock(-1)} className="px-3 py-1.5 text-xs rounded-md border hover:bg-muted transition-colors">
+                Expandir todos
+              </button>
+            </div>
 
             {blocks.length === 0 ? (
               <div className="border-2 border-dashed rounded-lg p-6 text-sm text-muted-foreground">
@@ -819,23 +850,31 @@ export function AdminMateriaForm() {
               </div>
             ) : (
               <div className="space-y-4">
-                {blocks.map((block, index) => (
+                {blocks.map((block, index) => {
+                  const isExpanded = activeBlock === -1 || activeBlock === index;
+                  const isActive = activeBlock === index;
+                  return (
                   <div
                     key={block.id}
-                    className={`rounded-lg p-4 space-y-3 border-l-4 transition-colors ${blockStyles[block.type].border} ${blockStyles[block.type].bg}`}
+                    id={`block-${index}`}
+                    className={`rounded-lg border-l-4 transition-colors ${blockStyles[block.type].border} ${blockStyles[block.type].bg} ${isActive ? "ring-2 ring-primary/30" : ""}`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className={`text-xs px-2 py-1 rounded font-medium ${blockStyles[block.type].badge}`}>
-                        {blockTypeLabels[block.type]}
+                    <div className="flex items-center justify-between gap-2 p-4 cursor-pointer" onClick={() => setActiveBlock(isActive ? null : index)}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs">{isExpanded ? "▼" : "▶"}</span>
+                        <div className={`text-xs px-2 py-1 rounded font-medium ${blockStyles[block.type].badge}`}>
+                          Bloco {index + 1} · {blockTypeLabels[block.type]}
+                        </div>
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                         <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === 0} onClick={() => moveBlock(index, -1)}><ChevronUp className="w-3 h-3" /></button>
                         <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)}><ChevronDown className="w-3 h-3" /></button>
                         <button type="button" className="p-1 rounded border hover:bg-destructive/10" onClick={() => removeBlock(block.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
                       </div>
                     </div>
 
-                    {block.type === "image" ? (
+                    {isExpanded && (block.type === "image" ? (
+                      <div className="px-4 pb-4">
                       <div className="space-y-3">
                         <div className="flex gap-2">
                           <input value={block.url || ""} onChange={(e) => updateBlock(block.id, { url: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="https://..." />
@@ -848,7 +887,9 @@ export function AdminMateriaForm() {
                         <input value={block.caption || ""} onChange={(e) => updateBlock(block.id, { caption: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Legenda (opcional)" />
                         <input value={block.credit || ""} onChange={(e) => updateBlock(block.id, { credit: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Crédito (opcional)" />
                       </div>
+                      </div>
                     ) : block.type === "image-text" ? (
+                      <div className="px-4 pb-4">
                       <div className="space-y-3">
                         <div className="flex gap-2">
                           <input value={block.url || ""} onChange={(e) => updateBlock(block.id, { url: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="https://..." />
@@ -895,7 +936,9 @@ export function AdminMateriaForm() {
                           <option value="lg">Grande</option>
                         </select>
                       </div>
+                      </div>
                     ) : (
+                      <div className="px-4 pb-4">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <button type="button" onClick={() => applyInlineTag(block.id, "strong")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Bold className="w-3 h-3" /> Negrito</button>
@@ -924,9 +967,11 @@ export function AdminMateriaForm() {
                           />
                         )}
                       </div>
-                    )}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
 
