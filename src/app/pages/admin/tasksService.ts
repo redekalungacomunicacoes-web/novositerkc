@@ -45,8 +45,8 @@ export async function fetchTeamProfiles() {
 export async function fetchTasksInRange(startDate: string, endDate: string, userId: string, canManage: boolean) {
   const buildQuery = (includeProfileRelations: boolean) => {
     const selectWithRelations =
-      "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,prioridade,status,assigned_to,created_by,external_link,mentions,created_at,updated_at,assigned_profile:profiles!tasks_assigned_to_fkey(nome,email),created_profile:profiles!tasks_created_by_fkey(nome,email),task_attachments(*)";
-    const selectPlain = "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,prioridade,status,assigned_to,created_by,external_link,mentions,created_at,updated_at,task_attachments(*)";
+      "id,titulo,descricao,data_tarefa,prioridade,status,assigned_to,created_by,external_link,direcionamento,created_at,updated_at,assigned_profile:profiles!tasks_assigned_to_fkey(nome,email),created_profile:profiles!tasks_created_by_fkey(nome,email),task_attachments(*)";
+    const selectPlain = "id,titulo,descricao,data_tarefa,prioridade,status,assigned_to,created_by,external_link,direcionamento,created_at,updated_at,task_attachments(*)";
 
     let query = supabase
     .from("tasks")
@@ -54,7 +54,7 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
       .gte("data_tarefa", startDate)
       .lte("data_tarefa", endDate)
       .order("data_tarefa", { ascending: true })
-      .order("hora_inicio", { ascending: true, nullsFirst: false });
+      ;
 
     if (!canManage) query = query.eq("assigned_to", userId);
     return query;
@@ -70,7 +70,7 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
   if (error) throw new Error(error.message);
   return ((data ?? []) as Partial<Task>[]).map((task) => ({
     ...task,
-    mentions: Array.isArray(task.mentions) ? task.mentions.filter((id): id is string => typeof id === "string") : [],
+    direcionamento: Array.isArray(task.direcionamento) ? task.direcionamento.filter((id): id is string => typeof id === "string") : [],
   })) as Task[];
 }
 
@@ -80,7 +80,7 @@ export async function createTask(payload: Omit<Task, "id" | "created_at" | "upda
     .insert({
       ...payload,
       id: crypto.randomUUID(),
-      mentions: [...new Set(payload.mentions ?? [])],
+      direcionamento: [...new Set(payload.direcionamento ?? [])],
     })
     .select("id")
     .single();
@@ -96,7 +96,7 @@ export async function updateTask(
     .from("tasks")
     .update({
       ...payload,
-      mentions: [...new Set(payload.mentions ?? [])],
+      direcionamento: [...new Set(payload.direcionamento ?? [])],
     })
     .eq("id", taskId);
   if (error) throw new Error(`Erro ao atualizar tarefa: ${error.message}`);
@@ -114,8 +114,7 @@ export async function isDuplicateTask(payload: Pick<Task, "id" | "titulo" | "dat
     .eq("titulo", payload.titulo)
     .eq("data_tarefa", payload.data_tarefa)
     .eq("assigned_to", payload.assigned_to ?? "");
-  if (payload.hora_inicio) query = query.eq("hora_inicio", payload.hora_inicio);
-  if (payload.hora_fim) query = query.eq("hora_fim", payload.hora_fim);
+  
   if (payload.id) query = query.neq("id", payload.id);
 
   const { count, error } = await query;
@@ -193,8 +192,8 @@ export async function markNotificationAsRead(notificationId: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function notifyUsers(task: Pick<Task, "id" | "titulo" | "data_tarefa" | "assigned_to" | "mentions">, actorUserId: string, action: "created" | "updated") {
-  const userIds = [...new Set([task.assigned_to, ...(task.mentions ?? [])].filter(Boolean) as string[])];
+export async function notifyUsers(task: Pick<Task, "id" | "titulo" | "data_tarefa" | "assigned_to" | "direcionamento">, actorUserId: string, action: "created" | "updated") {
+  const userIds = [...new Set([task.assigned_to, ...(task.direcionamento ?? [])].filter(Boolean) as string[])];
   if (userIds.length === 0) return;
 
   const payload = {

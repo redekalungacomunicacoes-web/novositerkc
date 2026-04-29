@@ -1,19 +1,13 @@
 export const taskBrandTheme = {
   brandPrimary: "#0F7A3E",
-  brandPrimaryHover: "#0C6433",
-  brandSoft: "#EAF6EF",
-  brandBorder: "#9BCFB1",
-  brandText: "#0D3A20",
-  brandBadge: "#146C43",
-  calendarTaskDay: "#F0F9F4",
-  calendarSelectedDay: "#DDF2E5",
 } as const;
 
 export const priorityBadgeClass: Record<string, string> = {
-  baixa: "border-slate-300 bg-slate-100 text-slate-700",
-  media: "border-emerald-200 bg-emerald-100 text-emerald-800",
-  alta: "border-amber-200 bg-amber-100 text-amber-800",
-  urgente: "border-rose-200 bg-rose-100 text-rose-800",
+  urgente: "border-[#EF4444]/30 bg-[#EF4444]/10 text-[#B91C1C]",
+  alta: "border-[#F97316]/30 bg-[#F97316]/10 text-[#C2410C]",
+  media: "border-[#3B82F6]/30 bg-[#3B82F6]/10 text-[#1D4ED8]",
+  baixa: "border-[#EAB308]/30 bg-[#EAB308]/10 text-[#A16207]",
+  concluida: "border-[#22C55E]/30 bg-[#22C55E]/10 text-[#15803D]",
 };
 
 export const statusBadgeClass: Record<string, string> = {

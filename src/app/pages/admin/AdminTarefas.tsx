@@ -43,25 +43,22 @@ function emptyForm(date: Date): TaskFormValues {
     id: undefined,
     titulo: "",
     descricao: "",
-    data_tarefa: toDateKey(date),
-    hora_inicio: "",
-    hora_fim: "",
+    data_inicial: toDateKey(new Date()),
+    data_final: toDateKey(date),
     prioridade: "media",
     status: "pendente",
     assigned_to: "",
-    mentions: [],
-    external_link: "",
-    external_attachment_link: "",
+    direcionamento: [],
+    observacoes: "",
   };
 }
 
 function validate(values: TaskFormValues) {
   if (!values.titulo.trim()) return "O título é obrigatório.";
-  if (!values.data_tarefa) return "A data é obrigatória.";
-  if (!values.assigned_to) return "Selecione um responsável.";
-  if (values.hora_inicio && values.hora_fim && values.hora_fim < values.hora_inicio) return "A hora de fim deve ser maior que a hora de início.";
-  if (values.external_link && !/^https?:\/\//.test(values.external_link)) return "O link externo da tarefa deve começar com http:// ou https://.";
-  if (values.external_attachment_link && !/^https?:\/\//.test(values.external_attachment_link)) return "O link de anexo deve começar com http:// ou https://.";
+  if (!values.data_inicial || !values.data_final) return "Datas inicial/final são obrigatórias.";
+  if (!values.assigned_to) return "Responsável não identificado.";
+  if (!values.direcionamento.length) return "Direcionamento é obrigatório.";
+  if (values.data_final < values.data_inicial) return "Data final não pode ser anterior à inicial.";
   return null;
 }
 
@@ -161,6 +158,7 @@ export function AdminTarefas() {
         const canManageTasks = roles.includes("admin_alfa") || roles.includes("admin");
 
         setCurrentUserId(userId);
+        setForm((prev)=>({ ...prev, assigned_to: userId }));
         setCanManage(canManageTasks);
 
         await Promise.all([refreshTasksAndNotifications(month, userId, canManageTasks), loadUsers()]);
@@ -184,7 +182,7 @@ export function AdminTarefas() {
   }, [month, currentUserId, canManage]);
 
   useEffect(() => {
-    setForm((prev) => ({ ...prev, data_tarefa: selectedDateKey }));
+    setForm((prev) => ({ ...prev, data_final: selectedDateKey, data_inicial: prev.data_inicial || toDateKey(new Date()) }));
   }, [selectedDateKey]);
 
   useEffect(() => {
@@ -202,8 +200,8 @@ export function AdminTarefas() {
       return;
     }
 
-    const mentionsFinal = [...new Set(form.mentions)].filter((id) => id !== form.assigned_to);
-    const validation = validate({ ...form, mentions: mentionsFinal });
+    const direcionamentoFinal = [...new Set(form.direcionamento)].filter((id) => id !== form.assigned_to);
+    const validation = validate({ ...form, direcionamento: direcionamentoFinal });
     if (validation) {
       setSaveError(validation);
       return;
@@ -214,23 +212,21 @@ export function AdminTarefas() {
       const payload = {
         titulo: form.titulo.trim(),
         descricao: form.descricao.trim() || null,
-        data_tarefa: form.data_tarefa,
-        hora_inicio: form.hora_inicio || null,
-        hora_fim: form.hora_fim || null,
+        data_tarefa: form.data_final,
         prioridade: form.prioridade,
         status: form.status,
         assigned_to: form.assigned_to,
         created_by: currentUserId,
-        mentions: mentionsFinal,
-        external_link: form.external_link.trim() || null,
+        direcionamento: direcionamentoFinal,
+        external_link: form.observacoes.trim() || null,
       } as const;
 
       const hasDuplicate = await isDuplicateTask({
         id: form.id ?? "",
         titulo: payload.titulo,
         data_tarefa: payload.data_tarefa,
-        hora_inicio: payload.hora_inicio,
-        hora_fim: payload.hora_fim,
+        hora_inicio: null,
+        hora_fim: null,
         assigned_to: payload.assigned_to,
       });
       if (hasDuplicate) {
@@ -247,7 +243,7 @@ export function AdminTarefas() {
 
       let attachmentWarning: string | null = null;
 
-      if (form.external_attachment_link.trim()) {
+      if (false) {
         try {
           await createExternalAttachment(taskId, form.external_attachment_link.trim(), currentUserId);
         } catch (attachmentError) {
@@ -267,7 +263,7 @@ export function AdminTarefas() {
 
       try {
         await notifyUsers(
-          { id: taskId, titulo: payload.titulo, data_tarefa: payload.data_tarefa, assigned_to: payload.assigned_to, mentions: payload.mentions },
+          { id: taskId, titulo: payload.titulo, data_tarefa: payload.data_tarefa, assigned_to: payload.assigned_to, direcionamento: payload.direcionamento },
           currentUserId,
           form.id ? "updated" : "created",
         );
@@ -294,14 +290,12 @@ export function AdminTarefas() {
       titulo: task.titulo,
       descricao: task.descricao ?? "",
       data_tarefa: task.data_tarefa,
-      hora_inicio: task.hora_inicio ?? "",
-      hora_fim: task.hora_fim ?? "",
+      
       prioridade: task.prioridade,
       status: task.status,
       assigned_to: task.assigned_to ?? "",
-      mentions: task.mentions ?? [],
-      external_link: task.external_link ?? "",
-      external_attachment_link: "",
+      direcionamento: (task.direcionamento as string[]) ?? [],
+      observacoes: task.external_link ?? "",
     });
   }
 
@@ -391,7 +385,7 @@ export function AdminTarefas() {
         </aside>
       </div>
 
-      <TasksDrawer
+      <TasksDrawer responsibleName={userNameById.get(currentUserId) || "Usuário logado"}
         isOpen={isDrawerOpen}
         selectedDate={selectedDate}
         tasksOfDay={tasksOfDay}
