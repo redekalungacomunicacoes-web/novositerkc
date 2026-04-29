@@ -1,4 +1,4 @@
-export type TaskPriority = "baixa" | "media" | "alta" | "urgente";
+export type TaskPriority = "baixa" | "media" | "alta" | "urgente" | "concluida";
 export type TaskStatus = "pendente" | "em_andamento" | "concluida" | "cancelada";
 export type AttachmentType = "link" | "foto" | "pdf" | "video" | "documento" | "arquivo";
 
@@ -29,14 +29,12 @@ export type Task = {
   titulo: string;
   descricao: string | null;
   data_tarefa: string;
-  hora_inicio: string | null;
-  hora_fim: string | null;
   prioridade: TaskPriority;
   status: TaskStatus;
   assigned_to: string | null;
   created_by: string | null;
   external_link: string | null;
-  mentions: string[];
+  direcionamento: string[];
   created_at: string;
   updated_at: string;
   assigned_profile?: { nome: string | null; email: string | null } | null;
@@ -58,6 +56,7 @@ export type Notification = {
     titulo: string;
     data_tarefa: string;
     assigned_to: string | null;
+    direcionamento: string[];
   } | null;
   recipient?: { nome: string | null; email: string | null } | null;
 };
@@ -66,13 +65,11 @@ export type TaskFormValues = {
   id?: string;
   titulo: string;
   descricao: string;
-  data_tarefa: string;
-  hora_inicio: string;
-  hora_fim: string;
+  data_inicial: string;
+  data_final: string;
   prioridade: TaskPriority;
   status: TaskStatus;
   assigned_to: string;
-  mentions: string[];
-  external_link: string;
-  external_attachment_link: string;
+  direcionamento: string[];
+  observacoes: string;
 };
