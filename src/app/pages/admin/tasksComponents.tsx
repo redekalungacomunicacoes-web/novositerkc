@@ -99,8 +99,8 @@ export function TasksDrawer({
   isSaving,
   saveSuccess,
   form,
-  profiles,
-  profileNameById,
+  users,
+  userNameById,
   files,
   saveError,
   tasksDayLoading,
@@ -120,8 +120,8 @@ export function TasksDrawer({
   isSaving: boolean;
   saveSuccess: string | null;
   form: TaskFormValues;
-  profiles: TeamProfile[];
-  profileNameById: Map<string, string>;
+  users: TeamProfile[];
+  userNameById: Map<string, string>;
   files: File[];
   saveError: string | null;
   tasksDayLoading: boolean;
@@ -174,12 +174,12 @@ export function TasksDrawer({
                   </div>
                 </div>
                 <p className="mt-1 text-xs text-slate-600">
-                  {task.hora_inicio ?? "--:--"} - {task.hora_fim ?? "--:--"} • {profileNameById.get(task.assigned_to ?? "") || task.assigned_profile?.nome || task.assigned_profile?.email || "Sem responsável"}
+                  {task.hora_inicio ?? "--:--"} - {task.hora_fim ?? "--:--"} • {userNameById.get(task.assigned_to ?? "") || task.assigned_profile?.nome || task.assigned_profile?.email || "Sem responsável"}
                 </p>
                 <p className="mt-2 line-clamp-2 text-sm text-slate-700">{task.descricao || "Sem descrição"}</p>
                 {task.mentions.length > 0 ? (
                   <p className="mt-2 text-xs text-slate-600">
-                    Menções: {task.mentions.map((mentionId) => profileNameById.get(mentionId) || mentionId).join(", ")}
+                    Menções: {task.mentions.map((mentionId) => userNameById.get(mentionId) || mentionId).join(", ")}
                   </p>
                 ) : null}
                 {(task.task_attachments ?? []).length > 0 ? (
@@ -224,11 +224,11 @@ export function TasksDrawer({
                 <label htmlFor="task-assigned" className="mb-1 block text-sm font-medium text-slate-700">Responsável *</label>
                 <select id="task-assigned" className={fieldClass} value={form.assigned_to} onChange={(event) => onFormChange({ assigned_to: event.target.value })} disabled={teamLoading} required>
                   <option value="">{teamLoading ? "Carregando equipe..." : "Selecione"}</option>
-                  {profiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>{profile.nome || profile.email || "Usuário sem nome"}</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>{user.nome || user.email || "Usuário sem nome"}</option>
                   ))}
                 </select>
-                {!teamLoading && profiles.length === 0 ? <p className="mt-1 text-xs text-amber-700">Nenhum integrante ativo cadastrado.</p> : null}
+                {!teamLoading && users.length === 0 ? <p className="mt-1 text-xs text-amber-700">Nenhum integrante ativo cadastrado.</p> : null}
               </div>
             </div>
 
@@ -245,9 +245,9 @@ export function TasksDrawer({
                 }}
                 disabled={teamLoading}
               >
-                {profiles.map((profile) => (
-                  <option key={`mention-${profile.id}`} value={profile.id}>
-                    {profile.nome || profile.email || "Usuário sem nome"}
+                {users.map((user) => (
+                  <option key={`mention-`} value={user.id}>
+                    {user.nome || user.email || "Usuário sem nome"}
                   </option>
                 ))}
               </select>
