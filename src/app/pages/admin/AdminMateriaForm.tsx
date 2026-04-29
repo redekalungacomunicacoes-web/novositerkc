@@ -332,6 +332,8 @@ export function AdminMateriaForm() {
   const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
   const [activeBlock, setActiveBlock] = useState<number | null>(0);
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
+  const [forceRender, setForceRender] = useState(0);
+  const isMounted = useRef(true);
 
   const coverUrl = watch("coverImage");
   const bannerUrl = watch("bannerImage");
@@ -344,6 +346,26 @@ export function AdminMateriaForm() {
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const canUseGallery = useMemo(() => !!id, [id]);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && isMounted.current) {
+        setForceRender((prev) => prev + 1);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -631,7 +653,9 @@ export function AdminMateriaForm() {
   };
 
   const addBlock = (type: MateriaTextBlockType | "image" | "image-text") => {
+    if (!isMounted.current) return;
     setBlocks((prev) => {
+      if (!isMounted.current) return prev;
       const newIndex = prev.length;
       let newBlock: MateriaContentBlock;
 
@@ -643,8 +667,11 @@ export function AdminMateriaForm() {
         newBlock = { id: uid("txt"), type, text: "", size: "md", author: "" };
       }
 
-      setActiveBlock(newIndex);
+      if (isMounted.current) {
+        setActiveBlock(newIndex);
+      }
       setTimeout(() => {
+        if (!isMounted.current) return;
         document.getElementById(`block-${newIndex}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }, 100);
 
@@ -653,27 +680,36 @@ export function AdminMateriaForm() {
   };
 
   const updateBlock = (id: string, patch: Partial<MateriaContentBlock>) => {
+    if (!isMounted.current) return;
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } as MateriaContentBlock : b)));
   };
 
   const removeBlock = (blockId: string) => {
+    if (!isMounted.current) return;
     setBlocks((prev) => {
+      if (!isMounted.current) return prev;
       const removedIndex = prev.findIndex((b) => b.id === blockId);
+      if (removedIndex === -1 || !prev || !prev[removedIndex]) return prev;
       const next = prev.filter((b) => b.id !== blockId);
 
-      setActiveBlock((current) => {
-        if (current === null || current === -1 || removedIndex === -1) return current;
-        if (current === removedIndex) return next.length ? Math.min(removedIndex, next.length - 1) : null;
-        if (current > removedIndex) return current - 1;
-        return current;
-      });
+      if (isMounted.current) {
+        setActiveBlock((current) => {
+          if (current === null || current === -1 || removedIndex === -1) return current;
+          if (current === removedIndex) return next.length ? Math.min(removedIndex, next.length - 1) : null;
+          if (current > removedIndex) return current - 1;
+          return current;
+        });
+      }
 
       return next;
     });
   };
 
   const moveBlock = (index: number, direction: -1 | 1) => {
+    if (!isMounted.current) return;
     setBlocks((prev) => {
+      if (!isMounted.current) return prev;
+      if (!prev || !prev[index]) return prev;
       const target = index + direction;
       if (target < 0 || target >= prev.length) return prev;
       const clone = [...prev];
@@ -772,7 +808,7 @@ export function AdminMateriaForm() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div key={forceRender} className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/admin/materias" className="p-2 hover:bg-muted rounded-full transition-colors">
