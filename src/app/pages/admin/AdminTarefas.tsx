@@ -60,7 +60,6 @@ function validate(values: TaskFormValues) {
   if (!values.titulo.trim()) return "O título é obrigatório.";
   if (!values.data_tarefa) return "A data é obrigatória.";
   if (!values.assigned_to) return "Selecione um responsável.";
-  if (values.mentions.some((mention) => mention === values.assigned_to)) return "Não inclua o responsável também nas menções.";
   if (values.hora_inicio && values.hora_fim && values.hora_fim < values.hora_inicio) return "A hora de fim deve ser maior que a hora de início.";
   if (values.external_link && !/^https?:\/\//.test(values.external_link)) return "O link externo da tarefa deve começar com http:// ou https://.";
   if (values.external_attachment_link && !/^https?:\/\//.test(values.external_attachment_link)) return "O link de anexo deve começar com http:// ou https://.";
@@ -196,7 +195,8 @@ export function AdminTarefas() {
       return;
     }
 
-    const validation = validate(form);
+    const mentionsFinal = [...new Set(form.mentions)].filter((id) => id !== form.assigned_to);
+    const validation = validate({ ...form, mentions: mentionsFinal });
     if (validation) {
       setSaveError(validation);
       return;
@@ -214,7 +214,7 @@ export function AdminTarefas() {
         status: form.status,
         assigned_to: form.assigned_to,
         created_by: currentUserId,
-        mentions: [...new Set(form.mentions)].filter((id) => id !== form.assigned_to),
+        mentions: mentionsFinal,
         external_link: form.external_link.trim() || null,
       } as const;
 
