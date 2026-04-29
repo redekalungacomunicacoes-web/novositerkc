@@ -289,8 +289,8 @@ export function AdminTarefas() {
       id: task.id,
       titulo: task.titulo,
       descricao: task.descricao ?? "",
-      data_tarefa: task.data_tarefa,
-      
+      data_inicial: task.data_tarefa,
+      data_final: task.data_tarefa,
       prioridade: task.prioridade,
       status: task.status,
       assigned_to: task.assigned_to ?? "",
