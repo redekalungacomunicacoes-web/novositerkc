@@ -38,6 +38,13 @@ type AdminSettingsForm = {
 
   google_analytics_enabled: boolean;
   google_analytics_measurement_id: string;
+  seo_title: string;
+  seo_description: string;
+  seo_keywords: string;
+  seo_og_title: string;
+  seo_og_description: string;
+  seo_og_image: string;
+  seo_indexation: "index" | "noindex";
 };
 
 type UploadKind = "banner" | "territory" | "footer-logo" | "favicon";
@@ -83,6 +90,13 @@ export function AdminConfiguracoes() {
 
     google_analytics_enabled: false,
     google_analytics_measurement_id: "",
+    seo_title: "",
+    seo_description: "",
+    seo_keywords: "",
+    seo_og_title: "",
+    seo_og_description: "",
+    seo_og_image: "",
+    seo_indexation: "index",
   });
 
   const footerDescriptionCount = form.footer_description.length;
@@ -134,6 +148,13 @@ export function AdminConfiguracoes() {
 
           google_analytics_enabled: s.google_analytics_enabled ?? false,
           google_analytics_measurement_id: s.google_analytics_measurement_id ?? "",
+          seo_title: s.seo_title ?? "",
+          seo_description: s.seo_description ?? "",
+          seo_keywords: s.seo_keywords ?? "",
+          seo_og_title: s.seo_og_title ?? "",
+          seo_og_description: s.seo_og_description ?? "",
+          seo_og_image: s.seo_og_image ?? "",
+          seo_indexation: s.seo_indexation === "noindex" ? "noindex" : "index",
         }));
       } catch (e: any) {
         console.warn("Erro ao carregar settings (Admin Configurações):", e?.message || e);
@@ -214,6 +235,13 @@ export function AdminConfiguracoes() {
 
           google_analytics_enabled: form.google_analytics_enabled,
           google_analytics_measurement_id: form.google_analytics_measurement_id.trim() || null,
+          seo_title: form.seo_title.trim() || null,
+          seo_description: form.seo_description.trim() || null,
+          seo_keywords: form.seo_keywords.trim() || null,
+          seo_og_title: form.seo_og_title.trim() || null,
+          seo_og_description: form.seo_og_description.trim() || null,
+          seo_og_image: form.seo_og_image.trim() || null,
+          seo_indexation: form.seo_indexation,
         }),
         upsertFooterSettings({
           footer_logo_path: form.footer_logo_path || null,
@@ -320,6 +348,84 @@ export function AdminConfiguracoes() {
                 className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 disabled={loading}
               />
+            </div>
+          </div>
+        </div>
+
+        {/* SEO do Site */}
+        <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+          <h3 className="font-semibold text-lg border-b pb-4 mb-4">SEO do Site</h3>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium">SEO Básico</label>
+              <input
+                value={form.seo_title}
+                onChange={(e) => setField("seo_title", e.target.value)}
+                placeholder="Título do site (SEO)"
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <textarea
+                value={form.seo_description}
+                onChange={(e) => setField("seo_description", e.target.value)}
+                placeholder="Descrição do site"
+                className="w-full min-h-24 px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <input
+                value={form.seo_keywords}
+                onChange={(e) => setField("seo_keywords", e.target.value)}
+                placeholder="Palavras-chave (separadas por vírgula)"
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2 mt-2">
+              <label className="text-sm font-medium">SEO Social (Open Graph)</label>
+              <input
+                value={form.seo_og_title}
+                onChange={(e) => setField("seo_og_title", e.target.value)}
+                placeholder="Título para redes sociais"
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <textarea
+                value={form.seo_og_description}
+                onChange={(e) => setField("seo_og_description", e.target.value)}
+                placeholder="Descrição para redes sociais"
+                className="w-full min-h-24 px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <input
+                value={form.seo_og_image}
+                onChange={(e) => setField("seo_og_image", e.target.value)}
+                placeholder="URL da imagem de compartilhamento"
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2 mt-2">
+              <label className="text-sm font-medium">Controle de indexação</label>
+              <select
+                value={form.seo_indexation}
+                onChange={(e) => setField("seo_indexation", e.target.value as "index" | "noindex")}
+                className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                disabled={loading}
+              >
+                <option value="index">Permitir indexação (Google)</option>
+                <option value="noindex">Não indexar</option>
+              </select>
             </div>
           </div>
         </div>

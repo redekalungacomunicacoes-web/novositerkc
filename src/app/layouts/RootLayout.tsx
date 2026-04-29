@@ -5,12 +5,14 @@ import { ScrollToTop } from "@/app/components/ScrollToTop";
 import { SiteFavicon } from "@/app/components/SiteFavicon";
 import { GoogleAnalytics } from "@/app/components/GoogleAnalytics";
 import { SiteViewTracker } from "@/app/components/SiteViewTracker";
+import { SiteSeo } from "@/app/components/SiteSeo";
 
 export function RootLayout() {
   return (
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />
       <SiteFavicon />
+      <SiteSeo />
       <GoogleAnalytics />
       <SiteViewTracker />
       <Header />
