@@ -331,6 +331,7 @@ export function AdminMateriaForm() {
 
   const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
   const [activeBlock, setActiveBlock] = useState<number | null>(0);
+  const [activeTab, setActiveTab] = useState<"conteudo" | "galeria">("conteudo");
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
   const [forceRender, setForceRender] = useState(0);
   const isMounted = useRef(true);
@@ -859,6 +860,24 @@ export function AdminMateriaForm() {
             </div>
           </div>
 
+          <div className="tabs-menu flex gap-2 mb-2">
+            <button
+              type="button"
+              className={`px-3 py-2 rounded-md text-sm transition-colors ${activeTab === "conteudo" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
+              onClick={() => setActiveTab("conteudo")}
+            >
+              Conteúdo
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-2 rounded-md text-sm transition-colors ${activeTab === "galeria" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
+              onClick={() => setActiveTab("galeria")}
+            >
+              Galeria de Fotos
+            </button>
+          </div>
+
+          {activeTab === "conteudo" && (
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <h3 className="font-semibold text-lg">Conteúdo em blocos</h3>
@@ -1011,16 +1030,10 @@ export function AdminMateriaForm() {
               </div>
             )}
 
-            <div className="space-y-2 pt-3 border-t">
-              <label className="text-sm font-medium">Conteúdo legado (fallback)</label>
-              <textarea
-                {...register("content")}
-                className="w-full min-h-[140px] p-3 rounded-md border bg-background text-sm"
-                placeholder="Se necessário, mantenha aqui o conteúdo HTML legado para compatibilidade."
-              />
-            </div>
           </div>
+          )}
 
+          {activeTab === "galeria" && (
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <div>
@@ -1066,6 +1079,7 @@ export function AdminMateriaForm() {
               <p className="text-xs text-muted-foreground">Será exibido abaixo da galeria na matéria publicada.</p>
             </div>
           </div>
+          )}
         </div>
 
         <div className="space-y-6">
