@@ -17,6 +17,14 @@ export type SiteSettings = {
 
   google_analytics_enabled: boolean;
   google_analytics_measurement_id: string | null;
+
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_keywords: string | null;
+  seo_og_title: string | null;
+  seo_og_description: string | null;
+  seo_og_image: string | null;
+  seo_indexation: "index" | "noindex" | null;
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -34,7 +42,14 @@ export async function getSiteSettings(): Promise<SiteSettings> {
       about_team_title,
       about_team_subtitle,
       google_analytics_enabled,
-      google_analytics_measurement_id
+      google_analytics_measurement_id,
+      seo_title,
+      seo_description,
+      seo_keywords,
+      seo_og_title,
+      seo_og_description,
+      seo_og_image,
+      seo_indexation
       `
     )
     .eq("singleton", true)
@@ -57,6 +72,14 @@ export async function getSiteSettings(): Promise<SiteSettings> {
 
     google_analytics_enabled: data?.google_analytics_enabled ?? false,
     google_analytics_measurement_id: data?.google_analytics_measurement_id ?? null,
+
+    seo_title: data?.seo_title ?? null,
+    seo_description: data?.seo_description ?? null,
+    seo_keywords: data?.seo_keywords ?? null,
+    seo_og_title: data?.seo_og_title ?? null,
+    seo_og_description: data?.seo_og_description ?? null,
+    seo_og_image: data?.seo_og_image ?? null,
+    seo_indexation: data?.seo_indexation ?? "index",
   };
 }
 
@@ -85,7 +108,14 @@ export async function updateSiteSettings(patch: Partial<SiteSettings>) {
       about_team_title,
       about_team_subtitle,
       google_analytics_enabled,
-      google_analytics_measurement_id
+      google_analytics_measurement_id,
+      seo_title,
+      seo_description,
+      seo_keywords,
+      seo_og_title,
+      seo_og_description,
+      seo_og_image,
+      seo_indexation
       `
     )
     .maybeSingle();
