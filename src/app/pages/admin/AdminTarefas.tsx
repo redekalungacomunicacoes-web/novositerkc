@@ -58,7 +58,9 @@ function emptyForm(date: Date): TaskFormValues {
 function validate(values: TaskFormValues) {
   if (!values.titulo.trim()) return "O título é obrigatório.";
   if (!values.data_inicial || !values.data_final) return "Datas inicial/final são obrigatórias.";
-  if (values.assigned_to && !values.direcionamento.includes(values.assigned_to)) return "Responsável deve estar no direcionamento";
+  if (!values.assigned_to) return "Selecione o responsável da tarefa.";
+  if (!values.direcionamento.length) return "Selecione ao menos um usuário no direcionamento.";
+  if (!values.direcionamento.includes(values.assigned_to)) return "Responsável deve estar no direcionamento.";
   if (values.data_final < values.data_inicial) return "Data final não pode ser anterior à inicial.";
   return null;
 }
@@ -409,7 +411,18 @@ export function AdminTarefas() {
         tasksDayLoading={tasksDayLoading}
         onClose={() => setIsDrawerOpen(false)}
         onSubmit={(event) => void handleCreateTask(event)}
-        onFormChange={(values) => setForm((prev) => ({ ...prev, ...values }))}
+        onFormChange={(values) =>
+          setForm((prev) => {
+            const next = { ...prev, ...values };
+            if (Object.prototype.hasOwnProperty.call(values, "direcionamento")) {
+              const nextDirecionamento = Array.isArray(values.direcionamento) ? values.direcionamento : prev.direcionamento;
+              if (next.assigned_to && !nextDirecionamento.includes(next.assigned_to)) {
+                next.assigned_to = "";
+              }
+            }
+            return next;
+          })
+        }
         onFilesChange={setFiles}
         onEditTask={handleEditTask}
         onDeleteTask={(taskId) => void handleDeleteTask(taskId)}
