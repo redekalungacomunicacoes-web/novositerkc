@@ -8,11 +8,13 @@ import {
   createExternalAttachment,
   createTask,
   deleteTask,
+  fetchTeamProfiles,
   fetchNotifications,
   fetchTasksInRange,
   isDuplicateTask,
   markNotificationAsRead,
   notifyUsers,
+  userExistsById,
   updateTask,
   uploadTaskAttachment,
 } from "./tasksService";
@@ -60,6 +62,10 @@ function validate(values: TaskFormValues) {
   if (!values.direcionamento.length) return "Direcionamento é obrigatório.";
   if (values.data_final < values.data_inicial) return "Data final não pode ser anterior à inicial.";
   return null;
+}
+
+function isValidUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export function AdminTarefas() {
@@ -119,23 +125,12 @@ export function AdminTarefas() {
     }
   }
 
-  async function fetchEquipe() {
-    const { data, error } = await supabase.from("equipe").select("id, nome, email").order("nome");
-
-    if (error) {
-      console.error("Erro ao buscar equipe:", error);
-      return [];
-    }
-
-    return data;
-  }
-
   async function loadUsers() {
     setTeamLoading(true);
     setTeamError(null);
     try {
-      const equipe = await fetchEquipe();
-      setUsers([...new Map(equipe.map((user) => [user.id, user as TeamProfile])).values()]);
+      const profiles = await fetchTeamProfiles();
+      setUsers([...new Map(profiles.map((user) => [user.id, user as TeamProfile])).values()]);
     } catch (caught) {
       console.error("Erro ao carregar equipe", caught);
       const message = caught instanceof Error ? caught.message : "Falha ao carregar integrantes.";
@@ -200,22 +195,34 @@ export function AdminTarefas() {
       return;
     }
 
-    const direcionamentoFinal = [...new Set(form.direcionamento)].filter((id) => id !== form.assigned_to);
-    const validation = validate({ ...form, direcionamento: direcionamentoFinal });
+    const assignedToFallback = form.assigned_to || currentUserId;
+    const direcionamentoFinal = [...new Set(form.direcionamento)].filter((id) => id !== assignedToFallback);
+    const validation = validate({ ...form, assigned_to: assignedToFallback, direcionamento: direcionamentoFinal });
     if (validation) {
       setSaveError(validation);
       return;
     }
 
+    if (!isValidUuid(assignedToFallback)) {
+      setSaveError("Selecione um responsável válido antes de salvar a tarefa.");
+      return;
+    }
+
     try {
       setSaving(true);
+      const assignedUserExists = await userExistsById(assignedToFallback);
+      if (!assignedUserExists) {
+        setSaveError("O responsável selecionado não foi encontrado. Atualize a lista e tente novamente.");
+        return;
+      }
+
       const payload = {
         titulo: form.titulo.trim(),
         descricao: form.descricao.trim() || null,
         data_tarefa: form.data_final,
         prioridade: form.prioridade,
         status: form.status,
-        assigned_to: form.assigned_to,
+        assigned_to: assignedToFallback,
         created_by: currentUserId,
         direcionamento: direcionamentoFinal,
         external_link: form.observacoes.trim() || null,
@@ -272,7 +279,7 @@ export function AdminTarefas() {
       }
 
       await refreshTasksAndNotifications(month, currentUserId, canManage);
-      setForm(emptyForm(selectedDate));
+      setForm({ ...emptyForm(selectedDate), assigned_to: currentUserId });
       setFiles([]);
       setSaveSuccess(attachmentWarning ?? (form.id ? "Tarefa atualizada com sucesso." : "Tarefa salva com sucesso."));
     } catch (caught) {
@@ -385,7 +392,7 @@ export function AdminTarefas() {
         </aside>
       </div>
 
-      <TasksDrawer responsibleName={userNameById.get(currentUserId) || "Usuário logado"}
+      <TasksDrawer
         isOpen={isDrawerOpen}
         selectedDate={selectedDate}
         tasksOfDay={tasksOfDay}
@@ -406,6 +413,7 @@ export function AdminTarefas() {
         onFilesChange={setFiles}
         onEditTask={handleEditTask}
         onDeleteTask={(taskId) => void handleDeleteTask(taskId)}
+        responsibleName={userNameById.get(currentUserId) || "Usuário logado"}
       />
 
       {loading ? <p className="text-sm text-slate-500">Carregando dados do calendário...</p> : null}
