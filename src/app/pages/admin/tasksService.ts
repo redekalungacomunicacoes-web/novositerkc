@@ -75,11 +75,21 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
 }
 
 export async function createTask(payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">) {
+  if (!payload.assigned_to) {
+    throw new Error("Selecione um responsável pela tarefa");
+  }
+
+  const exists = await userExistsById(payload.assigned_to);
+  if (!exists) {
+    throw new Error("Usuário inválido para o campo responsável.");
+  }
+
   const { data, error } = await supabase
     .from("tasks")
     .insert({
       ...payload,
       id: crypto.randomUUID(),
+      assigned_to: payload.assigned_to ?? null,
       direcionamento: [...new Set(payload.direcionamento ?? [])],
     })
     .select("id")
@@ -89,26 +99,31 @@ export async function createTask(payload: Omit<Task, "id" | "created_at" | "upda
 }
 
 export async function userExistsById(userId: string) {
-  const [profilesResult, equipeResult] = await Promise.all([
-    supabase.from("profiles").select("id").eq("id", userId).maybeSingle(),
-    supabase.from("equipe").select("user_id").eq("user_id", userId).maybeSingle(),
-  ]);
-
-  if (profilesResult.error && equipeResult.error) {
-    throw new Error("Não foi possível validar o responsável da tarefa.");
+  const profilesResult = await supabase.from("profiles").select("id").eq("id", userId).maybeSingle();
+  if (profilesResult.error) {
+    throw new Error(`Não foi possível validar o responsável da tarefa: ${profilesResult.error.message}`);
   }
-
-  return Boolean(profilesResult.data?.id || equipeResult.data?.user_id);
+  return Boolean(profilesResult.data?.id);
 }
 
 export async function updateTask(
   taskId: string,
   payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">,
 ) {
+  if (!payload.assigned_to) {
+    throw new Error("Selecione um responsável pela tarefa");
+  }
+
+  const exists = await userExistsById(payload.assigned_to);
+  if (!exists) {
+    throw new Error("Usuário inválido para o campo responsável.");
+  }
+
   const { error } = await supabase
     .from("tasks")
     .update({
       ...payload,
+      assigned_to: payload.assigned_to ?? null,
       direcionamento: [...new Set(payload.direcionamento ?? [])],
     })
     .eq("id", taskId);
