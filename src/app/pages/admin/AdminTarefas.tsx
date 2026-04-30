@@ -58,7 +58,7 @@ function emptyForm(date: Date): TaskFormValues {
 function validate(values: TaskFormValues) {
   if (!values.titulo.trim()) return "O título é obrigatório.";
   if (!values.data_inicial || !values.data_final) return "Datas inicial/final são obrigatórias.";
-  if (!values.assigned_to) return "Selecione um responsável pela tarefa";
+  if (values.assigned_to && !values.direcionamento.includes(values.assigned_to)) return "Responsável deve estar no direcionamento";
   if (values.data_final < values.data_inicial) return "Data final não pode ser anterior à inicial.";
   return null;
 }
@@ -193,25 +193,27 @@ export function AdminTarefas() {
       return;
     }
 
-    const selectedUserId = form.assigned_to;
-    const direcionamentoFinal = [...new Set(form.direcionamento)].filter((id) => id !== selectedUserId);
-    const validation = validate({ ...form, assigned_to: selectedUserId, direcionamento: direcionamentoFinal });
+    const selectedUserId = form.assigned_to || null;
+    const direcionamentoFinal = [...new Set(form.direcionamento)];
+    const validation = validate({ ...form, assigned_to: selectedUserId ?? "", direcionamento: direcionamentoFinal });
     if (validation) {
       setSaveError(validation);
       return;
     }
 
-    if (!isValidUuid(selectedUserId)) {
+    if (selectedUserId && !isValidUuid(selectedUserId)) {
       setSaveError("Selecione um responsável válido antes de salvar a tarefa.");
       return;
     }
 
     try {
       setSaving(true);
-      const assignedUserExists = await userExistsById(selectedUserId);
-      if (!assignedUserExists) {
-        setSaveError("O responsável selecionado não foi encontrado. Atualize a lista e tente novamente.");
-        return;
+      if (selectedUserId) {
+        const assignedUserExists = await userExistsById(selectedUserId);
+        if (!assignedUserExists) {
+          setSaveError("O responsável selecionado não foi encontrado. Atualize a lista e tente novamente.");
+          return;
+        }
       }
 
       const payload = {
@@ -357,7 +359,7 @@ export function AdminTarefas() {
           monthStartOffset={monthStartOffset}
           month={month}
           selectedDateKey={selectedDateKey}
-          taskCountByDate={taskCountByDate}
+          tasksByDate={new Map(tasks.map((task) => [task.data_tarefa, tasks.filter((t) => t.data_tarefa === task.data_tarefa)]))}
           onSelectDate={(day) => {
             setSelectedDate(day);
             setIsDrawerOpen(true);
