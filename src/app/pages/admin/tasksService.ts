@@ -89,9 +89,16 @@ export async function createTask(payload: Omit<Task, "id" | "created_at" | "upda
 }
 
 export async function userExistsById(userId: string) {
-  const { data, error } = await supabase.from("profiles").select("id").eq("id", userId).maybeSingle();
-  if (error) throw new Error("Não foi possível validar o responsável da tarefa.");
-  return Boolean(data?.id);
+  const [profilesResult, equipeResult] = await Promise.all([
+    supabase.from("profiles").select("id").eq("id", userId).maybeSingle(),
+    supabase.from("equipe").select("user_id").eq("user_id", userId).maybeSingle(),
+  ]);
+
+  if (profilesResult.error && equipeResult.error) {
+    throw new Error("Não foi possível validar o responsável da tarefa.");
+  }
+
+  return Boolean(profilesResult.data?.id || equipeResult.data?.user_id);
 }
 
 export async function updateTask(
