@@ -168,7 +168,21 @@ export function TasksDrawer(props: { isOpen: boolean; selectedDate: Date; tasksO
                       <option value="pendente">Pendente</option><option value="em_andamento">Em andamento</option><option value="concluida">Concluída</option><option value="cancelada">Cancelada</option>
                     </select>
                   </InputField>
-                  <div className="md:col-span-2"><InputField label="Responsável (automático)"><input readOnly value={props.responsibleName} className="h-11 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 text-sm text-slate-500" /></InputField></div>
+                  <div className="md:col-span-2"><InputField label="Responsável pela tarefa *">
+                    <select
+                      required
+                      value={props.form.assigned_to}
+                      onChange={(e) => props.onFormChange({ assigned_to: e.target.value })}
+                      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                    >
+                      <option value="">Selecione o responsável</option>
+                      {props.users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {(user.nome || "Usuário")} {user.email ? `(${user.email})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </InputField></div>
                 </div>
               ) : null}
 

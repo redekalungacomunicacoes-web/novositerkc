@@ -88,6 +88,12 @@ export async function createTask(payload: Omit<Task, "id" | "created_at" | "upda
   return data.id as string;
 }
 
+export async function userExistsById(userId: string) {
+  const { data, error } = await supabase.from("profiles").select("id").eq("id", userId).maybeSingle();
+  if (error) throw new Error("Não foi possível validar o responsável da tarefa.");
+  return Boolean(data?.id);
+}
+
 export async function updateTask(
   taskId: string,
   payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">,
