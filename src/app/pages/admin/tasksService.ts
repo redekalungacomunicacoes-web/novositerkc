@@ -75,13 +75,15 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
 }
 
 export async function createTask(payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">) {
-  if (!payload.assigned_to) {
-    throw new Error("Selecione um responsável pela tarefa");
+  if (payload.assigned_to && !payload.direcionamento.includes(payload.assigned_to)) {
+    throw new Error("Responsável deve estar no direcionamento");
   }
 
-  const exists = await userExistsById(payload.assigned_to);
-  if (!exists) {
-    throw new Error("Usuário inválido para o campo responsável.");
+  if (payload.assigned_to) {
+    const exists = await userExistsById(payload.assigned_to);
+    if (!exists) {
+      throw new Error("Usuário inválido para o campo responsável.");
+    }
   }
 
   const { data, error } = await supabase
@@ -110,13 +112,15 @@ export async function updateTask(
   taskId: string,
   payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">,
 ) {
-  if (!payload.assigned_to) {
-    throw new Error("Selecione um responsável pela tarefa");
+  if (payload.assigned_to && !payload.direcionamento.includes(payload.assigned_to)) {
+    throw new Error("Responsável deve estar no direcionamento");
   }
 
-  const exists = await userExistsById(payload.assigned_to);
-  if (!exists) {
-    throw new Error("Usuário inválido para o campo responsável.");
+  if (payload.assigned_to) {
+    const exists = await userExistsById(payload.assigned_to);
+    if (!exists) {
+      throw new Error("Usuário inválido para o campo responsável.");
+    }
   }
 
   const { error } = await supabase
