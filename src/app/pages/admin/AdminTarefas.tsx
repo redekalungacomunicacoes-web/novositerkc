@@ -58,8 +58,7 @@ function emptyForm(date: Date): TaskFormValues {
 function validate(values: TaskFormValues) {
   if (!values.titulo.trim()) return "O título é obrigatório.";
   if (!values.data_inicial || !values.data_final) return "Datas inicial/final são obrigatórias.";
-  if (!values.assigned_to) return "Responsável não identificado.";
-  if (!values.direcionamento.length) return "Direcionamento é obrigatório.";
+  if (!values.assigned_to) return "Selecione um responsável pela tarefa";
   if (values.data_final < values.data_inicial) return "Data final não pode ser anterior à inicial.";
   return null;
 }
@@ -153,7 +152,6 @@ export function AdminTarefas() {
         const canManageTasks = roles.includes("admin_alfa") || roles.includes("admin");
 
         setCurrentUserId(userId);
-        setForm((prev)=>({ ...prev, assigned_to: userId }));
         setCanManage(canManageTasks);
 
         await Promise.all([refreshTasksAndNotifications(month, userId, canManageTasks), loadUsers()]);
@@ -195,22 +193,22 @@ export function AdminTarefas() {
       return;
     }
 
-    const assignedToFallback = form.assigned_to || currentUserId;
-    const direcionamentoFinal = [...new Set(form.direcionamento)].filter((id) => id !== assignedToFallback);
-    const validation = validate({ ...form, assigned_to: assignedToFallback, direcionamento: direcionamentoFinal });
+    const selectedUserId = form.assigned_to;
+    const direcionamentoFinal = [...new Set(form.direcionamento)].filter((id) => id !== selectedUserId);
+    const validation = validate({ ...form, assigned_to: selectedUserId, direcionamento: direcionamentoFinal });
     if (validation) {
       setSaveError(validation);
       return;
     }
 
-    if (!isValidUuid(assignedToFallback)) {
+    if (!isValidUuid(selectedUserId)) {
       setSaveError("Selecione um responsável válido antes de salvar a tarefa.");
       return;
     }
 
     try {
       setSaving(true);
-      const assignedUserExists = await userExistsById(assignedToFallback);
+      const assignedUserExists = await userExistsById(selectedUserId);
       if (!assignedUserExists) {
         setSaveError("O responsável selecionado não foi encontrado. Atualize a lista e tente novamente.");
         return;
@@ -222,7 +220,7 @@ export function AdminTarefas() {
         data_tarefa: form.data_final,
         prioridade: form.prioridade,
         status: form.status,
-        assigned_to: assignedToFallback,
+        assigned_to: selectedUserId,
         created_by: currentUserId,
         direcionamento: direcionamentoFinal,
         external_link: form.observacoes.trim() || null,
@@ -279,7 +277,7 @@ export function AdminTarefas() {
       }
 
       await refreshTasksAndNotifications(month, currentUserId, canManage);
-      setForm({ ...emptyForm(selectedDate), assigned_to: currentUserId });
+      setForm(emptyForm(selectedDate));
       setFiles([]);
       setSaveSuccess(attachmentWarning ?? (form.id ? "Tarefa atualizada com sucesso." : "Tarefa salva com sucesso."));
     } catch (caught) {

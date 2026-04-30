@@ -63,6 +63,25 @@ function DatePicker(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input type="date" {...props} className={cn("h-11 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-200", props.className)} />;
 }
 
+
+function UserSingleSelect({ users, value, onChange, required = false }: { users: TeamProfile[]; value: string; onChange: (id: string) => void; required?: boolean }) {
+  return (
+    <select
+      required={required}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+    >
+      <option value="">Selecione o responsável</option>
+      {users.map((user) => (
+        <option key={user.id} value={user.id}>
+          {(user.nome || "Usuário")} {user.email ? `(${user.email})` : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function UserSelector({ users, value, onChange }: { users: TeamProfile[]; value: string[]; onChange: (ids: string[]) => void }) {
   return (
     <div className="space-y-2">
@@ -169,19 +188,12 @@ export function TasksDrawer(props: { isOpen: boolean; selectedDate: Date; tasksO
                     </select>
                   </InputField>
                   <div className="md:col-span-2"><InputField label="Responsável pela tarefa *">
-                    <select
+                    <UserSingleSelect
                       required
+                      users={props.users}
                       value={props.form.assigned_to}
-                      onChange={(e) => props.onFormChange({ assigned_to: e.target.value })}
-                      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                    >
-                      <option value="">Selecione o responsável</option>
-                      {props.users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {(user.nome || "Usuário")} {user.email ? `(${user.email})` : ""}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(id) => props.onFormChange({ assigned_to: id })}
+                    />
                   </InputField></div>
                 </div>
               ) : null}
