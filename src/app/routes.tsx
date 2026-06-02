@@ -40,94 +40,95 @@ type RoleName = "admin_alfa" | "admin" | "editor" | "autor" | "financeiro";
 
 async function getMyRoles(): Promise<RoleName[]> {
   const { roles } = await getCurrentUserRoles();
-  return roles as RoleName[];
-}
+    return roles as RoleName[];
+    }
 
-async function adminRootLoader() {
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) throw redirect("/admin/login");
+    async function adminRootLoader() {
+      const { data } = await supabase.auth.getSession();
+        if (!data.session) throw redirect("/admin/login");
 
-  const roles = await getMyRoles();
-  if (!hasAdminPanelRole(roles)) throw redirect("/admin/login");
+          const roles = await getMyRoles();
+            if (!hasAdminPanelRole(roles)) throw redirect("/admin/login");
 
-  return { roles };
-}
+              return { roles };
+              }
 
-function requireRoles(required: RoleName[]) {
-  return async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect("/admin/login");
+              function requireRoles(required: RoleName[]) {
+                return async () => {
+                    const { data } = await supabase.auth.getSession();
+                        if (!data.session) throw redirect("/admin/login");
 
-    const roles = await getMyRoles();
-    if (!hasAnyRole(roles, required)) throw redirect("/admin");
+                            const roles = await getMyRoles();
+                                if (!hasAnyRole(roles, required)) throw redirect("/admin");
 
-    return { roles };
-  };
-}
+                                    return { roles };
+                                      };
+                                      }
 
-export const router = createBrowserRouter([
-  {
-    path: "/admin",
-    children: [
-      { path: "login", Component: AdminLogin },
+                                      export const router = createBrowserRouter([
+                                        {
+                                            path: "/admin",
+                                                children: [
+                                                      { path: "login", Component: AdminLogin },
 
-      {
-        path: "",
-        loader: adminRootLoader,
-        Component: AdminLayout,
-        children: [
-          { index: true, Component: Dashboard },
+                                                            {
+                                                                    path: "",
+                                                                            loader: adminRootLoader,
+                                                                                    Component: AdminLayout,
+                                                                                            children: [
+                                                                                                      { index: true, Component: Dashboard },
 
-          { path: "materias", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriasAlias },
-          { path: "materias/nova", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriaForm },
-          { path: "materias/editar/:id", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriaForm },
+                                                                                                                { path: "materias", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriasAlias },
+                                                                                                                          { path: "materias/nova", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriaForm },
+                                                                                                                                    { path: "materias/editar/:id", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminMateriaForm },
 
-          { path: "projetos", loader: requireRoles(["admin", "editor"]), Component: AdminProjetos },
-          { path: "projetos/novo", loader: requireRoles(["admin", "editor"]), Component: AdminProjetoForm },
-          { path: "projetos/editar/:id", loader: requireRoles(["admin", "editor"]), Component: AdminProjetoForm },
+                                                                                                                                              { path: "projetos", loader: requireRoles(["admin", "editor"]), Component: AdminProjetos },
+                                                                                                                                                        { path: "projetos/novo", loader: requireRoles(["admin", "editor"]), Component: AdminProjetoForm },
+                                                                                                                                                                  { path: "projetos/editar/:id", loader: requireRoles(["admin", "editor"]), Component: AdminProjetoForm },
 
-          { path: "equipe", loader: requireRoles(["admin", "editor"]), Component: AdminEquipe },
-          { path: "equipe/novo", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
-          { path: "equipe/editar/:id", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
-          { path: "perfil", loader: requireRoles(["autor"]), Component: AdminPerfil },
+                                                                                                                                                                            { path: "equipe", loader: requireRoles(["admin", "editor"]), Component: AdminEquipe },
+                                                                                                                                                                                      { path: "equipe/novo", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
+                                                                                                                                                                                                { path: "equipe/editar/:id", loader: requireRoles(["admin", "editor"]), Component: AdminEquipeForm },
+                                                                                                                                                                                                          { path: "perfil", loader: requireRoles(["autor"]), Component: AdminPerfil },
 
-          // ✅ NOVO: Quem Somos (admin/editor)
-          { path: "quem-somos", loader: requireRoles(["admin", "editor"]), Component: AdminQuemSomos },
+                                                                                                                                                                                                                    // ✅ NOVO: Quem Somos (admin/editor)
+                                                                                                                                                                                                                              { path: "quem-somos", loader: requireRoles(["admin", "editor"]), Component: AdminQuemSomos },
 
-          // ✅ Newsletter (admin/editor)
-          { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
+                                                                                                                                                                                                                                        // ✅ Newsletter (admin/editor)
+                                                                                                                                                                                                                                                  { path: "newsletter", loader: requireRoles(["admin", "editor"]), Component: AdminNewsletter },
 
-          // ✅ Tarefas da equipe (admin/editor/autor)
-          { path: "tarefas", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminTarefas },
+                                                                                                                                                                                                                                                            // ✅ Tarefas da equipe (admin/editor/autor)
+                                                                                                                                                                                                                                                                      { path: "tarefas", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminTarefas },
 
-          {
-            path: "financeiro",
-            loader: requireRoles([...FINANCE_MODULE_ROLES]),
-            children: financeiroRoutes.map((route) => ({ ...route, loader: requireRoles([...FINANCE_MODULE_ROLES]) })),
-          },
+                                                                                                                                                                                                                                                                                {
+                                                                                                                                                                                                                                                                                            path: "financeiro",
+                                                                                                                                                                                                                                                                                                        loader: requireRoles([...FINANCE_MODULE_ROLES]),
+                                                                                                                                                                                                                                                                                                                    children: financeiroRoutes.map((route) => ({ ...route, loader: requireRoles([...FINANCE_MODULE_ROLES]) })),
+                                                                                                                                                                                                                                                                                                                              },
 
-          { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
-          { path: "configuracoes", loader: requireRoles(["admin_alfa"]), Component: AdminConfiguracoes },
-        ],
-      },
-    ],
-  },
+                                                                                                                                                                                                                                                                                                                                        { path: "usuarios", loader: requireRoles(["admin_alfa"]), Component: AdminUsuarios },
+                                                                                                                                                                                                                                                                                                                                                  { path: "configuracoes", loader: requireRoles(["admin_alfa"]), Component: AdminConfiguracoes },
+                                                                                                                                                                                                                                                                                                                                                          ],
+                                                                                                                                                                                                                                                                                                                                                                },
+                                                                                                                                                                                                                                                                                                                                                                    ],
+                                                                                                                                                                                                                                                                                                                                                                      },
 
-  {
-    path: "/",
-    Component: RootLayout,
-    children: [
-      { index: true, Component: Home },
-      { path: "quem-somos", Component: QuemSomos },
-      { path: "equipe/:slug", Component: TeamMemberPublicPage },
-      { path: "equipe/id/:id", Component: TeamMemberPublicPage },
-      { path: "projetos", Component: Projetos },
-      { path: "projetos/:id", Component: ProjetoDetalhes },
-      { path: "materias", Component: Materias },
-      { path: "materias/:id", Component: MateriaDetalhes },
-      { path: "newsletter", Component: Newsletter },
-      { path: "contato", Component: Contato },
-      { path: "*", Component: NotFound },
-    ],
-  },
-]);
+                                                                                                                                                                                                                                                                                                                                                                        {
+                                                                                                                                                                                                                                                                                                                                                                            path: "/",
+                                                                                                                                                                                                                                                                                                                                                                                Component: RootLayout,
+                                                                                                                                                                                                                                                                                                                                                                                    children: [
+                                                                                                                                                                                                                                                                                                                                                                                          { index: true, Component: Home },
+                                                                                                                                                                                                                                                                                                                                                                                                { path: "quem-somos", Component: QuemSomos },
+                                                                                                                                                                                                                                                                                                                                                                                                      { path: "equipe/:slug", Component: TeamMemberPublicPage },
+                                                                                                                                                                                                                                                                                                                                                                                                            { path: "equipe/id/:id", Component: TeamMemberPublicPage },
+                                                                                                                                                                                                                                                                                                                                                                                                                  { path: "projetos", Component: Projetos },
+                                                                                                                                                                                                                                                                                                                                                                                                                        { path: "projetos/:id", Component: ProjetoDetalhes },
+                                                                                                                                                                                                                                                                                                                                                                                                                              { path: "materias", Component: Materias },
+                                                                                                                                                                                                                                                                                                                                                                                                                                    { path: "materias/:id", Component: MateriaDetalhes },
+                                                                                                                                                                                                                                                                                                                                                                                                                                          { path: "newsletter", Component: Newsletter },
+                                                                                                                                                                                                                                                                                                                                                                                                                                                { path: "contato", Component: Contato },
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      { path: "*", Component: NotFound },
+                                                                                                                                                                                                                                                                                                                                                                                                                                                          ],
+                                                                                                                                                                                                                                                                                                                                                                                                                                                            },
+                                                                                                                                                                                                                                                                                                                                                                                                                                                            ]);
+                                                                                                                                                                                                                                                                                                                                                                                                                                                            

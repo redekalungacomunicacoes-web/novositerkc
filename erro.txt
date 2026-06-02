@@ -1,0 +1,23 @@
+
+> @figma/my-make-file@0.0.1 build
+> vite build
+
+vite v6.3.5 building for production...
+transforming...
+✓ 1644 modules transformed.
+✗ Build failed in 3.01s
+error during build:
+[vite]: Rollup failed to resolve import "@fullcalendar/react" from "/workspaces/novositerkc/src/app/pages/admin/CalendarPro.jsx".
+This is most likely unintended because it can break your application at runtime.
+If you do want to externalize this module explicitly add it to
+`build.rollupOptions.external`
+    at viteLog (file:///workspaces/novositerkc/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:46345:15)
+    at file:///workspaces/novositerkc/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:46403:18
+    at onwarn (file:///workspaces/novositerkc/node_modules/@vitejs/plugin-react/dist/index.js:90:7)
+    at file:///workspaces/novositerkc/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:46401:7
+    at onRollupLog (file:///workspaces/novositerkc/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:46393:5)
+    at onLog (file:///workspaces/novositerkc/node_modules/vite/dist/node/chunks/dep-DBxKXgDP.js:46043:7)
+    at file:///workspaces/novositerkc/node_modules/rollup/dist/es/shared/node-entry.js:20958:32
+    at Object.logger [as onLog] (file:///workspaces/novositerkc/node_modules/rollup/dist/es/shared/node-entry.js:22945:9)
+    at ModuleLoader.handleInvalidResolvedId (file:///workspaces/novositerkc/node_modules/rollup/dist/es/shared/node-entry.js:21689:26)
+    at file:///workspaces/novositerkc/node_modules/rollup/dist/es/shared/node-entry.js:21647:26
