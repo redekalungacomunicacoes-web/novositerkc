@@ -1,5 +1,12 @@
-import MaintenancePage from './pages/MaintenancePage';
+import { RouterProvider } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { router } from '@/app/routes';
 
 export default function App() {
-  return <MaintenancePage />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <Toaster richColors position="top-right" />
+    </>
+  );
 }
