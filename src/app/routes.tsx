@@ -31,6 +31,7 @@ import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
 import { AdminPerfil } from "@/app/pages/admin/AdminPerfil";
 import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
 import { AdminTarefas } from "@/app/pages/admin/AdminTarefas";
+import { AdminTarefasKanban } from "@/app/pages/admin/AdminTarefasKanban";
 import { financeiroRoutes } from "@/app/pages/admin/Financeiro/routes";
 
 // ✅ NOVO: Admin Quem Somos
@@ -99,6 +100,7 @@ async function getMyRoles(): Promise<RoleName[]> {
 
                                                                                                                                                                                                                                                             // ✅ Tarefas da equipe (admin/editor/autor)
                                                                                                                                                                                                                                                                       { path: "tarefas", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminTarefas },
+                                                                                                                                                                                                                                                                              { path: "tarefas/kanban", loader: requireRoles(["admin", "editor", "autor"]), Component: AdminTarefasKanban },
 
                                                                                                                                                                                                                                                                                 {
                                                                                                                                                                                                                                                                                             path: "financeiro",

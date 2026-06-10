@@ -15,6 +15,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@tanstack/react-query": path.resolve(__dirname, "./src/shims/react-query.tsx"),
+      "@dnd-kit/core": path.resolve(__dirname, "./src/shims/dnd-core.tsx"),
+      "@dnd-kit/sortable": path.resolve(__dirname, "./src/shims/dnd-sortable.tsx"),
+      "@dnd-kit/utilities": path.resolve(__dirname, "./src/shims/dnd-utilities.ts"),
     },
   },
 
