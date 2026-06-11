@@ -305,37 +305,32 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   return data.id as string;
 }
 
-export async function updateTaskStatus(taskId: string, status: TaskStatus, oldStatus?: TaskStatus) {
+export async function updateTaskStatus(
+  taskId: string,
+  status: TaskStatus,
+  oldStatus?: TaskStatus,
+) {
   const payload = {
     status: toDbStatus(status),
     updated_at: new Date().toISOString(),
   };
 
-  const result = await supabase
+  const updateResult = await supabase
     .from("tasks")
     .update(payload)
-    .eq("id", taskId)
-    .select(TASK_SELECT)
-    .maybeSingle();
+    .eq("id", taskId);
 
-  console.log("[tarefas:kanban] task_id", taskId);
-  console.log("[tarefas:kanban] status antigo", oldStatus ?? "desconhecido");
-  console.log("[tarefas:kanban] status novo", status);
-  console.log("[tarefas:kanban] retorno Supabase", result);
+  console.log("[KANBAN UPDATE]", updateResult);
 
-  if (result.error) {
-    console.error("[tarefas:kanban] erro", result.error);
-    throw new Error(result.error.message);
+  if (updateResult.error) {
+    throw new Error(updateResult.error.message);
   }
 
-  if (!result.data) {
-    console.error("[tarefas:kanban] sem retorno", result);
-    throw new Error(
-      "A tarefa foi atualizada, mas nenhum registro foi retornado pelo Supabase."
-    );
-  }
-
-  return mapTask(result.data as DbTask);
+  return {
+    id: taskId,
+    status,
+    updated_at: payload.updated_at,
+  } as any;
 }
 
 export async function deleteTask(taskId: string) {
