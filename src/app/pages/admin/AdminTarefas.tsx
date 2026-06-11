@@ -1,25 +1,22 @@
 import { useState } from "react";
 import { Calendar } from "./calendar2026/Calendar";
+import { ExecutiveDashboard } from "./calendar2026/ExecutiveDashboard";
 import { Header } from "./calendar2026/Header";
-import { RightPanel } from "./calendar2026/RightPanel";
-import { Sidebar } from "./calendar2026/Sidebar";
 import { TaskModal } from "./calendar2026/TaskModal";
 import { CalendarProvider } from "./calendar2026/store";
+import { TasksPageShell } from "./calendar2026/TasksShell";
 
 export function AdminTarefas() {
   const [openModal, setOpenModal] = useState(false);
 
   return (
-    <CalendarProvider><div className="min-h-screen bg-slate-950 p-4 text-slate-100 md:p-6">
-      <div className="mx-auto grid max-w-[1700px] gap-4 lg:grid-cols-[280px_1fr_340px]">
-        <Sidebar />
-        <main>
-          <Header onNewTask={() => setOpenModal(true)} />
-          <Calendar onSelectDay={() => setOpenModal(true)} />
-        </main>
-        <RightPanel />
-      </div>
-      <TaskModal open={openModal} onClose={() => setOpenModal(false)} />
-    </div></CalendarProvider>
+    <CalendarProvider>
+      <TasksPageShell>
+        <Header onNewTask={() => setOpenModal(true)} />
+        <ExecutiveDashboard />
+        <Calendar onSelectDay={() => setOpenModal(true)} />
+        <TaskModal open={openModal} onClose={() => setOpenModal(false)} />
+      </TasksPageShell>
+    </CalendarProvider>
   );
 }

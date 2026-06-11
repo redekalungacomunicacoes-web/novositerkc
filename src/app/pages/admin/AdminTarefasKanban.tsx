@@ -2,7 +2,7 @@ import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { Sidebar } from "./calendar2026/Sidebar";
+import { TasksPageShell } from "./calendar2026/TasksShell";
 import { CalendarProvider, useCalendarStore } from "./calendar2026/store";
 import { statusLabels } from "./calendar2026/tasksApi";
 import { useTaskStatusMutation } from "./calendar2026/useTaskQueries";
@@ -22,20 +22,20 @@ function KanbanCard({ task }: { task: CalendarTask }) {
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
-      className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm transition-colors hover:border-sky-500/30 hover:bg-sky-500/10"
+      className="rounded-2xl border border-emerald-100 bg-white p-3 text-sm shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/60 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/50"
     >
-      <p className="font-medium text-white">{task.title}</p>
-      <p className="mt-1 text-xs text-slate-400">{task.endDate}</p>
+      <p className="font-medium text-slate-900 dark:text-white">{task.title}</p>
+      <p className="mt-1 text-xs text-slate-500 dark:text-emerald-100/60">{task.endDate}</p>
     </article>
   );
 }
 
 function Column({ status, tasks }: { status: TaskStatus; tasks: CalendarTask[] }) {
   return (
-    <section id={status} className="min-h-96 rounded-3xl border border-white/10 bg-slate-900 p-4">
-      <h2 className="mb-3 flex items-center justify-between font-semibold text-white">
+    <section id={status} className="min-h-96 rounded-3xl border border-emerald-100 bg-emerald-50/60 p-4 dark:border-emerald-800/60 dark:bg-emerald-950/70">
+      <h2 className="mb-3 flex items-center justify-between font-semibold text-slate-900 dark:text-white">
         {statusLabels[status]}
-        <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs text-sky-300">
+        <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs text-white">
           {tasks.length}
         </span>
       </h2>
@@ -63,14 +63,12 @@ function KanbanBoard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 p-4 text-slate-100 md:p-6">
-      <div className="mx-auto grid max-w-[1700px] gap-4 lg:grid-cols-[280px_1fr]">
-        <Sidebar />
-        <main>
-          <div className="mb-4 rounded-3xl border border-white/10 bg-slate-900 p-4">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sky-300">Tarefas</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">Kanban de tarefas</h1>
-            <p className="mt-1 text-sm text-slate-300">Acompanhe o andamento operacional por status.</p>
+    <TasksPageShell>
+      <div>
+          <div className="mb-4 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">Tarefas</p>
+            <h1 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">Kanban de tarefas</h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-emerald-100/70">Acompanhe o andamento operacional por status.</p>
           </div>
           <DndContext onDragEnd={handleDragEnd}>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -79,9 +77,8 @@ function KanbanBoard() {
               ))}
             </div>
           </DndContext>
-        </main>
       </div>
-    </div>
+    </TasksPageShell>
   );
 }
 
