@@ -1,16 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addTaskComment, deleteTask, fetchNotifications, fetchTasks, fetchTeamMembers, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
+import { addTaskComment, deleteTask, fetchNotifications, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
 import type { TaskInput, TaskStatus } from "./types";
 
 export const taskKeys = {
   all: ["admin-tasks"] as const,
   members: ["admin-task-members"] as const,
   notifications: ["admin-task-notifications"] as const,
+  currentMember: ["admin-task-current-member"] as const,
   range: (start: string, end: string, assignee: string) => [...taskKeys.all, start, end, assignee] as const,
 };
 
 export function useTeamMembersQuery() {
   return useQuery({ queryKey: taskKeys.members, queryFn: fetchTeamMembers });
+}
+
+export function useCurrentMemberQuery() {
+  return useQuery({ queryKey: taskKeys.currentMember, queryFn: getCurrentEquipeMember });
 }
 
 export function useTasksQuery(startDate: string, endDate: string, assignee: string) {

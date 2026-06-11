@@ -12,7 +12,7 @@ export const priorityBadgeClass: Record<string, string> = {
 
 export const statusBadgeClass: Record<string, string> = {
   pendente: "border-zinc-300 bg-zinc-100 text-zinc-800",
-  em_andamento: "border-sky-200 bg-sky-100 text-sky-800",
+  em_andamento: "border-emerald-200 bg-emerald-100 text-emerald-800",
   concluida: "border-emerald-200 bg-emerald-100 text-emerald-800",
   cancelada: "border-rose-200 bg-rose-100 text-rose-800",
 };

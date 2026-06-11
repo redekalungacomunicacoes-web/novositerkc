@@ -132,13 +132,13 @@ export async function getCurrentEquipeMember() {
 
   const { data: member, error } = await supabase
     .from("equipe")
-    .select("id,user_id,nome,email_login,cargo")
+    .select("id,user_id,nome,email_login,cargo,foto_url")
     .eq("user_id", authUserId)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
 
-  return member ?? { id: authUserId, user_id: authUserId, nome: userData.user.email ?? "Usuário", email_login: userData.user.email, cargo: "" };
+  return member ?? { id: authUserId, user_id: authUserId, nome: userData.user.email ?? "Usuário", email_login: userData.user.email, cargo: "", foto_url: null };
 }
 
 export async function getPermissionLevel(): Promise<PermissionLevel> {
