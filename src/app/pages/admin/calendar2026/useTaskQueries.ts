@@ -56,6 +56,7 @@ export function useTaskStatusMutation() {
   return useMutation({
     mutationFn: ({ taskId, status, oldStatus }: { taskId: string; status: TaskStatus; oldStatus?: TaskStatus }) => updateTaskStatus(taskId, status, oldStatus),
     onSuccess: (updatedTask) => {
+      // replaceTaskInCache(queryClient, updatedTask);
       replaceTaskInCache(queryClient, updatedTask);
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       void queryClient.invalidateQueries({ queryKey: taskKeys.notifications });
