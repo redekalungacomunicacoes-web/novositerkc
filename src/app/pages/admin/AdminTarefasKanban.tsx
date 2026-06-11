@@ -76,7 +76,7 @@ function KanbanBoard() {
   const [targetStatus, setTargetStatus] = useState<TaskStatus | null>(null);
   const [selectedTask, setSelectedTask] = useState<CalendarTask | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const currentMemberId = currentMember.data?.id ?? currentMember.data?.user_id ?? null;
+  const currentMemberId = currentMember.data?.id ?? null;
   const isAdmin = permission.data === "admin";
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
