@@ -329,3 +329,15 @@ export async function uploadTaskAttachment(taskId: string, file: File) {
 
   if (error) throw new Error(error.message);
 }
+
+export async function createExternalAttachment(taskId: string, url: string) {
+  const currentMember = await getCurrentEquipeMember();
+  const { error } = await supabase.from("task_attachments").insert({
+    task_id: taskId,
+    tipo: "link",
+    external_url: url,
+    uploaded_by: currentMember?.id ?? null,
+  });
+
+  if (error) throw new Error(error.message);
+}

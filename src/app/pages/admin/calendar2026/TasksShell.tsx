@@ -34,7 +34,7 @@ type TaskTab = {
 
 const tabs: TaskTab[] = [
   { label: "Calendário", icon: CalendarDays, to: "/admin/tarefas", end: true },
-  { label: "Kanban", icon: CheckSquare, to: "/admin/tarefas/kanban" },
+  { label: "Tarefas", icon: CheckSquare, to: "/admin/tarefas/kanban" },
   { label: "Anexos", icon: FileStack, to: "/admin/tarefas/anexos" },
   { label: "Equipe", icon: Users, to: "/admin/tarefas/equipe" },
   { label: "Relatórios", icon: BarChart3, to: "/admin/tarefas/relatorios" },
