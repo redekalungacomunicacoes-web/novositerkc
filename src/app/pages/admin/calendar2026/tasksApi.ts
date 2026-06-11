@@ -127,19 +127,29 @@ export async function getCurrentEquipeMember() {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw new Error(userError.message);
 
-  const authUserId = userData.user?.id;
-  if (!authUserId) return null;
+  const authUser = userData.user ?? null;
+  console.log("AUTH USER", authUser);
 
-  const { data: member, error } = await supabase
+  const authUserId = authUser?.id;
+  if (!authUserId) {
+    console.log("EQUIPE LOOKUP", { data: null, error: null, authUserId: null });
+    console.log("CURRENT MEMBER", null);
+    return null;
+  }
+
+  const lookupResult = await supabase
     .from("equipe")
     .select("id,user_id,nome,email_login,cargo,foto_url,ativo")
-    .eq("user_id", authUserId)
-    .maybeSingle();
+    .eq("user_id", authUserId);
 
-  if (error) throw new Error(error.message);
-  if (!member || member.ativo === false) return null;
+  console.log("EQUIPE LOOKUP", lookupResult);
 
-  return member;
+  if (lookupResult.error) throw new Error(lookupResult.error.message);
+
+  const currentMember = (lookupResult.data ?? []).find((member) => member.ativo !== false) ?? null;
+  console.log("CURRENT MEMBER", currentMember);
+
+  return currentMember;
 }
 
 async function requireCurrentEquipeMember() {

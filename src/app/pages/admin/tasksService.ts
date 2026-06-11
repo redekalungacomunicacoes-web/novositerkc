@@ -11,6 +11,43 @@ function inferAttachmentType(file: File): AttachmentType {
   return "arquivo";
 }
 
+export async function getCurrentEquipeMember() {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw new Error(userError.message);
+
+  const authUser = userData.user ?? null;
+  console.log("AUTH USER", authUser);
+
+  const authUserId = authUser?.id;
+  if (!authUserId) {
+    console.log("EQUIPE LOOKUP", { data: null, error: null, authUserId: null });
+    console.log("CURRENT MEMBER", null);
+    return null;
+  }
+
+  const lookupResult = await supabase
+    .from("equipe")
+    .select("id,user_id,nome,email_login,cargo,foto_url,ativo")
+    .eq("user_id", authUserId);
+
+  console.log("EQUIPE LOOKUP", lookupResult);
+
+  if (lookupResult.error) throw new Error(lookupResult.error.message);
+
+  const currentMember = (lookupResult.data ?? []).find((member) => member.ativo !== false) ?? null;
+  console.log("CURRENT MEMBER", currentMember);
+
+  return currentMember;
+}
+
+async function requireCurrentEquipeMember() {
+  const currentMember = await getCurrentEquipeMember();
+  if (!currentMember?.id) {
+    throw new Error("Seu usuário autenticado não possui vínculo ativo com a equipe. Solicite ao administrador para vincular seu acesso antes de criar tarefas ou anexos.");
+  }
+  return currentMember;
+}
+
 export async function fetchTeamProfiles() {
   const equipeQuery = await supabase
     .from("equipe")
@@ -24,7 +61,7 @@ export async function fetchTeamProfiles() {
       .map(
         (member) =>
           ({
-            id: member.user_id as string,
+            id: member.id as string,
             equipe_id: member.id as string,
             nome: member.nome ?? null,
             email: member.email_login ?? null,
@@ -45,7 +82,7 @@ export async function fetchTeamProfiles() {
 export async function fetchTasksInRange(startDate: string, endDate: string, userId: string, canManage: boolean) {
   const buildQuery = (includeProfileRelations: boolean) => {
     const selectWithRelations =
-      "id,titulo,descricao,data_tarefa,prioridade,status,assigned_to,created_by,external_link,direcionamento,created_at,updated_at,assigned_profile:profiles!tasks_assigned_to_fkey(nome,email),created_profile:profiles!tasks_created_by_fkey(nome,email),task_attachments(*)";
+      "id,titulo,descricao,data_tarefa,prioridade,status,assigned_to,created_by,external_link,direcionamento,created_at,updated_at,assigned_profile:equipe!tasks_assigned_to_fkey(nome,email_login),created_profile:equipe!tasks_created_by_fkey(nome,email_login),task_attachments(*)";
     const selectPlain = "id,titulo,descricao,data_tarefa,prioridade,status,assigned_to,created_by,external_link,direcionamento,created_at,updated_at,task_attachments(*)";
 
     let query = supabase
@@ -61,7 +98,7 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
   };
 
   let { data, error } = await buildQuery(true);
-  if (error && /relationship|tasks_.*_fkey|profiles/i.test(error.message)) {
+  if (error && /relationship|tasks_.*_fkey|profiles|equipe/i.test(error.message)) {
     const fallbackResult = await buildQuery(false);
     data = fallbackResult.data;
     error = fallbackResult.error;
@@ -75,15 +112,10 @@ export async function fetchTasksInRange(startDate: string, endDate: string, user
 }
 
 export async function createTask(payload: Omit<Task, "id" | "created_at" | "updated_at" | "task_attachments" | "assigned_profile" | "created_profile">) {
+  const currentMember = await requireCurrentEquipeMember();
+
   if (payload.assigned_to && !payload.direcionamento.includes(payload.assigned_to)) {
     throw new Error("Responsável deve estar no direcionamento");
-  }
-
-  if (payload.created_by) {
-    const creatorExists = await equipeMemberExistsById(payload.created_by);
-    if (!creatorExists) {
-      throw new Error("Criador inválido: o usuário autenticado não possui vínculo válido com equipe.");
-    }
   }
 
   if (payload.assigned_to) {
@@ -95,11 +127,12 @@ export async function createTask(payload: Omit<Task, "id" | "created_at" | "upda
 
   const finalPayload = {
     ...payload,
+    created_by: currentMember.id,
     assigned_to: payload.assigned_to ?? null,
     direcionamento: [...new Set(payload.direcionamento ?? [])],
   };
 
-  console.log("[tarefas:create] currentMember", payload.created_by);
+  console.log("[tarefas:create] currentMember", currentMember);
   console.log("[tarefas:create] created_by", finalPayload.created_by);
   console.log("[tarefas:create] assigned_to", finalPayload.assigned_to);
   console.log("[tarefas:create] payload final", finalPayload);
