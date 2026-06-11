@@ -225,6 +225,9 @@ export async function saveTask(input: TaskInput, taskId?: string) {
 
   if (!taskId) payload.created_by = input.created_by ?? currentMember?.id ?? null;
 
+  console.log("CURRENT MEMBER", currentMember);
+  console.log("PAYLOAD", payload);
+  
   if (taskId) {
     const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
     if (error) throw new Error(error.message);
