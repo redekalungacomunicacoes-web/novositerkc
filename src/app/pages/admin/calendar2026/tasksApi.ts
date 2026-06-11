@@ -87,7 +87,7 @@ function normalizeTime(time: string | null | undefined): string {
 }
 
 function getTaskInputDate(input: TaskInput): string {
-  return (input as unknown as Record<string, string>)[`data_${"inicio"}`];
+  return input.data_inicio;
 }
 
 function mapTask(task: DbTask): CalendarTask {
