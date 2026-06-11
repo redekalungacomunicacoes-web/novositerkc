@@ -212,15 +212,12 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 export async function saveTask(input: TaskInput, taskId?: string) {
   const currentMember = await getCurrentEquipeMember();
   const description = input.descricao?.trim() || null;
+  console.log("CURRENT MEMBER", currentMember);
+  console.log("INPUT", input);
+  console.log("CREATED_BY", input.created_by);
+  console.log("ASSIGNED_TO", input.assigned_to);
+
   const payload: TaskPayload = {
-    console.log("CURRENT MEMBER", currentMember);
-
-    console.log("INPUT", input);
-
-    console.log("CREATED_BY", input.created_by);
-
-    console.log("ASSIGNED_TO", input.assigned_to);
-  
     titulo: input.titulo.trim(),
     descricao: description,
     description,
