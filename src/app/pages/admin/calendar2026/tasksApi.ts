@@ -217,16 +217,19 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   console.log("CREATED_BY", input.created_by);
   console.log("ASSIGNED_TO", input.assigned_to);
 
-  const payload: TaskPayload = {
-    titulo: input.titulo.trim(),
-    descricao: description,
-    description,
-    data_tarefa: getTaskInputDate(input),
-    prioridade: input.prioridade,
-    status: toDbStatus(input.status),
-    assigned_to: input.assigned_to,
-    updated_at: new Date().toISOString(),
-  };
+  console.log("CURRENT MEMBER", currentMember);
+console.log("INPUT", input);
+
+const payload: TaskPayload = {
+  titulo: input.titulo.trim(),
+  descricao: description,
+  description,
+  data_tarefa: getTaskInputDate(input),
+  prioridade: input.prioridade,
+  status: toDbStatus(input.status),
+  assigned_to: input.assigned_to,
+  updated_at: new Date().toISOString(),
+};
 
   if (!taskId) {
   payload.created_by =
