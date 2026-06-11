@@ -6,7 +6,7 @@ import { TasksPageShell } from "./calendar2026/TasksShell";
 import { useExternalAttachmentMutation, useTaskAttachmentMutation } from "./calendar2026/useTaskQueries";
 import type { TaskAttachment } from "./calendar2026/types";
 
-const typeLabels: Record<TaskAttachment["tipo"], string> = { foto: "Imagem", pdf: "PDF", documento: "Documento", link: "Link", arquivo: "Arquivo", video: "Arquivo" };
+const typeLabels: Record<TaskAttachment["tipo"], string> = { foto: "Imagem", pdf: "PDF", documento: "Documento", link: "Link", arquivo: "Arquivo", video: "Vídeo" };
 
 function AttachmentIcon({ type }: { type: TaskAttachment["tipo"] }) {
   if (type === "foto") return <ImageIcon size={18} />;
@@ -22,28 +22,28 @@ function AttachmentsCenter() {
   const [open, setOpen] = useState(false);
   const [taskId, setTaskId] = useState("");
   const [link, setLink] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
 
   const attachments = useMemo(() => tasks.flatMap((task) => task.attachments.map((attachment) => ({ attachment, task }))).sort((a, b) => b.attachment.created_at.localeCompare(a.attachment.created_at)), [tasks]);
 
-  function handleFile(fileValue: File | null) {
-    setFile(fileValue);
-    setPreview((old) => {
-      if (old) URL.revokeObjectURL(old);
-      return fileValue ? URL.createObjectURL(fileValue) : null;
-    });
+  function handleFiles(fileValues: File[]) {
+    previews.forEach((previewUrl) => URL.revokeObjectURL(previewUrl));
+    setFiles(fileValues);
+    setPreviews(fileValues.filter((fileValue) => fileValue.type.startsWith("image/")).map((fileValue) => URL.createObjectURL(fileValue)));
   }
 
   async function saveAttachment(event: React.FormEvent) {
     event.preventDefault();
     if (!taskId) return;
-    if (file) await uploadAttachment.mutateAsync({ taskId, file });
-    if (link.trim()) await linkAttachment.mutateAsync({ taskId, url: link.trim() });
+    for (const file of files) await uploadAttachment.mutateAsync({ taskId, file });
+    for (const url of link.split(/\n|,/).map((item) => item.trim()).filter(Boolean)) {
+      await linkAttachment.mutateAsync({ taskId, url });
+    }
     setOpen(false);
     setTaskId("");
     setLink("");
-    handleFile(null);
+    handleFiles([]);
   }
 
   return (
@@ -63,9 +63,11 @@ function AttachmentsCenter() {
         {open ? (
           <form onSubmit={(event) => void saveAttachment(event)} className="grid gap-3 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70 md:grid-cols-2">
             <select required value={taskId} onChange={(event) => setTaskId(event.target.value)} className="h-11 rounded-2xl border border-emerald-100 bg-white px-3 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white"><option value="">Selecionar tarefa de destino</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select>
-            <input type="file" onChange={(event) => handleFile(event.target.files?.[0] ?? null)} className="h-11 rounded-2xl border border-emerald-100 bg-white px-3 py-2 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white" />
-            <input type="url" value={link} onChange={(event) => setLink(event.target.value)} placeholder="Ou informe um link" className="h-11 rounded-2xl border border-emerald-100 bg-white px-3 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white md:col-span-2" />
-            {preview ? <div className="rounded-2xl border border-emerald-100 p-3 dark:border-emerald-800/60 md:col-span-2">{file?.type.startsWith("image/") ? <img src={preview} alt="Preview" className="max-h-56 rounded-xl object-contain" /> : <p className="text-sm text-slate-600 dark:text-emerald-100/70">Preview selecionado: {file?.name}</p>}</div> : null}
+            <input type="file" multiple onChange={(event) => handleFiles(Array.from(event.target.files ?? []))} className="h-11 rounded-2xl border border-emerald-100 bg-white px-3 py-2 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white" />
+            <textarea value={link} onChange={(event) => setLink(event.target.value)} placeholder="Ou informe links (um por linha ou separados por vírgula)" className="min-h-20 rounded-2xl border border-emerald-100 bg-white px-3 py-2 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white md:col-span-2" />
+            {files.length ? <div className="rounded-2xl border border-emerald-100 p-3 dark:border-emerald-800/60 md:col-span-2"><p className="text-sm text-slate-600 dark:text-emerald-100/70">Selecionados: {files.map((file) => file.name).join(", ")}</p>{previews.length ? <div className="mt-3 flex flex-wrap gap-3">{previews.map((preview) => <img key={preview} src={preview} alt="Preview" className="max-h-56 rounded-xl object-contain" />)}</div> : null}</div> : null}
+            {uploadAttachment.error ? <p className="text-sm text-rose-500 md:col-span-2">{uploadAttachment.error.message}</p> : null}
+            {linkAttachment.error ? <p className="text-sm text-rose-500 md:col-span-2">{linkAttachment.error.message}</p> : null}
             <div className="flex gap-2 md:col-span-2"><button disabled={uploadAttachment.isPending || linkAttachment.isPending} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">Salvar</button><button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-emerald-100 px-4 py-2 text-sm dark:border-emerald-800/60">Cancelar</button></div>
           </form>
         ) : null}

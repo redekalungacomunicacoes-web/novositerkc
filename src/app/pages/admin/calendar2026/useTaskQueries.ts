@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addTaskComment, createExternalAttachment, deleteTask, fetchNotifications, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, getPermissionLevel, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
-import type { TaskInput, TaskStatus } from "./types";
+import type { CalendarTask, TaskInput, TaskStatus } from "./types";
 
 export const taskKeys = {
   all: ["admin-tasks"] as const,
@@ -10,6 +10,13 @@ export const taskKeys = {
   permission: ["admin-task-permission"] as const,
   range: (start: string, end: string, assignee: string) => [...taskKeys.all, start, end, assignee] as const,
 };
+
+function replaceTaskInCache(queryClient: ReturnType<typeof useQueryClient>, updatedTask: CalendarTask) {
+  queryClient.getQueriesData({ queryKey: taskKeys.all }).forEach(([queryKey, data]) => {
+    if (!Array.isArray(data)) return;
+    queryClient.setQueryData(queryKey, data.map((task) => task?.id === updatedTask.id ? updatedTask : task));
+  });
+}
 
 export function useTeamMembersQuery() {
   return useQuery({ queryKey: taskKeys.members, queryFn: fetchTeamMembers });
@@ -47,20 +54,12 @@ export function useDeleteTaskMutation() {
 export function useTaskStatusMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) => updateTaskStatus(taskId, status),
-    onMutate: async ({ taskId, status }) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshots = queryClient.getQueriesData({ queryKey: taskKeys.all });
-      snapshots.forEach(([queryKey, data]) => {
-        if (!Array.isArray(data)) return;
-        queryClient.setQueryData(queryKey, data.map((task) => task?.id === taskId ? { ...task, status, updatedAt: new Date().toISOString(), completedAt: status === "concluida" ? new Date().toISOString() : task.completedAt } : task));
-      });
-      return { snapshots };
+    mutationFn: ({ taskId, status, oldStatus }: { taskId: string; status: TaskStatus; oldStatus?: TaskStatus }) => updateTaskStatus(taskId, status, oldStatus),
+    onSuccess: (updatedTask) => {
+      replaceTaskInCache(queryClient, updatedTask);
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.notifications });
     },
-    onError: (_error, _variables, context) => {
-      context?.snapshots.forEach(([queryKey, data]) => queryClient.setQueryData(queryKey, data));
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }),
   });
 }
 

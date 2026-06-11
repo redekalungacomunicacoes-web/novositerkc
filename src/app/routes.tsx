@@ -26,7 +26,6 @@ import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
 import { AdminTarefas } from "@/app/pages/admin/AdminTarefas";
 import { AdminTarefasAnexos } from "@/app/pages/admin/AdminTarefasAnexos";
 import { AdminTarefasConfiguracoes } from "@/app/pages/admin/AdminTarefasConfiguracoes";
-import { AdminTarefasEquipe } from "@/app/pages/admin/AdminTarefasEquipe";
 import { AdminTarefasKanban } from "@/app/pages/admin/AdminTarefasKanban";
 import { AdminTarefasRelatorios } from "@/app/pages/admin/AdminTarefasRelatorios";
 import { AdminUsuarios } from "@/app/pages/admin/AdminUsuarios";
@@ -97,7 +96,6 @@ export const router = createBrowserRouter([
           { path: "tarefas", loader: requireRoles(taskRoles), Component: AdminTarefas },
           { path: "tarefas/kanban", loader: requireRoles(taskRoles), Component: AdminTarefasKanban },
           { path: "tarefas/anexos", loader: requireRoles(taskRoles), Component: AdminTarefasAnexos },
-          { path: "tarefas/equipe", loader: requireRoles(taskRoles), Component: AdminTarefasEquipe },
           { path: "tarefas/relatorios", loader: requireRoles(taskRoles), Component: AdminTarefasRelatorios },
           { path: "tarefas/configuracoes", loader: requireRoles(taskRoles), Component: AdminTarefasConfiguracoes },
           {

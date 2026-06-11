@@ -79,33 +79,46 @@ export async function createTask(payload: Omit<Task, "id" | "created_at" | "upda
     throw new Error("Responsável deve estar no direcionamento");
   }
 
-  if (payload.assigned_to) {
-    const exists = await userExistsById(payload.assigned_to);
-    if (!exists) {
-      throw new Error("Usuário inválido para o campo responsável.");
+  if (payload.created_by) {
+    const creatorExists = await equipeMemberExistsById(payload.created_by);
+    if (!creatorExists) {
+      throw new Error("Criador inválido: o usuário autenticado não possui vínculo válido com equipe.");
     }
   }
 
+  if (payload.assigned_to) {
+    const exists = await equipeMemberExistsById(payload.assigned_to);
+    if (!exists) {
+      throw new Error("Responsável inválido: selecione um integrante da equipe.");
+    }
+  }
+
+  const finalPayload = {
+    ...payload,
+    assigned_to: payload.assigned_to ?? null,
+    direcionamento: [...new Set(payload.direcionamento ?? [])],
+  };
+
+  console.log("[tarefas:create] currentMember", payload.created_by);
+  console.log("[tarefas:create] created_by", finalPayload.created_by);
+  console.log("[tarefas:create] assigned_to", finalPayload.assigned_to);
+  console.log("[tarefas:create] payload final", finalPayload);
+
   const { data, error } = await supabase
     .from("tasks")
-    .insert({
-      ...payload,
-      id: crypto.randomUUID(),
-      assigned_to: payload.assigned_to ?? null,
-      direcionamento: [...new Set(payload.direcionamento ?? [])],
-    })
+    .insert(finalPayload)
     .select("id")
     .single();
   if (error) throw new Error(`Erro ao inserir tarefa: ${error.message}`);
   return data.id as string;
 }
 
-export async function userExistsById(userId: string) {
-  const profilesResult = await supabase.from("profiles").select("id").eq("id", userId).maybeSingle();
-  if (profilesResult.error) {
-    throw new Error(`Não foi possível validar o responsável da tarefa: ${profilesResult.error.message}`);
+export async function equipeMemberExistsById(memberId: string) {
+  const equipeResult = await supabase.from("equipe").select("id").eq("id", memberId).maybeSingle();
+  if (equipeResult.error) {
+    throw new Error(`Não foi possível validar o integrante da tarefa: ${equipeResult.error.message}`);
   }
-  return Boolean(profilesResult.data?.id);
+  return Boolean(equipeResult.data?.id);
 }
 
 export async function updateTask(
@@ -117,9 +130,9 @@ export async function updateTask(
   }
 
   if (payload.assigned_to) {
-    const exists = await userExistsById(payload.assigned_to);
+    const exists = await equipeMemberExistsById(payload.assigned_to);
     if (!exists) {
-      throw new Error("Usuário inválido para o campo responsável.");
+      throw new Error("Responsável inválido: selecione um integrante da equipe.");
     }
   }
 
@@ -158,12 +171,16 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
   const safeName = file.name.replace(/\s+/g, "-").toLowerCase();
   const path = `tasks/${taskId}/${crypto.randomUUID()}-${safeName}`;
 
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
+  console.log("[tarefas:anexos] task_id", taskId);
+  console.log("[tarefas:anexos] arquivo", { name: file.name, type: file.type, size: file.size });
+
+  const uploadResult = await supabase.storage.from(BUCKET).upload(path, file, {
     cacheControl: "3600",
     upsert: false,
-    contentType: file.type,
+    contentType: file.type || "application/octet-stream",
   });
-  if (uploadError) throw new Error(`Erro no upload para storage: ${uploadError.message}`);
+  console.log("[tarefas:anexos] upload", uploadResult);
+  if (uploadResult.error) throw new Error(`Erro no upload para storage: ${uploadResult.error.message}`);
 
   const metadata: Omit<TaskAttachment, "id" | "created_at"> = {
     task_id: taskId,
@@ -177,8 +194,9 @@ export async function uploadTaskAttachment(taskId: string, file: File, uploadedB
     uploaded_by: uploadedBy,
   };
 
-  const { error: insertError } = await supabase.from("task_attachments").insert(metadata);
-  if (insertError) throw new Error(`Arquivo enviado, mas falhou ao salvar metadados: ${insertError.message}`);
+  const insertResult = await supabase.from("task_attachments").insert(metadata).select("*").single();
+  console.log("[tarefas:anexos] insert", insertResult);
+  if (insertResult.error) throw new Error(`Arquivo enviado, mas falhou ao salvar metadados: ${insertResult.error.message}`);
 }
 
 export async function createExternalAttachment(taskId: string, url: string, uploadedBy: string) {
@@ -188,8 +206,12 @@ export async function createExternalAttachment(taskId: string, url: string, uplo
     external_url: url,
     uploaded_by: uploadedBy,
   };
-  const { error } = await supabase.from("task_attachments").insert(payload);
-  if (error) throw new Error(`Erro ao salvar anexo externo: ${error.message}`);
+  console.log("[tarefas:anexos] task_id", taskId);
+  console.log("[tarefas:anexos] arquivo", { external_url: url });
+  console.log("[tarefas:anexos] upload", "link externo sem storage");
+  const insertResult = await supabase.from("task_attachments").insert(payload).select("*").single();
+  console.log("[tarefas:anexos] insert", insertResult);
+  if (insertResult.error) throw new Error(`Erro ao salvar anexo externo: ${insertResult.error.message}`);
 }
 
 export async function fetchNotifications(userId: string, canManage: boolean) {
