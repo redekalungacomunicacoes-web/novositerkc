@@ -164,11 +164,18 @@ async function requireCurrentEquipeMember() {
   );
 
   const { data, error } = await supabase
-    .from("equipe")
-    .select("id,nome")
-    .eq("ativo", true)
-    .limit(1)
-    .single();
+  .from("tasks")
+  .update(payload)
+  .eq("id", taskId)
+  .select(TASK_SELECT)
+  .maybeSingle();
+
+  console.log("UPDATE TASK RESULT", {
+  data,
+  error,
+  taskId,
+  payload,
+});
 
   if (error || !data) {
     throw new Error(
