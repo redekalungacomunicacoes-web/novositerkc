@@ -93,9 +93,13 @@ function KanbanBoard() {
       setTimeout(() => setFeedback(null), 2600);
       return;
     }
-    await statusMutation.mutateAsync({ taskId, status });
-    setFeedback(`Tarefa movida para ${statusLabels[status]}.`);
-    setTimeout(() => setFeedback(null), 2600);
+    try {
+      await statusMutation.mutateAsync({ taskId, status, oldStatus: task.status });
+      setFeedback(`Tarefa movida para ${statusLabels[status]}.`);
+      setTimeout(() => setFeedback(null), 2600);
+    } catch {
+      setFeedback(null);
+    }
   }
 
   return (

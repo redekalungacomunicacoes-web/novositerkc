@@ -132,13 +132,37 @@ export async function getCurrentEquipeMember() {
 
   const { data: member, error } = await supabase
     .from("equipe")
-    .select("id,user_id,nome,email_login,cargo,foto_url")
+    .select("id,user_id,nome,email_login,cargo,foto_url,ativo")
     .eq("user_id", authUserId)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!member || member.ativo === false) return null;
 
-  return member ?? { id: authUserId, user_id: authUserId, nome: userData.user.email ?? "Usuário", email_login: userData.user.email, cargo: "", foto_url: null };
+  return member;
+}
+
+async function requireCurrentEquipeMember() {
+  const currentMember = await getCurrentEquipeMember();
+  if (!currentMember?.id) {
+    throw new Error("Seu usuário autenticado não possui vínculo ativo com a equipe. Solicite ao administrador para vincular seu acesso antes de criar tarefas ou anexos.");
+  }
+  return currentMember;
+}
+
+async function ensureEquipeMemberExists(memberId: string | null | undefined, label: string) {
+  if (!memberId) return null;
+
+  const { data, error } = await supabase
+    .from("equipe")
+    .select("id")
+    .eq("id", memberId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Não foi possível validar ${label}: ${error.message}`);
+  if (!data?.id) throw new Error(`${label} inválido: selecione um integrante ativo da equipe.`);
+
+  return data.id as string;
 }
 
 export async function getPermissionLevel(): Promise<PermissionLevel> {
@@ -210,39 +234,30 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 }
 
 export async function saveTask(input: TaskInput, taskId?: string) {
-  const currentMember = await getCurrentEquipeMember();
+  const currentMember = await requireCurrentEquipeMember();
   const description = input.descricao?.trim() || null;
-  console.log("CURRENT MEMBER", currentMember);
-  console.log("INPUT", input);
-  console.log("CREATED_BY", input.created_by);
-  console.log("ASSIGNED_TO", input.assigned_to);
+  const assignedTo = await ensureEquipeMemberExists(input.assigned_to, "responsável");
 
-  console.log("CURRENT MEMBER", currentMember);
-console.log("INPUT", input);
-
-const payload: TaskPayload = {
-  titulo: input.titulo.trim(),
-  descricao: description,
-  description,
-  data_tarefa: getTaskInputDate(input),
-  prioridade: input.prioridade,
-  status: toDbStatus(input.status),
-  assigned_to: input.assigned_to,
-  updated_at: new Date().toISOString(),
-};
+  const payload: TaskPayload = {
+    titulo: input.titulo.trim(),
+    descricao: description,
+    description,
+    data_tarefa: getTaskInputDate(input),
+    prioridade: input.prioridade,
+    status: toDbStatus(input.status),
+    assigned_to: assignedTo,
+    updated_at: new Date().toISOString(),
+  };
 
   if (!taskId) {
-  payload.created_by =
-    input.created_by ??
-    currentMember?.id ??
-    null;
+    payload.created_by = currentMember.id;
+  }
 
-  console.log("FINAL CREATED_BY", payload.created_by);
-}
+  console.log("[tarefas:create] currentMember", currentMember);
+  console.log("[tarefas:create] created_by", payload.created_by ?? "mantido");
+  console.log("[tarefas:create] assigned_to", payload.assigned_to);
+  console.log("[tarefas:create] payload final", payload);
 
-  console.log("CURRENT MEMBER", currentMember);
-  console.log("PAYLOAD", payload);
-  
   if (taskId) {
     const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
     if (error) throw new Error(error.message);
@@ -254,13 +269,24 @@ const payload: TaskPayload = {
   return data.id as string;
 }
 
-export async function updateTaskStatus(taskId: string, status: TaskStatus) {
-  const { error } = await supabase
+export async function updateTaskStatus(taskId: string, status: TaskStatus, oldStatus?: TaskStatus) {
+  const payload = { status: toDbStatus(status), updated_at: new Date().toISOString() };
+  const result = await supabase
     .from("tasks")
-    .update({ status: toDbStatus(status), updated_at: new Date().toISOString() })
-    .eq("id", taskId);
+    .update(payload)
+    .eq("id", taskId)
+    .select(TASK_SELECT)
+    .single();
 
-  if (error) throw new Error(error.message);
+  console.log("[tarefas:kanban] task_id", taskId);
+  console.log("[tarefas:kanban] status antigo", oldStatus ?? "desconhecido");
+  console.log("[tarefas:kanban] status novo", status);
+  console.log("[tarefas:kanban] retorno Supabase", result);
+
+  if (result.error) throw new Error(result.error.message);
+  if (!result.data) throw new Error("O status não foi atualizado no banco. Recarregue a página e tente novamente.");
+
+  return mapTask(result.data as DbTask);
 }
 
 export async function deleteTask(taskId: string) {
@@ -298,10 +324,10 @@ export async function fetchNotifications(): Promise<TeamNotification[]> {
 }
 
 export async function addTaskComment(taskId: string, comentario: string) {
-  const currentMember = await getCurrentEquipeMember();
+  const currentMember = await requireCurrentEquipeMember();
   const { error } = await supabase.from("task_comments").insert({
     task_id: taskId,
-    author_id: currentMember?.id ?? null,
+    author_id: currentMember.id,
     comentario,
   });
 
@@ -309,35 +335,51 @@ export async function addTaskComment(taskId: string, comentario: string) {
 }
 
 export async function uploadTaskAttachment(taskId: string, file: File) {
-  const currentMember = await getCurrentEquipeMember();
+  const currentMember = await requireCurrentEquipeMember();
   const safeName = file.name.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase();
   const storagePath = `tasks/${taskId}/${crypto.randomUUID()}-${safeName}`;
 
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, file, { contentType: file.type, upsert: false });
-  if (uploadError) throw new Error(uploadError.message);
+  console.log("[tarefas:anexos] task_id", taskId);
+  console.log("[tarefas:anexos] arquivo", { name: file.name, type: file.type, size: file.size });
 
-  const { error } = await supabase.from("task_attachments").insert({
+  const uploadResult = await supabase.storage.from(BUCKET).upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  console.log("[tarefas:anexos] upload", uploadResult);
+  if (uploadResult.error) throw new Error(uploadResult.error.message);
+
+  const metadata = {
     task_id: taskId,
     tipo: inferAttachmentType(file),
     storage_bucket: BUCKET,
     storage_path: storagePath,
     file_name: file.name,
-    mime_type: file.type,
+    mime_type: file.type || null,
     file_size: file.size,
-    uploaded_by: currentMember?.id ?? null,
-  });
+    uploaded_by: currentMember.id,
+  };
 
-  if (error) throw new Error(error.message);
+  const insertResult = await supabase.from("task_attachments").insert(metadata).select("*").single();
+  console.log("[tarefas:anexos] insert", insertResult);
+  if (insertResult.error) throw new Error(insertResult.error.message);
+
+  return insertResult.data as TaskAttachment;
 }
 
 export async function createExternalAttachment(taskId: string, url: string) {
-  const currentMember = await getCurrentEquipeMember();
-  const { error } = await supabase.from("task_attachments").insert({
+  const currentMember = await requireCurrentEquipeMember();
+  const payload = {
     task_id: taskId,
-    tipo: "link",
+    tipo: "link" as const,
     external_url: url,
-    uploaded_by: currentMember?.id ?? null,
-  });
+    uploaded_by: currentMember.id,
+  };
 
-  if (error) throw new Error(error.message);
+  console.log("[tarefas:anexos] task_id", taskId);
+  console.log("[tarefas:anexos] arquivo", { external_url: url });
+  console.log("[tarefas:anexos] upload", "link externo sem storage");
+
+  const insertResult = await supabase.from("task_attachments").insert(payload).select("*").single();
+  console.log("[tarefas:anexos] insert", insertResult);
+  if (insertResult.error) throw new Error(insertResult.error.message);
+
+  return insertResult.data as TaskAttachment;
 }

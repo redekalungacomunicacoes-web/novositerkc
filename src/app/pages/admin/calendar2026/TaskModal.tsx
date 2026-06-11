@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, FileText, MessageSquare, Paperclip, UserCircle } from "lucide-react";
 import { priorityLabels, statusLabels } from "./tasksApi";
-import { useDeleteTaskMutation, useSaveTaskMutation, useTaskAttachmentMutation, useTaskCommentMutation } from "./useTaskQueries";
+import { useDeleteTaskMutation, useExternalAttachmentMutation, useSaveTaskMutation, useTaskAttachmentMutation, useTaskCommentMutation } from "./useTaskQueries";
 import { useCalendarStore } from "./store";
 import type { CalendarTask, TaskInput, TaskPriority, TaskStatus } from "./types";
 
@@ -25,11 +25,14 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
   const [editing, setEditing] = useState<CalendarTask | null>(null);
   const [form, setForm] = useState<TaskInput>(emptyForm(selectedDate));
   const [comment, setComment] = useState("");
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [externalLinks, setExternalLinks] = useState("");
   const saveTask = useSaveTaskMutation();
   const deleteTask = useDeleteTaskMutation();
   const addComment = useTaskCommentMutation();
   const uploadAttachment = useTaskAttachmentMutation();
-  const isSaving = saveTask.isPending || addComment.isPending || uploadAttachment.isPending;
+  const linkAttachment = useExternalAttachmentMutation();
+  const isSaving = saveTask.isPending || addComment.isPending || uploadAttachment.isPending || linkAttachment.isPending;
   const selectedTask = useMemo(() => editing, [editing]);
 
   function editTask(task: CalendarTask) {
@@ -42,29 +45,35 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     if (initialTask) {
       editTask(initialTask);
       setComment("");
+      setAttachmentFiles([]);
+      setExternalLinks("");
       return;
     }
     setEditing(null);
     setForm(emptyForm(selectedDate));
     setComment("");
+    setAttachmentFiles([]);
+    setExternalLinks("");
   }, [open, selectedDate, initialTask]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const taskId = await saveTask.mutateAsync({ input: form, taskId: editing?.id });
     if (comment.trim()) await addComment.mutateAsync({ taskId, comentario: comment.trim() });
+    for (const file of attachmentFiles) await uploadAttachment.mutateAsync({ taskId, file });
+    for (const url of externalLinks.split(/\n|,/).map((item) => item.trim()).filter(Boolean)) {
+      await linkAttachment.mutateAsync({ taskId, url });
+    }
     setEditing(null);
     setForm(emptyForm(selectedDate));
     setComment("");
+    setAttachmentFiles([]);
+    setExternalLinks("");
     if (initialTask) onClose();
   }
 
-  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    const taskId = editing?.id;
-    if (!taskId) return;
-    for (const file of files) await uploadAttachment.mutateAsync({ taskId, file });
-    event.target.value = "";
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setAttachmentFiles(Array.from(event.target.files ?? []));
   }
 
   const assignee = teamMembers.find((member) => member.id === selectedTask?.assigneeId || member.userId === selectedTask?.assigneeId);
@@ -98,8 +107,12 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         <select value={form.status} onChange={(e) => setForm((old) => ({ ...old, status: e.target.value as TaskStatus }))} className={inputClass}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <select value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2`}><option value="">Responsável inteligente</option>{teamMembers.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}</select>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} className={`${inputClass} min-h-20 md:col-span-2`} placeholder="Adicionar comentário" />
-        {editing ? <input type="file" multiple onChange={(event) => void handleFileChange(event)} className={`${inputClass} md:col-span-2`} /> : null}
+        <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
+        <textarea value={externalLinks} onChange={(e) => setExternalLinks(e.target.value)} className={`${inputClass} min-h-16 md:col-span-2`} placeholder="Links externos (um por linha ou separados por vírgula)" />
+        {attachmentFiles.length ? <p className="text-xs text-slate-500 dark:text-emerald-100/60 md:col-span-2">{attachmentFiles.length} arquivo(s) selecionado(s): {attachmentFiles.map((file) => file.name).join(", ")}</p> : null}
         {saveTask.error ? <p className="text-sm text-rose-500 md:col-span-2">{saveTask.error.message}</p> : null}
+        {uploadAttachment.error ? <p className="text-sm text-rose-500 md:col-span-2">{uploadAttachment.error.message}</p> : null}
+        {linkAttachment.error ? <p className="text-sm text-rose-500 md:col-span-2">{linkAttachment.error.message}</p> : null}
         <div className="flex flex-wrap gap-2 md:col-span-2"><button disabled={isSaving} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400">{editing ? "Atualizar tarefa" : "Criar tarefa"}</button>{editing ? <button type="button" onClick={() => { setEditing(null); setForm(emptyForm(selectedDate)); }} className="rounded-xl border border-emerald-100 px-4 py-2 text-sm dark:border-emerald-800/60">Cancelar edição</button> : null}</div>
       </form>
 
