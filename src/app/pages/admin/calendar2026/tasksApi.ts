@@ -315,12 +315,14 @@ export async function updateTaskStatus(
     updated_at: new Date().toISOString(),
   };
 
-  const updateResult = await supabase
-    .from("tasks")
-    .update(payload)
-    .eq("id", taskId);
+  const result = await supabase
+  .from("tasks")
+  .update(payload)
+  .eq("id", taskId)
+  .select(TASK_SELECT)
+  .maybeSingle();
 
-  console.log("[KANBAN UPDATE]", updateResult);
+console.log("KANBAN RESULT", result);
 
   if (updateResult.error) {
     throw new Error(updateResult.error.message);
