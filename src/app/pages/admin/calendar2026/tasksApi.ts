@@ -159,24 +159,6 @@ async function requireCurrentEquipeMember() {
     return currentMember;
   }
 
-  console.warn(
-    "[tarefas] usuário sem vínculo em equipe. Utilizando fallback temporário."
-  );
-
-  const { data, error } = await supabase
-  .from("tasks")
-  .update(payload)
-  .eq("id", taskId)
-  .select(TASK_SELECT)
-  .maybeSingle();
-
-  console.log("UPDATE TASK RESULT", {
-  data,
-  error,
-  taskId,
-  payload,
-});
-
   if (error || !data) {
     throw new Error(
       "Nenhum membro ativo encontrado na tabela equipe."
@@ -316,16 +298,14 @@ export async function updateTaskStatus(
   };
 
   const result = await supabase
-  .from("tasks")
-  .update(payload)
-  .eq("id", taskId)
-  .select(TASK_SELECT)
-  .maybeSingle();
+    .from("tasks")
+    .update(payload)
+    .eq("id", taskId);
 
-console.log("KANBAN RESULT", result);
+  console.log("KANBAN RESULT", result);
 
-  if (updateResult.error) {
-    throw new Error(updateResult.error.message);
+  if (result.error) {
+    throw new Error(result.error.message);
   }
 
   return {
