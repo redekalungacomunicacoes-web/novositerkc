@@ -306,21 +306,34 @@ export async function saveTask(input: TaskInput, taskId?: string) {
 }
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus, oldStatus?: TaskStatus) {
-  const payload = { status: toDbStatus(status), updated_at: new Date().toISOString() };
+  const payload = {
+    status: toDbStatus(status),
+    updated_at: new Date().toISOString(),
+  };
+
   const result = await supabase
     .from("tasks")
     .update(payload)
     .eq("id", taskId)
     .select(TASK_SELECT)
-    .single();
+    .maybeSingle();
 
   console.log("[tarefas:kanban] task_id", taskId);
   console.log("[tarefas:kanban] status antigo", oldStatus ?? "desconhecido");
   console.log("[tarefas:kanban] status novo", status);
   console.log("[tarefas:kanban] retorno Supabase", result);
 
-  if (result.error) throw new Error(result.error.message);
-  if (!result.data) throw new Error("O status não foi atualizado no banco. Recarregue a página e tente novamente.");
+  if (result.error) {
+    console.error("[tarefas:kanban] erro", result.error);
+    throw new Error(result.error.message);
+  }
+
+  if (!result.data) {
+    console.error("[tarefas:kanban] sem retorno", result);
+    throw new Error(
+      "A tarefa foi atualizada, mas nenhum registro foi retornado pelo Supabase."
+    );
+  }
 
   return mapTask(result.data as DbTask);
 }
