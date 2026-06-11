@@ -213,6 +213,14 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   const currentMember = await getCurrentEquipeMember();
   const description = input.descricao?.trim() || null;
   const payload: TaskPayload = {
+    console.log("CURRENT MEMBER", currentMember);
+
+    console.log("INPUT", input);
+
+    console.log("CREATED_BY", input.created_by);
+
+    console.log("ASSIGNED_TO", input.assigned_to);
+  
     titulo: input.titulo.trim(),
     descricao: description,
     description,
@@ -223,7 +231,14 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     updated_at: new Date().toISOString(),
   };
 
-  if (!taskId) payload.created_by = input.created_by ?? currentMember?.id ?? null;
+  if (!taskId) {
+  payload.created_by =
+    input.created_by ??
+    currentMember?.id ??
+    null;
+
+  console.log("FINAL CREATED_BY", payload.created_by);
+}
 
   console.log("CURRENT MEMBER", currentMember);
   console.log("PAYLOAD", payload);
