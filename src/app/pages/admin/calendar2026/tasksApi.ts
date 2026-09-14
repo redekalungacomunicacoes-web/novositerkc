@@ -39,7 +39,8 @@ type DbTeamMember = {
   ativo: boolean | null;
 };
 
-export type TaskDatabaseInsert = {
+/** Payload persistido em public.tasks (não reutilizar CalendarTask neste ponto). */
+export type TaskInsert = {
   titulo: string;
   descricao: string | null;
   data_tarefa: string;
@@ -48,7 +49,8 @@ export type TaskDatabaseInsert = {
   data_conclusao: string | null;
   status: TaskStatus;
   prioridade: TaskPriority;
-  assigned_to: string | null;
+  assigned_to: string;
+  direcionamento: string[];
   created_by?: string | null;
   updated_at: string;
 };
@@ -91,6 +93,19 @@ function normalizeTime(time: string | null | undefined): string {
 
 function getTaskInputDate(input: TaskInput): string {
   return input.data_inicio;
+}
+
+function requireDatabaseDate(value: string, label: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} deve estar no formato AAAA-MM-DD.`);
+  }
+
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${label} inválida.`);
+  }
+
+  return value;
 }
 
 function mapTask(task: DbTask): CalendarTask {
@@ -253,18 +268,28 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 export async function saveTask(input: TaskInput, taskId?: string) {
   const currentMember = await requireCurrentEquipeMember();
   const description = input.descricao?.trim() || null;
+  if (!input.assigned_to) {
+    throw new Error("Selecione o responsável pela tarefa.");
+  }
   const assignedTo = await ensureEquipeMemberExists(input.assigned_to, "responsável");
+  if (!assignedTo) throw new Error("Selecione o responsável pela tarefa.");
 
-  const payload: TaskDatabaseInsert = {
+  const startDate = requireDatabaseDate(input.data_inicio, "Data inicial");
+  const endDate = requireDatabaseDate(input.data_fim, "Data final");
+
+  // Montado explicitamente para impedir que campos derivados de CalendarTask
+  // (comentários, anexos e suas contagens) cheguem ao INSERT de public.tasks.
+  const payload: TaskInsert = {
     titulo: input.titulo.trim(),
     descricao: description,
-    data_tarefa: getTaskInputDate(input),
-    data_inicio: input.data_inicio,
-    data_fim: input.data_fim,
-    data_conclusao: input.data_conclusao,
+    data_tarefa: requireDatabaseDate(getTaskInputDate(input), "Data da tarefa"),
+    data_inicio: startDate,
+    data_fim: endDate,
+    data_conclusao: input.data_conclusao ?? null,
     prioridade: input.prioridade,
     status: toDbStatus(input.status),
     assigned_to: assignedTo,
+    direcionamento: [assignedTo],
     updated_at: new Date().toISOString(),
   };
 
@@ -272,17 +297,23 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     payload.created_by = currentMember.id;
   }
 
-  if (import.meta.env.DEV) console.log("[TASK CREATE] payload", payload);
-
   if (taskId) {
     const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
     if (error) throw new Error(error.message);
     return taskId;
   }
 
-  const { data, error } = await supabase.from("tasks").insert(payload).select("id").single();
+  console.log("[TASK CREATE][PAYLOAD]", payload);
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert(payload)
+    .select()
+    .single();
   if (error) {
-    console.error("[TASK CREATE][DATABASE]", error);
+    console.error("[TASK CREATE][DATABASE]", {
+      payload,
+      error,
+    });
     throw error;
   }
   if (!data) throw new Error("A tarefa não foi retornada após a criação.");

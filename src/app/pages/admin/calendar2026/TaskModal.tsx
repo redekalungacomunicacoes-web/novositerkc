@@ -79,6 +79,10 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       setSubmitError("A data final não pode ser anterior à data inicial.");
       return;
     }
+    if (!form.assigned_to) {
+      setSubmitError("Selecione o responsável pela tarefa.");
+      return;
+    }
 
     try {
       const taskId = await saveTask.mutateAsync({ input: form, taskId: editing?.id });
@@ -161,7 +165,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         <input type="date" value={form.data_fim} onChange={(e) => setForm((old) => ({ ...old, data_fim: e.target.value }))} className={inputClass} />
         <select value={form.prioridade} onChange={(e) => setForm((old) => ({ ...old, prioridade: e.target.value as TaskPriority }))} className={inputClass}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <select value={form.status} onChange={(e) => setForm((old) => ({ ...old, status: e.target.value as TaskStatus }))} className={inputClass}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-        <select value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2`}><option value="">Responsável inteligente</option>{teamMembers.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}</select>
+        <select required value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2`}><option value="">Selecione o responsável</option>{teamMembers.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}</select>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} className={`${inputClass} min-h-20 md:col-span-2`} placeholder="Adicionar comentário" />
         <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
         <textarea value={externalLinks} onChange={(e) => setExternalLinks(e.target.value)} className={`${inputClass} min-h-16 md:col-span-2`} placeholder="Links externos (um por linha ou separados por vírgula)" />
