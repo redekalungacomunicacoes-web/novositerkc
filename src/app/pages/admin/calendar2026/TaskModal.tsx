@@ -9,7 +9,7 @@ import { useCalendarStore } from "./store";
 import type { CalendarTask, TaskInput, TaskPriority, TaskStatus } from "./types";
 
 function emptyForm(date: string): TaskInput {
-  return { titulo: "", descricao: "", assigned_to: null, prioridade: "media", status: "pendente", data_inicio: date, data_fim: date, data_conclusao: null };
+  return { titulo: "", descricao: "", assigned_to: null, direcionamento: [], prioridade: "media", status: "pendente", data_inicio: date, data_fim: date, data_conclusao: null };
 }
 
 const inputClass = "rounded-xl border border-emerald-100 bg-white p-2 text-sm text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-emerald-50";
@@ -41,7 +41,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
 
   function editTask(task: CalendarTask) {
     setEditing(task);
-    setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt });
+    setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, direcionamento: task.direcionamento, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt });
   }
 
   useEffect(() => {
@@ -83,6 +83,10 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       setSubmitError("Selecione o responsável pela tarefa.");
       return;
     }
+    if (!form.direcionamento.includes(form.assigned_to)) {
+      setSubmitError("O responsável deve fazer parte do direcionamento.");
+      return;
+    }
 
     try {
       const taskId = await saveTask.mutateAsync({ input: form, taskId: editing?.id });
@@ -110,7 +114,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     } catch (error) {
       console.error("[TASK CREATE] erro técnico:", error);
       const attachmentMessage = "A tarefa foi criada, mas não foi possível enviar um dos anexos.";
-      const missingMemberMessage = "Seu usuário não está vinculado a um membro ativo da equipe. Verifique equipe.user_id.";
+      const missingMemberMessage = "Seu usuário não possui um cadastro correspondente na equipe.";
       setSubmitError(
         error instanceof Error && error.message === attachmentMessage
           ? attachmentMessage
@@ -165,7 +169,13 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         <input type="date" value={form.data_fim} onChange={(e) => setForm((old) => ({ ...old, data_fim: e.target.value }))} className={inputClass} />
         <select value={form.prioridade} onChange={(e) => setForm((old) => ({ ...old, prioridade: e.target.value as TaskPriority }))} className={inputClass}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <select value={form.status} onChange={(e) => setForm((old) => ({ ...old, status: e.target.value as TaskStatus }))} className={inputClass}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-        <select required value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2`}><option value="">Selecione o responsável</option>{teamMembers.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}</select>
+        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 md:col-span-2">Direcionamento
+          <select multiple value={form.direcionamento} onChange={(e) => { const ids = Array.from(e.currentTarget.selectedOptions, (option) => option.value); setForm((old) => ({ ...old, direcionamento: ids, assigned_to: old.assigned_to && ids.includes(old.assigned_to) ? old.assigned_to : null })); }} className={`${inputClass} min-h-28`}>
+            {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}
+          </select>
+          <span className="font-normal text-slate-500">Use Ctrl/Cmd para selecionar mais de um membro.</span>
+        </label>
+        <select required disabled={form.direcionamento.length === 0} value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60`}><option value="">{form.direcionamento.length ? "Selecione o responsável" : "Selecione o direcionamento primeiro"}</option>{teamMembers.filter((member) => form.direcionamento.includes(member.id)).map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} className={`${inputClass} min-h-20 md:col-span-2`} placeholder="Adicionar comentário" />
         <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
         <textarea value={externalLinks} onChange={(e) => setExternalLinks(e.target.value)} className={`${inputClass} min-h-16 md:col-span-2`} placeholder="Links externos (um por linha ou separados por vírgula)" />

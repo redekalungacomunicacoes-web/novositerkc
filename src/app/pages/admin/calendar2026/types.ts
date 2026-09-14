@@ -47,6 +47,7 @@ export interface CalendarTask {
   priority: TaskPriority;
   status: TaskStatus;
   assigneeId: string;
+  direcionamento: string[];
   creatorId: string | null;
   completedAt: string | null;
   meetingLink?: string | null;
@@ -81,6 +82,7 @@ export interface TaskInput {
   prioridade: TaskPriority;
   status: TaskStatus;
   assigned_to: string | null;
+  direcionamento: string[];
   created_by?: string | null;
   data_conclusao?: string | null;
 }
