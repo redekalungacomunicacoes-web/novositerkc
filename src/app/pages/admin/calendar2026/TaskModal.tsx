@@ -1,8 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, FileText, MessageSquare, Paperclip, UserCircle } from "lucide-react";
+import { CalendarDays, FileText, MessageSquare, MoreVertical, Paperclip, Pencil, Trash2, UserCircle } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { priorityLabels, statusLabels } from "./tasksApi";
-import { useDeleteTaskMutation, useExternalAttachmentMutation, useSaveTaskMutation, useTaskAttachmentMutation, useTaskCommentMutation } from "./useTaskQueries";
+import { useDeleteTaskAttachmentMutation, useExternalAttachmentMutation, useSaveTaskMutation, useTaskAttachmentMutation, useTaskCommentMutation } from "./useTaskQueries";
+import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { useCalendarStore } from "./store";
 import type { CalendarTask, TaskInput, TaskPriority, TaskStatus } from "./types";
 
@@ -28,11 +30,12 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [externalLinks, setExternalLinks] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const saveTask = useSaveTaskMutation();
-  const deleteTask = useDeleteTaskMutation();
   const addComment = useTaskCommentMutation();
   const uploadAttachment = useTaskAttachmentMutation();
   const linkAttachment = useExternalAttachmentMutation();
+  const removeAttachment = useDeleteTaskAttachmentMutation();
   const isSaving = saveTask.isPending || addComment.isPending || uploadAttachment.isPending || linkAttachment.isPending;
   const selectedTask = useMemo(() => editing, [editing]);
 
@@ -116,7 +119,16 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">{selectedTask ? "Detalhes da tarefa" : "Nova tarefa"}</p>
           <h3 className="mt-1 text-2xl font-semibold">{selectedTask?.title ?? `Tarefas • ${formatDate(selectedDate)}`}</h3>
         </div>
-        <button type="button" onClick={onClose} className="rounded-xl border border-emerald-100 px-4 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50 dark:border-emerald-800/60 dark:text-emerald-100 dark:hover:bg-emerald-900/50">Fechar</button>
+        <div className="flex items-center gap-2">
+          {selectedTask ? <DropdownMenu>
+            <DropdownMenuTrigger asChild><button type="button" aria-label="Ações da tarefa" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-emerald-100 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800/60 dark:text-emerald-100"><MoreVertical size={20} /></button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-white dark:bg-emerald-950">
+              <DropdownMenuItem onSelect={() => editTask(selectedTask)}><Pencil /> Editar</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialogOpen(true)}><Trash2 /> Excluir</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu> : null}
+          <button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-emerald-100 px-4 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50 dark:border-emerald-800/60 dark:text-emerald-100 dark:hover:bg-emerald-900/50">Fechar</button>
+        </div>
       </div>
 
       {selectedTask ? (
@@ -149,11 +161,12 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60 lg:col-span-2"><h4 className="flex items-center gap-2 font-semibold"><FileText size={16} /> Descrição</h4><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-emerald-100/70">{selectedTask.description || "Sem descrição."}</p></div>
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><CalendarDays size={16} /> Histórico</h4><p className="mt-2 text-sm text-slate-600 dark:text-emerald-100/70">Criada em {formatDate(selectedTask.createdAt?.slice(0,10))}</p><p className="text-sm text-slate-600 dark:text-emerald-100/70">Atualizada em {formatDate(selectedTask.updatedAt?.slice(0,10))}</p></div>
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60 lg:col-span-2"><h4 className="flex items-center gap-2 font-semibold"><MessageSquare size={16} /> Comentários</h4><div className="mt-2 space-y-2">{selectedTask.comments.length ? selectedTask.comments.map((item) => <p key={item.id} className="rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40">{item.comentario}</p>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum comentário.</p>}</div></div>
-          <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><Paperclip size={16} /> Anexos</h4><div className="mt-2 space-y-2">{selectedTask.attachments.length ? selectedTask.attachments.map((item) => <p key={item.id} className="rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40">{item.file_name ?? "Anexo"}</p>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum anexo.</p>}</div></div>
+          <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><Paperclip size={16} /> Anexos</h4><div className="mt-2 space-y-2">{selectedTask.attachments.length ? selectedTask.attachments.map((item) => <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40"><span className="min-w-0 truncate">{item.file_name ?? "Anexo"}</span><button type="button" disabled={removeAttachment.isPending} aria-label={`Remover ${item.file_name ?? "anexo"}`} onClick={() => void removeAttachment.mutateAsync(item)} className="flex min-h-10 min-w-10 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-100 disabled:opacity-50"><Trash2 size={16} /></button></div>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum anexo.</p>}</div></div>
         </section>
       ) : (
         <div className="space-y-2">{dayTasks.length === 0 ? <div className="rounded-2xl border border-dashed border-emerald-200 p-6 text-center text-slate-500 dark:border-emerald-800/60 dark:text-emerald-100/60">Nenhuma tarefa para este dia.</div> : dayTasks.map((t) => <button type="button" key={t.id} onClick={() => editTask(t)} className="w-full rounded-2xl border border-emerald-100 p-3 text-left transition hover:bg-emerald-50 dark:border-emerald-800/60 dark:hover:bg-emerald-900/40"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{t.title}</p><p className="text-xs text-slate-500 dark:text-emerald-100/60">{formatDate(t.date)} · {t.description}</p><p className="mt-1 text-xs text-slate-500 dark:text-emerald-100/60">{statusLabels[t.status]} · {priorityLabels[t.priority]}</p></div><span className="text-xs text-emerald-700 dark:text-emerald-300"><UserCircle size={14} /></span></div></button>)}</div>
       )}
     </motion.div>
+      {selectedTask ? <TaskDeleteDialog taskId={selectedTask.id} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} onDeleted={onClose} /> : null}
   </motion.div>}</AnimatePresence>;
 }
