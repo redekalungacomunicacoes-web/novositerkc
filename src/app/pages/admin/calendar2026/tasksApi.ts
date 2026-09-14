@@ -3,16 +3,13 @@ import { getCurrentUserRoles } from "@/lib/rbac";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
-const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,data_conclusao,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
+const TASK_SELECT = "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
 
 type DbTask = {
   id: string;
   titulo: string | null;
   descricao: string | null;
   data_tarefa: string | null;
-  data_inicio: string | null;
-  data_fim: string | null;
-  data_conclusao: string | null;
   hora_inicio: string | null;
   hora_fim: string | null;
   status: TaskStatus | "concluido" | "andamento" | "atrasado" | string | null;
@@ -21,7 +18,7 @@ type DbTask = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  direcionamento?: string | null;
+  direcionamento?: string[] | null;
   mentions?: unknown;
   external_link: string | null;
   link_reuniao: string | null;
@@ -44,14 +41,11 @@ export type TaskInsert = {
   titulo: string;
   descricao: string | null;
   data_tarefa: string;
-  data_inicio: string;
-  data_fim: string;
-  data_conclusao: string | null;
   status: TaskStatus;
   prioridade: TaskPriority;
-  assigned_to: string;
-  direcionamento: string[];
-  created_by?: string | null;
+  assigned_to: string | null;
+  direcionamento: string[] | null;
+  created_by: string;
   updated_at: string;
 };
 
@@ -91,25 +85,26 @@ function normalizeTime(time: string | null | undefined): string {
   return time?.slice(0, 5) ?? "";
 }
 
-function getTaskInputDate(input: TaskInput): string {
-  return input.data_inicio;
-}
-
 function requireDatabaseDate(value: string, label: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+  const brazilianDate = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  const normalizedValue = brazilianDate
+    ? `${brazilianDate[3]}-${brazilianDate[2]}-${brazilianDate[1]}`
+    : value;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
     throw new Error(`${label} deve estar no formato AAAA-MM-DD.`);
   }
 
-  const parsed = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+  const parsed = new Date(`${normalizedValue}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== normalizedValue) {
     throw new Error(`${label} inválida.`);
   }
 
-  return value;
+  return normalizedValue;
 }
 
 function mapTask(task: DbTask): CalendarTask {
-  const date = task.data_inicio ?? task.data_tarefa ?? new Date().toISOString().slice(0, 10);
+  const date = task.data_tarefa ?? new Date().toISOString().slice(0, 10);
   const description = task.descricao ?? "";
 
   return {
@@ -117,14 +112,15 @@ function mapTask(task: DbTask): CalendarTask {
     title: task.titulo ?? "Sem título",
     description,
     date,
-    endDate: task.data_fim ?? task.data_tarefa ?? date,
+    endDate: task.data_tarefa ?? date,
     startTime: normalizeTime(task.hora_inicio),
     endTime: normalizeTime(task.hora_fim),
     priority: normalizePriority(task.prioridade),
     status: normalizeStatus(task.status),
     assigneeId: task.assigned_to ?? "",
+    direcionamento: Array.isArray(task.direcionamento) ? task.direcionamento : [],
     creatorId: task.created_by,
-    completedAt: task.data_conclusao ?? (normalizeStatus(task.status) === "concluida" ? task.updated_at : null),
+    completedAt: normalizeStatus(task.status) === "concluida" ? task.updated_at : null,
     meetingLink: task.link_reuniao ?? task.external_link ?? null,
     attachments: task.task_attachments ?? [],
     comments: task.task_comments ?? [],
@@ -134,44 +130,43 @@ function mapTask(task: DbTask): CalendarTask {
 }
 
 export async function getCurrentEquipeMember() {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) throw new Error(userError.message);
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return null;
 
-  const authUser = userData.user ?? null;
-  console.log("AUTH USER", authUser);
-
-  const authUserId = authUser?.id;
-  if (!authUserId) {
-    console.log("EQUIPE LOOKUP", { data: null, error: null, authUserId: null });
-    console.log("CURRENT MEMBER", null);
-    return null;
-  }
-
-  const lookupResult = await supabase
+  const { data: currentMember, error: memberError } = await supabase
     .from("equipe")
     .select("id,user_id,nome,email_login,cargo,foto_url,ativo")
-    .eq("user_id", authUserId);
+    .eq("user_id", user.id)
+    .maybeSingle();
 
-  console.log("EQUIPE LOOKUP", lookupResult);
-
-  if (lookupResult.error) throw new Error(lookupResult.error.message);
-
-  const currentMember = (lookupResult.data ?? []).find((member) => member.ativo !== false) ?? null;
-  console.log("CURRENT MEMBER", currentMember);
+  if (memberError) {
+    console.error("[TASK CREATE][CURRENT MEMBER]", memberError);
+    throw memberError;
+  }
 
   return currentMember;
 }
 
 async function requireCurrentEquipeMember() {
-  const currentMember = await getCurrentEquipeMember();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error("Usuário não autenticado.");
 
-  if (!currentMember?.id) {
-    throw new Error(
-      "Seu usuário não está vinculado a um membro ativo da equipe. Verifique equipe.user_id."
-    );
+  const { data: currentMember, error: memberError } = await supabase
+    .from("equipe")
+    .select("id,user_id,nome,cargo")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (memberError) {
+    console.error("[TASK CREATE][CURRENT MEMBER]", memberError);
+    throw memberError;
   }
 
-  return currentMember;
+  if (!currentMember?.id) {
+    throw new Error("Seu usuário não possui um cadastro correspondente na equipe.");
+  }
+
+  return { user, currentMember };
 }
 
 async function ensureEquipeMemberExists(memberId: string | null | undefined, label: string) {
@@ -266,7 +261,7 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 }
 
 export async function saveTask(input: TaskInput, taskId?: string) {
-  const currentMember = await requireCurrentEquipeMember();
+  const { user, currentMember } = await requireCurrentEquipeMember();
   const description = input.descricao?.trim() || null;
   if (!input.assigned_to) {
     throw new Error("Selecione o responsável pela tarefa.");
@@ -274,35 +269,45 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   const assignedTo = await ensureEquipeMemberExists(input.assigned_to, "responsável");
   if (!assignedTo) throw new Error("Selecione o responsável pela tarefa.");
 
+  const direcionamento = [...new Set(input.direcionamento ?? [])];
+  await Promise.all(direcionamento.map((memberId) => ensureEquipeMemberExists(memberId, "direcionamento")));
+  if (!direcionamento.includes(assignedTo)) {
+    throw new Error("O responsável deve fazer parte do direcionamento.");
+  }
+
   const startDate = requireDatabaseDate(input.data_inicio, "Data inicial");
-  const endDate = requireDatabaseDate(input.data_fim, "Data final");
+  requireDatabaseDate(input.data_fim, "Data final");
 
   // Montado explicitamente para impedir que campos derivados de CalendarTask
   // (comentários, anexos e suas contagens) cheguem ao INSERT de public.tasks.
-  const payload: TaskInsert = {
+  const taskValues = {
     titulo: input.titulo.trim(),
     descricao: description,
-    data_tarefa: requireDatabaseDate(getTaskInputDate(input), "Data da tarefa"),
-    data_inicio: startDate,
-    data_fim: endDate,
-    data_conclusao: input.data_conclusao ?? null,
+    data_tarefa: startDate,
     prioridade: input.prioridade,
     status: toDbStatus(input.status),
     assigned_to: assignedTo,
-    direcionamento: [assignedTo],
+    direcionamento: direcionamento.length ? direcionamento : null,
     updated_at: new Date().toISOString(),
   };
 
-  if (!taskId) {
-    payload.created_by = currentMember.id;
-  }
-
   if (taskId) {
-    const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
+    const { error } = await supabase.from("tasks").update(taskValues).eq("id", taskId);
     if (error) throw new Error(error.message);
     return taskId;
   }
 
+  const payload: TaskInsert = {
+    ...taskValues,
+    created_by: currentMember.id,
+  };
+
+  console.log("[TASK CREATE][IDS]", {
+    authUserId: user.id,
+    equipeId: currentMember.id,
+    equipeUserId: currentMember.user_id,
+    assignedTo,
+  });
   console.log("[TASK CREATE][PAYLOAD]", payload);
   const { data, error } = await supabase
     .from("tasks")
@@ -311,8 +316,11 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     .single();
   if (error) {
     console.error("[TASK CREATE][DATABASE]", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
       payload,
-      error,
     });
     throw error;
   }
@@ -402,7 +410,7 @@ export async function fetchNotifications(): Promise<TeamNotification[]> {
 }
 
 export async function addTaskComment(taskId: string, comentario: string) {
-  const currentMember = await requireCurrentEquipeMember();
+  const { currentMember } = await requireCurrentEquipeMember();
   const { error } = await supabase.from("task_comments").insert({
     task_id: taskId,
     author_id: currentMember.id,
