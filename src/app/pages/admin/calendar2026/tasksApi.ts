@@ -115,14 +115,6 @@ function mapTask(task: DbTask): CalendarTask {
   };
 }
 
-function inferAttachmentType(file: File): TaskAttachment["tipo"] {
-  if (file.type.startsWith("image/")) return "foto";
-  if (file.type.startsWith("video/")) return "video";
-  if (file.type === "application/pdf") return "pdf";
-  if (file.type.includes("word") || file.type.includes("sheet") || file.type.includes("officedocument")) return "documento";
-  return "arquivo";
-}
-
 export async function getCurrentEquipeMember() {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw new Error(userError.message);
@@ -357,42 +349,46 @@ export async function addTaskComment(taskId: string, comentario: string) {
 }
 
 export async function uploadTaskAttachment(taskId: string, file: File) {
-  const currentMember = await requireCurrentEquipeMember();
-  const safeName = file.name.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase();
-  const storagePath = `tasks/${taskId}/${crypto.randomUUID()}-${safeName}`;
+  const safeFileName = file.name.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase();
+  const filePath = `${taskId}/${crypto.randomUUID()}-${safeFileName}`;
 
   console.log("[tarefas:anexos] task_id", taskId);
   console.log("[tarefas:anexos] arquivo", { name: file.name, type: file.type, size: file.size });
 
-  const uploadResult = await supabase.storage.from(BUCKET).upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  const uploadResult = await supabase.storage.from(BUCKET).upload(filePath, file, { contentType: file.type || "application/octet-stream", upsert: false });
   console.log("[tarefas:anexos] upload", uploadResult);
   if (uploadResult.error) throw new Error(uploadResult.error.message);
 
   const metadata = {
     task_id: taskId,
-    tipo: inferAttachmentType(file),
-    storage_bucket: BUCKET,
-    storage_path: storagePath,
+    file_url: filePath,
     file_name: file.name,
-    mime_type: file.type || null,
-    file_size: file.size,
-    uploaded_by: currentMember.id,
   };
 
   const insertResult = await supabase.from("task_attachments").insert(metadata).select("*").single();
   console.log("[tarefas:anexos] insert", insertResult);
-  if (insertResult.error) throw new Error(insertResult.error.message);
+  if (insertResult.error) {
+    const cleanupResult = await supabase.storage.from(BUCKET).remove([filePath]);
+    if (cleanupResult.error) {
+      console.error("[tarefas:anexos] falha ao remover upload após erro de insert", cleanupResult.error);
+    }
+    throw new Error(insertResult.error.message);
+  }
 
   return insertResult.data as TaskAttachment;
 }
 
+export async function getTaskAttachmentSignedUrl(filePath: string) {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, 600);
+  if (error) throw new Error(error.message);
+  return data.signedUrl;
+}
+
 export async function createExternalAttachment(taskId: string, url: string) {
-  const currentMember = await requireCurrentEquipeMember();
   const payload = {
     task_id: taskId,
-    tipo: "link" as const,
-    external_url: url,
-    uploaded_by: currentMember.id,
+    file_url: url,
+    file_name: url,
   };
 
   console.log("[tarefas:anexos] task_id", taskId);

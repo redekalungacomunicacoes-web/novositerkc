@@ -31,14 +31,8 @@ export interface TaskComment {
 export interface TaskAttachment {
   id: string;
   task_id: string;
-  tipo: "link" | "foto" | "pdf" | "video" | "documento" | "arquivo";
-  external_url: string | null;
-  storage_bucket: string | null;
-  storage_path: string | null;
+  file_url: string;
   file_name: string | null;
-  mime_type: string | null;
-  file_size: number | null;
-  uploaded_by: string | null;
   created_at: string;
 }
 
