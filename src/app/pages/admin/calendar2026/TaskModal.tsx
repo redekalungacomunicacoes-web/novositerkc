@@ -63,8 +63,22 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    console.log("[TASK CREATE] submit acionado");
     setSubmitError(null);
     let taskCreated = false;
+
+    if (!form.titulo.trim()) {
+      setSubmitError("Informe o título da tarefa.");
+      return;
+    }
+    if (!form.data_inicio || !form.data_fim) {
+      setSubmitError("Informe as datas inicial e final da tarefa.");
+      return;
+    }
+    if (form.data_fim < form.data_inicio) {
+      setSubmitError("A data final não pode ser anterior à data inicial.");
+      return;
+    }
 
     try {
       const taskId = await saveTask.mutateAsync({ input: form, taskId: editing?.id });
@@ -90,7 +104,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       setExternalLinks("");
       if (initialTask) onClose();
     } catch (error) {
-      console.error("[tarefas] erro no fluxo de criação", error);
+      console.error("[TASK CREATE] erro técnico:", error);
       const attachmentMessage = "A tarefa foi criada, mas não foi possível enviar um dos anexos.";
       const missingMemberMessage = "Seu usuário não está vinculado a um membro ativo da equipe. Verifique equipe.user_id.";
       setSubmitError(
@@ -153,7 +167,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         <textarea value={externalLinks} onChange={(e) => setExternalLinks(e.target.value)} className={`${inputClass} min-h-16 md:col-span-2`} placeholder="Links externos (um por linha ou separados por vírgula)" />
         {attachmentFiles.length ? <p className="text-xs text-slate-500 dark:text-emerald-100/60 md:col-span-2">{attachmentFiles.length} arquivo(s) selecionado(s): {attachmentFiles.map((file) => file.name).join(", ")}</p> : null}
         {submitError ? <p className="text-sm text-rose-500 md:col-span-2">{submitError}</p> : null}
-        <div className="flex flex-wrap gap-2 md:col-span-2"><button disabled={isSaving} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400">{editing ? "Atualizar tarefa" : "Criar tarefa"}</button>{editing ? <button type="button" onClick={() => { setEditing(null); setForm(emptyForm(selectedDate)); }} className="rounded-xl border border-emerald-100 px-4 py-2 text-sm dark:border-emerald-800/60">Cancelar edição</button> : null}</div>
+        <div className="flex flex-wrap gap-2 md:col-span-2"><button type="submit" disabled={isSaving} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400">{editing ? "Atualizar tarefa" : "Criar tarefa"}</button>{editing ? <button type="button" onClick={() => { setEditing(null); setForm(emptyForm(selectedDate)); }} className="rounded-xl border border-emerald-100 px-4 py-2 text-sm dark:border-emerald-800/60">Cancelar edição</button> : null}</div>
       </form>
 
       {selectedTask ? (

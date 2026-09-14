@@ -3,13 +3,16 @@ import { getCurrentUserRoles } from "@/lib/rbac";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
-const TASK_SELECT = "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,description,link_reuniao";
+const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,data_conclusao,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
 
 type DbTask = {
   id: string;
   titulo: string | null;
   descricao: string | null;
   data_tarefa: string | null;
+  data_inicio: string | null;
+  data_fim: string | null;
+  data_conclusao: string | null;
   hora_inicio: string | null;
   hora_fim: string | null;
   status: TaskStatus | "concluido" | "andamento" | "atrasado" | string | null;
@@ -21,7 +24,6 @@ type DbTask = {
   direcionamento?: string | null;
   mentions?: unknown;
   external_link: string | null;
-  description: string | null;
   link_reuniao: string | null;
   task_attachments?: TaskAttachment[] | null;
   task_comments?: TaskComment[] | null;
@@ -37,11 +39,13 @@ type DbTeamMember = {
   ativo: boolean | null;
 };
 
-type TaskPayload = {
+export type TaskDatabaseInsert = {
   titulo: string;
   descricao: string | null;
-  description: string | null;
   data_tarefa: string;
+  data_inicio: string;
+  data_fim: string;
+  data_conclusao: string | null;
   status: TaskStatus;
   prioridade: TaskPriority;
   assigned_to: string | null;
@@ -90,22 +94,22 @@ function getTaskInputDate(input: TaskInput): string {
 }
 
 function mapTask(task: DbTask): CalendarTask {
-  const date = task.data_tarefa || new Date().toISOString().slice(0, 10);
-  const description = task.descricao ?? task.description ?? "";
+  const date = task.data_inicio ?? task.data_tarefa ?? new Date().toISOString().slice(0, 10);
+  const description = task.descricao ?? "";
 
   return {
     id: task.id,
     title: task.titulo ?? "Sem título",
     description,
     date,
-    endDate: date,
+    endDate: task.data_fim ?? task.data_tarefa ?? date,
     startTime: normalizeTime(task.hora_inicio),
     endTime: normalizeTime(task.hora_fim),
     priority: normalizePriority(task.prioridade),
     status: normalizeStatus(task.status),
     assigneeId: task.assigned_to ?? "",
     creatorId: task.created_by,
-    completedAt: normalizeStatus(task.status) === "concluida" ? task.updated_at : null,
+    completedAt: task.data_conclusao ?? (normalizeStatus(task.status) === "concluida" ? task.updated_at : null),
     meetingLink: task.link_reuniao ?? task.external_link ?? null,
     attachments: task.task_attachments ?? [],
     comments: task.task_comments ?? [],
@@ -251,11 +255,13 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   const description = input.descricao?.trim() || null;
   const assignedTo = await ensureEquipeMemberExists(input.assigned_to, "responsável");
 
-  const payload: TaskPayload = {
+  const payload: TaskDatabaseInsert = {
     titulo: input.titulo.trim(),
     descricao: description,
-    description,
     data_tarefa: getTaskInputDate(input),
+    data_inicio: input.data_inicio,
+    data_fim: input.data_fim,
+    data_conclusao: input.data_conclusao,
     prioridade: input.prioridade,
     status: toDbStatus(input.status),
     assigned_to: assignedTo,
@@ -266,10 +272,7 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     payload.created_by = currentMember.id;
   }
 
-  console.log("[tarefas:create] currentMember", currentMember);
-  console.log("[tarefas:create] created_by", payload.created_by ?? "mantido");
-  console.log("[tarefas:create] assigned_to", payload.assigned_to);
-  console.log("[tarefas:create] payload final", payload);
+  if (import.meta.env.DEV) console.log("[TASK CREATE] payload", payload);
 
   if (taskId) {
     const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
@@ -278,7 +281,11 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   }
 
   const { data, error } = await supabase.from("tasks").insert(payload).select("id").single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[TASK CREATE][DATABASE]", error);
+    throw error;
+  }
+  if (!data) throw new Error("A tarefa não foi retornada após a criação.");
   return data.id as string;
 }
 
