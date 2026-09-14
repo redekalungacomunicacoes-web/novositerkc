@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addTaskComment, createExternalAttachment, deleteTask, fetchNotifications, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, getPermissionLevel, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
-import type { CalendarTask, TaskInput, TaskStatus } from "./types";
+import { addTaskComment, createExternalAttachment, deleteTask, deleteTaskAttachment, fetchNotifications, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, getPermissionLevel, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
+import type { CalendarTask, TaskAttachment, TaskInput, TaskStatus } from "./types";
 
 export const taskKeys = {
   all: ["admin-tasks"] as const,
@@ -48,7 +48,16 @@ export function useSaveTaskMutation() {
 
 export function useDeleteTaskMutation() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: deleteTask, onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }) });
+  return useMutation({
+    mutationFn: deleteTask,
+    onSuccess: (_data, taskId) => {
+      queryClient.getQueriesData({ queryKey: taskKeys.all }).forEach(([queryKey, data]) => {
+        if (Array.isArray(data)) queryClient.setQueryData(queryKey, data.filter((task) => task?.id !== taskId));
+      });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.notifications });
+    },
+  });
 }
 
 export function useTaskStatusMutation() {
@@ -77,4 +86,15 @@ export function useTaskAttachmentMutation() {
 export function useExternalAttachmentMutation() {
   const queryClient = useQueryClient();
   return useMutation({ mutationFn: ({ taskId, url }: { taskId: string; url: string }) => createExternalAttachment(taskId, url), onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }) });
+}
+
+export function useDeleteTaskAttachmentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (attachment: Pick<TaskAttachment, "id" | "file_url">) => deleteTaskAttachment(attachment),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.notifications });
+    },
+  });
 }

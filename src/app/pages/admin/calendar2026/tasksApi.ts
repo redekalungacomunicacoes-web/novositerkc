@@ -4,7 +4,6 @@ import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskIn
 
 const BUCKET = "task-files";
 const TASK_SELECT = "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,description,link_reuniao";
-const TASK_SELECT_WITH_RELATIONS = `${TASK_SELECT},task_attachments(*),task_comments(*)`;
 
 type DbTask = {
   id: string;
@@ -205,7 +204,7 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 
   let query = supabase
     .from("tasks")
-    .select(TASK_SELECT_WITH_RELATIONS)
+    .select(TASK_SELECT)
     .gte("data_tarefa", startDate)
     .lte("data_tarefa", endDate)
     .order("data_tarefa", { ascending: true })
@@ -216,27 +215,35 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
   if (permission === "gestor" && currentMember?.id) query = query.or(`assigned_to.eq.${currentMember.id},created_by.eq.${currentMember.id}`);
 
   const { data, error } = await query;
+  if (error) throw new Error(error.message);
 
-  if (!error) return ((data ?? []) as DbTask[]).map(mapTask);
+  const dbTasks = (data ?? []) as DbTask[];
+  const taskIds = dbTasks.map((task) => task.id);
+  if (taskIds.length === 0) return [];
 
-  if (!/task_attachments|task_comments|relationship|schema cache/i.test(error.message)) throw new Error(error.message);
+  // Uma consulta por relacionamento para toda a lista evita N+1 e não depende
+  // de o relacionamento estar disponível no schema cache do PostgREST.
+  const [attachmentsResult, commentsResult] = await Promise.all([
+    supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").in("task_id", taskIds),
+    supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").in("task_id", taskIds),
+  ]);
+  if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
+  if (commentsResult.error) throw new Error(commentsResult.error.message);
 
-  let fallbackQuery = supabase
-    .from("tasks")
-    .select(TASK_SELECT)
-    .gte("data_tarefa", startDate)
-    .lte("data_tarefa", endDate)
-    .order("data_tarefa", { ascending: true })
-    .order("hora_inicio", { ascending: true, nullsFirst: false });
+  const attachmentsByTask = new Map<string, TaskAttachment[]>();
+  for (const attachment of (attachmentsResult.data ?? []) as TaskAttachment[]) {
+    attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), attachment]);
+  }
+  const commentsByTask = new Map<string, TaskComment[]>();
+  for (const comment of (commentsResult.data ?? []) as TaskComment[]) {
+    commentsByTask.set(comment.task_id, [...(commentsByTask.get(comment.task_id) ?? []), comment]);
+  }
 
-  if (filters?.assignee && filters.assignee !== "all") fallbackQuery = fallbackQuery.eq("assigned_to", filters.assignee);
-  if (permission === "colaborador" && currentMember?.id) fallbackQuery = fallbackQuery.eq("assigned_to", currentMember.id);
-  if (permission === "gestor" && currentMember?.id) fallbackQuery = fallbackQuery.or(`assigned_to.eq.${currentMember.id},created_by.eq.${currentMember.id}`);
-
-  const fallback = await fallbackQuery;
-  if (fallback.error) throw new Error(fallback.error.message);
-
-  return ((fallback.data ?? []) as DbTask[]).map(mapTask);
+  return dbTasks.map((task) => mapTask({
+    ...task,
+    task_attachments: attachmentsByTask.get(task.id) ?? [],
+    task_comments: commentsByTask.get(task.id) ?? [],
+  }));
 }
 
 export async function saveTask(input: TaskInput, taskId?: string) {
@@ -304,6 +311,25 @@ export async function updateTaskStatus(
 }
 
 export async function deleteTask(taskId: string) {
+  const attachmentsResult = await supabase
+    .from("task_attachments")
+    .select("id,file_url")
+    .eq("task_id", taskId);
+  if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
+
+  const storagePaths = (attachmentsResult.data ?? [])
+    .map((attachment) => attachment.file_url as string | null)
+    .filter((path): path is string => Boolean(path) && !/^https?:\/\//i.test(path));
+
+  if (storagePaths.length > 0) {
+    const storageResult = await supabase.storage.from(BUCKET).remove(storagePaths);
+    if (storageResult.error) {
+      console.error("[tarefas:excluir] falha ao remover anexos do Storage", storageResult.error);
+      throw new Error("Não foi possível remover todos os anexos da tarefa.");
+    }
+  }
+
+  // task_comments e task_attachments possuem ON DELETE CASCADE nas migrations.
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
   if (error) throw new Error(error.message);
 }
@@ -400,4 +426,17 @@ export async function createExternalAttachment(taskId: string, url: string) {
   if (insertResult.error) throw new Error(insertResult.error.message);
 
   return insertResult.data as TaskAttachment;
+}
+
+export async function deleteTaskAttachment(attachment: Pick<TaskAttachment, "id" | "file_url">) {
+  if (attachment.file_url && !/^https?:\/\//i.test(attachment.file_url)) {
+    const storageResult = await supabase.storage.from(BUCKET).remove([attachment.file_url]);
+    if (storageResult.error) {
+      console.error("[tarefas:anexos] falha ao remover arquivo do Storage", storageResult.error);
+      throw new Error("Não foi possível remover o anexo da tarefa.");
+    }
+  }
+
+  const { error } = await supabase.from("task_attachments").delete().eq("id", attachment.id);
+  if (error) throw new Error(error.message);
 }

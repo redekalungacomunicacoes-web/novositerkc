@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, Lock, Sparkles } from "lucide-react";
+import { CheckCircle2, Lock, MessageCircle, MoreVertical, Paperclip, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 
 import { TaskModal } from "./calendar2026/TaskModal";
+import { TaskDeleteDialog } from "./calendar2026/TaskDeleteDialog";
 import { TasksPageShell } from "./calendar2026/TasksShell";
 import { CalendarProvider, useCalendarStore } from "./calendar2026/store";
 import { priorityLabels, statusLabels } from "./calendar2026/tasksApi";
@@ -22,7 +24,12 @@ function canMoveTask(task: CalendarTask, targetStatus: TaskStatus, currentMember
   return false;
 }
 
+function pluralize(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function KanbanCard({ task, onOpen }: { task: CalendarTask; onOpen: (task: CalendarTask) => void }) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   return (
     <article
       draggable
@@ -30,18 +37,34 @@ function KanbanCard({ task, onOpen }: { task: CalendarTask; onOpen: (task: Calen
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/task-id", task.id);
       }}
-      onClick={() => onOpen(task)}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("button,[role=menuitem],[data-slot=alert-dialog-content]")) return;
+        onOpen(task);
+      }}
       className="min-h-[132px] cursor-grab rounded-2xl border border-emerald-100 bg-white p-4 text-sm shadow-sm transition active:cursor-grabbing hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/60 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/50"
     >
       <div className="flex items-start justify-between gap-3">
         <p className="line-clamp-2 font-semibold text-slate-900 dark:text-white">{task.title}</p>
-        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-800 dark:bg-emerald-800 dark:text-emerald-100">{priorityLabels[task.priority]}</span>
+        <div className="flex items-center gap-1">
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-800 dark:bg-emerald-800 dark:text-emerald-100">{priorityLabels[task.priority]}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><button type="button" aria-label={`Ações de ${task.title}`} onClick={(event) => event.stopPropagation()} className="flex min-h-10 min-w-10 items-center justify-center rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-800"><MoreVertical size={18} /></button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-white dark:bg-emerald-950" onClick={(event) => event.stopPropagation()}>
+              <DropdownMenuItem onSelect={() => onOpen(task)}><Pencil /> Editar</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialogOpen(true)}><Trash2 /> Excluir</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-emerald-100/60">{task.description || "Sem descrição."}</p>
       <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-emerald-100/60">
         <span>{new Date(`${task.endDate}T00:00:00`).toLocaleDateString("pt-BR")}</span>
-        <span>{task.comments.length} comentários · {task.attachments.length} anexos</span>
+        <span className="flex flex-wrap justify-end gap-x-2" aria-label={`${pluralize(task.comments.length, "comentário", "comentários")}; ${pluralize(task.attachments.length, "anexo", "anexos")}`}>
+          <span className="inline-flex items-center gap-1"><MessageCircle size={13} /> {pluralize(task.comments.length, "comentário", "comentários")}</span>
+          <span className="inline-flex items-center gap-1"><Paperclip size={13} /> {pluralize(task.attachments.length, "anexo", "anexos")}</span>
+        </span>
       </div>
+      <TaskDeleteDialog taskId={task.id} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} />
     </article>
   );
 }
@@ -74,12 +97,13 @@ function KanbanBoard() {
   const permission = usePermissionQuery();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [targetStatus, setTargetStatus] = useState<TaskStatus | null>(null);
-  const [selectedTask, setSelectedTask] = useState<CalendarTask | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const currentMemberId = currentMember.data?.id ?? null;
   const isAdmin = permission.data === "admin";
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+  const selectedTask = selectedTaskId ? taskById.get(selectedTaskId) ?? null : null;
 
   async function handleDrop(status: TaskStatus) {
     const taskId = draggingId;
@@ -123,11 +147,11 @@ function KanbanBoard() {
         <div onDragStart={(event) => setDraggingId(event.dataTransfer.getData("text/task-id"))}>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {columns.map((status) => (
-              <Column key={status} status={status} draggingId={draggingId} highlighted={targetStatus === status} onDragOver={setTargetStatus} onDrop={(dropStatus) => void handleDrop(dropStatus)} onOpen={setSelectedTask} tasks={tasks.filter((task) => task.status === status)} />
+              <Column key={status} status={status} draggingId={draggingId} highlighted={targetStatus === status} onDragOver={setTargetStatus} onDrop={(dropStatus) => void handleDrop(dropStatus)} onOpen={(task) => setSelectedTaskId(task.id)} tasks={tasks.filter((task) => task.status === status)} />
             ))}
           </div>
         </div>
-        <TaskModal open={Boolean(selectedTask)} onClose={() => setSelectedTask(null)} initialTask={selectedTask} />
+        <TaskModal open={Boolean(selectedTask)} onClose={() => setSelectedTaskId(null)} initialTask={selectedTask} />
       </div>
     </TasksPageShell>
   );
