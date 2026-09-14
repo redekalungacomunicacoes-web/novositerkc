@@ -155,17 +155,13 @@ export async function getCurrentEquipeMember() {
 async function requireCurrentEquipeMember() {
   const currentMember = await getCurrentEquipeMember();
 
-  if (currentMember?.id) {
-    return currentMember;
-  }
-
-  if (error || !data) {
+  if (!currentMember?.id) {
     throw new Error(
-      "Nenhum membro ativo encontrado na tabela equipe."
+      "Seu usuário não está vinculado a um membro ativo da equipe. Verifique equipe.user_id."
     );
   }
 
-  return data;
+  return currentMember;
 }
 
 async function ensureEquipeMemberExists(memberId: string | null | undefined, label: string) {
