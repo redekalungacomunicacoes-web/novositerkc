@@ -1,34 +1,6 @@
+import { lazy } from "react";
 import { createBrowserRouter, redirect } from "react-router-dom";
 
-import { AdminLayout } from "@/app/layouts/AdminLayout";
-import { RootLayout } from "@/app/layouts/RootLayout";
-import { Contato } from "@/app/pages/Contato";
-import { Home } from "@/app/pages/Home";
-import { MateriaDetalhes } from "@/app/pages/MateriaDetalhes";
-import { Materias } from "@/app/pages/Materias";
-import { Newsletter } from "@/app/pages/Newsletter";
-import { NotFound } from "@/app/pages/NotFound";
-import { ProjetoDetalhes } from "@/app/pages/ProjetoDetalhes";
-import { Projetos } from "@/app/pages/Projetos";
-import { QuemSomos } from "@/app/pages/QuemSomos";
-import { AdminConfiguracoes } from "@/app/pages/admin/AdminConfiguracoes";
-import { AdminEquipe } from "@/app/pages/admin/AdminEquipe";
-import { AdminEquipeForm } from "@/app/pages/admin/AdminEquipeForm";
-import { Dashboard } from "@/app/pages/admin/Dashboard";
-import { AdminLogin } from "@/app/pages/admin/AdminLogin";
-import { AdminMateriaForm } from "@/app/pages/admin/AdminMateriaForm";
-import { AdminMaterias as AdminMateriasAlias } from "@/app/pages/admin/AdminMaterias";
-import { AdminNewsletter } from "@/app/pages/admin/AdminNewsletter";
-import { AdminPerfil } from "@/app/pages/admin/AdminPerfil";
-import { AdminProjetoForm } from "@/app/pages/admin/AdminProjetoForm";
-import { AdminProjetos } from "@/app/pages/admin/AdminProjetos";
-import { AdminQuemSomos } from "@/app/pages/admin/AdminQuemSomos";
-import { AdminTarefas } from "@/app/pages/admin/AdminTarefas";
-import { AdminTarefasAnexos } from "@/app/pages/admin/AdminTarefasAnexos";
-import { AdminTarefasConfiguracoes } from "@/app/pages/admin/AdminTarefasConfiguracoes";
-import { AdminTarefasKanban } from "@/app/pages/admin/AdminTarefasKanban";
-import { AdminTarefasRelatorios } from "@/app/pages/admin/AdminTarefasRelatorios";
-import { AdminUsuarios } from "@/app/pages/admin/AdminUsuarios";
 import { financeiroRoutes } from "@/app/pages/admin/Financeiro/routes";
 import { TeamMemberPublicPage } from "@/app/pages/public/TeamMember/TeamMemberPublicPage";
 import {
@@ -38,6 +10,36 @@ import {
   hasAnyRole,
 } from "@/lib/rbac";
 import { supabase } from "@/lib/supabase";
+
+const AdminLayout = lazy(() => import("@/app/layouts/AdminLayout").then(m => ({ default: m.AdminLayout })));
+const RootLayout = lazy(() => import("@/app/layouts/RootLayout").then(m => ({ default: m.RootLayout })));
+const Contato = lazy(() => import("@/app/pages/Contato").then(m => ({ default: m.Contato })));
+const Home = lazy(() => import("@/app/pages/Home").then(m => ({ default: m.Home })));
+const MateriaDetalhes = lazy(() => import("@/app/pages/MateriaDetalhes").then(m => ({ default: m.MateriaDetalhes })));
+const Materias = lazy(() => import("@/app/pages/Materias").then(m => ({ default: m.Materias })));
+const Newsletter = lazy(() => import("@/app/pages/Newsletter").then(m => ({ default: m.Newsletter })));
+const NotFound = lazy(() => import("@/app/pages/NotFound").then(m => ({ default: m.NotFound })));
+const ProjetoDetalhes = lazy(() => import("@/app/pages/ProjetoDetalhes").then(m => ({ default: m.ProjetoDetalhes })));
+const Projetos = lazy(() => import("@/app/pages/Projetos").then(m => ({ default: m.Projetos })));
+const QuemSomos = lazy(() => import("@/app/pages/QuemSomos").then(m => ({ default: m.QuemSomos })));
+const AdminConfiguracoes = lazy(() => import("@/app/pages/admin/AdminConfiguracoes").then(m => ({ default: m.AdminConfiguracoes })));
+const AdminEquipe = lazy(() => import("@/app/pages/admin/AdminEquipe").then(m => ({ default: m.AdminEquipe })));
+const AdminEquipeForm = lazy(() => import("@/app/pages/admin/AdminEquipeForm").then(m => ({ default: m.AdminEquipeForm })));
+const Dashboard = lazy(() => import("@/app/pages/admin/Dashboard").then(m => ({ default: m.Dashboard })));
+const AdminLogin = lazy(() => import("@/app/pages/admin/AdminLogin").then(m => ({ default: m.AdminLogin })));
+const AdminMateriaForm = lazy(() => import("@/app/pages/admin/AdminMateriaForm").then(m => ({ default: m.AdminMateriaForm })));
+const AdminMateriasAlias = lazy(() => import("@/app/pages/admin/AdminMaterias").then(m => ({ default: m.AdminMaterias })));
+const AdminNewsletter = lazy(() => import("@/app/pages/admin/AdminNewsletter").then(m => ({ default: m.AdminNewsletter })));
+const AdminPerfil = lazy(() => import("@/app/pages/admin/AdminPerfil").then(m => ({ default: m.AdminPerfil })));
+const AdminProjetoForm = lazy(() => import("@/app/pages/admin/AdminProjetoForm").then(m => ({ default: m.AdminProjetoForm })));
+const AdminProjetos = lazy(() => import("@/app/pages/admin/AdminProjetos").then(m => ({ default: m.AdminProjetos })));
+const AdminQuemSomos = lazy(() => import("@/app/pages/admin/AdminQuemSomos").then(m => ({ default: m.AdminQuemSomos })));
+const AdminTarefas = lazy(() => import("@/app/pages/admin/AdminTarefas").then(m => ({ default: m.AdminTarefas })));
+const AdminTarefasAnexos = lazy(() => import("@/app/pages/admin/AdminTarefasAnexos").then(m => ({ default: m.AdminTarefasAnexos })));
+const AdminTarefasConfiguracoes = lazy(() => import("@/app/pages/admin/AdminTarefasConfiguracoes").then(m => ({ default: m.AdminTarefasConfiguracoes })));
+const AdminTarefasKanban = lazy(() => import("@/app/pages/admin/AdminTarefasKanban").then(m => ({ default: m.AdminTarefasKanban })));
+const AdminTarefasRelatorios = lazy(() => import("@/app/pages/admin/AdminTarefasRelatorios").then(m => ({ default: m.AdminTarefasRelatorios })));
+const AdminUsuarios = lazy(() => import("@/app/pages/admin/AdminUsuarios").then(m => ({ default: m.AdminUsuarios })));
 
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor" | "financeiro";
 
