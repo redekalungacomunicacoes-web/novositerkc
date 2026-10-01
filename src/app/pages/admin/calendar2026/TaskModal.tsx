@@ -132,7 +132,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     });
     setAttachmentFiles(failedFiles);
 
-    const links = externalLinks.split(/\n|,).map((item) => item.trim()).filter(Boolean);
+    const links = externalLinks.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
     const failedLinks: string[] = [];
     for (const url of links) {
       try {
