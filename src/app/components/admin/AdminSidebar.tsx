@@ -35,7 +35,6 @@ type SidebarLink = {
 };
 
 export const adminLinks: SidebarLink[] = [
-  { href: "/admin/academia", label: "Academia", icon: GraduationCap, allow: ["admin_alfa", "admin", "editor", "autor", "financeiro"] },
   {
     href: "/admin",
     label: "Dashboard",
@@ -102,6 +101,7 @@ export const adminLinks: SidebarLink[] = [
     icon: Settings,
     allow: ["admin_alfa"],
   },
+  { href: "/admin/academia", label: "Academia", icon: GraduationCap, allow: ["admin_alfa", "admin", "editor", "autor", "financeiro"] },
 ];
 
 function normalizeRoles(roles: string[]): RoleName[] {

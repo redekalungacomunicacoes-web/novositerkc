@@ -21,7 +21,7 @@ export function AdminLayout() {
       </div>
 
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 bg-background md:hidden p-4">
+        <div className="fixed inset-0 z-50 bg-background md:hidden p-4 overflow-y-auto">
           <div className="flex justify-end">
             <button onClick={() => setIsMobileMenuOpen(false)} className="p-2">
               ✕

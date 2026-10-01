@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { videoEmbed } from "./media";
 import type { AcademyData } from "./types";
 
 export const tables = {
@@ -45,13 +46,19 @@ export async function loadAcademy(): Promise<AcademyData> {
       return [key, rows] as const;
     }),
   );
-  const [members, reports] = await Promise.all([
+  const [members, reports, driveFiles] = await Promise.all([
     supabase.from("equipe").select("id,nome,user_id").order("nome"),
     supabase.rpc("academy_report"),
+    supabase
+      .from("drive_files")
+      .select("*")
+      .eq("module", "academy")
+      .in("status", ["active", "archived"]),
   ]);
   return {
     ...Object.fromEntries(entries),
     members: unwrap(members) || [],
+    driveFiles: unwrap(driveFiles) || [],
     reports: unwrap(reports) || [],
   } as AcademyData;
 }
@@ -59,6 +66,21 @@ export async function saveEntity(
   entity: Entity,
   values: Record<string, unknown>,
 ) {
+  if (
+    entity === "lessons" &&
+    values.media_source &&
+    ["youtube", "vimeo"].includes(String(values.media_source))
+  ) {
+    if (
+      !videoEmbed(String(values.media_source), String(values.media_url || ""))
+    )
+      throw new Error(
+        "Informe um link HTTPS válido do provedor selecionado (YouTube ou Vimeo).",
+      );
+    values.media_drive_file_id = null;
+    values.media_path = null;
+  }
+
   const query =
     values.id !== undefined
       ? supabase.from(tables[entity]).update(values).eq("id", values.id)
@@ -96,23 +118,6 @@ export function safeContextRoute(route: string | null | undefined) {
     !route.includes("..")
     ? route
     : null;
-}
-export async function uploadAsset(courseId: string, file: File) {
-  if (file.size > 50 * 1024 * 1024)
-    throw new Error(
-      "Arquivo acima de 50 MB. Use um link HTTPS para vídeos maiores.",
-    );
-  const filename = file.name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9._-]/g, "-");
-  const path = `${courseId}/${crypto.randomUUID()}-${filename}`;
-  unwrap(
-    await supabase.storage
-      .from("academy")
-      .upload(path, file, { upsert: false, contentType: file.type }),
-  );
-  return path;
 }
 export async function saveQuestion(
   values: Record<string, unknown>,

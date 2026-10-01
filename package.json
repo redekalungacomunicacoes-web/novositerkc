@@ -8,7 +8,8 @@
     "dev": "vite",
     "typecheck:academia": "tsc -p tsconfig.academia.json",
     "lint:academia": "eslint --config eslint.academia.config.mjs src/app/pages/admin/academia",
-    "test:academia": "node --test tests/academia.test.mjs"
+    "test:academia": "node --test tests/academia.test.mjs tests/academia-autoria.test.mjs tests/academy-drive.test.mjs",
+    "test:academia:ui": "node tests/academia-ui.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
