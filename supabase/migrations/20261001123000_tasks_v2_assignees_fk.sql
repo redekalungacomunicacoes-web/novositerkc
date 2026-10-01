@@ -22,11 +22,20 @@ begin
   end loop;
 end $$;
 
-alter table public.task_assignees
-  add constraint task_assignees_user_id_equipe_fkey
-  foreign key (user_id)
-  references public.equipe(id)
-  on delete cascade;
+do $
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.task_assignees'::regclass
+      and conname = 'task_assignees_user_id_equipe_fkey'
+  ) then
+    alter table public.task_assignees
+      add constraint task_assignees_user_id_equipe_fkey
+      foreign key (user_id)
+      references public.equipe(id)
+      on delete cascade;
+  end if;
+end $;
 
 create index if not exists idx_task_assignees_user_task
   on public.task_assignees(user_id, task_id);
