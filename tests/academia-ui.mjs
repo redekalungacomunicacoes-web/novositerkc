@@ -98,6 +98,8 @@ async function setup(role, mobile = false) {
     media_url: "https://youtu.be/abcdefghijk",
     content: "Conteúdo da aula",
     duration_minutes: 10,
+    required: false,
+    position: 0,
   };
   await page.route("https://fixture.supabase.co/**", async (route) => {
     const req = route.request(),
@@ -263,7 +265,7 @@ try {
   });
   await page.getByRole("link", { name: "Conhecer curso", exact: true }).click();
   await page
-    .getByRole("link", { name: "Aula de leitura", exact: true })
+    .getByRole("link", { name: "Aula de leitura (opcional)", exact: true })
     .click();
   await page.getByTitle("Aula de leitura").waitFor();
   assert.equal(
