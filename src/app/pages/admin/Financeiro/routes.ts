@@ -1,4 +1,4 @@
-import { lazy } from "react";
+import { createElement, lazy } from "react";
 import { type RouteObject } from "react-router-dom";
 
 const Dashboard = lazy(() => import("./Dashboard").then(m => ({ default: m.Dashboard })));
@@ -8,12 +8,12 @@ const Projetos = lazy(() => import("./Projetos").then(m => ({ default: m.Projeto
 const ProjetoDetalhes = lazy(() => import("./ProjetoDetalhes").then(m => ({ default: m.ProjetoDetalhes })));
 
 export const financeiroRoutes: RouteObject[] = [
-  { index: true, element: <Dashboard /> },
-  { path: "dashboard", element: <Dashboard /> },
-  { path: "fundos", element: <Fundos /> },
-  { path: "fundos/:id", element: <FundoDetalhes /> },
-  { path: "projetos", element: <Projetos /> },
-  { path: "projetos/:id", element: <ProjetoDetalhes /> },
-  { path: "movimentacoes", element: <Dashboard /> },
-  { path: "relatorios", element: <Dashboard /> },
+  { index: true, element: createElement(Dashboard) },
+  { path: "dashboard", element: createElement(Dashboard) },
+  { path: "fundos", element: createElement(Fundos) },
+  { path: "fundos/:id", element: createElement(FundoDetalhes) },
+  { path: "projetos", element: createElement(Projetos) },
+  { path: "projetos/:id", element: createElement(ProjetoDetalhes) },
+  { path: "movimentacoes", element: createElement(Dashboard) },
+  { path: "relatorios", element: createElement(Dashboard) },
 ];
