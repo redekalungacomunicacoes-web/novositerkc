@@ -149,10 +149,17 @@ export function Academia() {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
+    let saved: unknown;
     if (edit.entity === "questions") {
       const { answer, ...question } = values;
-      await saveQuestion(question, String(answer || ""));
-    } else await saveEntity(edit.entity, values);
+      saved = await saveQuestion(question, String(answer || ""));
+    } else {
+      if (edit.entity === "lessons" && values.media_source === "drive")
+        values.media_url = null;
+      saved = await saveEntity(edit.entity, values);
+    }
+    if (edit.entity === "courses" && saved && typeof saved === "object" && "id" in saved)
+      setSelectedCourse(String(saved.id));
     await reload();
     setNotice("Alteração salva.");
   }
