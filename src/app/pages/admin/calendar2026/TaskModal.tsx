@@ -2,14 +2,14 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, FileText, MessageSquare, MoreVertical, Paperclip, Pencil, Trash2, UserCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
-import { priorityLabels, statusLabels } from "./tasksApi";
+import { priorityLabels, statusLabels } from "./tasksApi";\nimport { listMaterias, listProjetos } from "@/lib/cms";
 import { useDeleteTaskAttachmentMutation, useExternalAttachmentMutation, useSaveTaskMutation, useTaskAttachmentMutation, useTaskCommentMutation } from "./useTaskQueries";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { useCalendarStore } from "./store";
-import type { CalendarTask, TaskInput, TaskPriority, TaskStatus } from "./types";
+import type { CalendarTask, TaskAttachmentAccess, TaskInput, TaskPriority, TaskStatus } from "./types";
 
 function emptyForm(date: string): TaskInput {
-  return { titulo: "", descricao: "", assigned_to: null, direcionamento: [], prioridade: "media", status: "pendente", data_inicio: date, data_fim: date, data_conclusao: null };
+  return { titulo: "", descricao: "", assigned_to: null, direcionamento: [], prioridade: "media", status: "pendente", data_inicio: date, data_fim: date, data_conclusao: null, context_type: "internal", context_id: null };
 }
 
 const inputClass = "rounded-xl border border-emerald-100 bg-white p-2 text-sm text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-emerald-50";
@@ -31,6 +31,9 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
   const [externalLinks, setExternalLinks] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [attachmentAccess, setAttachmentAccess] = useState<TaskAttachmentAccess>("assignees");
+  const [projects, setProjects] = useState<Array<{ id: string; titulo: string; published: boolean }>>([]);
+  const [materias, setMaterias] = useState<Array<{ id: string; titulo: string; status: string }>>([]);
   const saveTask = useSaveTaskMutation();
   const addComment = useTaskCommentMutation();
   const uploadAttachment = useTaskAttachmentMutation();
@@ -41,7 +44,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
 
   function editTask(task: CalendarTask) {
     setEditing(task);
-    setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, direcionamento: task.direcionamento, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt });
+    setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, direcionamento: task.direcionamento, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt, context_type: task.contextType, context_id: task.contextId });
   }
 
   useEffect(() => {
@@ -79,7 +82,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       setSubmitError("A data final não pode ser anterior à data inicial.");
       return;
     }
-    if (!form.assigned_to) {
+    if (form.context_type !== "internal" && !form.context_id) {\n      setSubmitError("Selecione o projeto ou matéria vinculada à tarefa.");\n      return;\n    }\n    if (!form.assigned_to) {
       setSubmitError("Selecione o responsável pela tarefa.");
       return;
     }
@@ -95,7 +98,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       if (comment.trim()) await addComment.mutateAsync({ taskId, comentario: comment.trim() });
       for (const file of attachmentFiles) {
         try {
-          await uploadAttachment.mutateAsync({ taskId, file });
+          await uploadAttachment.mutateAsync({ taskId, file, accessScope: attachmentAccess });
         } catch (attachmentError) {
           console.error("[tarefas] falha ao enviar anexo", attachmentError);
           throw new Error("A tarefa foi criada, mas não foi possível enviar um dos anexos.");
@@ -168,6 +171,13 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         <input type="date" value={form.data_inicio} onChange={(e) => setForm((old) => ({ ...old, data_inicio: e.target.value }))} className={inputClass} />
         <input type="date" value={form.data_fim} onChange={(e) => setForm((old) => ({ ...old, data_fim: e.target.value }))} className={inputClass} />
         <select value={form.prioridade} onChange={(e) => setForm((old) => ({ ...old, prioridade: e.target.value as TaskPriority }))} className={inputClass}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <select value={form.context_type} onChange={(e) => setForm((old) => ({ ...old, context_type: e.target.value as TaskInput["context_type"], context_id: null }))} className={inputClass}>
+          <option value="internal">Tarefa interna</option>
+          <option value="project">Vinculada a projeto</option>
+          <option value="materia">Vinculada a matéria</option>
+        </select>
+        {form.context_type === "project" ? <select required value={form.context_id ?? ""} onChange={(e) => setForm((old) => ({ ...old, context_id: e.target.value || null }))} className={inputClass}><option value="">Selecione o projeto</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.titulo} · {project.published ? "Publicado" : "Interno/rascunho"}</option>)}</select> : null}
+        {form.context_type === "materia" ? <select required value={form.context_id ?? ""} onChange={(e) => setForm((old) => ({ ...old, context_id: e.target.value || null }))} className={inputClass}><option value="">Selecione a matéria</option>{materias.map((materia) => <option key={materia.id} value={materia.id}>{materia.titulo} · {materia.status}</option>)}</select> : null}
         <select value={form.status} onChange={(e) => setForm((old) => ({ ...old, status: e.target.value as TaskStatus }))} className={inputClass}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 md:col-span-2">Direcionamento
           <select multiple value={form.direcionamento} onChange={(e) => { const ids = Array.from(e.currentTarget.selectedOptions, (option) => option.value); setForm((old) => ({ ...old, direcionamento: ids, assigned_to: old.assigned_to && ids.includes(old.assigned_to) ? old.assigned_to : null })); }} className={`${inputClass} min-h-28`}>
@@ -177,7 +187,13 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         </label>
         <select required disabled={form.direcionamento.length === 0} value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60`}><option value="">{form.direcionamento.length ? "Selecione o responsável" : "Selecione o direcionamento primeiro"}</option>{teamMembers.filter((member) => form.direcionamento.includes(member.id)).map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} className={`${inputClass} min-h-20 md:col-span-2`} placeholder="Adicionar comentário" />
-        <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
+        <div className="grid gap-2 md:col-span-2 md:grid-cols-[1fr_240px]">
+          <input type="file" multiple onChange={handleFileChange} className={inputClass} />
+          <select value={attachmentAccess} onChange={(e) => setAttachmentAccess(e.target.value as TaskAttachmentAccess)} className={inputClass}>
+            <option value="assignees">Somente envolvidos na tarefa</option>
+            <option value="team">Toda a equipe RKC</option>
+          </select>
+        </div>
         <textarea value={externalLinks} onChange={(e) => setExternalLinks(e.target.value)} className={`${inputClass} min-h-16 md:col-span-2`} placeholder="Links externos (um por linha ou separados por vírgula)" />
         {attachmentFiles.length ? <p className="text-xs text-slate-500 dark:text-emerald-100/60 md:col-span-2">{attachmentFiles.length} arquivo(s) selecionado(s): {attachmentFiles.map((file) => file.name).join(", ")}</p> : null}
         {submitError ? <p className="text-sm text-rose-500 md:col-span-2">{submitError}</p> : null}
