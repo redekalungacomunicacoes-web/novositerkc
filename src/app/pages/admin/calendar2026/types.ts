@@ -2,6 +2,9 @@ export type ViewMode = "month" | "week" | "day";
 export type TaskStatus = "pendente" | "em_andamento" | "revisao" | "concluida" | "cancelada";
 export type TaskPriority = "baixa" | "media" | "alta" | "urgente";
 export type PermissionLevel = "admin" | "gestor" | "colaborador";
+export type TaskContextType = "internal" | "project" | "materia";
+export type TaskAttachmentAccess = "assignees" | "team";
+export type TaskAccessScope = "assignees" | "team";
 
 export interface TeamMember {
   id: string;
@@ -34,6 +37,9 @@ export interface TaskAttachment {
   file_url: string;
   file_name: string | null;
   created_at: string;
+  source?: "legacy" | "drive";
+  drive_file_id?: string | null;
+  access_scope?: TaskAttachmentAccess;
 }
 
 export interface CalendarTask {
@@ -55,6 +61,11 @@ export interface CalendarTask {
   comments: TaskComment[];
   createdAt: string;
   updatedAt: string;
+  contextType: TaskContextType;
+  contextId: string | null;
+  progress: number;
+  driveFolderId: string | null;
+  accessScope: TaskAccessScope;
 }
 
 export interface TeamNotification {
@@ -85,4 +96,7 @@ export interface TaskInput {
   direcionamento: string[];
   created_by?: string | null;
   data_conclusao?: string | null;
+  context_type?: TaskContextType;
+  context_id?: string | null;
+  access_scope?: TaskAccessScope;
 }
