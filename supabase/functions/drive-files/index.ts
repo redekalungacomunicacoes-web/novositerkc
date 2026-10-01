@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import {
   downloadDriveFile,
+  driveHealth,
   ensureDrivePath,
   renameDriveFile,
   trashDriveFile,
@@ -90,7 +91,10 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action ?? "");
-    if (action === "health") return json({ ok: true, drive: { configured: Boolean(rootFolderId) } });
+    if (action === "health") {
+      if (!rootFolderId) return json({ ok: false, error: "Pasta raiz do Drive não configurada." }, 503);
+      return json({ ok: true, drive: await driveHealth(rootFolderId) });
+    }
     const id = String(body.id ?? "");
     if (!id) return json({ ok: false, error: "ID do arquivo obrigatório." }, 400);
     const { data: file, error } = await admin.from("drive_files").select("*").eq("id", id).eq("status", "active").maybeSingle();
