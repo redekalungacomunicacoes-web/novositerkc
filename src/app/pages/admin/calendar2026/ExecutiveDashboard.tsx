@@ -17,7 +17,7 @@ export function ExecutiveDashboard() {
   const inProgress = tasks.filter((task) => task.status === "em_andamento" || task.status === "revisao").length;
   const overdue = tasks.filter((task) => task.status !== "concluida" && task.status !== "cancelada" && task.endDate < today).length;
   const dueToday = tasks.filter((task) => task.status !== "concluida" && task.endDate === today).length;
-  const productivityRate = total ? Math.round((done / total) * 100) : 0;
+  const productivityRate = total ? Math.round((done / total) * 100) : 0;\n  const averageProgress = total ? Math.round(tasks.reduce((sum, task) => sum + task.progress, 0) / total) : 0;\n  const projectTasks = tasks.filter((task) => task.contextType === "project").length;\n  const materiaTasks = tasks.filter((task) => task.contextType === "materia").length;\n  const internalTasks = tasks.filter((task) => task.contextType === "internal").length;
 
   const kpis = [
     { label: "Total", value: total, tone: "text-slate-900 dark:text-white" },
@@ -25,7 +25,7 @@ export function ExecutiveDashboard() {
     { label: "Em andamento", value: inProgress, tone: "text-amber-700 dark:text-amber-300" },
     { label: "Atrasadas", value: overdue, tone: "text-rose-700 dark:text-rose-300" },
     { label: "Prazo hoje", value: dueToday, tone: "text-teal-700 dark:text-teal-300" },
-    { label: "Produtividade", value: `${productivityRate}%`, tone: "text-emerald-800 dark:text-emerald-200" },
+    { label: "Progresso médio", value: `${averageProgress}%`, tone: "text-emerald-800 dark:text-emerald-200" },
   ];
 
   const byCollaborator = useMemo(() => teamMembers.slice(0, 8).map((member) => ({
@@ -75,7 +75,14 @@ export function ExecutiveDashboard() {
         })}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <article className="rounded-2xl border border-emerald-100 bg-white p-4 text-sm shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70"><span className="text-slate-500 dark:text-emerald-100/70">Projetos</span><strong className="ml-2 text-emerald-800 dark:text-emerald-200">{projectTasks}</strong></article>
+        <article className="rounded-2xl border border-emerald-100 bg-white p-4 text-sm shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70"><span className="text-slate-500 dark:text-emerald-100/70">Matérias</span><strong className="ml-2 text-emerald-800 dark:text-emerald-200">{materiaTasks}</strong></article>
+        <article className="rounded-2xl border border-emerald-100 bg-white p-4 text-sm shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70"><span className="text-slate-500 dark:text-emerald-100/70">Internas</span><strong className="ml-2 text-emerald-800 dark:text-emerald-200">{internalTasks}</strong></article>
+        <article className="rounded-2xl border border-emerald-100 bg-white p-4 text-sm shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70"><span className="text-slate-500 dark:text-emerald-100/70">Taxa de conclusão</span><strong className="ml-2 text-emerald-800 dark:text-emerald-200">{productivityRate}%</strong></article>
+      </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
         <article className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70">
           <h3 className="font-semibold text-slate-900 dark:text-white">Tarefas por colaborador</h3>
           <div className="mt-4 h-56">
