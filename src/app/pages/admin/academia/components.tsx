@@ -129,6 +129,7 @@ export type Field = {
   max?: number;
   nullable?: boolean;
   hint?: string;
+  visibleWhen?: { field: string; equals: string[] };
 };
 export const opts = (values: string[]) =>
   values.map((value) => ({ value, label: labels[value] || value }));
@@ -203,7 +204,7 @@ export function Editor({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          {fields.map((f) => (
+          {fields.filter((f) => !f.visibleWhen || f.visibleWhen.equals.includes(String(values[f.visibleWhen.field] ?? ""))).map((f) => (
             <div key={f.name} className="text-sm space-y-1">
               <label
                 className="block font-medium"
