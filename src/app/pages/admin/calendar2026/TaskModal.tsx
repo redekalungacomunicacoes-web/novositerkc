@@ -30,6 +30,8 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [externalLinks, setExternalLinks] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null);
+  const [savedTaskId, setSavedTaskId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const saveTask = useSaveTaskMutation();
   const addComment = useTaskCommentMutation();
@@ -51,6 +53,9 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       setComment("");
       setAttachmentFiles([]);
       setExternalLinks("");
+      setSubmitError(null);
+      setSubmitNotice(null);
+      setSavedTaskId(null);
       return;
     }
     setEditing(null);
@@ -59,13 +64,14 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     setAttachmentFiles([]);
     setExternalLinks("");
     setSubmitError(null);
+    setSubmitNotice(null);
+    setSavedTaskId(null);
   }, [open, selectedDate, initialTask]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    console.log("[TASK CREATE] submit acionado");
     setSubmitError(null);
-    let taskCreated = false;
+    setSubmitNotice(null);
 
     if (!form.titulo.trim()) {
       setSubmitError("Informe o título da tarefa.");
@@ -88,47 +94,79 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       return;
     }
 
-    try {
-      const taskId = await saveTask.mutateAsync({ input: form, taskId: editing?.id });
-      taskCreated = !editing;
-
-      if (comment.trim()) await addComment.mutateAsync({ taskId, comentario: comment.trim() });
-      for (const file of attachmentFiles) {
-        try {
-          await uploadAttachment.mutateAsync({ taskId, file });
-        } catch (attachmentError) {
-          console.error("[tarefas] falha ao enviar anexo", attachmentError);
-          throw new Error("A tarefa foi criada, mas não foi possível enviar um dos anexos.");
-        }
+    let taskId = savedTaskId;
+    if (!taskId) {
+      try {
+        taskId = await saveTask.mutateAsync({ input: form, taskId: editing?.id });
+        if (!editing) setSavedTaskId(taskId);
+      } catch (error) {
+        console.error("[TASK CREATE] erro ao salvar tarefa:", error);
+        const message = error instanceof Error ? error.message : "Erro inesperado ao salvar a tarefa.";
+        setSubmitError(message.includes("usuário não possui um cadastro correspondente")
+          ? "Seu usuário não possui um cadastro correspondente na equipe."
+          : `Não foi possível salvar a tarefa: ${message}`);
+        return;
       }
-      for (const url of externalLinks.split(/\n|,/).map((item) => item.trim()).filter(Boolean)) {
-        await linkAttachment.mutateAsync({ taskId, url });
-      }
-
-      setEditing(null);
-      setForm(emptyForm(selectedDate));
-      setComment("");
-      setAttachmentFiles([]);
-      setExternalLinks("");
-      if (initialTask) onClose();
-    } catch (error) {
-      console.error("[TASK CREATE] erro técnico:", error);
-      const attachmentMessage = "A tarefa foi criada, mas não foi possível enviar um dos anexos.";
-      const missingMemberMessage = "Seu usuário não possui um cadastro correspondente na equipe.";
-      setSubmitError(
-        error instanceof Error && error.message === attachmentMessage
-          ? attachmentMessage
-          : error instanceof Error && error.message === missingMemberMessage
-            ? missingMemberMessage
-          : taskCreated
-            ? "A tarefa foi criada, mas não foi possível concluir todos os dados adicionais."
-            : "Não foi possível criar a tarefa."
-      );
     }
+    if (!taskId) return;
+
+    const failures: string[] = [];
+    if (comment.trim()) {
+      try {
+        await addComment.mutateAsync({ taskId, comentario: comment.trim() });
+        setComment("");
+      } catch (error) {
+        failures.push(`Comentário: ${error instanceof Error ? error.message : "falha ao salvar"}`);
+      }
+    }
+
+    const uploadResults = await Promise.allSettled(
+      attachmentFiles.map((file) => uploadAttachment.mutateAsync({ taskId, file })),
+    );
+    const failedFiles: File[] = [];
+    uploadResults.forEach((result, index) => {
+      if (result.status === "rejected") {
+        failedFiles.push(attachmentFiles[index]);
+        const reason = result.reason instanceof Error ? result.reason.message : "falha no envio";
+        failures.push(`${attachmentFiles[index].name}: ${reason}`);
+      }
+    });
+    setAttachmentFiles(failedFiles);
+
+    const links = externalLinks.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+    const failedLinks: string[] = [];
+    for (const url of links) {
+      try {
+        await linkAttachment.mutateAsync({ taskId, url });
+      } catch (error) {
+        failedLinks.push(url);
+        failures.push(`Link ${url}: ${error instanceof Error ? error.message : "falha ao salvar"}`);
+      }
+    }
+    setExternalLinks(failedLinks.join("\n"));
+
+    if (failures.length) {
+      setSubmitNotice(`Tarefa salva com sucesso (código ${taskId.slice(0, 8)}). Ela já aparece na lista de tarefas. Reenvie os itens pendentes abaixo; a tarefa não será criada novamente.`);
+      setSubmitError(`Não foi possível concluir: ${failures.join(" · ")}`);
+      return;
+    }
+
+    setEditing(null);
+    setSavedTaskId(null);
+    setForm(emptyForm(selectedDate));
+    setComment("");
+    setAttachmentFiles([]);
+    setExternalLinks("");
+    setSubmitNotice(editing ? "Tarefa atualizada com sucesso." : "Tarefa criada com sucesso.");
+    if (initialTask || !editing) onClose();
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    setAttachmentFiles(Array.from(event.target.files ?? []));
+    const selected = Array.from(event.target.files ?? []);
+    setAttachmentFiles((current) => [...current, ...selected.filter((file) =>
+      !current.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified),
+    )]);
+    event.currentTarget.value = "";
   }
 
   const assignee = teamMembers.find((member) => member.id === selectedTask?.assigneeId || member.userId === selectedTask?.assigneeId);
@@ -181,11 +219,15 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         </label>
         <select required disabled={form.direcionamento.length === 0} value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60`}><option value="">{form.direcionamento.length ? "Selecione o responsável" : "Selecione o direcionamento primeiro"}</option>{teamMembers.filter((member) => form.direcionamento.includes(member.id)).map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} className={`${inputClass} min-h-20 md:col-span-2`} placeholder="Adicionar comentário" />
-        <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
+        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 md:col-span-2">Arquivos da tarefa
+          <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
+          <span className="font-normal text-slate-500">Você pode adicionar vários arquivos. Os itens com falha ficam disponíveis para nova tentativa.</span>
+        </label>
+        {attachmentFiles.length ? <div className="grid gap-2 md:col-span-2">{attachmentFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-emerald-100 px-3 py-2 dark:border-emerald-800/60"><Paperclip size={15} className="shrink-0 text-emerald-700 dark:text-emerald-300" /><span className="min-w-0 flex-1 truncate text-sm">{file.name}</span><span className="shrink-0 text-xs text-slate-400">{(file.size / 1024 / 1024).toFixed(1)} MB</span><button type="button" aria-label={`Remover ${file.name}`} onClick={() => setAttachmentFiles((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50"><Trash2 size={15} /></button></div>)}</div> : null}
         <textarea value={externalLinks} onChange={(e) => setExternalLinks(e.target.value)} className={`${inputClass} min-h-16 md:col-span-2`} placeholder="Links externos (um por linha ou separados por vírgula)" />
         {attachmentFiles.length ? <p className="text-xs text-slate-500 dark:text-emerald-100/60 md:col-span-2">{attachmentFiles.length} arquivo(s) selecionado(s): {attachmentFiles.map((file) => file.name).join(", ")}</p> : null}
-        {submitError ? <p className="text-sm text-rose-500 md:col-span-2">{submitError}</p> : null}
-        <div className="flex flex-wrap gap-2 md:col-span-2"><button type="submit" disabled={isSaving} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400">{editing ? "Atualizar tarefa" : "Criar tarefa"}</button>{editing ? <button type="button" onClick={() => { setEditing(null); setForm(emptyForm(selectedDate)); }} className="rounded-xl border border-emerald-100 px-4 py-2 text-sm dark:border-emerald-800/60">Cancelar edição</button> : null}</div>
+        {submitNotice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100 md:col-span-2">{submitNotice}</p> : null}{submitError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200 md:col-span-2">{submitError}</p> : null}
+        <div className="flex flex-wrap gap-2 md:col-span-2"><button type="submit" disabled={isSaving} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400">{savedTaskId ? "Tentar novamente" : editing ? "Atualizar tarefa" : "Criar tarefa"}</button>{editing ? <button type="button" onClick={() => { setEditing(null); setForm(emptyForm(selectedDate)); }} className="rounded-xl border border-emerald-100 px-4 py-2 text-sm dark:border-emerald-800/60">Cancelar edição</button> : null}</div>
       </form>
 
       {selectedTask ? (

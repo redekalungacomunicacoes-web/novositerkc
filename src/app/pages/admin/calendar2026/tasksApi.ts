@@ -227,42 +227,58 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
 export async function fetchTasks(startDate: string, endDate: string, filters?: { assignee?: string | "all" }): Promise<CalendarTask[]> {
   const currentMember = await getCurrentEquipeMember();
   const permission = await getPermissionLevel();
+  const pageSize = 500;
+  const dbTasks: DbTask[] = [];
 
-  let query = supabase
-    .from("tasks")
-    .select(TASK_SELECT)
-    .lte("data_inicio", endDate)
-    .gte("data_fim", startDate)
-    .order("data_tarefa", { ascending: true })
-    .order("hora_inicio", { ascending: true, nullsFirst: false });
+  for (let offset = 0; ; offset += pageSize) {
+    let query = supabase
+      .from("tasks")
+      .select(TASK_SELECT)
+      .lte("data_inicio", endDate)
+      .gte("data_fim", startDate)
+      .order("data_tarefa", { ascending: true })
+      .order("hora_inicio", { ascending: true, nullsFirst: false })
+      .range(offset, offset + pageSize - 1);
 
-  if (filters?.assignee && filters.assignee !== "all") query = query.eq("assigned_to", filters.assignee);
-  if (permission === "colaborador" && currentMember?.id) query = query.eq("assigned_to", currentMember.id);
-  if (permission === "gestor" && currentMember?.id) query = query.or(`assigned_to.eq.${currentMember.id},created_by.eq.${currentMember.id}`);
+    if (filters?.assignee && filters.assignee !== "all") query = query.eq("assigned_to", filters.assignee);
+    if (permission === "colaborador" && currentMember?.id) query = query.eq("assigned_to", currentMember.id);
+    if (permission === "gestor" && currentMember?.id) query = query.or(`assigned_to.eq.${currentMember.id},created_by.eq.${currentMember.id}`);
 
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as DbTask[];
+    dbTasks.push(...page);
+    if (page.length < pageSize) break;
+  }
 
-  const dbTasks = (data ?? []) as DbTask[];
   const taskIds = dbTasks.map((task) => task.id);
   if (taskIds.length === 0) return [];
 
-  // Uma consulta por relacionamento para toda a lista evita N+1 e não depende
-  // de o relacionamento estar disponível no schema cache do PostgREST.
-  const [attachmentsResult, commentsResult] = await Promise.all([
-    supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").in("task_id", taskIds),
-    supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").in("task_id", taskIds),
-  ]);
-  if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
-  if (commentsResult.error) throw new Error(commentsResult.error.message);
-
+  // Consulta os relacionamentos em lotes para suportar a biblioteca completa,
+  // mesmo quando o histórico passa do limite padrão de linhas do PostgREST.
   const attachmentsByTask = new Map<string, TaskAttachment[]>();
-  for (const attachment of (attachmentsResult.data ?? []) as TaskAttachment[]) {
-    attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), attachment]);
-  }
   const commentsByTask = new Map<string, TaskComment[]>();
-  for (const comment of (commentsResult.data ?? []) as TaskComment[]) {
-    commentsByTask.set(comment.task_id, [...(commentsByTask.get(comment.task_id) ?? []), comment]);
+  const relationshipBatchSize = 300;
+  const relationPageSize = 1000;
+  for (let offset = 0; offset < taskIds.length; offset += relationshipBatchSize) {
+    const batch = taskIds.slice(offset, offset + relationshipBatchSize);
+    for (let relationOffset = 0; ; relationOffset += relationPageSize) {
+      const [attachmentsResult, commentsResult] = await Promise.all([
+        supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").in("task_id", batch).range(relationOffset, relationOffset + relationPageSize - 1),
+        supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").in("task_id", batch).range(relationOffset, relationOffset + relationPageSize - 1),
+      ]);
+      if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
+      if (commentsResult.error) throw new Error(commentsResult.error.message);
+
+      for (const attachment of (attachmentsResult.data ?? []) as TaskAttachment[]) {
+        attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), attachment]);
+      }
+      for (const comment of (commentsResult.data ?? []) as TaskComment[]) {
+        commentsByTask.set(comment.task_id, [...(commentsByTask.get(comment.task_id) ?? []), comment]);
+      }
+
+      if ((attachmentsResult.data?.length ?? 0) < relationPageSize && (commentsResult.data?.length ?? 0) < relationPageSize) break;
+    }
   }
 
   return dbTasks.map((task) => mapTask({
