@@ -83,7 +83,7 @@ export function Calendar({ onSelectDay }: { onSelectDay: () => void }) {
         </div>
       </div>
 
-      {view !== "day" ? <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:gap-2 sm:text-xs md:text-left md:tracking-[0.16em] md:text-slate-400 dark:text-emerald-100/60 md:dark:text-emerald-100/50">
+      {view !== "day" ? <div className={`${view === "week" ? "hidden md:grid" : "grid"} grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:gap-2 sm:text-xs md:text-left md:tracking-[0.16em] md:text-slate-400 dark:text-emerald-100/60 md:dark:text-emerald-100/50`}>
         {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => <p key={day} className="px-2">{day}</p>)}
       </div> : null}
       <div className={`mt-2 grid gap-1 sm:gap-2 ${columnsClass}`}>
@@ -101,9 +101,10 @@ export function Calendar({ onSelectDay }: { onSelectDay: () => void }) {
               onClick={() => openDay(key)}
               className={`min-h-[72px] rounded-2xl border p-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:min-h-40 md:rounded-3xl md:p-3 ${isSelected ? "border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/60" : "border-emerald-100 bg-slate-50/80 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/50 dark:bg-[#07352d]/70 dark:hover:bg-emerald-900/50"} ${view === "day" ? "min-h-[520px]" : ""}`}
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="mb-1 flex items-center justify-between gap-1 md:mb-3 md:gap-2">
                 <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-bold md:h-8 md:w-8 md:rounded-2xl md:text-sm ${isToday ? "bg-emerald-700 text-white" : "text-slate-700 dark:text-emerald-50"}`}>{day.getDate()}</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 shadow-sm dark:bg-emerald-950 dark:text-emerald-100">{dayTasks.length}</span>
+                {view === "week" ? <span className="min-w-0 flex-1 text-[10px] font-semibold capitalize text-slate-500 md:hidden">{day.toLocaleDateString("pt-BR", { weekday: "short", month: "short" })}</span> : null}
+                <span className="hidden rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 shadow-sm md:inline-flex dark:bg-emerald-950 dark:text-emerald-100">{dayTasks.length}</span>
               </div>
               {view === "month" ? <div className="mt-2 flex min-h-3 items-center gap-1 md:hidden" aria-label={`${dayTasks.length} tarefas`}>{dayTasks.slice(0, 3).map((task) => <span key={task.id} title={task.title} className={`h-1.5 w-1.5 rounded-full ${priorityDot[task.priority]}`} />)}{dayTasks.length > 3 ? <span className="text-[9px] font-semibold text-slate-500">+{dayTasks.length - 3}</span> : null}</div> : null}
               <div className={`${view === "month" ? "hidden md:block" : "space-y-2"} ${view === "day" ? "grid gap-2 md:grid-cols-2 xl:grid-cols-3" : ""}`}>
