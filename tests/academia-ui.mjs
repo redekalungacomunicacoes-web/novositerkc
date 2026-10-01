@@ -204,10 +204,24 @@ try {
     await page
       .getByRole("button", { name: "Editar meus cursos", exact: true })
       .click();
-    const options = await page.locator("select option").allTextContents();
-    assert.ok(options.some((t) => t.includes("Curso próprio")));
-    assert.ok(!options.some((t) => t.includes("Curso da equipe")));
-    await page.locator("select").first().selectOption("own");
+    assert.equal(
+      await page.getByRole("heading", { name: "Curso próprio", exact: true }).count(),
+      1,
+    );
+    assert.equal(
+      await page.getByRole("heading", { name: "Curso da equipe", exact: true }).count(),
+      0,
+    );
+    await page.getByRole("searchbox", { name: /Buscar por curso/ }).fill("Curso próprio");
+    assert.equal(
+      await page.getByRole("button", { name: "Duplicar curso Curso próprio" }).count(),
+      1,
+    );
+    assert.equal(
+      await page.getByRole("button", { name: "Excluir curso Curso próprio" }).count(),
+      1,
+    );
+    await page.getByRole("button", { name: "Editar curso Curso próprio" }).click();
     assert.equal(
       await page.getByRole("button", { name: "Publicar", exact: true }).count(),
       1,
