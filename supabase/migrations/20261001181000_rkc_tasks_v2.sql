@@ -145,7 +145,7 @@ $$;
 
 drop trigger if exists trg_tasks_sync_progress on public.tasks;
 create trigger trg_tasks_sync_progress
-before insert or update of status on public.tasks
+before insert or update on public.tasks
 for each row execute function public.sync_task_progress_from_status();
 
 comment on column public.tasks.context_type is 'internal, project ou materia.';

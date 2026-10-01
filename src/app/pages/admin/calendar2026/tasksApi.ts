@@ -3,7 +3,7 @@ import { getCurrentUserRoles } from "@/lib/rbac";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
-const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
+const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao,context_type,context_id,progress,drive_folder_id,access_scope";
 
 function localDateKey(date: Date) {
   const year = date.getFullYear();
@@ -33,6 +33,11 @@ type DbTask = {
   link_reuniao: string | null;
   task_attachments?: TaskAttachment[] | null;
   task_comments?: TaskComment[] | null;
+  context_type?: "internal" | "project" | "materia" | null;
+  context_id?: string | null;
+  progress?: number | null;
+  drive_folder_id?: string | null;
+  access_scope?: "assignees" | "team" | null;
 };
 
 type DbTeamMember = {
@@ -58,6 +63,11 @@ export type TaskInsert = {
   direcionamento: string[] | null;
   created_by: string;
   updated_at: string;
+  context_type?: "internal" | "project" | "materia";
+  context_id?: string | null;
+  progress?: number;
+  drive_folder_id?: string | null;
+  access_scope?: "assignees" | "team";
 };
 
 export const statusLabels: Record<TaskStatus, string> = {
@@ -138,6 +148,11 @@ function mapTask(task: DbTask): CalendarTask {
     comments: task.task_comments ?? [],
     createdAt: task.created_at,
     updatedAt: task.updated_at,
+    contextType: task.context_type === "project" || task.context_type === "materia" ? task.context_type : "internal",
+    contextId: task.context_id ?? null,
+    progress: Math.max(0, Math.min(100, Number(task.progress ?? 0))),
+    driveFolderId: task.drive_folder_id ?? null,
+    accessScope: task.access_scope === "team" ? "team" : "assignees",
   };
 }
 
@@ -319,6 +334,9 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     status: toDbStatus(input.status),
     assigned_to: assignedTo,
     direcionamento: direcionamento.length ? direcionamento : null,
+    context_type: input.context_type ?? "internal",
+    context_id: input.context_type === "project" || input.context_type === "materia" ? input.context_id ?? null : null,
+    access_scope: input.access_scope ?? "assignees",
     updated_at: new Date().toISOString(),
   };
 
