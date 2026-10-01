@@ -26,6 +26,13 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
     const contentType = req.headers.get("content-type") || "";
+    const canAccessTask = async (taskId: string) => {
+      const { data: isAdmin, error: adminError } = await userClient.rpc("is_team_admin");
+      if (!adminError && isAdmin === true) return true;
+      const { data: task } = await userClient.from("tasks").select("id").eq("id", taskId).maybeSingle();
+      return Boolean(task);
+    };
+
 
     if (contentType.includes("application/json")) {
       const body = await req.json();
@@ -35,7 +42,7 @@ Deno.serve(async (req) => {
 
       if (action === "ensure-task-folder") {
         const taskId = String(body?.task_id || "").trim();
-        if (!taskId) return json({ ok: false, error: "task_id obrigatorio." }, 400);
+        if (!taskId) return json({ ok: false, error: "task_id obrigatorio." }, 400);\n        if (!(await canAccessTask(taskId))) return json({ ok: false, error: "Sem permissao para esta tarefa." }, 403);
         const { data: task, error: taskError } = await admin.from("tasks")
           .select("id,titulo,context_type,context_id,drive_folder_id").eq("id", taskId).single();
         if (taskError || !task) return json({ ok: false, error: "Tarefa nao encontrada." }, 404);
@@ -59,7 +66,7 @@ Deno.serve(async (req) => {
       const id = String(body?.id || "");
       if (!id) return json({ ok: false, error: "ID do arquivo obrigatorio." }, 400);
       const { data: record, error: recordError } = await admin.from("drive_files").select("*").eq("id", id).single();
-      if (recordError || !record) return json({ ok: false, error: "Arquivo nao encontrado." }, 404);
+      if (recordError || !record) return json({ ok: false, error: "Arquivo nao encontrado." }, 404);\n      if (record.task_id && !(await canAccessTask(String(record.task_id)))) return json({ ok: false, error: "Sem permissao para este arquivo de tarefa." }, 403);
 
       if (action === "rename") {
         const name = String(body?.name || "").trim();
