@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Download, ExternalLink, File, FileImage, Fil
 import { CalendarProvider, useCalendarStore } from "./calendar2026/store";
 import { TasksPageShell } from "./calendar2026/TasksShell";
 import { useExternalAttachmentMutation, useTaskAttachmentMutation, useTasksQuery } from "./calendar2026/useTaskQueries";
-import { getTaskAttachmentSignedUrl } from "./calendar2026/tasksApi";
+import { getTaskAttachmentSignedUrl, priorityLabels, statusLabels } from "./calendar2026/tasksApi";
 import type { CalendarTask, TaskAttachment } from "./calendar2026/types";
 
 function getFileKind(attachment: TaskAttachment) {
@@ -175,7 +175,7 @@ function AttachmentsCenter() {
                 return <article key={task.id} className="p-4 md:p-5">
                   <button type="button" onClick={() => setExpanded((current) => ({ ...current, [task.id]: !isExpanded }))} aria-expanded={isExpanded} className="flex w-full items-center gap-3 text-left">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100">{isExpanded ? <FolderOpen size={19} /> : <FolderOpen size={19} />}</span>
-                    <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-slate-900 dark:text-white">{task.title}</span><span className="mt-1 block text-xs text-slate-500 dark:text-emerald-100/60">{assignee?.name ?? "Responsável não definido"} · {task.attachments.length} item(ns)</span></span>
+                    <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-slate-900 dark:text-white">{task.title}</span><span className="mt-1 block text-xs text-slate-500 dark:text-emerald-100/60">{assignee?.name ?? "Responsável não definido"} · {task.attachments.length} item(ns)</span><span className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800 dark:bg-sky-950/60 dark:text-sky-200">{statusLabels[task.status]}</span><span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">{priorityLabels[task.priority]}</span></span></span>
                     <span className="hidden text-xs text-slate-500 dark:text-emerald-100/60 sm:block">{new Date(`${task.date}T00:00:00`).toLocaleDateString("pt-BR")}</span>
                     {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   </button>
