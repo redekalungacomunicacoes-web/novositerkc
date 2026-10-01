@@ -43,6 +43,8 @@ export type TaskInsert = {
   titulo: string;
   descricao: string | null;
   data_tarefa: string;
+  data_inicio: string;
+  data_fim: string;
   status: TaskStatus;
   prioridade: TaskPriority;
   assigned_to: string | null;
