@@ -157,7 +157,7 @@ export async function duplicateCourse(courseId: string) {
   const omit = (row: Record<string, unknown>) => Object.fromEntries(
     Object.entries(row).filter(([key]) => !["id", "created_at", "updated_at", "published_at"].includes(key)),
   );
-  const insert = async (table: string, row: Record<string, unknown>): Promise<Record<string, unknown>> =>
+  const insert = async (table: string, row: Record<string, unknown>): Promise<AcademyRow> =>
     unwrap<AcademyRow>(await supabase.from(table).insert(row).select("*").single());
   let createdId: string | null = null;
   let skippedDriveMedia = 0;
@@ -192,7 +192,7 @@ export async function duplicateCourse(courseId: string) {
         module_id: moduleIds.get(String(row.module_id)),
         status: "draft",
         media_source: ["youtube", "vimeo"].includes(String(row.media_source)) ? row.media_source : "none",
-        media_url: ["youtube", "vimeo"].includes(String(row.media_source)) ? row.media_url : null,
+        media_url: ["youtube", "vimeo"].includes(String(row.media_source)) && typeof row.media_url === "string" ? row.media_url : null,
         media_drive_file_id: null,
         media_path: null,
       });
