@@ -9,7 +9,10 @@ type DbTask = {
   id: string;
   titulo: string | null;
   descricao: string | null;
-  data_tarefa: string | null;\n  data_inicio?: string | null;\n  data_fim?: string | null;\n  data_conclusao?: string | null;
+  data_tarefa: string | null;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+  data_conclusao?: string | null;
   hora_inicio: string | null;
   hora_fim: string | null;
   status: TaskStatus | "concluido" | "andamento" | "atrasado" | string | null;
@@ -21,7 +24,11 @@ type DbTask = {
   direcionamento?: string[] | null;
   mentions?: unknown;
   external_link: string | null;
-  link_reuniao: string | null;\n  context_type?: "internal" | "project" | "materia" | null;\n  context_id?: string | null;\n  progress?: number | null;\n  drive_folder_id?: string | null;
+  link_reuniao: string | null;
+  context_type?: "internal" | "project" | "materia" | null;
+  context_id?: string | null;
+  progress?: number | null;
+  drive_folder_id?: string | null;
   access_scope?: "assignees" | "team" | null;
   task_attachments?: TaskAttachment[] | null;
   task_comments?: TaskComment[] | null;
@@ -227,12 +234,17 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
     .order("data_tarefa", { ascending: true })
     .order("hora_inicio", { ascending: true, nullsFirst: false });
 
-  if (filters?.assignee && filters.assignee !== "all") query = query.eq("assigned_to", filters.assignee);
+  // O filtro de integrante considera responsavel principal e direcionamento N:N.
+  // A filtragem acontece apos a leitura para nao esconder tarefas em que o membro
+  // participa via task_assignees/direcionamento, mas nao e o responsavel principal.
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  const dbTasks = (data ?? []) as DbTask[];
+  let dbTasks = (data ?? []) as DbTask[];
+  if (filters?.assignee && filters.assignee !== "all") {
+    dbTasks = dbTasks.filter((task) => task.assigned_to === filters.assignee || (task.direcionamento ?? []).includes(filters.assignee as string));
+  }
   const taskIds = dbTasks.map((task) => task.id);
   if (taskIds.length === 0) return [];
 
@@ -366,9 +378,11 @@ export async function updateTaskStatus(
   status: TaskStatus,
   oldStatus?: TaskStatus,
 ) {
+  const now = new Date().toISOString();
   const payload = {
     status: toDbStatus(status),
-    updated_at: new Date().toISOString(),
+    data_conclusao: status === "concluida" ? now : null,
+    updated_at: now,
   };
 
   const result = await supabase
@@ -386,6 +400,7 @@ export async function updateTaskStatus(
     id: taskId,
     status,
     updated_at: payload.updated_at,
+    completedAt: payload.data_conclusao,
   } as any;
 }
 
