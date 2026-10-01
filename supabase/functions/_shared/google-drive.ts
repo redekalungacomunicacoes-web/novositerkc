@@ -282,6 +282,17 @@ export async function ensureDrivePath(
   return { folderId: parentId, folders };
 }
 
+function isPublicDirectPermission(permission: {
+  type: string;
+  permissionDetails?: Array<{ inherited: boolean }>;
+}) {
+  if (!["anyone", "domain"].includes(permission.type)) return false;
+  // A limited folder may still report parent permissions as metadata-only entries.
+  // Treat only direct entries as access that makes the destination unsafe.
+  return !permission.permissionDetails?.length ||
+    permission.permissionDetails.some((detail) => detail.inherited === false);
+}
+
 async function listDrivePermissions(id: string) {
   const params = new URLSearchParams({
     supportsAllDrives: "true",
@@ -321,9 +332,7 @@ export async function getDriveFolder(id: string, requireLimitedAccess = false) {
   if (requireLimitedAccess) {
     const permissions = await listDrivePermissions(folder.id);
     if (
-      permissions.some((p: { type: string }) =>
-        ["anyone", "domain"].includes(p.type),
-      )
+      permissions.some(isPublicDirectPermission)
     )
       throw new Error(
         "09_ACADEMIA tem permissão pública direta. Remova-a antes de enviar materiais.",
@@ -408,9 +417,7 @@ export async function resolveAcademyFolder(rootId: string) {
 export async function assertPrivateDriveFile(id: string) {
   const permissions = await listDrivePermissions(id);
   if (
-    permissions.some((p: { type: string }) =>
-      ["anyone", "domain"].includes(p.type),
-    )
+    permissions.some(isPublicDirectPermission)
   )
     throw new Error(
       "O arquivo herdou acesso aberto no Drive. Envio não confirmado.",
