@@ -146,8 +146,19 @@ export async function uploadAcademyDrive(
           : ["Materiais"]),
     ];
     const path = await ensureDrivePath(academy.id, segments);
-    const uploaded = await uploadDriveFile(file, path.folderId);
-    uploadedId = uploaded.id;
+    let uploaded: Record<string, unknown>;
+    try {
+      uploaded = await uploadDriveFile(file, path.folderId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (/storageQuotaExceeded|Service Accounts do not have storage quota/i.test(detail)) {
+        throw new Error(
+          "O Drive recusou o envio porque a integração está usando uma conta de serviço sem cota. Configure o OAuth da conta da RKC no Supabase ou use uma pasta de Shared Drive com acesso de Editor para a integração.",
+        );
+      }
+      throw error;
+    }
+    uploadedId = String(uploaded.id);
     await assertPrivateDriveFile(uploaded.id);
     const { data: record, error } = await admin.rpc("academy_commit_drive", {
       p_actor: actor,
