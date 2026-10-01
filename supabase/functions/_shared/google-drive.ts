@@ -282,6 +282,23 @@ export async function ensureDrivePath(
   return { folderId: parentId, folders };
 }
 
+async function listDrivePermissions(id: string) {
+  const params = new URLSearchParams({
+    supportsAllDrives: "true",
+    pageSize: "100",
+    fields: "permissions(id,type,role,permissionDetails(inherited,inheritedFrom)),nextPageToken",
+  });
+  const response = await driveFetch(
+    `${DRIVE_API}/files/${encodeURIComponent(id)}/permissions?${params}`,
+  );
+  if (!response.ok)
+    throw new Error("Não foi possível confirmar as permissões no Drive.");
+  const payload = await response.json();
+  if (payload.nextPageToken)
+    throw new Error("Não foi possível verificar todas as permissões no Drive.");
+  return payload.permissions || [];
+}
+
 export async function getDriveFolder(id: string, requireLimitedAccess = false) {
   const response = await driveFetch(
     `${DRIVE_API}/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id,name,mimeType,driveId,parents,trashed,capabilities(canAddChildren),owners(emailAddress,displayName),permissions(type,role),inheritedPermissionsDisabled`,
@@ -301,15 +318,17 @@ export async function getDriveFolder(id: string, requireLimitedAccess = false) {
     throw new Error(
       "Ative Limitar acesso diretamente em 09_ACADEMIA antes de enviar materiais.",
     );
-  if (
-    requireLimitedAccess &&
-    folder.permissions?.some((p: { type: string }) =>
-      ["anyone", "domain"].includes(p.type),
+  if (requireLimitedAccess) {
+    const permissions = await listDrivePermissions(folder.id);
+    if (
+      permissions.some((p: { type: string }) =>
+        ["anyone", "domain"].includes(p.type),
+      )
     )
-  )
-    throw new Error(
-      "09_ACADEMIA tem permissão pública direta. Remova-a antes de enviar materiais.",
-    );
+      throw new Error(
+        "09_ACADEMIA tem permissão pública direta. Remova-a antes de enviar materiais.",
+      );
+  }
   return folder;
 }
 export async function resolveAcademyFolder(rootId: string) {
@@ -387,14 +406,9 @@ export async function resolveAcademyFolder(rootId: string) {
   };
 }
 export async function assertPrivateDriveFile(id: string) {
-  const response = await driveFetch(
-    `${DRIVE_API}/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id,permissions(type,role)`,
-  );
-  if (!response.ok)
-    throw new Error("Não foi possível verificar a privacidade do arquivo.");
-  const file = await response.json();
+  const permissions = await listDrivePermissions(id);
   if (
-    file.permissions?.some((p: { type: string }) =>
+    permissions.some((p: { type: string }) =>
       ["anyone", "domain"].includes(p.type),
     )
   )
