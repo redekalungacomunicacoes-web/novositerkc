@@ -1,9 +1,10 @@
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
+import { downloadRkcDriveFile, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
-const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao,context_type,context_id,progress,drive_folder_id,access_scope";
+const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
 
 function localDateKey(date: Date) {
   const year = date.getFullYear();
@@ -33,11 +34,6 @@ type DbTask = {
   link_reuniao: string | null;
   task_attachments?: TaskAttachment[] | null;
   task_comments?: TaskComment[] | null;
-  context_type?: "internal" | "project" | "materia" | null;
-  context_id?: string | null;
-  progress?: number | null;
-  drive_folder_id?: string | null;
-  access_scope?: "assignees" | "team" | null;
 };
 
 type DbTeamMember = {
@@ -63,11 +59,6 @@ export type TaskInsert = {
   direcionamento: string[] | null;
   created_by: string;
   updated_at: string;
-  context_type?: "internal" | "project" | "materia";
-  context_id?: string | null;
-  progress?: number;
-  drive_folder_id?: string | null;
-  access_scope?: "assignees" | "team";
 };
 
 export const statusLabels: Record<TaskStatus, string> = {
@@ -148,11 +139,6 @@ function mapTask(task: DbTask): CalendarTask {
     comments: task.task_comments ?? [],
     createdAt: task.created_at,
     updatedAt: task.updated_at,
-    contextType: task.context_type === "project" || task.context_type === "materia" ? task.context_type : "internal",
-    contextId: task.context_id ?? null,
-    progress: Math.max(0, Math.min(100, Number(task.progress ?? 0))),
-    driveFolderId: task.drive_folder_id ?? null,
-    accessScope: task.access_scope === "team" ? "team" : "assignees",
   };
 }
 
@@ -278,21 +264,27 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
   for (let offset = 0; offset < taskIds.length; offset += relationshipBatchSize) {
     const batch = taskIds.slice(offset, offset + relationshipBatchSize);
     for (let relationOffset = 0; ; relationOffset += relationPageSize) {
-      const [attachmentsResult, commentsResult] = await Promise.all([
+      const [attachmentsResult, commentsResult, driveResult] = await Promise.all([
         supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").in("task_id", batch).range(relationOffset, relationOffset + relationPageSize - 1),
+        supabase.from("drive_files").select("id,task_id,drive_file_id,drive_folder_id,name,mime_type,size_bytes,web_view_link,access_scope,created_at").in("task_id", batch).eq("status", "active").range(relationOffset, relationOffset + relationPageSize - 1),
         supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").in("task_id", batch).range(relationOffset, relationOffset + relationPageSize - 1),
       ]);
       if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
       if (commentsResult.error) throw new Error(commentsResult.error.message);
+      if (driveResult.error) throw new Error(driveResult.error.message);
 
       for (const attachment of (attachmentsResult.data ?? []) as TaskAttachment[]) {
         attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), attachment]);
+      }
+      for (const file of (driveResult.data ?? []) as Array<{id:string;task_id:string;drive_file_id:string;name:string;web_view_link:string|null;access_scope:string;created_at:string}>) {
+        const item: TaskAttachment = { id:file.id, task_id:file.task_id, file_url:file.web_view_link ?? file.drive_file_id, file_name:file.name, created_at:file.created_at, source:"drive", drive_file_id:file.drive_file_id, access_scope:file.access_scope === "team" ? "team" : "assignees" };
+        attachmentsByTask.set(item.task_id, [...(attachmentsByTask.get(item.task_id) ?? []), item]);
       }
       for (const comment of (commentsResult.data ?? []) as TaskComment[]) {
         commentsByTask.set(comment.task_id, [...(commentsByTask.get(comment.task_id) ?? []), comment]);
       }
 
-      if ((attachmentsResult.data?.length ?? 0) < relationPageSize && (commentsResult.data?.length ?? 0) < relationPageSize) break;
+      if ((attachmentsResult.data?.length ?? 0) < relationPageSize && (commentsResult.data?.length ?? 0) < relationPageSize && (driveResult.data?.length ?? 0) < relationPageSize) break;
     }
   }
 
@@ -334,9 +326,6 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     status: toDbStatus(input.status),
     assigned_to: assignedTo,
     direcionamento: direcionamento.length ? direcionamento : null,
-    context_type: input.context_type ?? "internal",
-    context_id: input.context_type === "project" || input.context_type === "materia" ? input.context_id ?? null : null,
-    access_scope: input.access_scope ?? "assignees",
     updated_at: new Date().toISOString(),
   };
 
@@ -474,7 +463,20 @@ export async function addTaskComment(taskId: string, comentario: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function uploadTaskAttachment(taskId: string, file: File) {
+export async function uploadTaskAttachment(taskId: string, file: File, accessScope: "assignees" | "team" = "assignees") {
+  const uploaded = await uploadRkcDriveFile({ file, module: "tasks", taskId, entityId: taskId, accessScope, visibility: "private" });
+  return {
+    id: uploaded.id,
+    task_id: taskId,
+    file_url: uploaded.web_view_link ?? uploaded.drive_file_id,
+    file_name: uploaded.name,
+    created_at: uploaded.created_at,
+    source: "drive",
+    drive_file_id: uploaded.drive_file_id,
+    access_scope: uploaded.access_scope ?? accessScope,
+  } as TaskAttachment;
+}
+async function uploadTaskAttachmentLegacy(taskId: string, file: File) {
   const safeFileName = file.name.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase();
   const filePath = `${taskId}/${crypto.randomUUID()}-${safeFileName}`;
 
@@ -528,7 +530,11 @@ export async function createExternalAttachment(taskId: string, url: string) {
   return insertResult.data as TaskAttachment;
 }
 
-export async function deleteTaskAttachment(attachment: Pick<TaskAttachment, "id" | "file_url">) {
+export async function deleteTaskAttachment(attachment: Pick<TaskAttachment, "id" | "file_url"> & Partial<Pick<TaskAttachment, "source" | "drive_file_id">>) {
+  if (attachment.source === "drive") {
+    await trashRkcDriveFile(attachment.id);
+    return;
+  }
   if (attachment.file_url && !/^https?:\/\//i.test(attachment.file_url)) {
     const storageResult = await supabase.storage.from(BUCKET).remove([attachment.file_url]);
     if (storageResult.error) {
