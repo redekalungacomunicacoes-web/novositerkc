@@ -53,12 +53,6 @@ export function fieldsFor(
         { name: "summary", label: "Descrição curta", type: "textarea" },
         { name: "description", label: "Descrição completa", type: "textarea" },
         {
-          name: "cover_path",
-          label: "Capa",
-          type: "asset",
-          hint: "Salve o curso antes de enviar a capa.",
-        },
-        {
           name: "category_id",
           label: "Categoria",
           type: "select",
@@ -158,12 +152,22 @@ export function fieldsFor(
           ]),
         },
         {
-          name: "media_url",
-          label: "Link HTTPS da mídia",
-          nullable: true,
-          hint: "Links externos devem ter acesso adequado ao público interno. Use arquivo privado para material restrito.",
+          name: "media_source",
+          label: "Origem do conteúdo",
+          type: "select",
+          options: [
+            { value: "none", label: "Somente texto" },
+            { value: "drive", label: "Arquivo ou vídeo do Drive RKC" },
+            { value: "vimeo", label: "Vimeo" },
+            { value: "youtube", label: "YouTube" },
+          ],
+          hint: "Salve a aula e envie o arquivo pelo painel de conteúdo do Drive.",
         },
-        { name: "media_path", label: "Arquivo privado", type: "asset" },
+        {
+          name: "media_url",
+          label: "Link do Vimeo ou YouTube",
+          nullable: true,
+        },
         {
           name: "duration_minutes",
           label: "Duração estimada (minutos)",
@@ -189,12 +193,6 @@ export function fieldsFor(
         title,
         lesson,
         { name: "url", label: "Link HTTPS", nullable: true },
-        {
-          name: "storage_path",
-          label: "Arquivo privado",
-          type: "asset",
-          hint: "Preencha o link ou envie um arquivo, somente um dos dois.",
-        },
       ];
     case "activities":
       return [
@@ -355,7 +353,7 @@ export function defaults(entity: Entity): Record<string, unknown> {
         level: "iniciante",
         visibility: "internal",
         access_mode: "internal",
-        enrollment_mode: "manual",
+        enrollment_mode: "self",
         hours: 0,
         price: 0,
         position: 0,
@@ -367,6 +365,7 @@ export function defaults(entity: Entity): Record<string, unknown> {
     case "lessons":
       return {
         type: "text",
+        media_source: "none",
         status: "draft",
         position: 0,
         duration_minutes: 0,

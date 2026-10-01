@@ -10,7 +10,9 @@ import {
 } from "@/app/components/ui/dialog";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
-import { signedAsset, safeLink, uploadAsset, message } from "./service";
+import { signedAsset, safeLink, message } from "./service";
+import { downloadRkcDriveFile } from "@/services/driveFiles";
+import { videoEmbed } from "./media";
 export { Button };
 export const labels: Record<string, string> = {
   draft: "Rascunho",
@@ -51,9 +53,17 @@ export const labels: Record<string, string> = {
   intermediario: "Intermediário",
   avancado: "Avançado",
 };
-export function Badge({ children }: { children: ReactNode }) {
+export function Badge({
+  children,
+  tone,
+}: {
+  children: ReactNode;
+  tone?: "published" | "draft";
+}) {
   return (
-    <span className="inline-flex rounded-full border bg-muted px-2 py-1 text-xs">
+    <span
+      className={`inline-flex rounded-full border px-2 py-1 text-xs ${tone === "published" ? "bg-green-100 text-green-900 border-green-200" : tone === "draft" ? "bg-amber-100 text-amber-900 border-amber-200" : "bg-muted"}`}
+    >
       {children}
     </span>
   );
@@ -126,7 +136,7 @@ export function Editor({
   title,
   fields,
   initial,
-  courseId,
+  courseId: _courseId,
   onSave,
   onClose,
 }: {
@@ -218,9 +228,24 @@ export function Editor({
                   required={f.required}
                   className="w-full border rounded-md bg-background px-3 py-2"
                   value={String(values[f.name] ?? "")}
-                  onChange={(e) =>
-                    setValues({ ...values, [f.name]: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const next = { ...values, [f.name]: e.target.value };
+                    if (f.name === "media_source") {
+                      if (e.target.value === "none") {
+                        next.media_url = null;
+                        next.media_path = null;
+                        next.media_drive_file_id = null;
+                      }
+                      if (e.target.value === "drive") {
+                        next.media_url = null;
+                      }
+                      if (["youtube", "vimeo"].includes(e.target.value)) {
+                        next.media_path = null;
+                        next.media_drive_file_id = null;
+                      }
+                    }
+                    setValues(next);
+                  }}
                 >
                   {f.nullable && <option value="">Nenhum</option>}
                   {!f.nullable && !values[f.name] && (
@@ -242,42 +267,6 @@ export function Editor({
                     setValues({ ...values, [f.name]: e.target.value })
                   }
                 />
-              ) : f.type === "asset" ? (
-                <div className="space-y-2">
-                  <Input
-                    id={`academy-${f.name}`}
-                    readOnly
-                    value={String(values[f.name] ?? "")}
-                    placeholder="Nenhum arquivo enviado"
-                  />
-                  <input
-                    aria-label={`Enviar ${f.label}`}
-                    type="file"
-                    disabled={busy || !courseId}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file || !courseId) return;
-                      setBusy(true);
-                      setError("");
-                      try {
-                        const path = await uploadAsset(courseId, file);
-                        setValues((v) => ({ ...v, [f.name]: path }));
-                      } catch (e) {
-                        setError(message(e));
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setValues({ ...values, [f.name]: null })}
-                  >
-                    Remover referência
-                  </Button>
-                </div>
               ) : (
                 <Input
                   id={`academy-${f.name}`}
@@ -292,6 +281,25 @@ export function Editor({
                   }
                 />
               )}
+              {f.name === "media_url" &&
+                videoEmbed(
+                  String(values.media_source),
+                  String(values.media_url),
+                ) && (
+                  <iframe
+                    title="Prévia do vídeo"
+                    className="w-full aspect-video rounded-md"
+                    src={
+                      videoEmbed(
+                        String(values.media_source),
+                        String(values.media_url),
+                      )!
+                    }
+                    allow="fullscreen; picture-in-picture"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    sandbox="allow-scripts allow-same-origin allow-presentation"
+                  />
+                )}
               {f.hint && (
                 <span className="block text-xs text-muted-foreground">
                   {f.hint}
@@ -324,22 +332,41 @@ export function Editor({
 }
 export function Asset({
   path,
+  driveFileId,
+  source,
   url,
   title,
   type,
 }: {
   path?: string | null;
+  driveFileId?: string | null;
+  source?: string;
   url?: string | null;
   title: string;
   type?: string;
 }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [mime, setMime] = useState("");
+  const [retry, setRetry] = useState(0);
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
     setError("");
     setSrc(null);
-    if (path)
+    setMime("");
+    let objectUrl: string | null = null;
+    if (driveFileId)
+      downloadRkcDriveFile(driveFileId)
+        .then((blob) => {
+          if (!active) return;
+          objectUrl = URL.createObjectURL(blob);
+          setMime(blob.type);
+          setSrc(objectUrl);
+        })
+        .catch((e) => {
+          if (active) setError(message(e));
+        });
+    else if (path)
       signedAsset(path)
         .then((s) => {
           if (active) setSrc(s);
@@ -350,18 +377,45 @@ export function Asset({
     else setSrc(safeLink(url));
     return () => {
       active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [path, url]);
+  }, [path, url, driveFileId, retry]);
   if (error)
     return (
       <p role="alert" className="text-destructive">
         {error}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setRetry((value) => value + 1)}
+        >
+          Tentar abrir novamente
+        </Button>
       </p>
     );
-  if (!src) return path ? <p>Carregando material…</p> : null;
+  if (!src)
+    return path || driveFileId ? <p>Carregando material privado…</p> : null;
+  const embed = videoEmbed(source || "", url);
+  const format = mime.startsWith("video/")
+    ? "video"
+    : mime.startsWith("audio/")
+      ? "audio"
+      : mime.startsWith("image/")
+        ? "image"
+        : type;
   return (
     <div className="space-y-3">
-      {type === "video" && /\.(mp4|webm)(\?|$)/i.test(src) ? (
+      {embed ? (
+        <iframe
+          title={title}
+          src={embed}
+          className="w-full aspect-video rounded-lg"
+          allow="fullscreen; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
+          sandbox="allow-scripts allow-same-origin allow-presentation"
+        />
+      ) : format === "video" &&
+        (driveFileId || /\.(mp4|webm)(\?|$)/i.test(src)) ? (
         <video
           aria-label={title}
           controls
@@ -369,9 +423,9 @@ export function Asset({
           className="w-full max-h-96 rounded-lg"
           src={src}
         />
-      ) : type === "audio" ? (
+      ) : format === "audio" ? (
         <audio aria-label={title} controls src={src} className="w-full" />
-      ) : type === "image" ? (
+      ) : format === "image" ? (
         <img
           alt={title}
           src={src}
@@ -383,6 +437,7 @@ export function Asset({
         href={src}
         target="_blank"
         rel="noopener noreferrer"
+        download={driveFileId ? title : undefined}
       >
         Abrir {title}
       </a>

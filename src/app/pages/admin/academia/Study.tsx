@@ -96,9 +96,10 @@ export function Study({
         </div>
         <h1 className="text-3xl font-bold break-words">{course.title}</h1>
         <p>{course.summary}</p>
-        {course.cover_path && (
+        {(course.cover_path || course.cover_drive_file_id) && (
           <Asset
             path={course.cover_path}
+            driveFileId={course.cover_drive_file_id}
             title={`Capa de ${course.title}`}
             type="image"
           />
@@ -213,6 +214,8 @@ export function Study({
               </div>
               <Asset
                 path={lesson.media_path}
+                driveFileId={lesson.media_drive_file_id}
+                source={lesson.media_source}
                 url={lesson.media_url}
                 title={lesson.title}
                 type={lesson.type}
@@ -286,6 +289,7 @@ export function Study({
                 <Asset
                   key={m.id}
                   path={m.storage_path}
+                  driveFileId={m.drive_file_id}
                   url={m.url}
                   title={m.title}
                 />

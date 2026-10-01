@@ -47,7 +47,10 @@ export function useAcademy() {
           ),
       )
       .map((ci) => ci.course_id) || [];
-  const canEdit = (course: string) => admin || editCourses.includes(course);
+  const canEdit = (course: string) =>
+    admin ||
+    data?.courses.some((c) => c.id === course && c.created_by === userId) ||
+    editCourses.includes(course);
   return {
     data,
     roles,
@@ -57,6 +60,8 @@ export function useAcademy() {
     reload,
     admin,
     canEdit,
-    manager: admin || editCourses.length > 0,
+    manager: roles.some((r) =>
+      ["admin_alfa", "admin", "editor", "autor", "financeiro"].includes(r),
+    ),
   };
 }

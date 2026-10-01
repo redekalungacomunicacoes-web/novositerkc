@@ -1,0 +1,56 @@
+name: Validate Academia
+on:
+  pull_request:
+    paths:
+      - 'src/app/pages/admin/academia/**'
+      - 'src/app/components/admin/AdminSidebar.tsx'
+      - 'src/app/layouts/AdminLayout.tsx'
+      - 'src/services/driveFiles.ts'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/*academia*'
+      - 'tests/*academ*'
+      - 'package*.json'
+      - '.github/workflows/validate-academia.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck:academia
+      - run: npm run lint:academia
+      - run: npm run test:academia
+      - run: npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --node-modules-dir=manual --config supabase/functions/drive-files/deno.json supabase/functions/drive-files/index.ts
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: Start fixture app
+        run: |
+          VITE_SUPABASE_URL=https://fixture.supabase.co VITE_SUPABASE_ANON_KEY=fixture-public-key npm run dev -- --host 127.0.0.1 --port 5173 > /tmp/vite-academia.log 2>&1 &
+      - run: npm run test:academia:ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: academia-ui-evidence
+          path: |
+            /tmp/rkc-academia-qa
+            /tmp/vite-academia.log
+          if-no-files-found: ignore

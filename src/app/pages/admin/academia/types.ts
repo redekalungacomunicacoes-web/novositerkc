@@ -1,3 +1,4 @@
+import type { DriveFileRecord } from "@/services/driveFiles";
 export type Status = "draft" | "review" | "published" | "archived";
 export type Course = {
   id: string;
@@ -6,6 +7,8 @@ export type Course = {
   summary: string;
   description: string;
   cover_path: string | null;
+  cover_drive_file_id: string | null;
+  created_by: string | null;
   category_id: string | null;
   level: string;
   hours: number;
@@ -42,6 +45,8 @@ export type Lesson = {
   type: string;
   media_url: string | null;
   media_path: string | null;
+  media_source: "none" | "drive" | "youtube" | "vimeo";
+  media_drive_file_id: string | null;
   duration_minutes: number;
   position: number;
   required: boolean;
@@ -55,6 +60,7 @@ export type Material = {
   lesson_id: string | null;
   title: string;
   storage_path: string | null;
+  drive_file_id: string | null;
   url: string | null;
 };
 export type Enrollment = {
@@ -158,6 +164,7 @@ export type Report = {
 };
 export type Settings = { id: boolean; title: string; welcome_text: string };
 export type AcademyData = {
+  driveFiles: DriveFileRecord[];
   courses: Course[];
   categories: Category[];
   modules: Module[];
