@@ -17,7 +17,12 @@ export function ExecutiveDashboard() {
   const inProgress = tasks.filter((task) => task.status === "em_andamento" || task.status === "revisao").length;
   const overdue = tasks.filter((task) => task.status !== "concluida" && task.status !== "cancelada" && task.endDate < today).length;
   const dueToday = tasks.filter((task) => task.status !== "concluida" && task.endDate === today).length;
-  const productivityRate = total ? Math.round((done / total) * 100) : 0;\n  const averageProgress = total ? Math.round(tasks.reduce((sum, task) => sum + task.progress, 0) / total) : 0;\n  const projectTasks = tasks.filter((task) => task.contextType === "project").length;\n  const materiaTasks = tasks.filter((task) => task.contextType === "materia").length;\n  const internalTasks = tasks.filter((task) => task.contextType === "internal").length;
+  const eligible = tasks.filter((task) => task.status !== "cancelada").length;
+  const productivityRate = eligible ? Math.round((done / eligible) * 100) : 0;
+  const averageProgress = total ? Math.round(tasks.reduce((sum, task) => sum + task.progress, 0) / total) : 0;
+  const projectTasks = tasks.filter((task) => task.contextType === "project").length;
+  const materiaTasks = tasks.filter((task) => task.contextType === "materia").length;
+  const internalTasks = tasks.filter((task) => task.contextType === "internal").length;
 
   const kpis = [
     { label: "Total", value: total, tone: "text-slate-900 dark:text-white" },
@@ -28,12 +33,15 @@ export function ExecutiveDashboard() {
     { label: "Progresso médio", value: `${averageProgress}%`, tone: "text-emerald-800 dark:text-emerald-200" },
   ];
 
-  const byCollaborator = useMemo(() => teamMembers.slice(0, 8).map((member) => ({
-    nome: member.name.split(" ")[0],
-    total: tasks.filter((task) => task.assigneeId === member.id).length,
-    concluidas: tasks.filter((task) => task.assigneeId === member.id && task.status === "concluida").length,
-    atrasadas: tasks.filter((task) => task.assigneeId === member.id && task.status !== "concluida" && task.endDate < today).length,
-  })).filter((item) => item.total || item.concluidas || item.atrasadas), [tasks, teamMembers, today]);
+  const byCollaborator = useMemo(() => teamMembers.slice(0, 8).map((member) => {
+    const related = tasks.filter((task) => task.assigneeId === member.id || task.direcionamento.includes(member.id));
+    return {
+      nome: member.name.split(" ")[0],
+      total: related.length,
+      concluidas: related.filter((task) => task.status === "concluida").length,
+      atrasadas: related.filter((task) => !["concluida", "cancelada"].includes(task.status) && task.endDate < today).length,
+    };
+  }).filter((item) => item.total || item.concluidas || item.atrasadas), [tasks, teamMembers, today]);
 
   const monthly = useMemo(() => {
     const grouped = new Map<string, { mes: string; concluidas: number; total: number }>();
