@@ -5,6 +5,7 @@ import { CalendarProvider, useCalendarStore } from "./calendar2026/store";
 import { TasksPageShell } from "./calendar2026/TasksShell";
 import { useExternalAttachmentMutation, useTaskAttachmentMutation, useTasksQuery } from "./calendar2026/useTaskQueries";
 import { getTaskAttachmentSignedUrl, priorityLabels, statusLabels } from "./calendar2026/tasksApi";
+import { downloadRkcDriveFile } from "@/services/driveFiles";
 import type { CalendarTask, TaskAttachment } from "./calendar2026/types";
 
 function getFileKind(attachment: TaskAttachment) {
@@ -38,10 +39,17 @@ function AttachmentOpenButton({ attachment }: { attachment: TaskAttachment }) {
     tab.opener = null;
     setLoading(true);
     try {
-      const url = /^https?:\/\//i.test(attachment.file_url)
-        ? attachment.file_url
-        : await getTaskAttachmentSignedUrl(attachment.file_url);
-      tab.location.href = url;
+      if (attachment.source === "drive") {
+        const blob = await downloadRkcDriveFile(attachment.id);
+        const url = URL.createObjectURL(blob);
+        tab.location.href = url;
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } else {
+        const url = /^https?:\/\//i.test(attachment.file_url)
+          ? attachment.file_url
+          : await getTaskAttachmentSignedUrl(attachment.file_url);
+        tab.location.href = url;
+      }
     } catch (reason) {
       tab.close();
       setError(reason instanceof Error ? reason.message : "Não foi possível abrir o arquivo.");
@@ -88,11 +96,16 @@ function AttachmentsCenter() {
     setSubmitNotice("");
     if (!taskId) return;
 
-    const results = await Promise.allSettled(files.map((file) => uploadAttachment.mutateAsync({ taskId, file })));
-    const failedFiles = files.filter((_file, index) => results[index].status === "rejected");
-    const failures = results.flatMap((result, index) => result.status === "rejected"
-      ? [`${files[index].name}: ${result.reason instanceof Error ? result.reason.message : "falha no envio"}`]
-      : []);
+    const failedFiles: File[] = [];
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        await uploadAttachment.mutateAsync({ taskId, file });
+      } catch (reason) {
+        failedFiles.push(file);
+        failures.push(`${file.name}: ${reason instanceof Error ? reason.message : "falha no envio"}`);
+      }
+    }
 
     const links = link.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
     const failedLinks: string[] = [];

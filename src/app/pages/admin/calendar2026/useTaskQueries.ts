@@ -92,7 +92,10 @@ export function useTaskCommentMutation() {
 
 export function useTaskAttachmentMutation() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: ({ taskId, file }: { taskId: string; file: File }) => uploadTaskAttachment(taskId, file), onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }) });
+  return useMutation({
+    mutationFn: ({ taskId, file, accessScope }: { taskId: string; file: File; accessScope?: "assignees" | "team" }) => uploadTaskAttachment(taskId, file, accessScope),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }),
+  });
 }
 
 export function useExternalAttachmentMutation() {
