@@ -51,9 +51,9 @@ A fila conserva arquivos e falhas durante navegação na Academia; um reload com
 - `npm run typecheck:academia`: passou.
 - `npm run lint:academia`: passou.
 - `npm run build`: passou.
-- `npm run test:academia`: **27 testes passaram** no run 9 do GitHub Actions. Testes PostgreSQL/PGlite reais de schema/RLS e testes com Google/Supabase HTTP simulados. Incluem autoria, leitores, admin/instrutor explícito, rascunhos, URLs inválidas, upload/download, erro do Google, rollback de metadata, substituição, remoção, retry e criação/reuso de pasta.
-- `deno check --node-modules-dir=manual --config supabase/functions/drive-files/deno.json supabase/functions/drive-files/index.ts`: passou no run 9 com dependência Supabase fixada em 2.94.1, a versão do lockfile.
-- Teste visual Playwright em GitHub Actions, no run 9 do head `207b4c610409f056a9ea5a0fada75a553607c6c8`: **passou**, incluindo os cinco perfis e mobile. O runner executou com Chromium; o bloqueio local de socket não se aplica ao resultado do CI.
+- `npm run test:academia`: **27 testes passaram** no run 13 (head `4df2a2003f17dfe4e1b7c8a056a417fc5db1894a`) do GitHub Actions. Testes PostgreSQL/PGlite reais de schema/RLS e testes com Google/Supabase HTTP simulados. Incluem autoria, leitores, admin/instrutor explícito, rascunhos, URLs inválidas, upload/download, erro do Google, rollback de metadata, substituição, remoção, retry e criação/reuso de pasta.
+- `deno check --node-modules-dir=manual --config supabase/functions/drive-files/deno.json supabase/functions/drive-files/index.ts`: passou no run 13 com dependência Supabase fixada em 2.94.1, a versão do lockfile.
+- Teste visual Playwright em GitHub Actions, no run 13 do head `4df2a2003f17dfe4e1b7c8a056a417fc5db1894a`: **passou**, incluindo os cinco perfis e mobile. O runner executou com Chromium; o bloqueio local de socket não se aplica ao resultado do CI.
 - Upload/download real, acesso privado real, ID/reuso/criação real de `09_ACADEMIA`: **pendentes**, sem sessão de usuário RKC ou ferramentas de Drive expostas nesta sessão. Testes simulados não comprovam acesso ao Drive de produção.
 
 ## Publicação bloqueada
