@@ -126,6 +126,10 @@ function mapTask(task: DbTask): CalendarTask {
     comments: task.task_comments ?? [],
     createdAt: task.created_at,
     updatedAt: task.updated_at,
+    contextType: task.context_type === "project" || task.context_type === "materia" ? task.context_type : "internal",
+    contextId: task.context_id ?? null,
+    progress: Math.max(0, Math.min(100, Number(task.progress ?? 0))),
+    driveFolderId: task.drive_folder_id ?? null,
   };
 }
 
@@ -213,9 +217,6 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
 }
 
 export async function fetchTasks(startDate: string, endDate: string, filters?: { assignee?: string | "all" }): Promise<CalendarTask[]> {
-  const currentMember = await getCurrentEquipeMember();
-  const permission = await getPermissionLevel();
-
   let query = supabase
     .from("tasks")
     .select(TASK_SELECT)
@@ -225,8 +226,6 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
     .order("hora_inicio", { ascending: true, nullsFirst: false });
 
   if (filters?.assignee && filters.assignee !== "all") query = query.eq("assigned_to", filters.assignee);
-  if (permission === "colaborador" && currentMember?.id) query = query.eq("assigned_to", currentMember.id);
-  if (permission === "gestor" && currentMember?.id) query = query.or(`assigned_to.eq.${currentMember.id},created_by.eq.${currentMember.id}`);
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
@@ -237,16 +236,33 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 
   // Uma consulta por relacionamento para toda a lista evita N+1 e não depende
   // de o relacionamento estar disponível no schema cache do PostgREST.
-  const [attachmentsResult, commentsResult] = await Promise.all([
+  const [attachmentsResult, driveAttachmentsResult, commentsResult] = await Promise.all([
     supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").in("task_id", taskIds),
+    supabase.from("drive_files").select("id,task_id,drive_file_id,name,created_at,access_scope,status").in("task_id", taskIds).eq("status", "active"),
     supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").in("task_id", taskIds),
   ]);
   if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
+  if (driveAttachmentsResult.error) throw new Error(driveAttachmentsResult.error.message);
   if (commentsResult.error) throw new Error(commentsResult.error.message);
 
   const attachmentsByTask = new Map<string, TaskAttachment[]>();
   for (const attachment of (attachmentsResult.data ?? []) as TaskAttachment[]) {
-    attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), attachment]);
+    const legacy = { ...attachment, source: "legacy" as const };
+    attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), legacy]);
+  }
+  for (const file of (driveAttachmentsResult.data ?? []) as any[]) {
+    if (!file.task_id) continue;
+    const attachment: TaskAttachment = {
+      id: file.id,
+      task_id: file.task_id,
+      file_url: "",
+      file_name: file.name ?? null,
+      created_at: file.created_at,
+      source: "drive",
+      drive_file_id: file.drive_file_id,
+      access_scope: file.access_scope === "team" ? "team" : "assignees",
+    };
+    attachmentsByTask.set(file.task_id, [...(attachmentsByTask.get(file.task_id) ?? []), attachment]);
   }
   const commentsByTask = new Map<string, TaskComment[]>();
   for (const comment of (commentsResult.data ?? []) as TaskComment[]) {
@@ -276,7 +292,7 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   }
 
   const startDate = requireDatabaseDate(input.data_inicio, "Data inicial");
-  requireDatabaseDate(input.data_fim, "Data final");
+  const endDate = requireDatabaseDate(input.data_fim, "Data final");
 
   // Montado explicitamente para impedir que campos derivados de CalendarTask
   // (comentários, anexos e suas contagens) cheguem ao INSERT de public.tasks.
@@ -284,6 +300,10 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     titulo: input.titulo.trim(),
     descricao: description,
     data_tarefa: startDate,
+    data_inicio: startDate,
+    data_fim: endDate,
+    context_type: input.context_type,
+    context_id: input.context_type === "internal" ? null : input.context_id,
     prioridade: input.prioridade,
     status: toDbStatus(input.status),
     assigned_to: assignedTo,
@@ -294,6 +314,12 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   if (taskId) {
     const { error } = await supabase.from("tasks").update(taskValues).eq("id", taskId);
     if (error) throw new Error(error.message);
+    const { error: clearError } = await supabase.from("task_assignees").delete().eq("task_id", taskId);
+    if (clearError) throw new Error(clearError.message);
+    if (direcionamento.length) {
+      const { error: assigneeError } = await supabase.from("task_assignees").insert(direcionamento.map((user_id) => ({ task_id: taskId, user_id })));
+      if (assigneeError) throw new Error(assigneeError.message);
+    }
     return taskId;
   }
 
@@ -325,6 +351,10 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     throw error;
   }
   if (!data) throw new Error("A tarefa não foi retornada após a criação.");
+  if (direcionamento.length) {
+    const { error: assigneeError } = await supabase.from("task_assignees").insert(direcionamento.map((user_id) => ({ task_id: data.id, user_id })));
+    if (assigneeError) throw new Error(assigneeError.message);
+  }
   return data.id as string;
 }
 
@@ -433,7 +463,6 @@ export async function uploadTaskAttachment(taskId: string, file: File, accessSco
   const { data, error } = await supabase.functions.invoke("drive-files", { body: form });
   if (error) throw new Error(error.message);
   if (!data?.ok || !data?.file) throw new Error(data?.error || "Não foi possível enviar o anexo ao Drive RKC.");
-
   const row = data.file;
   return {
     id: row.id, task_id: taskId, file_url: "", file_name: row.name ?? file.name,
@@ -473,7 +502,6 @@ export async function deleteTaskAttachment(attachment: Pick<TaskAttachment, "id"
     if (!data?.ok) throw new Error(data?.error || "Não foi possível remover o arquivo do Drive.");
     return;
   }
-
   if (attachment.file_url && !/^https?:\/\//i.test(attachment.file_url)) {
     const storageResult = await supabase.storage.from(BUCKET).remove([attachment.file_url]);
     if (storageResult.error) throw new Error("Não foi possível remover o anexo legado da tarefa.");
