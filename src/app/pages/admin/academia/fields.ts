@@ -44,7 +44,10 @@ export function fieldsFor(
   switch (entity) {
     case "courses":
       return [
-        title,
+        {
+          ...title,
+          hint: "Depois de salvar os dados, o curso ficará selecionado para você enviar e conferir a capa no Drive RKC.",
+        },
         {
           name: "slug",
           label: "Slug (endereço único)",
