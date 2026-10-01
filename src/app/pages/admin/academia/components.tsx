@@ -231,6 +231,16 @@ export function Editor({
                   value={String(values[f.name] ?? "")}
                   onChange={(e) => {
                     const next = { ...values, [f.name]: e.target.value };
+                    if (f.name === "type") {
+                      if (["video", "audio", "image", "pdf", "document", "presentation", "mixed"].includes(e.target.value)) {
+                        next.media_source = "drive";
+                        next.media_url = null;
+                      }
+                      if (e.target.value === "link") {
+                        next.media_source = "none";
+                        next.media_url = null;
+                      }
+                    }
                     if (f.name === "media_source") {
                       if (e.target.value === "none") {
                         next.media_url = null;
