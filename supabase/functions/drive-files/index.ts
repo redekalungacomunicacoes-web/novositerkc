@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
         const segments =
           task.context_type === "project"
             ? [
-                "01_PROJETOS",
+                "03_PROJETOS",
                 String(task.context_id ?? "geral"),
                 "TAREFAS",
                 label,
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
                   "TAREFAS",
                   label,
                 ]
-              : ["03_TAREFAS_INTERNAS", label];
+              : ["06_TAREFAS", label];
         const path = await ensureDrivePath(rootFolderId, segments);
         folderId = path.folderId;
         const { error } = await admin
