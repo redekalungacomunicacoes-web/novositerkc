@@ -29,14 +29,15 @@ O Advisor remoto também mostrou problemas anteriores fora da Academia (por exem
 
 PR #151: aberta, draft, não merged, head `9fef23e9a35bc363e2f68d1a153e0345888bc380`. Foram reaproveitados somente `src/services/driveFiles.ts`, `_shared/google-drive.ts` e o handler `drive-files`, com extensões acadêmicas. A function publicada `drive-files` v2 difere do handler da PR e usa service_role sem as mesmas verificações por tarefa. Nenhuma function foi sobrescrita. `drive-media` não é usado para conteúdo da Academia.
 
-A raiz informada pelo usuário é [RKC - SISTEMA DO SITE](https://drive.google.com/drive/folders/1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD). O nome foi confirmado pelo título público da página. Em seguida o usuário autorizou criar `09_ACADEMIA` nessa raiz caso não exista. O ID da subpasta, seu proprietário/permissões e sua disponibilidade na integração do site ainda não foram confirmados por API autenticada.
+A raiz informada pelo usuário é [RKC - SISTEMA DO SITE](https://drive.google.com/drive/folders/1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD), onde ficam também arquivos publicados no site. Portanto, a raiz pode manter acesso público de leitura; a validação da Academia não rejeita permissões públicas na raiz. O usuário criou `09_ACADEMIA` e ativou “Limitar o acesso” nela, conforme captura de tela. O ID da subpasta, as permissões diretas e o acesso da conta de serviço ainda precisam ser confirmados pelo Drive/API autenticada.
 
-Antes de criar ou enviar:
+Antes de enviar:
 
 1. Conferir se `GOOGLE_DRIVE_ROOT_FOLDER_ID` existente aponta à raiz acima. Não trocar OAuth ou usar o Drive pessoal da Play Moments.
 2. Confirmar nome, tipo, propriedade e permissões pela integração existente. Um Shared Drive precisa ser identificado como RKC. Para pasta compartilhada da conta da própria RKC em Meu Drive, a configuração não secreta `GOOGLE_DRIVE_RKC_OWNER_EMAIL` deve corresponder ao proprietário real; não definir por suposição.
-3. Procurar `Academia` e `09_ACADEMIA`; reutilizar o único resultado. Se os dois existirem, bloquear por ambiguidade. Se nenhum existir, criar apenas `09_ACADEMIA`, sob lease global. Nunca usar o número 9 como ID.
-4. Rejeitar acesso aberto `anyone`/`domain` herdado nas pastas/arquivos antes de confirmar envio.
+3. Reutilizar a única pasta existente entre `Academia` e `09_ACADEMIA`; se as duas existirem, bloquear por ambiguidade. Se nenhuma existir, bloquear e orientar a criação manual de `09_ACADEMIA`, com “Limitar o acesso” ativado antes do uso. O serviço nunca cria automaticamente essa pasta.
+4. Confirmar que o campo `inheritedPermissionsDisabled` da pasta está ativo e que ela não tem permissões diretas `anyone`/`domain`. Conceder acesso Editor diretamente à conta de serviço Google usada pela integração, pois a pasta limitada não recebe permissões herdadas da raiz.
+5. Validar a privacidade dos arquivos da Academia antes de confirmar o envio. A configuração de acesso público para outras pastas da raiz continua disponível para imagens, áudios e documentos publicados no site.
 
 Hierarquia: `09_ACADEMIA/Cursos/<course UUID>/Capa` ou `Módulos/<module UUID>/Aulas/<lesson UUID>/Conteúdo|Materiais`. Títulos não fazem parte da chave da pasta. Arquivos gerais de curso usam `<course UUID>/Materiais`.
 
