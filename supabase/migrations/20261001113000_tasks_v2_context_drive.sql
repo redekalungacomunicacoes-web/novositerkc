@@ -100,7 +100,7 @@ alter table public.task_activity enable row level security;
 drop policy if exists "task_checklist_select_related" on public.task_checklist;
 create policy "task_checklist_select_related" on public.task_checklist for select to authenticated
 using (
-  public.is_task_admin(auth.uid())
+  public.is_team_admin()
   or exists (
     select 1 from public.tasks t
     left join public.equipe creator on creator.id = t.created_by
@@ -118,7 +118,7 @@ using (
 drop policy if exists "task_checklist_manage_related" on public.task_checklist;
 create policy "task_checklist_manage_related" on public.task_checklist for all to authenticated
 using (
-  public.is_task_admin(auth.uid())
+  public.is_team_admin()
   or exists (
     select 1 from public.tasks t
     left join public.equipe creator on creator.id = t.created_by
@@ -133,7 +133,7 @@ using (
   )
 )
 with check (
-  public.is_task_admin(auth.uid())
+  public.is_team_admin()
   or exists (
     select 1 from public.tasks t
     left join public.equipe creator on creator.id = t.created_by
@@ -151,7 +151,7 @@ with check (
 drop policy if exists "task_activity_select_related" on public.task_activity;
 create policy "task_activity_select_related" on public.task_activity for select to authenticated
 using (
-  public.is_task_admin(auth.uid())
+  public.is_team_admin()
   or exists (
     select 1 from public.tasks t
     left join public.equipe creator on creator.id = t.created_by
@@ -169,7 +169,7 @@ using (
 drop policy if exists "task_activity_insert_related" on public.task_activity;
 create policy "task_activity_insert_related" on public.task_activity for insert to authenticated
 with check (
-  public.is_task_admin(auth.uid())
+  public.is_team_admin()
   or exists (
     select 1 from public.equipe actor where actor.id = task_activity.actor_id and actor.user_id = auth.uid()
   )
@@ -179,7 +179,7 @@ with check (
 drop policy if exists "tasks_select_authenticated" on public.tasks;
 create policy "tasks_select_authenticated" on public.tasks for select to authenticated
 using (
-  public.is_task_admin(auth.uid())
+  public.is_team_admin()
   or exists (select 1 from public.equipe e where e.user_id = auth.uid() and e.id in (assigned_to, created_by))
   or exists (
     select 1 from public.task_assignees ta
@@ -191,7 +191,7 @@ using (
 drop policy if exists "tasks_update_creator_or_assigned" on public.tasks;
 create policy "tasks_update_creator_or_assigned" on public.tasks for update to authenticated
 using (
-  public.is_task_admin(auth.uid())
+  public.is_team_admin()
   or exists (select 1 from public.equipe e where e.user_id = auth.uid() and e.id in (assigned_to, created_by))
   or exists (
     select 1 from public.task_assignees ta join public.equipe e on e.id = ta.user_id
@@ -199,7 +199,7 @@ using (
   )
 )
 with check (
-  public.is_task_admin(auth.uid())
+  public.is_team_admin()
   or exists (select 1 from public.equipe e where e.user_id = auth.uid() and e.id in (assigned_to, created_by))
   or exists (
     select 1 from public.task_assignees ta join public.equipe e on e.id = ta.user_id
