@@ -16,7 +16,10 @@ verify_jwt = true
 [functions.newsletter-config]
 verify_jwt = true
 
-
 [functions.drive-files]
 enabled = true
 verify_jwt = true
+
+[functions.drive-media]
+enabled = true
+verify_jwt = false
