@@ -36,6 +36,18 @@ function monthBounds(month: Date) {
   return { start: dateKey(start), end: dateKey(end) };
 }
 
+function viewBounds(view: ViewMode, selectedDate: string, month: Date) {
+  if (view === "month") return monthBounds(month);
+  const selected = new Date(`${selectedDate}T00:00:00`);
+  const start = new Date(selected);
+  const end = new Date(selected);
+  if (view === "week") {
+    start.setDate(selected.getDate() - selected.getDay());
+    end.setDate(selected.getDate() + (6 - selected.getDay()));
+  }
+  return { start: dateKey(start), end: dateKey(end) };
+}
+
 export function CalendarProvider({ children }: { children: ReactNode }) {
   const [selectedTeam, setTeam] = useState("equipe");
   const [selectedDate, setSelectedDate] = useState(dateKey(new Date()));
@@ -50,11 +62,26 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
 
   function updateMonth(nextMonth: Date) {
     setMonth(nextMonth);
-    const nextBounds = monthBounds(nextMonth);
     const selectedDay = Number(selectedDate.slice(-2)) || 1;
     const lastDay = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
-    setSelectedDate(dateKey(new Date(nextMonth.getFullYear(), nextMonth.getMonth(), Math.min(selectedDay, lastDay))));
+    const nextSelectedDate = dateKey(new Date(nextMonth.getFullYear(), nextMonth.getMonth(), Math.min(selectedDay, lastDay)));
+    setSelectedDate(nextSelectedDate);
+    const nextBounds = viewBounds(view, nextSelectedDate, nextMonth);
     setFilters((current) => ({ ...current, periodStart: nextBounds.start, periodEnd: nextBounds.end }));
+  }
+
+  function updateView(nextView: ViewMode) {
+    setView(nextView);
+    const nextBounds = viewBounds(nextView, selectedDate, month);
+    setFilters((current) => ({ ...current, periodStart: nextBounds.start, periodEnd: nextBounds.end }));
+  }
+
+  function updateSelectedDate(nextDate: string) {
+    setSelectedDate(nextDate);
+    if (view !== "month") {
+      const nextBounds = viewBounds(view, nextDate, month);
+      setFilters((current) => ({ ...current, periodStart: nextBounds.start, periodEnd: nextBounds.end }));
+    }
   }
 
   const tasks = useMemo(() => (tasksQuery.data ?? []).filter((task) => {
@@ -65,7 +92,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     return matchesStatus && matchesPriority && matchesSearch;
   }), [tasksQuery.data, filters]);
 
-  return <Ctx.Provider value={{ selectedTeam, selectedDate, month, view, tasks, teamMembers: membersQuery.data ?? [], isLoading: tasksQuery.isLoading || membersQuery.isLoading, filters, setView, setMonth: updateMonth, setSelectedDate, setTeam, setSearch: (search) => setFilters((f) => ({ ...f, search })), setStatus: (status) => setFilters((f) => ({ ...f, status })), setPriority: (priority) => setFilters((f) => ({ ...f, priority })), setAssignee: (assignee) => setFilters((f) => ({ ...f, assignee })), setPeriod: (periodStart, periodEnd) => setFilters((f) => ({ ...f, periodStart, periodEnd })) }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ selectedTeam, selectedDate, month, view, tasks, teamMembers: membersQuery.data ?? [], isLoading: tasksQuery.isLoading || membersQuery.isLoading, filters, setView: updateView, setMonth: updateMonth, setSelectedDate: updateSelectedDate, setTeam, setSearch: (search) => setFilters((f) => ({ ...f, search })), setStatus: (status) => setFilters((f) => ({ ...f, status })), setPriority: (priority) => setFilters((f) => ({ ...f, priority })), setAssignee: (assignee) => setFilters((f) => ({ ...f, assignee })), setPeriod: (periodStart, periodEnd) => setFilters((f) => ({ ...f, periodStart, periodEnd })) }}>{children}</Ctx.Provider>;
 }
 
 export function useCalendarStore() {
