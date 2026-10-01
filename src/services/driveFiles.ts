@@ -82,13 +82,33 @@ export async function uploadRkcDriveFile(input: {
 }
 
 export async function downloadRkcDriveFile(id: string): Promise<Blob> {
-  const { data, error } = await supabase.functions.invoke("drive-files", {
-    body: { action: "download", id },
-  });
-  if (error) throw await driveError(error);
-  if (!(data instanceof Blob))
-    throw new Error("O Drive não retornou o arquivo.");
-  return data;
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session)
+    throw new Error("Sua sessão expirou. Entre novamente.");
+  // Preserve exact bytes for every MIME type; functions.invoke parses JSON/text downloads.
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/drive-files`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${data.session.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action: "download", id }),
+    },
+  );
+  if (!response.ok) {
+    let detail = "Não foi possível abrir o arquivo privado no Drive RKC.";
+    try {
+      const body = await response.json();
+      if (body.error) detail = body.error;
+    } catch {
+      /* use fallback when backend is unavailable */
+    }
+    throw new Error(detail);
+  }
+  return response.blob();
 }
 
 export async function renameRkcDriveFile(id: string, name: string) {

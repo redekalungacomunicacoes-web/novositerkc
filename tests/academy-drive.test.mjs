@@ -445,3 +445,41 @@ test("HTTP endpoint denies anonymous access, reader writes and out-of-scope down
   assert.equal(unlink, 1);
   assert.ok(googleCalls.some((x) => x.init.method === "PATCH"));
 });
+test("authenticated downloads preserve exact bytes for JSON and text materials", async () => {
+  globalThis.__academyDownloadClient = {
+    auth: {
+      getSession: async () => ({
+        data: { session: { access_token: "fixture" } },
+        error: null,
+      }),
+    },
+  };
+  const code = (
+    await readFile(
+      new URL("../src/services/driveFiles.ts", import.meta.url),
+      "utf8",
+    )
+  )
+    .replace(
+      'import { supabase } from "../lib/supabase";',
+      "const supabase = globalThis.__academyDownloadClient;",
+    )
+    .replaceAll(
+      "import.meta.env.VITE_SUPABASE_URL",
+      '"https://fixture.supabase.co"',
+    )
+    .replaceAll("import.meta.env.VITE_SUPABASE_ANON_KEY", '"fixture-public"');
+  const service = await import(dataModule(code));
+  for (const [mime, content] of [
+    ["application/json", '{ "original" : true }\n'],
+    ["text/plain", "Original text\n"],
+  ]) {
+    globalThis.fetch = async (_url, init) => {
+      assert.equal(init.headers.Authorization, "Bearer fixture");
+      return new Response(content, { headers: { "Content-Type": mime } });
+    };
+    const blob = await service.downloadRkcDriveFile("private-id");
+    assert.equal(await blob.text(), content);
+    assert.equal(blob.type, mime);
+  }
+});
