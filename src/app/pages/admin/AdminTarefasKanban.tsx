@@ -13,7 +13,8 @@ import type { CalendarTask, TaskStatus } from "./calendar2026/types";
 const columns: TaskStatus[] = ["pendente", "em_andamento", "revisao", "concluida"];
 const allowedResponsibleMoves: Partial<Record<TaskStatus, TaskStatus[]>> = {
   pendente: ["em_andamento"],
-  em_andamento: ["concluida"],
+  em_andamento: ["revisao"],
+  revisao: ["concluida"],
 };
 
 function canMoveTask(task: CalendarTask, targetStatus: TaskStatus, currentMemberId?: string | null, isAdmin?: boolean) {
@@ -57,6 +58,7 @@ function KanbanCard({ task, onOpen }: { task: CalendarTask; onOpen: (task: Calen
         </div>
       </div>
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-emerald-100/60">{task.description || "Sem descrição."}</p>
+      <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-semibold uppercase tracking-wide"><span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600 dark:bg-emerald-900 dark:text-emerald-100">{task.contextType === "project" ? "Projeto" : task.contextType === "materia" ? "Matéria" : "Interna"}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600 dark:bg-emerald-900 dark:text-emerald-100">{task.accessScope === "team" ? "Equipe" : "Envolvidos"}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600 dark:bg-emerald-900 dark:text-emerald-100">{task.progress}%</span></div>
       <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-emerald-100/60">
         <span>{new Date(`${task.endDate}T00:00:00`).toLocaleDateString("pt-BR")}</span>
         <span className="flex flex-wrap justify-end gap-x-2" aria-label={`${pluralize(task.comments.length, "comentário", "comentários")}; ${pluralize(task.attachments.length, "anexo", "anexos")}`}>
