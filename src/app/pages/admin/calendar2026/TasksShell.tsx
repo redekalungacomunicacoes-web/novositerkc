@@ -17,11 +17,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useQueryClient } from "@tanstack/react-query";
-
 import { supabase } from "@/lib/supabase";
 import { getCurrentEquipeMember } from "./tasksApi";
-import { taskKeys, useCurrentMemberQuery, useNotificationsQuery } from "./useTaskQueries";
+import { useCurrentMemberQuery, useNotificationsQuery } from "./useTaskQueries";
 import type { TeamNotification } from "./types";
 
 type TaskTab = {
@@ -57,23 +55,41 @@ function formatNotificationDate(date: string) {
   return parsed.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+const VIEWED_NOTIFICATIONS_STORAGE_KEY = "rkc-task-notifications-viewed";
+
+function readViewedNotifications(): Record<string, string[]> {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = window.localStorage.getItem(VIEWED_NOTIFICATIONS_STORAGE_KEY);
+    const parsed: unknown = stored ? JSON.parse(stored) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, string[]> : {};
+  } catch {
+    return {};
+  }
+}
+
 function NotificationsMenu() {
-  const queryClient = useQueryClient();
+  const currentMember = useCurrentMemberQuery();
   const notifications = useNotificationsQuery();
   const [open, setOpen] = useState(false);
-  const [viewedIds, setViewedIds] = useState<Set<string>>(() => new Set());
+  const [viewedByUser, setViewedByUser] = useState<Record<string, string[]>>(readViewedNotifications);
+  const viewerId = currentMember.data?.id ?? "unknown";
+  const viewedIds = new Set(viewedByUser[viewerId] ?? []);
   const items = notifications.data ?? [];
   const unreadItems = items.filter((item) => item.status === "novo" && !viewedIds.has(item.id));
 
   function toggleNotifications() {
-    setOpen((current) => {
-      const next = !current;
-      if (next) {
-        setViewedIds((previous) => new Set([...previous, ...items.map((item) => item.id)]));
-        void queryClient.invalidateQueries({ queryKey: taskKeys.notifications });
+    if (!open) {
+      const nextViewedIds = [...new Set([...viewedIds, ...items.map((item) => item.id)])].slice(-500);
+      const nextViewedByUser = { ...viewedByUser, [viewerId]: nextViewedIds };
+      setViewedByUser(nextViewedByUser);
+      try {
+        window.localStorage.setItem(VIEWED_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(nextViewedByUser));
+      } catch {
+        // Keep the menu usable when browser storage is unavailable.
       }
-      return next;
-    });
+    }
+    setOpen((current) => !current);
   }
 
   return (

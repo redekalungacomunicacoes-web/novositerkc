@@ -3,13 +3,22 @@ import { getCurrentUserRoles } from "@/lib/rbac";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
-const TASK_SELECT = "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
+const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
+
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 type DbTask = {
   id: string;
   titulo: string | null;
   descricao: string | null;
   data_tarefa: string | null;
+  data_inicio?: string | null;
+  data_fim?: string | null;
   hora_inicio: string | null;
   hora_fim: string | null;
   status: TaskStatus | "concluido" | "andamento" | "atrasado" | string | null;
@@ -41,6 +50,8 @@ export type TaskInsert = {
   titulo: string;
   descricao: string | null;
   data_tarefa: string;
+  data_inicio: string;
+  data_fim: string;
   status: TaskStatus;
   prioridade: TaskPriority;
   assigned_to: string | null;
@@ -104,7 +115,8 @@ function requireDatabaseDate(value: string, label: string): string {
 }
 
 function mapTask(task: DbTask): CalendarTask {
-  const date = task.data_tarefa ?? new Date().toISOString().slice(0, 10);
+  const date = task.data_inicio ?? task.data_tarefa ?? localDateKey(new Date());
+  const endDate = task.data_fim ?? task.data_tarefa ?? date;
   const description = task.descricao ?? "";
 
   return {
@@ -112,7 +124,7 @@ function mapTask(task: DbTask): CalendarTask {
     title: task.titulo ?? "Sem título",
     description,
     date,
-    endDate: task.data_tarefa ?? date,
+    endDate,
     startTime: normalizeTime(task.hora_inicio),
     endTime: normalizeTime(task.hora_fim),
     priority: normalizePriority(task.prioridade),
@@ -219,8 +231,8 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
   let query = supabase
     .from("tasks")
     .select(TASK_SELECT)
-    .gte("data_tarefa", startDate)
-    .lte("data_tarefa", endDate)
+    .lte("data_inicio", endDate)
+    .gte("data_fim", startDate)
     .order("data_tarefa", { ascending: true })
     .order("hora_inicio", { ascending: true, nullsFirst: false });
 
@@ -276,7 +288,8 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   }
 
   const startDate = requireDatabaseDate(input.data_inicio, "Data inicial");
-  requireDatabaseDate(input.data_fim, "Data final");
+  const endDate = requireDatabaseDate(input.data_fim, "Data final");
+  if (endDate < startDate) throw new Error("A data final não pode ser anterior à data inicial.");
 
   // Montado explicitamente para impedir que campos derivados de CalendarTask
   // (comentários, anexos e suas contagens) cheguem ao INSERT de public.tasks.
@@ -284,6 +297,8 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     titulo: input.titulo.trim(),
     descricao: description,
     data_tarefa: startDate,
+    data_inicio: startDate,
+    data_fim: endDate,
     prioridade: input.prioridade,
     status: toDbStatus(input.status),
     assigned_to: assignedTo,
@@ -381,9 +396,14 @@ export async function deleteTask(taskId: string) {
 }
 
 export async function fetchNotifications(): Promise<TeamNotification[]> {
-  const today = new Date().toISOString().slice(0, 10);
-  const startDate = new Date(Date.now() - 1000 * 60 * 60 * 24 * 60).toISOString().slice(0, 10);
-  const endDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 60).toISOString().slice(0, 10);
+  const currentDate = new Date();
+  const start = new Date(currentDate);
+  const end = new Date(currentDate);
+  start.setDate(start.getDate() - 60);
+  end.setDate(end.getDate() + 60);
+  const today = localDateKey(currentDate);
+  const startDate = localDateKey(start);
+  const endDate = localDateKey(end);
   const tasks = await fetchTasks(startDate, endDate);
   const notifications: TeamNotification[] = [];
 

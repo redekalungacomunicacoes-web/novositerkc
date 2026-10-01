@@ -5,13 +5,20 @@ import { useCalendarStore } from "./store";
 
 const kpiIcons = [ListChecks, CheckCircle2, Clock3, AlertTriangle, CalendarCheck2, TrendingUp];
 
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function shortDate(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
 export function ExecutiveDashboard() {
   const { tasks, teamMembers } = useCalendarStore();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const total = tasks.length;
   const done = tasks.filter((task) => task.status === "concluida").length;
   const inProgress = tasks.filter((task) => task.status === "em_andamento" || task.status === "revisao").length;
@@ -44,7 +51,7 @@ export function ExecutiveDashboard() {
       if (task.status === "concluida") current.concluidas += 1;
       grouped.set(key, current);
     });
-    return [...grouped.values()].sort((a, b) => a.mes.localeCompare(b.mes)).slice(-6);
+    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value).slice(-6);
   }, [tasks]);
 
   const byDate = useMemo(() => {

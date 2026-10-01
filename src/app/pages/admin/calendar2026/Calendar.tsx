@@ -21,7 +21,10 @@ const priorityDot: Record<TaskPriority, string> = {
 const viewLabels = { month: "Mês", week: "Semana", day: "Dia" } as const;
 
 function dateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function taskTime(task: CalendarTask) {
@@ -34,7 +37,12 @@ export function Calendar({ onSelectDay }: { onSelectDay: () => void }) {
   const days = useMemo(() => {
     const first = new Date(month.getFullYear(), month.getMonth(), 1);
     const count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-    return Array.from({ length: count }).map((_, i) => new Date(first.getFullYear(), first.getMonth(), i + 1));
+    const offset = first.getDay();
+    const cellCount = Math.ceil((offset + count) / 7) * 7;
+    return Array.from({ length: cellCount }, (_, i) => {
+      const day = i - offset + 1;
+      return day < 1 || day > count ? null : new Date(first.getFullYear(), first.getMonth(), day);
+    });
   }, [month]);
 
   const selected = selectedDate || dateKey(new Date());
@@ -50,7 +58,7 @@ export function Calendar({ onSelectDay }: { onSelectDay: () => void }) {
   }, [selected]);
 
   const visibleDays = view === "month" ? days : view === "week" ? weekDays : [selectedDateObject];
-  const columnsClass = view === "month" ? "md:grid-cols-7" : view === "week" ? "md:grid-cols-7" : "md:grid-cols-1";
+  const columnsClass = view === "month" ? "grid-cols-7" : view === "week" ? "grid-cols-1 md:grid-cols-7" : "grid-cols-1";
 
   function getAssignee(task: CalendarTask) {
     return teamMembers.find((member) => member.id === task.assigneeId);
@@ -75,11 +83,12 @@ export function Calendar({ onSelectDay }: { onSelectDay: () => void }) {
         </div>
       </div>
 
-      <div className="hidden grid-cols-7 gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 md:grid dark:text-emerald-100/50">
+      {view !== "day" ? <div className={`${view === "week" ? "hidden md:grid" : "grid"} grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:gap-2 sm:text-xs md:text-left md:tracking-[0.16em] md:text-slate-400 dark:text-emerald-100/60 md:dark:text-emerald-100/50`}>
         {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => <p key={day} className="px-2">{day}</p>)}
-      </div>
-      <div className={`mt-2 grid grid-cols-1 gap-3 ${columnsClass}`}>
-        {visibleDays.map((day) => {
+      </div> : null}
+      <div className={`mt-2 grid gap-1 sm:gap-2 ${columnsClass}`}>
+        {visibleDays.map((day, index) => {
+          if (!day) return <div key={`empty-${index}`} aria-hidden="true" className="min-h-[72px] rounded-2xl md:min-h-40" />;
           const key = dateKey(day);
           const dayTasks = tasks.filter((task) => task.date <= key && task.endDate >= key);
           const isToday = key === dateKey(new Date());
@@ -90,13 +99,15 @@ export function Calendar({ onSelectDay }: { onSelectDay: () => void }) {
               key={key}
               type="button"
               onClick={() => openDay(key)}
-              className={`min-h-40 rounded-3xl border p-3 text-left transition ${isSelected ? "border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/60" : "border-emerald-100 bg-slate-50/80 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/50 dark:bg-[#07352d]/70 dark:hover:bg-emerald-900/50"} ${view === "day" ? "min-h-[520px]" : ""}`}
+              className={`min-h-[72px] rounded-2xl border p-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:min-h-40 md:rounded-3xl md:p-3 ${isSelected ? "border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/60" : "border-emerald-100 bg-slate-50/80 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/50 dark:bg-[#07352d]/70 dark:hover:bg-emerald-900/50"} ${view === "day" ? "min-h-[520px]" : ""}`}
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-2xl text-sm font-bold ${isToday ? "bg-emerald-700 text-white" : "text-slate-700 dark:text-emerald-50"}`}>{day.getDate()}</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 shadow-sm dark:bg-emerald-950 dark:text-emerald-100">{dayTasks.length}</span>
+              <div className="mb-1 flex items-center justify-between gap-1 md:mb-3 md:gap-2">
+                <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-bold md:h-8 md:w-8 md:rounded-2xl md:text-sm ${isToday ? "bg-emerald-700 text-white" : "text-slate-700 dark:text-emerald-50"}`}>{day.getDate()}</span>
+                {view === "week" ? <span className="min-w-0 flex-1 text-[10px] font-semibold capitalize text-slate-500 md:hidden">{day.toLocaleDateString("pt-BR", { weekday: "short", month: "short" })}</span> : null}
+                <span className="hidden rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 shadow-sm md:inline-flex dark:bg-emerald-950 dark:text-emerald-100">{dayTasks.length}</span>
               </div>
-              <div className={`space-y-2 ${view === "day" ? "grid gap-2 md:grid-cols-2 xl:grid-cols-3" : ""}`}>
+              {view === "month" ? <div className="mt-2 flex min-h-3 items-center gap-1 md:hidden" aria-label={`${dayTasks.length} tarefas`}>{dayTasks.slice(0, 3).map((task) => <span key={task.id} title={task.title} className={`h-1.5 w-1.5 rounded-full ${priorityDot[task.priority]}`} />)}{dayTasks.length > 3 ? <span className="text-[9px] font-semibold text-slate-500">+{dayTasks.length - 3}</span> : null}</div> : null}
+              <div className={`${view === "month" ? "hidden md:block" : "space-y-2"} ${view === "day" ? "grid gap-2 md:grid-cols-2 xl:grid-cols-3" : ""}`}>
                 {dayTasks.slice(0, view === "month" ? 4 : 12).map((task) => {
                   const assignee = getAssignee(task);
                   return (

@@ -11,10 +11,22 @@ export const taskKeys = {
   range: (start: string, end: string, assignee: string) => [...taskKeys.all, start, end, assignee] as const,
 };
 
-function replaceTaskInCache(queryClient: ReturnType<typeof useQueryClient>, updatedTask: CalendarTask) {
+function replaceTaskInCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  updatedTask: Pick<CalendarTask, "id" | "status"> & { updated_at?: string },
+) {
   queryClient.getQueriesData({ queryKey: taskKeys.all }).forEach(([queryKey, data]) => {
     if (!Array.isArray(data)) return;
-    queryClient.setQueryData(queryKey, data.map((task) => task?.id === updatedTask.id ? updatedTask : task));
+    queryClient.setQueryData(queryKey, data.map((task) => {
+      if (task?.id !== updatedTask.id) return task;
+      const { updated_at, ...changes } = updatedTask;
+      return {
+        ...task,
+        ...changes,
+        updatedAt: updated_at ?? task.updatedAt,
+        completedAt: changes.status === "concluida" ? updated_at ?? task.completedAt ?? new Date().toISOString() : null,
+      };
+    }));
   });
 }
 

@@ -165,8 +165,12 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       <form onSubmit={(event) => void handleSubmit(event)} className="mb-5 grid gap-2 md:grid-cols-2">
         <input required value={form.titulo} onChange={(e) => setForm((old) => ({ ...old, titulo: e.target.value }))} className={inputClass} placeholder="Título" />
         <input value={form.descricao ?? ""} onChange={(e) => setForm((old) => ({ ...old, descricao: e.target.value }))} className={inputClass} placeholder="Descrição" />
-        <input type="date" value={form.data_inicio} onChange={(e) => setForm((old) => ({ ...old, data_inicio: e.target.value }))} className={inputClass} />
-        <input type="date" value={form.data_fim} onChange={(e) => setForm((old) => ({ ...old, data_fim: e.target.value }))} className={inputClass} />
+        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200">Data inicial
+          <input required aria-label="Data inicial" type="date" value={form.data_inicio} onChange={(e) => setForm((old) => ({ ...old, data_inicio: e.target.value }))} className={inputClass} />
+        </label>
+        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200">Data final
+          <input required aria-label="Data final" type="date" min={form.data_inicio} value={form.data_fim} onChange={(e) => setForm((old) => ({ ...old, data_fim: e.target.value }))} className={inputClass} />
+        </label>
         <select value={form.prioridade} onChange={(e) => setForm((old) => ({ ...old, prioridade: e.target.value as TaskPriority }))} className={inputClass}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <select value={form.status} onChange={(e) => setForm((old) => ({ ...old, status: e.target.value as TaskStatus }))} className={inputClass}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 md:col-span-2">Direcionamento
