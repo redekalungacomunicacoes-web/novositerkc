@@ -21,7 +21,31 @@ function pemToArrayBuffer(pem: string) {
   return bytes.buffer;
 }
 
-async function accessToken() {
+async function oauthRefreshAccessToken() {
+  const clientId = Deno.env.get("GOOGLE_OAUTH_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_OAUTH_CLIENT_SECRET");
+  const refreshToken = Deno.env.get("GOOGLE_OAUTH_REFRESH_TOKEN");
+
+  if (!clientId || !clientSecret || !refreshToken) return null;
+
+  const response = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Falha OAuth Google (refresh token): ${await response.text()}`);
+  const payload = await response.json();
+  if (!payload.access_token) throw new Error("Google OAuth nao retornou access_token.");
+  return payload.access_token as string;
+}
+
+async function serviceAccountAccessToken() {
   const email = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL");
   const privateKey = Deno.env.get("GOOGLE_PRIVATE_KEY");
   if (!email || !privateKey) throw new Error("Credenciais Google Drive nao configuradas.");
@@ -61,8 +85,17 @@ async function accessToken() {
     }),
   });
 
-  if (!response.ok) throw new Error(`Falha OAuth Google: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Falha OAuth Google (service account): ${await response.text()}`);
   return (await response.json()).access_token as string;
+}
+
+async function accessToken() {
+  // Para escrita em pastas compartilhadas do My Drive, preferimos OAuth de uma
+  // conta Google com cota de armazenamento. A Service Account permanece como
+  // fallback para leitura/ambientes em que ela possa criar arquivos.
+  const oauthToken = await oauthRefreshAccessToken();
+  if (oauthToken) return oauthToken;
+  return await serviceAccountAccessToken();
 }
 
 export async function uploadDriveFile(file: File, folderId: string) {
