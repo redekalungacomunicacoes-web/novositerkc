@@ -11,7 +11,7 @@ type UserRoleJoinRow = {
   role_id: string;
   roles: {
     name: string;
-  } | null;
+  } | { name: string }[] | null;
 };
 
 export async function listRoles() {
@@ -27,7 +27,7 @@ export async function getUserRoles(userId: string): Promise<{ roles: string[]; e
   if (error) return { roles: [], error: error.message };
 
   const roleNames = ((data || []) as UserRoleJoinRow[])
-    .map((row) => row.roles?.name)
+    .map((row) => Array.isArray(row.roles) ? row.roles[0]?.name : row.roles?.name)
     .filter((name): name is string => Boolean(name));
 
   return { roles: [...new Set(roleNames)], error: null };

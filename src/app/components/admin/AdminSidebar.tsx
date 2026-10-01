@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
+  GraduationCap,
   FolderOpen,
   LayoutDashboard,
   FileText,
@@ -34,6 +35,7 @@ type SidebarLink = {
 };
 
 export const adminLinks: SidebarLink[] = [
+  { href: "/admin/academia", label: "Academia", icon: GraduationCap, allow: ["admin_alfa", "admin", "editor", "autor", "financeiro"] },
   {
     href: "/admin",
     label: "Dashboard",

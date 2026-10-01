@@ -8,6 +8,8 @@ export async function getMyRoles(): Promise<string[]> {
 export function canAccess(pathname: string, roles: string[]) {
   if (roles.includes("admin_alfa")) return true;
 
+  if (pathname === "/admin/academia" || pathname.startsWith("/admin/academia/")) return roles.some((r) => ["admin", "editor", "autor", "financeiro"].includes(r));
+
   if (pathname.startsWith("/admin/materias")) return roles.some((r) => ["admin", "editor", "autor"].includes(r));
   if (pathname.startsWith("/admin/projetos")) return roles.some((r) => ["admin", "editor"].includes(r));
   if (pathname.startsWith("/admin/equipe")) return roles.some((r) => ["admin", "editor"].includes(r));
