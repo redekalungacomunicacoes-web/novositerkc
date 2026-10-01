@@ -259,20 +259,25 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
   const attachmentsByTask = new Map<string, TaskAttachment[]>();
   const commentsByTask = new Map<string, TaskComment[]>();
   const relationshipBatchSize = 300;
+  const relationPageSize = 1000;
   for (let offset = 0; offset < taskIds.length; offset += relationshipBatchSize) {
     const batch = taskIds.slice(offset, offset + relationshipBatchSize);
-    const [attachmentsResult, commentsResult] = await Promise.all([
-      supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").in("task_id", batch),
-      supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").in("task_id", batch),
-    ]);
-    if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
-    if (commentsResult.error) throw new Error(commentsResult.error.message);
+    for (let relationOffset = 0; ; relationOffset += relationPageSize) {
+      const [attachmentsResult, commentsResult] = await Promise.all([
+        supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").in("task_id", batch).range(relationOffset, relationOffset + relationPageSize - 1),
+        supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").in("task_id", batch).range(relationOffset, relationOffset + relationPageSize - 1),
+      ]);
+      if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
+      if (commentsResult.error) throw new Error(commentsResult.error.message);
 
-    for (const attachment of (attachmentsResult.data ?? []) as TaskAttachment[]) {
-      attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), attachment]);
-    }
-    for (const comment of (commentsResult.data ?? []) as TaskComment[]) {
-      commentsByTask.set(comment.task_id, [...(commentsByTask.get(comment.task_id) ?? []), comment]);
+      for (const attachment of (attachmentsResult.data ?? []) as TaskAttachment[]) {
+        attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), attachment]);
+      }
+      for (const comment of (commentsResult.data ?? []) as TaskComment[]) {
+        commentsByTask.set(comment.task_id, [...(commentsByTask.get(comment.task_id) ?? []), comment]);
+      }
+
+      if ((attachmentsResult.data?.length ?? 0) < relationPageSize && (commentsResult.data?.length ?? 0) < relationPageSize) break;
     }
   }
 
