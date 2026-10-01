@@ -23,15 +23,22 @@ interface CalendarCtx {
 }
 const Ctx = createContext<CalendarCtx | null>(null);
 
+function dateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function monthBounds(month: Date) {
   const start = new Date(month.getFullYear(), month.getMonth(), 1);
   const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  return { start: dateKey(start), end: dateKey(end) };
 }
 
 export function CalendarProvider({ children }: { children: ReactNode }) {
   const [selectedTeam, setTeam] = useState("equipe");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(dateKey(new Date()));
   const [month, setMonth] = useState(new Date());
   const [view, setView] = useState<ViewMode>("month");
   const bounds = useMemo(() => monthBounds(month), [month]);
@@ -41,6 +48,12 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const tasksQuery = useTasksQuery(effectiveStart, effectiveEnd, filters.assignee);
   const membersQuery = useTeamMembersQuery();
 
+  function updateMonth(nextMonth: Date) {
+    setMonth(nextMonth);
+    const nextBounds = monthBounds(nextMonth);
+    setFilters((current) => ({ ...current, periodStart: nextBounds.start, periodEnd: nextBounds.end }));
+  }
+
   const tasks = useMemo(() => (tasksQuery.data ?? []).filter((task) => {
     const matchesStatus = filters.status === "all" || task.status === filters.status;
     const matchesPriority = filters.priority === "all" || task.priority === filters.priority;
@@ -49,7 +62,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     return matchesStatus && matchesPriority && matchesSearch;
   }), [tasksQuery.data, filters]);
 
-  return <Ctx.Provider value={{ selectedTeam, selectedDate, month, view, tasks, teamMembers: membersQuery.data ?? [], isLoading: tasksQuery.isLoading || membersQuery.isLoading, filters, setView, setMonth, setSelectedDate, setTeam, setSearch: (search) => setFilters((f) => ({ ...f, search })), setStatus: (status) => setFilters((f) => ({ ...f, status })), setPriority: (priority) => setFilters((f) => ({ ...f, priority })), setAssignee: (assignee) => setFilters((f) => ({ ...f, assignee })), setPeriod: (periodStart, periodEnd) => setFilters((f) => ({ ...f, periodStart, periodEnd })) }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ selectedTeam, selectedDate, month, view, tasks, teamMembers: membersQuery.data ?? [], isLoading: tasksQuery.isLoading || membersQuery.isLoading, filters, setView, setMonth: updateMonth, setSelectedDate, setTeam, setSearch: (search) => setFilters((f) => ({ ...f, search })), setStatus: (status) => setFilters((f) => ({ ...f, status })), setPriority: (priority) => setFilters((f) => ({ ...f, priority })), setAssignee: (assignee) => setFilters((f) => ({ ...f, assignee })), setPeriod: (periodStart, periodEnd) => setFilters((f) => ({ ...f, periodStart, periodEnd })) }}>{children}</Ctx.Provider>;
 }
 
 export function useCalendarStore() {
