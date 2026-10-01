@@ -51,6 +51,9 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   function updateMonth(nextMonth: Date) {
     setMonth(nextMonth);
     const nextBounds = monthBounds(nextMonth);
+    const selectedDay = Number(selectedDate.slice(-2)) || 1;
+    const lastDay = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
+    setSelectedDate(dateKey(new Date(nextMonth.getFullYear(), nextMonth.getMonth(), Math.min(selectedDay, lastDay))));
     setFilters((current) => ({ ...current, periodStart: nextBounds.start, periodEnd: nextBounds.end }));
   }
 
