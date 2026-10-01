@@ -91,7 +91,7 @@ export function useExternalAttachmentMutation() {
 export function useDeleteTaskAttachmentMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (attachment: Pick<TaskAttachment, "id" | "file_url">) => deleteTaskAttachment(attachment),
+    mutationFn: (attachment: Pick<TaskAttachment, "id" | "file_url" | "source">) => deleteTaskAttachment(attachment),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       void queryClient.invalidateQueries({ queryKey: taskKeys.notifications });
