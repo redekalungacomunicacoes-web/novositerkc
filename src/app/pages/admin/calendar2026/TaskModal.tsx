@@ -53,6 +53,9 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       setComment("");
       setAttachmentFiles([]);
       setExternalLinks("");
+      setSubmitError(null);
+      setSubmitNotice(null);
+      setSavedTaskId(null);
       return;
     }
     setEditing(null);
