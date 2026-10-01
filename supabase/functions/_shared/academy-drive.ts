@@ -158,8 +158,10 @@ export async function uploadAcademyDrive(
       }
       throw error;
     }
-    uploadedId = String(uploaded.id);
-    await assertPrivateDriveFile(uploaded.id);
+    if (typeof uploaded.id !== "string" || !uploaded.id)
+      throw new Error("O Drive não retornou o identificador do arquivo enviado.");
+    uploadedId = uploaded.id;
+    await assertPrivateDriveFile(uploadedId);
     const { data: record, error } = await admin.rpc("academy_commit_drive", {
       p_actor: actor,
       p_course: course,
