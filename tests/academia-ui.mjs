@@ -215,7 +215,7 @@ try {
         .getByRole("button", { name: "Novo curso", exact: true })
         .click();
       await page
-        .getByLabel("Título", { exact: true })
+        .getByLabel(/^Título(?: \*)?$/)
         .fill("Novo curso da autora");
       await page.getByRole("button", { name: "Salvar", exact: true }).click();
       await page.getByText("Alteração salva.", { exact: true }).waitFor();
@@ -232,7 +232,7 @@ try {
       await page
         .getByRole("button", { name: "Novo curso", exact: true })
         .click();
-      await page.getByLabel("Título", { exact: true }).fill("Outro curso");
+      await page.getByLabel(/^Título(?: \*)?$/).fill("Outro curso");
       await page.getByRole("button", { name: "Salvar", exact: true }).click();
       await page.getByText("Alteração salva.", { exact: true }).waitFor();
       await page
