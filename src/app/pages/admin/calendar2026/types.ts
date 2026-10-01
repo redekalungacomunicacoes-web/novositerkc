@@ -4,6 +4,7 @@ export type TaskPriority = "baixa" | "media" | "alta" | "urgente";
 export type PermissionLevel = "admin" | "gestor" | "colaborador";
 export type TaskContextType = "internal" | "project" | "materia";
 export type TaskAttachmentAccess = "assignees" | "team";
+export type TaskAccessScope = "assignees" | "team";
 
 export interface TeamMember {
   id: string;
@@ -64,6 +65,7 @@ export interface CalendarTask {
   contextId: string | null;
   progress: number;
   driveFolderId: string | null;
+  accessScope: TaskAccessScope;
 }
 
 export interface TeamNotification {
@@ -96,4 +98,5 @@ export interface TaskInput {
   data_conclusao?: string | null;
   context_type: TaskContextType;
   context_id: string | null;
+  access_scope: TaskAccessScope;
 }
