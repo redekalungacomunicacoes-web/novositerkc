@@ -30,15 +30,20 @@ function AttachmentOpenButton({ attachment }: { attachment: TaskAttachment }) {
 
   async function openAttachment() {
     setError("");
-    if (/^https?:\/\//i.test(attachment.file_url)) {
-      window.open(attachment.file_url, "_blank", "noopener,noreferrer");
+    const tab = window.open("about:blank", "_blank");
+    if (!tab) {
+      setError("Permita pop-ups para abrir este arquivo.");
       return;
     }
+    tab.opener = null;
     setLoading(true);
     try {
-      const url = await getTaskAttachmentSignedUrl(attachment.file_url);
-      window.open(url, "_blank", "noopener,noreferrer");
+      const url = /^https?:\/\//i.test(attachment.file_url)
+        ? attachment.file_url
+        : await getTaskAttachmentSignedUrl(attachment.file_url);
+      tab.location.href = url;
     } catch (reason) {
+      tab.close();
       setError(reason instanceof Error ? reason.message : "Não foi possível abrir o arquivo.");
     } finally {
       setLoading(false);
