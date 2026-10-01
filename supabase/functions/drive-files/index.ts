@@ -2,7 +2,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { driveHealth, moveDriveFile, renameDriveFile, trashDriveFile, uploadDriveFile } from "../_shared/google-drive.ts";
+import { driveHealth, ensureDrivePath, moveDriveFile, renameDriveFile, trashDriveFile, uploadDriveFile } from "../_shared/google-drive.ts";
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -32,6 +32,29 @@ Deno.serve(async (req) => {
       const action = String(body?.action || "");
 
       if (action === "health") return json({ ok: true, drive: await driveHealth(rootFolderId) });
+
+      if (action === "ensure-task-folder") {
+        const taskId = String(body?.task_id || "").trim();
+        if (!taskId) return json({ ok: false, error: "task_id obrigatorio." }, 400);
+        const { data: task, error: taskError } = await admin.from("tasks")
+          .select("id,titulo,context_type,context_id,drive_folder_id").eq("id", taskId).single();
+        if (taskError || !task) return json({ ok: false, error: "Tarefa nao encontrada." }, 404);
+        if (task.drive_folder_id) return json({ ok: true, folder_id: task.drive_folder_id, reused: true });
+
+        const safeTask = `${task.id} - ${String(task.titulo || "Tarefa").slice(0, 80)}`;
+        let segments: string[];
+        if (task.context_type === "project" && task.context_id) {
+          segments = ["01_PROJETOS", String(task.context_id), "TAREFAS", safeTask];
+        } else if (task.context_type === "materia" && task.context_id) {
+          segments = ["02_MATERIAS", String(task.context_id), "TAREFAS", safeTask];
+        } else {
+          segments = ["03_TAREFAS_INTERNAS", safeTask];
+        }
+        const path = await ensureDrivePath(rootFolderId, segments);
+        const { error: updateError } = await admin.from("tasks").update({ drive_folder_id: path.folderId }).eq("id", task.id);
+        if (updateError) throw updateError;
+        return json({ ok: true, folder_id: path.folderId, path: segments, reused: false });
+      }
 
       const id = String(body?.id || "");
       if (!id) return json({ ok: false, error: "ID do arquivo obrigatorio." }, 400);
@@ -82,16 +105,38 @@ Deno.serve(async (req) => {
     const entityIdRaw = String(form.get("entity_id") || "").trim();
     const folderId = String(form.get("folder_id") || rootFolderId).trim();
     const visibility = form.get("visibility") === "public" ? "public" : "private";
+    const taskId = String(form.get("task_id") || "").trim();
     if (!(file instanceof File)) return json({ ok: false, error: "Arquivo obrigatorio." }, 400);
 
-    const uploaded = await uploadDriveFile(file, folderId);
+    let resolvedFolderId = folderId;
+    if (taskId) {
+      const { data: task, error: taskError } = await admin.from("tasks")
+        .select("id,titulo,context_type,context_id,drive_folder_id").eq("id", taskId).single();
+      if (taskError || !task) return json({ ok: false, error: "Tarefa do anexo nao encontrada." }, 404);
+      if (task.drive_folder_id) {
+        resolvedFolderId = task.drive_folder_id;
+      } else {
+        const safeTask = `${task.id} - ${String(task.titulo || "Tarefa").slice(0, 80)}`;
+        const segments = task.context_type === "project" && task.context_id
+          ? ["01_PROJETOS", String(task.context_id), "TAREFAS", safeTask]
+          : task.context_type === "materia" && task.context_id
+            ? ["02_MATERIAS", String(task.context_id), "TAREFAS", safeTask]
+            : ["03_TAREFAS_INTERNAS", safeTask];
+        const path = await ensureDrivePath(rootFolderId, segments);
+        resolvedFolderId = path.folderId;
+        const { error: updateError } = await admin.from("tasks").update({ drive_folder_id: resolvedFolderId }).eq("id", task.id);
+        if (updateError) throw updateError;
+      }
+    }
+
+    const uploaded = await uploadDriveFile(file, resolvedFolderId);
     const row = {
-      drive_file_id: uploaded.id, drive_folder_id: uploaded.parents?.[0] || folderId,
+      drive_file_id: uploaded.id, drive_folder_id: uploaded.parents?.[0] || resolvedFolderId,
       name: uploaded.name || file.name, mime_type: uploaded.mimeType || file.type || null,
       size_bytes: uploaded.size ? Number(uploaded.size) : file.size, module,
       entity_id: entityIdRaw || null, category, uploaded_by: authData.user.id,
       web_view_link: uploaded.webViewLink || null, visibility,
-      public_slug: visibility === "public" ? crypto.randomUUID() : null,
+      public_slug: visibility === "public" ? crypto.randomUUID() : null, task_id: taskId || null,
     };
 
     const { data, error } = await admin.from("drive_files").insert(row).select("*").single();
