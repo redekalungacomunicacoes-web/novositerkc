@@ -49,6 +49,10 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
 
   useEffect(() => {
     if (!open) return;
+    void Promise.all([listProjetos(), listMaterias()]).then(([projectResult, materiaResult]) => {
+      setProjects((projectResult.data ?? []).map((item: any) => ({ id: item.id, titulo: item.titulo || "Projeto sem título", published: Boolean(item.publicado_transparencia) })));
+      setMaterias((materiaResult.data ?? []).map((item: any) => ({ id: item.id, titulo: item.titulo || "Matéria sem título", status: item.status || "draft" })));
+    }).catch((error) => console.error("[tarefas:contextos]", error));
     if (initialTask) {
       editTask(initialTask);
       setComment("");
