@@ -44,7 +44,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
 
   function editTask(task: CalendarTask) {
     setEditing(task);
-    setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, direcionamento: task.direcionamento, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt, access_scope: task.accessScope });
+    setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, direcionamento: task.direcionamento, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt, context_type: task.contextType, context_id: task.contextId, access_scope: task.accessScope });
   }
 
   useEffect(() => {

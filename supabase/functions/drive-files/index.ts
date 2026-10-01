@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action ?? "");
-    if (action === "health") return json({ ok: true, configured: Boolean(rootFolderId) });
+    if (action === "health") return json({ ok: true, drive: { configured: Boolean(rootFolderId) } });
     const id = String(body.id ?? "");
     if (!id) return json({ ok: false, error: "ID do arquivo obrigatório." }, 400);
     const { data: file, error } = await admin.from("drive_files").select("*").eq("id", id).eq("status", "active").maybeSingle();
