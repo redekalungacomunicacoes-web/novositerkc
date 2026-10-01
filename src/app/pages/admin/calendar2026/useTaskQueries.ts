@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addTaskComment, createExternalAttachment, deleteTask, deleteTaskAttachment, fetchNotifications, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, getPermissionLevel, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
-import type { CalendarTask, TaskAttachment, TaskInput, TaskStatus } from "./types";
+import type { CalendarTask, TaskAttachment, TaskAttachmentAccess, TaskInput, TaskStatus } from "./types";
 
 export const taskKeys = {
   all: ["admin-tasks"] as const,
@@ -80,7 +80,7 @@ export function useTaskCommentMutation() {
 
 export function useTaskAttachmentMutation() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: ({ taskId, file }: { taskId: string; file: File }) => uploadTaskAttachment(taskId, file), onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }) });
+  return useMutation({ mutationFn: ({ taskId, file, accessScope = "assignees" }: { taskId: string; file: File; accessScope?: TaskAttachmentAccess }) => uploadTaskAttachment(taskId, file, accessScope), onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }) });
 }
 
 export function useExternalAttachmentMutation() {
