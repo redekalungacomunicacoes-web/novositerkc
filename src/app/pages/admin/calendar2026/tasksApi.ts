@@ -3,13 +3,13 @@ import { getCurrentUserRoles } from "@/lib/rbac";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
-const TASK_SELECT = "id,titulo,descricao,data_tarefa,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
+const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,data_conclusao,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao,context_type,context_id,progress,drive_folder_id";
 
 type DbTask = {
   id: string;
   titulo: string | null;
   descricao: string | null;
-  data_tarefa: string | null;
+  data_tarefa: string | null;\n  data_inicio?: string | null;\n  data_fim?: string | null;\n  data_conclusao?: string | null;
   hora_inicio: string | null;
   hora_fim: string | null;
   status: TaskStatus | "concluido" | "andamento" | "atrasado" | string | null;
@@ -21,7 +21,7 @@ type DbTask = {
   direcionamento?: string[] | null;
   mentions?: unknown;
   external_link: string | null;
-  link_reuniao: string | null;
+  link_reuniao: string | null;\n  context_type?: "internal" | "project" | "materia" | null;\n  context_id?: string | null;\n  progress?: number | null;\n  drive_folder_id?: string | null;
   task_attachments?: TaskAttachment[] | null;
   task_comments?: TaskComment[] | null;
 };
@@ -104,7 +104,7 @@ function requireDatabaseDate(value: string, label: string): string {
 }
 
 function mapTask(task: DbTask): CalendarTask {
-  const date = task.data_tarefa ?? new Date().toISOString().slice(0, 10);
+  const date = task.data_inicio ?? task.data_tarefa ?? new Date().toISOString().slice(0, 10);
   const description = task.descricao ?? "";
 
   return {
@@ -112,7 +112,7 @@ function mapTask(task: DbTask): CalendarTask {
     title: task.titulo ?? "Sem título",
     description,
     date,
-    endDate: task.data_tarefa ?? date,
+    endDate: task.data_fim ?? task.data_tarefa ?? date,
     startTime: normalizeTime(task.hora_inicio),
     endTime: normalizeTime(task.hora_fim),
     priority: normalizePriority(task.prioridade),
@@ -120,7 +120,7 @@ function mapTask(task: DbTask): CalendarTask {
     assigneeId: task.assigned_to ?? "",
     direcionamento: Array.isArray(task.direcionamento) ? task.direcionamento : [],
     creatorId: task.created_by,
-    completedAt: normalizeStatus(task.status) === "concluida" ? task.updated_at : null,
+    completedAt: task.data_conclusao ?? (normalizeStatus(task.status) === "concluida" ? task.updated_at : null),
     meetingLink: task.link_reuniao ?? task.external_link ?? null,
     attachments: task.task_attachments ?? [],
     comments: task.task_comments ?? [],
@@ -420,34 +420,26 @@ export async function addTaskComment(taskId: string, comentario: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function uploadTaskAttachment(taskId: string, file: File) {
-  const safeFileName = file.name.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase();
-  const filePath = `${taskId}/${crypto.randomUUID()}-${safeFileName}`;
+export async function uploadTaskAttachment(taskId: string, file: File, accessScope: "assignees" | "team" = "assignees") {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("task_id", taskId);
+  form.append("module", "tasks");
+  form.append("entity_id", taskId);
+  form.append("category", "attachment");
+  form.append("visibility", "private");
+  form.append("access_scope", accessScope);
 
-  console.log("[tarefas:anexos] task_id", taskId);
-  console.log("[tarefas:anexos] arquivo", { name: file.name, type: file.type, size: file.size });
+  const { data, error } = await supabase.functions.invoke("drive-files", { body: form });
+  if (error) throw new Error(error.message);
+  if (!data?.ok || !data?.file) throw new Error(data?.error || "Não foi possível enviar o anexo ao Drive RKC.");
 
-  const uploadResult = await supabase.storage.from(BUCKET).upload(filePath, file, { contentType: file.type || "application/octet-stream", upsert: false });
-  console.log("[tarefas:anexos] upload", uploadResult);
-  if (uploadResult.error) throw new Error(uploadResult.error.message);
-
-  const metadata = {
-    task_id: taskId,
-    file_url: filePath,
-    file_name: file.name,
-  };
-
-  const insertResult = await supabase.from("task_attachments").insert(metadata).select("*").single();
-  console.log("[tarefas:anexos] insert", insertResult);
-  if (insertResult.error) {
-    const cleanupResult = await supabase.storage.from(BUCKET).remove([filePath]);
-    if (cleanupResult.error) {
-      console.error("[tarefas:anexos] falha ao remover upload após erro de insert", cleanupResult.error);
-    }
-    throw new Error(insertResult.error.message);
-  }
-
-  return insertResult.data as TaskAttachment;
+  const row = data.file;
+  return {
+    id: row.id, task_id: taskId, file_url: "", file_name: row.name ?? file.name,
+    created_at: row.created_at ?? new Date().toISOString(), source: "drive",
+    drive_file_id: row.drive_file_id, access_scope: row.access_scope ?? accessScope,
+  } as TaskAttachment;
 }
 
 export async function getTaskAttachmentSignedUrl(filePath: string) {
@@ -474,15 +466,18 @@ export async function createExternalAttachment(taskId: string, url: string) {
   return insertResult.data as TaskAttachment;
 }
 
-export async function deleteTaskAttachment(attachment: Pick<TaskAttachment, "id" | "file_url">) {
-  if (attachment.file_url && !/^https?:\/\//i.test(attachment.file_url)) {
-    const storageResult = await supabase.storage.from(BUCKET).remove([attachment.file_url]);
-    if (storageResult.error) {
-      console.error("[tarefas:anexos] falha ao remover arquivo do Storage", storageResult.error);
-      throw new Error("Não foi possível remover o anexo da tarefa.");
-    }
+export async function deleteTaskAttachment(attachment: Pick<TaskAttachment, "id" | "file_url" | "source">) {
+  if (attachment.source === "drive") {
+    const { data, error } = await supabase.functions.invoke("drive-files", { body: { action: "trash", id: attachment.id } });
+    if (error) throw new Error(error.message);
+    if (!data?.ok) throw new Error(data?.error || "Não foi possível remover o arquivo do Drive.");
+    return;
   }
 
+  if (attachment.file_url && !/^https?:\/\//i.test(attachment.file_url)) {
+    const storageResult = await supabase.storage.from(BUCKET).remove([attachment.file_url]);
+    if (storageResult.error) throw new Error("Não foi possível remover o anexo legado da tarefa.");
+  }
   const { error } = await supabase.from("task_attachments").delete().eq("id", attachment.id);
   if (error) throw new Error(error.message);
 }
