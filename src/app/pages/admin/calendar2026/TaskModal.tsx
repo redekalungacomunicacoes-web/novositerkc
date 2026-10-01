@@ -162,7 +162,11 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    setAttachmentFiles(Array.from(event.target.files ?? []));
+    const selected = Array.from(event.target.files ?? []);
+    setAttachmentFiles((current) => [...current, ...selected.filter((file) =>
+      !current.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified),
+    )]);
+    event.currentTarget.value = "";
   }
 
   const assignee = teamMembers.find((member) => member.id === selectedTask?.assigneeId || member.userId === selectedTask?.assigneeId);
@@ -215,7 +219,11 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         </label>
         <select required disabled={form.direcionamento.length === 0} value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60`}><option value="">{form.direcionamento.length ? "Selecione o responsável" : "Selecione o direcionamento primeiro"}</option>{teamMembers.filter((member) => form.direcionamento.includes(member.id)).map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} className={`${inputClass} min-h-20 md:col-span-2`} placeholder="Adicionar comentário" />
-        <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
+        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 md:col-span-2">Arquivos da tarefa
+          <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
+          <span className="font-normal text-slate-500">Você pode adicionar vários arquivos. Os itens com falha ficam disponíveis para nova tentativa.</span>
+        </label>
+        {attachmentFiles.length ? <div className="grid gap-2 md:col-span-2">{attachmentFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-emerald-100 px-3 py-2 dark:border-emerald-800/60"><Paperclip size={15} className="shrink-0 text-emerald-700 dark:text-emerald-300" /><span className="min-w-0 flex-1 truncate text-sm">{file.name}</span><span className="shrink-0 text-xs text-slate-400">{(file.size / 1024 / 1024).toFixed(1)} MB</span><button type="button" aria-label={`Remover ${file.name}`} onClick={() => setAttachmentFiles((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50"><Trash2 size={15} /></button></div>)}</div> : null}
         <textarea value={externalLinks} onChange={(e) => setExternalLinks(e.target.value)} className={`${inputClass} min-h-16 md:col-span-2`} placeholder="Links externos (um por linha ou separados por vírgula)" />
         {attachmentFiles.length ? <p className="text-xs text-slate-500 dark:text-emerald-100/60 md:col-span-2">{attachmentFiles.length} arquivo(s) selecionado(s): {attachmentFiles.map((file) => file.name).join(", ")}</p> : null}
         {submitNotice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100 md:col-span-2">{submitNotice}</p> : null}{submitError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200 md:col-span-2">{submitError}</p> : null}
