@@ -5,6 +5,13 @@ import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskIn
 const BUCKET = "task-files";
 const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
 
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 type DbTask = {
   id: string;
   titulo: string | null;
@@ -108,7 +115,7 @@ function requireDatabaseDate(value: string, label: string): string {
 }
 
 function mapTask(task: DbTask): CalendarTask {
-  const date = task.data_inicio ?? task.data_tarefa ?? new Date().toISOString().slice(0, 10);
+  const date = task.data_inicio ?? task.data_tarefa ?? localDateKey(new Date());
   const endDate = task.data_fim ?? task.data_tarefa ?? date;
   const description = task.descricao ?? "";
 
@@ -389,9 +396,14 @@ export async function deleteTask(taskId: string) {
 }
 
 export async function fetchNotifications(): Promise<TeamNotification[]> {
-  const today = new Date().toISOString().slice(0, 10);
-  const startDate = new Date(Date.now() - 1000 * 60 * 60 * 24 * 60).toISOString().slice(0, 10);
-  const endDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 60).toISOString().slice(0, 10);
+  const currentDate = new Date();
+  const start = new Date(currentDate);
+  const end = new Date(currentDate);
+  start.setDate(start.getDate() - 60);
+  end.setDate(end.getDate() + 60);
+  const today = localDateKey(currentDate);
+  const startDate = localDateKey(start);
+  const endDate = localDateKey(end);
   const tasks = await fetchTasks(startDate, endDate);
   const notifications: TeamNotification[] = [];
 
