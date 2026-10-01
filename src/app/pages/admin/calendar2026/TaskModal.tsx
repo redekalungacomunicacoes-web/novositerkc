@@ -129,7 +129,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     });
     setAttachmentFiles(failedFiles);
 
-    const links = externalLinks.split(/\\n|,/).map((item) => item.trim()).filter(Boolean);
+    const links = externalLinks.split(/\n|,).map((item) => item.trim()).filter(Boolean);
     const failedLinks: string[] = [];
     for (const url of links) {
       try {
@@ -139,7 +139,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         failures.push(`Link ${url}: ${error instanceof Error ? error.message : "falha ao salvar"}`);
       }
     }
-    setExternalLinks(failedLinks.join("\\n"));
+    setExternalLinks(failedLinks.join("\n"));
 
     if (failures.length) {
       setSubmitNotice(`Tarefa salva com sucesso (código ${taskId.slice(0, 8)}). Ela já aparece na lista de tarefas. Reenvie os itens pendentes abaixo; a tarefa não será criada novamente.`);
