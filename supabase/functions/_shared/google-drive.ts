@@ -116,3 +116,53 @@ export async function driveHealth(folderId: string) {
   if (!response.ok) throw new Error(`Drive indisponivel: ${await response.text()}`);
   return response.json();
 }
+
+
+function escapeDriveQuery(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+export async function findDriveFolder(parentId: string, name: string) {
+  const q = [
+    `'${escapeDriveQuery(parentId)}' in parents`,
+    `name = '${escapeDriveQuery(name)}'`,
+    "mimeType = 'application/vnd.google-apps.folder'",
+    "trashed = false",
+  ].join(" and ");
+  const params = new URLSearchParams({
+    q, spaces: "drive", pageSize: "1", fields: "files(id,name,parents)",
+    supportsAllDrives: "true", includeItemsFromAllDrives: "true",
+  });
+  const response = await driveFetch(`${DRIVE_API}/files?${params}`);
+  if (!response.ok) throw new Error(`Falha ao localizar pasta no Drive: ${await response.text()}`);
+  const payload = await response.json();
+  return payload.files?.[0] || null;
+}
+
+export async function createDriveFolder(name: string, parentId: string) {
+  const response = await driveFetch(`${DRIVE_API}/files?supportsAllDrives=true&fields=id,name,parents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }),
+  });
+  if (!response.ok) throw new Error(`Falha ao criar pasta no Drive: ${await response.text()}`);
+  return response.json();
+}
+
+export async function ensureDriveFolder(parentId: string, name: string) {
+  const existing = await findDriveFolder(parentId, name);
+  return existing || await createDriveFolder(name, parentId);
+}
+
+export async function ensureDrivePath(rootFolderId: string, segments: string[]) {
+  let parentId = rootFolderId;
+  const folders = [];
+  for (const raw of segments) {
+    const name = raw.trim().replace(/[\\/]+/g, "-").slice(0, 120);
+    if (!name) continue;
+    const folder = await ensureDriveFolder(parentId, name);
+    folders.push(folder);
+    parentId = folder.id;
+  }
+  return { folderId: parentId, folders };
+}
