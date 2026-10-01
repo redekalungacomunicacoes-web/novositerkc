@@ -67,6 +67,14 @@ function google({
       return json({ access_token: "fixture-token" });
     if (url.pathname.includes("/drives/"))
       return json({ id: "shared", name: "Rede Kalunga Comunicações" });
+    if (url.pathname.endsWith("/permissions")) {
+      const fileId = url.pathname.split("/").at(-2);
+      return json({
+        permissions: fileId === "academy" && openAcademy
+          ? [{ id: "public", type: "anyone", role: "reader" }]
+          : [{ id: "service", type: "user", role: "writer" }],
+      });
+    }
     if (url.pathname === "/drive/v3/files" && !init.method) {
       const q = url.searchParams.get("q");
       const match = q.match(/name = '([^']+)'/);
