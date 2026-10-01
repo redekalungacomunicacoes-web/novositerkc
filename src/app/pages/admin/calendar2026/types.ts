@@ -1,7 +1,7 @@
 export type ViewMode = "month" | "week" | "day";
 export type TaskStatus = "pendente" | "em_andamento" | "revisao" | "concluida" | "cancelada";
 export type TaskPriority = "baixa" | "media" | "alta" | "urgente";
-export type PermissionLevel = "admin" | "gestor" | "colaborador";
+export type PermissionLevel = "admin" | "gestor" | "colaborador";\nexport type TaskContextType = "internal" | "project" | "materia";\nexport type TaskAttachmentAccess = "assignees" | "team";
 
 export interface TeamMember {
   id: string;
