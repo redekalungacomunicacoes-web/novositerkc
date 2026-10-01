@@ -138,7 +138,8 @@ export async function questionKey(id: string) {
 export async function duplicateCourse(courseId: string) {
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError || !auth.user) throw new Error("Entre novamente para duplicar o curso.");
-  const source = unwrap<Record<string, any>>(
+  type AcademyRow = Record<string, unknown> & { id: string };
+  const source = unwrap<AcademyRow>(
     await supabase.from("academy_courses").select("*").eq("id", courseId).single(),
   );
   const [moduleResult, lessonResult, materialResult, activityResult, questionResult] = await Promise.all([
@@ -148,16 +149,16 @@ export async function duplicateCourse(courseId: string) {
     supabase.from("academy_activities").select("*").eq("course_id", courseId),
     supabase.from("academy_questions").select("*,academy_activities!inner(course_id)").eq("academy_activities.course_id", courseId),
   ]);
-  const modules = unwrap<Record<string, any>[]>(moduleResult) || [];
-  const lessons = unwrap<Record<string, any>[]>(lessonResult) || [];
-  const materials = unwrap<Record<string, any>[]>(materialResult) || [];
-  const activities = unwrap<Record<string, any>[]>(activityResult) || [];
-  const questions = unwrap<Record<string, any>[]>(questionResult) || [];
-  const omit = (row: Record<string, any>) => Object.fromEntries(
+  const modules = unwrap<AcademyRow[]>(moduleResult) || [];
+  const lessons = unwrap<AcademyRow[]>(lessonResult) || [];
+  const materials = unwrap<AcademyRow[]>(materialResult) || [];
+  const activities = unwrap<AcademyRow[]>(activityResult) || [];
+  const questions = unwrap<AcademyRow[]>(questionResult) || [];
+  const omit = (row: Record<string, unknown>) => Object.fromEntries(
     Object.entries(row).filter(([key]) => !["id", "created_at", "updated_at", "published_at"].includes(key)),
   );
-  const insert = async (table: string, row: Record<string, any>): Promise<Record<string, any>> =>
-    unwrap<Record<string, any>>(await supabase.from(table).insert(row).select("*").single());
+  const insert = async (table: string, row: Record<string, unknown>): Promise<Record<string, unknown>> =>
+    unwrap<AcademyRow>(await supabase.from(table).insert(row).select("*").single());
   let createdId: string | null = null;
   let skippedDriveMedia = 0;
   let skippedDriveMaterials = 0;
@@ -188,10 +189,10 @@ export async function duplicateCourse(courseId: string) {
       const copy = await insert("academy_lessons", {
         ...omit(row),
         course_id: createdCourse.id,
-        module_id: moduleIds.get(row.module_id),
+        module_id: moduleIds.get(String(row.module_id)),
         status: "draft",
-        media_source: ["youtube", "vimeo"].includes(row.media_source) ? row.media_source : "none",
-        media_url: ["youtube", "vimeo"].includes(row.media_source) ? row.media_url : null,
+        media_source: ["youtube", "vimeo"].includes(String(row.media_source)) ? row.media_source : "none",
+        media_url: ["youtube", "vimeo"].includes(String(row.media_source)) ? row.media_url : null,
         media_drive_file_id: null,
         media_path: null,
       });
@@ -205,7 +206,7 @@ export async function duplicateCourse(courseId: string) {
       await insert("academy_materials", {
         ...omit(row),
         course_id: createdCourse.id,
-        lesson_id: row.lesson_id ? lessonIds.get(row.lesson_id) : null,
+        lesson_id: row.lesson_id ? lessonIds.get(String(row.lesson_id)) : null,
       });
     }
     const activityIds = new Map<string, string>();
@@ -213,7 +214,7 @@ export async function duplicateCourse(courseId: string) {
       const copy = await insert("academy_activities", {
         ...omit(row),
         course_id: createdCourse.id,
-        lesson_id: row.lesson_id ? lessonIds.get(row.lesson_id) : null,
+        lesson_id: row.lesson_id ? lessonIds.get(String(row.lesson_id)) : null,
         status: "draft",
       });
       activityIds.set(row.id, copy.id);
@@ -221,7 +222,7 @@ export async function duplicateCourse(courseId: string) {
     for (const row of questions) {
       const key = await questionKey(row.id);
       await saveQuestion({
-        activity_id: activityIds.get(row.activity_id),
+        activity_id: activityIds.get(String(row.activity_id)),
         prompt: row.prompt,
         type: row.type,
         options: row.options,
