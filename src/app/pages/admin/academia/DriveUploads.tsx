@@ -1,4 +1,4 @@
-import { useId, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { Button, Asset } from "./components";
 import { message } from "./service";
 import { uploadAcademyFile, removeAcademyFile } from "@/services/driveFiles";
@@ -20,11 +20,11 @@ function subscribe(listener: () => void) {
 }
 function SelectedPreview({ file }: { file: File }) {
   const [src, setSrc] = useState("");
-  useState(() => {
+  useEffect(() => {
     const url = URL.createObjectURL(file);
     setSrc(url);
-    return url;
-  });
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
   if (!src) return null;
   if (file.type.startsWith("image/"))
     return <img src={src} alt={"Prévia de " + file.name} className="max-h-48 max-w-full rounded-md object-contain" />;
