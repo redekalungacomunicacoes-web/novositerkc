@@ -48,7 +48,9 @@ function google({
   shared = true,
   name = "RKC - SISTEMA DO SITE",
   duplicate = false,
-  open = false,
+  openRoot = false,
+  openAcademy = false,
+  limited = true,
   failUpload = false,
 } = {}) {
   const calls = [];
@@ -96,16 +98,20 @@ function google({
     if (url.pathname.endsWith("/uploaded"))
       return json({
         id: "uploaded",
-        permissions: open ? [{ type: "anyone" }] : [{ type: "user" }],
+        permissions: openAcademy ? [{ type: "anyone" }] : [{ type: "user" }],
       });
+    const isAcademy = url.pathname.endsWith("/academy");
     return json({
-      id: url.pathname.endsWith("/academy") ? "academy" : "root",
-      name: url.pathname.endsWith("/academy") ? folder : name,
+      id: isAcademy ? "academy" : "root",
+      name: isAcademy ? folder : name,
       mimeType: "application/vnd.google-apps.folder",
       driveId: shared ? "shared" : undefined,
       parents: ["root"],
       capabilities: { canAddChildren: true },
-      permissions: open ? [{ type: "anyone" }] : [{ type: "user" }],
+      permissions: (isAcademy ? openAcademy : openRoot)
+        ? [{ type: "anyone" }]
+        : [{ type: "user" }],
+      inheritedPermissionsDisabled: isAcademy ? limited : false,
     });
   };
   return calls;
@@ -164,8 +170,8 @@ function form() {
   f.set("kind", "material");
   return f;
 }
-test("existing numbered academy is reused; root is never created", async () => {
-  const calls = google();
+test("existing limited-access Academy is reused; a public root is allowed", async () => {
+  const calls = google({ openRoot: true });
   const found = await drive.resolveAcademyFolder("root");
   assert.equal(found.id, "academy");
   assert.equal(found.reused, true);
@@ -183,7 +189,8 @@ test("missing, duplicate, public and personal destinations stop before any folde
     { duplicate: true },
     { shared: false },
     { name: "Play Moments" },
-    { open: true },
+    { openAcademy: true },
+    { limited: false },
   ]) {
     const calls = google(config);
     await assert.rejects(drive.resolveAcademyFolder("root"));
@@ -299,33 +306,13 @@ test("video preview validates exact domain, protocol and provider IDs", () => {
     null,
   );
 });
-test("explicit creation only makes 09_ACADEMIA when both existing names are absent", async () => {
-  const calls = google({ folder: "Missing" });
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init = {}) => {
-    if (String(url).includes("/files/child"))
-      return new Response(
-        JSON.stringify({
-          id: "child",
-          name: "09_ACADEMIA",
-          mimeType: "application/vnd.google-apps.folder",
-          driveId: "shared",
-          parents: ["root"],
-          capabilities: { canAddChildren: true },
-          permissions: [{ type: "user" }],
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      );
-    return originalFetch(url, init);
-  };
-  const folder = await drive.resolveAcademyFolder("root", true);
-  assert.equal(folder.id, "child");
-  assert.equal(folder.reused, false);
-  const created = calls.filter(
-    (x) => x.url.pathname === "/drive/v3/files" && x.init.method === "POST",
+test("missing Academy folder is never auto-created under a public root", async () => {
+  const calls = google({ folder: "Missing", openRoot: true });
+  await assert.rejects(drive.resolveAcademyFolder("root"), /Crie 09_ACADEMIA/);
+  assert.equal(
+    calls.filter((x) => x.url.pathname === "/drive/v3/files" && x.init.method === "POST").length,
+    0,
   );
-  assert.equal(created.length, 1);
-  assert.equal(JSON.parse(created[0].init.body).name, "09_ACADEMIA");
 });
 test("HTTP endpoint denies anonymous access, reader writes and out-of-scope downloads", async () => {
   const source = await readFile(
