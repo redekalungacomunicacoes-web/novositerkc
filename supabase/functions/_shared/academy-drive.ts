@@ -90,7 +90,7 @@ export async function uploadAcademyDrive(
     );
   let academy;
   try {
-    academy = await resolveAcademyFolder(rootId, true);
+    academy = await resolveAcademyFolder(rootId);
   } finally {
     await user.rpc("academy_drive_root_unlock", { p_token: rootToken });
   }
