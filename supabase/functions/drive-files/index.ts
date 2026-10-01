@@ -113,6 +113,7 @@ Deno.serve(async (req) => {
     const folderId = String(form.get("folder_id") || rootFolderId).trim();
     const visibility = form.get("visibility") === "public" ? "public" : "private";
     const taskId = String(form.get("task_id") || "").trim();
+    const requestedAccessScope = form.get("access_scope") === "team" ? "team" : "assignees";
     const requestedAccessScope = form.get("access_scope") === "team" ? "team" : "assignees";\n    const accessScope = form.get("access_scope") === "team" ? "team" : "assignees";
     if (!(file instanceof File)) return json({ ok: false, error: "Arquivo obrigatorio." }, 400);
 
@@ -145,6 +146,7 @@ Deno.serve(async (req) => {
       entity_id: entityIdRaw || null, category, uploaded_by: authData.user.id,
       web_view_link: uploaded.webViewLink || null, visibility,
       public_slug: visibility === "public" ? crypto.randomUUID() : null, task_id: taskId || null,
+      access_scope: taskId ? requestedAccessScope : "assignees",
       access_scope: taskId ? requestedAccessScope : "assignees",\n      access_scope: taskId ? accessScope : "team",
     };
 
