@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, FileText, MessageSquare, MoreVertical, Paperclip, Pencil, Trash2, UserCircle } from "lucide-react";
+import { CalendarDays, Download, FileText, MessageSquare, MoreVertical, Paperclip, Pencil, Trash2, UserCircle } from "lucide-react";
+import { downloadRkcDriveFile } from "@/services/driveFiles";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { priorityLabels, statusLabels } from "./tasksApi";
 import { useDeleteTaskAttachmentMutation, useExternalAttachmentMutation, useSaveTaskMutation, useTaskAttachmentMutation, useTaskCommentMutation } from "./useTaskQueries";
@@ -9,7 +10,7 @@ import { useCalendarStore } from "./store";
 import type { CalendarTask, TaskInput, TaskPriority, TaskStatus } from "./types";
 
 function emptyForm(date: string): TaskInput {
-  return { titulo: "", descricao: "", assigned_to: null, direcionamento: [], prioridade: "media", status: "pendente", data_inicio: date, data_fim: date, data_conclusao: null };
+  return { titulo: "", descricao: "", assigned_to: null, direcionamento: [], prioridade: "media", status: "pendente", data_inicio: date, data_fim: date, data_conclusao: null, access_scope: "assignees" };
 }
 
 const inputClass = "rounded-xl border border-emerald-100 bg-white p-2 text-sm text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-emerald-50";
@@ -43,7 +44,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
 
   function editTask(task: CalendarTask) {
     setEditing(task);
-    setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, direcionamento: task.direcionamento, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt });
+    setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, direcionamento: task.direcionamento, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt, access_scope: task.accessScope });
   }
 
   useEffect(() => {
@@ -120,17 +121,17 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       }
     }
 
-    const uploadResults = await Promise.allSettled(
-      attachmentFiles.map((file) => uploadAttachment.mutateAsync({ taskId, file })),
-    );
     const failedFiles: File[] = [];
-    uploadResults.forEach((result, index) => {
-      if (result.status === "rejected") {
-        failedFiles.push(attachmentFiles[index]);
-        const reason = result.reason instanceof Error ? result.reason.message : "falha no envio";
-        failures.push(`${attachmentFiles[index].name}: ${reason}`);
+    // A API cria a pasta da tarefa no primeiro envio; uploads sequenciais
+    // evitam criar pastas duplicadas quando vários arquivos são selecionados.
+    for (const file of attachmentFiles) {
+      try {
+        await uploadAttachment.mutateAsync({ taskId, file, accessScope: form.access_scope ?? "assignees" });
+      } catch (error) {
+        failedFiles.push(file);
+        failures.push(`${file.name}: ${error instanceof Error ? error.message : "falha no envio"}`);
       }
-    });
+    }
     setAttachmentFiles(failedFiles);
 
     const links = externalLinks.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
@@ -159,6 +160,21 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     setExternalLinks("");
     setSubmitNotice(editing ? "Tarefa atualizada com sucesso." : "Tarefa criada com sucesso.");
     if (initialTask || !editing) onClose();
+  }
+
+  async function handleAttachmentDownload(item: CalendarTask["attachments"][number]) {
+    if (!item.drive_file_id) return;
+    try {
+      const blob = await downloadRkcDriveFile(item.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = item.file_name ?? "anexo";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Não foi possível baixar o arquivo.");
+    }
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -211,6 +227,12 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         </label>
         <select value={form.prioridade} onChange={(e) => setForm((old) => ({ ...old, prioridade: e.target.value as TaskPriority }))} className={inputClass}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <select value={form.status} onChange={(e) => setForm((old) => ({ ...old, status: e.target.value as TaskStatus }))} className={inputClass}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200">Acesso aos arquivos
+          <select value={form.access_scope ?? "assignees"} onChange={(e) => setForm((old) => ({ ...old, access_scope: e.target.value as "assignees" | "team" }))} className={inputClass}>
+            <option value="assignees">Somente participantes da tarefa</option>
+            <option value="team">Toda a equipe RKC</option>
+          </select>
+        </label>
         <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 md:col-span-2">Direcionamento
           <select multiple value={form.direcionamento} onChange={(e) => { const ids = Array.from(e.currentTarget.selectedOptions, (option) => option.value); setForm((old) => ({ ...old, direcionamento: ids, assigned_to: old.assigned_to && ids.includes(old.assigned_to) ? old.assigned_to : null })); }} className={`${inputClass} min-h-28`}>
             {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}
@@ -235,7 +257,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60 lg:col-span-2"><h4 className="flex items-center gap-2 font-semibold"><FileText size={16} /> Descrição</h4><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-emerald-100/70">{selectedTask.description || "Sem descrição."}</p></div>
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><CalendarDays size={16} /> Histórico</h4><p className="mt-2 text-sm text-slate-600 dark:text-emerald-100/70">Criada em {formatDate(selectedTask.createdAt?.slice(0,10))}</p><p className="text-sm text-slate-600 dark:text-emerald-100/70">Atualizada em {formatDate(selectedTask.updatedAt?.slice(0,10))}</p></div>
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60 lg:col-span-2"><h4 className="flex items-center gap-2 font-semibold"><MessageSquare size={16} /> Comentários</h4><div className="mt-2 space-y-2">{selectedTask.comments.length ? selectedTask.comments.map((item) => <p key={item.id} className="rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40">{item.comentario}</p>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum comentário.</p>}</div></div>
-          <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><Paperclip size={16} /> Anexos</h4><div className="mt-2 space-y-2">{selectedTask.attachments.length ? selectedTask.attachments.map((item) => <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40"><span className="min-w-0 truncate">{item.file_name ?? "Anexo"}</span><button type="button" disabled={removeAttachment.isPending} aria-label={`Remover ${item.file_name ?? "anexo"}`} onClick={() => void removeAttachment.mutateAsync(item)} className="flex min-h-10 min-w-10 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-100 disabled:opacity-50"><Trash2 size={16} /></button></div>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum anexo.</p>}</div></div>
+          <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><Paperclip size={16} /> Anexos</h4><div className="mt-2 space-y-2">{selectedTask.attachments.length ? selectedTask.attachments.map((item) => <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40">{item.source === "drive" ? <button type="button" onClick={() => void handleAttachmentDownload(item)} className="min-w-0 flex-1 truncate text-left text-emerald-800 underline-offset-2 hover:underline dark:text-emerald-200">{item.file_name ?? "Anexo"} <Download size={13} className="inline" /></button> : <span className="min-w-0 truncate">{item.file_name ?? "Anexo"}</span>}<button type="button" disabled={removeAttachment.isPending} aria-label={`Remover ${item.file_name ?? "anexo"}`} onClick={() => void removeAttachment.mutateAsync(item)} className="flex min-h-10 min-w-10 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-100 disabled:opacity-50"><Trash2 size={16} /></button></div>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum anexo.</p>}</div></div>
         </section>
       ) : (
         <div className="space-y-2">{dayTasks.length === 0 ? <div className="rounded-2xl border border-dashed border-emerald-200 p-6 text-center text-slate-500 dark:border-emerald-800/60 dark:text-emerald-100/60">Nenhuma tarefa para este dia.</div> : dayTasks.map((t) => <button type="button" key={t.id} onClick={() => editTask(t)} className="w-full rounded-2xl border border-emerald-100 p-3 text-left transition hover:bg-emerald-50 dark:border-emerald-800/60 dark:hover:bg-emerald-900/40"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{t.title}</p><p className="text-xs text-slate-500 dark:text-emerald-100/60">{formatDate(t.date)} · {t.description}</p><p className="mt-1 text-xs text-slate-500 dark:text-emerald-100/60">{statusLabels[t.status]} · {priorityLabels[t.priority]}</p></div><span className="text-xs text-emerald-700 dark:text-emerald-300"><UserCircle size={14} /></span></div></button>)}</div>
