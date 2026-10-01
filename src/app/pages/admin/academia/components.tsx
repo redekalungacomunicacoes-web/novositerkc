@@ -129,6 +129,7 @@ export type Field = {
   max?: number;
   nullable?: boolean;
   hint?: string;
+  visibleWhen?: { field: string; equals: string[] };
 };
 export const opts = (values: string[]) =>
   values.map((value) => ({ value, label: labels[value] || value }));
@@ -203,7 +204,7 @@ export function Editor({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          {fields.map((f) => (
+          {fields.filter((f) => !f.visibleWhen || f.visibleWhen.equals.includes(String(values[f.visibleWhen.field] ?? ""))).map((f) => (
             <div key={f.name} className="text-sm space-y-1">
               <label
                 className="block font-medium"
@@ -230,6 +231,16 @@ export function Editor({
                   value={String(values[f.name] ?? "")}
                   onChange={(e) => {
                     const next = { ...values, [f.name]: e.target.value };
+                    if (f.name === "type") {
+                      if (["video", "audio", "image", "pdf", "document", "presentation", "mixed"].includes(e.target.value)) {
+                        next.media_source = "drive";
+                        next.media_url = null;
+                      }
+                      if (e.target.value === "link") {
+                        next.media_source = "none";
+                        next.media_url = null;
+                      }
+                    }
                     if (f.name === "media_source") {
                       if (e.target.value === "none") {
                         next.media_url = null;

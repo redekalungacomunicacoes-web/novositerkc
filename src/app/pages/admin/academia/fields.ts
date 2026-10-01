@@ -44,7 +44,10 @@ export function fieldsFor(
   switch (entity) {
     case "courses":
       return [
-        title,
+        {
+          ...title,
+          hint: "Depois de salvar os dados, o curso ficará selecionado para você enviar e conferir a capa no Drive RKC.",
+        },
         {
           name: "slug",
           label: "Slug (endereço único)",
@@ -161,12 +164,13 @@ export function fieldsFor(
             { value: "vimeo", label: "Vimeo" },
             { value: "youtube", label: "YouTube" },
           ],
-          hint: "Salve a aula e envie o arquivo pelo painel de conteúdo do Drive.",
+          hint: "Para usar arquivo, PDF ou vídeo da RKC, selecione Drive. Salve a aula e envie o conteúdo pelo painel da aula.",
         },
         {
           name: "media_url",
           label: "Link do Vimeo ou YouTube",
           nullable: true,
+          visibleWhen: { field: "media_source", equals: ["vimeo", "youtube"] },
         },
         {
           name: "duration_minutes",
