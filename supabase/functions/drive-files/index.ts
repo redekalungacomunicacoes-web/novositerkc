@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     const entityIdRaw = String(form.get("entity_id") || "").trim();
     const folderId = String(form.get("folder_id") || rootFolderId).trim();
     const visibility = form.get("visibility") === "public" ? "public" : "private";
-    const taskId = String(form.get("task_id") || "").trim();
+    const taskId = String(form.get("task_id") || "").trim();\n    const accessScope = form.get("access_scope") === "team" ? "team" : "assignees";
     if (!(file instanceof File)) return json({ ok: false, error: "Arquivo obrigatorio." }, 400);
 
     let resolvedFolderId = folderId;
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
       size_bytes: uploaded.size ? Number(uploaded.size) : file.size, module,
       entity_id: entityIdRaw || null, category, uploaded_by: authData.user.id,
       web_view_link: uploaded.webViewLink || null, visibility,
-      public_slug: visibility === "public" ? crypto.randomUUID() : null, task_id: taskId || null,
+      public_slug: visibility === "public" ? crypto.randomUUID() : null, task_id: taskId || null,\n      access_scope: taskId ? accessScope : "team",
     };
 
     const { data, error } = await admin.from("drive_files").insert(row).select("*").single();
