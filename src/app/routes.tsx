@@ -11,6 +11,7 @@ import {
 } from "@/lib/rbac";
 import { supabase } from "@/lib/supabase";
 
+const Academia = lazy(() => import("@/app/pages/admin/academia/Academia").then(m => ({ default: m.Academia })));
 const AdminLayout = lazy(() => import("@/app/layouts/AdminLayout").then(m => ({ default: m.AdminLayout })));
 const RootLayout = lazy(() => import("@/app/layouts/RootLayout").then(m => ({ default: m.RootLayout })));
 const Contato = lazy(() => import("@/app/pages/Contato").then(m => ({ default: m.Contato })));
@@ -83,6 +84,9 @@ export const router = createBrowserRouter([
         element: <AdminLayout />,
         children: [
           { index: true, element: <Dashboard /> },
+          { path: "academia", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <Academia /> },
+          { path: "academia/cursos/:courseId", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <Academia /> },
+          { path: "academia/cursos/:courseId/aulas/:lessonId", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <Academia /> },
           { path: "materias", loader: requireRoles(["admin", "editor", "autor"]), element: <AdminMateriasAlias /> },
           { path: "materias/nova", loader: requireRoles(["admin", "editor", "autor"]), element: <AdminMateriaForm /> },
           { path: "materias/editar/:id", loader: requireRoles(["admin", "editor", "autor"]), element: <AdminMateriaForm /> },
