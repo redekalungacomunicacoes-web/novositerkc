@@ -89,7 +89,7 @@ function AttachmentsCenter() {
       ? [`${files[index].name}: ${result.reason instanceof Error ? result.reason.message : "falha no envio"}`]
       : []);
 
-    const links = link.split(/\n|,).map((item) => item.trim()).filter(Boolean);
+    const links = link.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
     const failedLinks: string[] = [];
     for (const url of links) {
       try {
