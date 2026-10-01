@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation, Link } from "react-router-dom";
-import { GraduationCap } from "lucide-react";
+import { CopyPlus, GraduationCap, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAcademy } from "./useAcademy";
 import { Study } from "./Study";
@@ -19,6 +19,7 @@ import {
 import { fieldsFor, defaults } from "./fields";
 import {
   deleteEntity,
+  duplicateCourse,
   exportCsv,
   message,
   questionKey,
@@ -63,6 +64,8 @@ export function Academia() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("");
+  const [courseSearch, setCourseSearch] = useState("");
+  const [courseCategory, setCourseCategory] = useState("");
   const [edit, setEdit] = useState<EditState | null>(null);
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
@@ -168,8 +171,10 @@ export function Academia() {
       window.confirm(
         "Excluir este registro? Registros com histórico acadêmico podem impedir a exclusão.",
       )
-    )
+    ) {
       await run(() => deleteEntity(entity, id));
+      if (entity === "courses" && selectedCourse === id) setSelectedCourse("");
+    }
   }
   if (loading && !data) return <p role="status">Carregando Academia RKC…</p>;
   if (error || !data)
@@ -224,6 +229,11 @@ export function Academia() {
       ? ownCourses
       : data.courses.filter((c) => canEdit(c.id));
   const managedCourse = editingCourses.find((c) => c.id === selectedCourse);
+  const managedCourseMatches = editingCourses.filter((c) => {
+    const categoryName = data.categories.find((item) => item.id === c.category_id)?.name || "";
+    const searchable = [c.title, c.summary, c.description, categoryName, labels[c.status], labels[c.level]].join(" ").toLowerCase();
+    return (!courseCategory || c.category_id === courseCategory) && searchable.includes(courseSearch.toLowerCase());
+  });
   function actions(
     entity: Entity,
     row: { id: string },
@@ -625,21 +635,16 @@ export function Academia() {
           {["Editar meus cursos", "Gestão de cursos"].includes(tab) &&
             manager && (
               <>
-                <div className="flex flex-wrap gap-3 items-end">
-                  <label className="flex-1">
-                    Gerenciar curso
-                    <select
-                      className="block w-full border rounded-md bg-background px-3 py-2"
-                      value={selectedCourse}
-                      onChange={(e) => setSelectedCourse(e.target.value)}
-                    >
-                      <option value="">Selecione um curso</option>
-                      {editingCourses.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.title} · {labels[c.status]}
-                        </option>
-                      ))}
-                    </select>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="min-w-[240px] flex-1">
+                    Buscar por curso, descrição ou categoria
+                    <input
+                      type="search"
+                      className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
+                      placeholder="Digite um nome ou tema"
+                      value={courseSearch}
+                      onChange={(e) => setCourseSearch(e.target.value)}
+                    />
                   </label>
                   {manager && (
                     <Button onClick={() => open("courses", "Novo curso")}>
@@ -647,11 +652,131 @@ export function Academia() {
                     </Button>
                   )}
                 </div>
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold">Filtrar por categoria</h2>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant={courseCategory ? "outline" : "default"}
+                      onClick={() => setCourseCategory("")}
+                    >
+                      Todas
+                    </Button>
+                    {data.categories.map((item) => (
+                      <Button
+                        key={item.id}
+                        size="sm"
+                        variant={courseCategory === item.id ? "default" : "outline"}
+                        onClick={() => setCourseCategory(item.id)}
+                      >
+                        {item.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                {editingCourses.length > 0 && (
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {managedCourseMatches.map((c) => {
+                      const categoryName = data.categories.find((item) => item.id === c.category_id)?.name;
+                      return (
+                        <Card key={c.id}>
+                          <div className="aspect-video overflow-hidden rounded-md bg-primary/10">
+                            {c.cover_path || c.cover_drive_file_id ? (
+                              <Asset
+                                path={c.cover_path}
+                                driveFileId={c.cover_drive_file_id}
+                                title={c.title}
+                                type="image"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center">
+                                <GraduationCap className="h-12 w-12 text-primary" aria-hidden="true" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge tone={c.status === "published" ? "published" : "draft"}>
+                              {labels[c.status]}
+                            </Badge>
+                            <Badge>{labels[c.level]}</Badge>
+                          </div>
+                          <h3 className="text-lg font-semibold break-words">{c.title}</h3>
+                          <p className="line-clamp-3 text-sm text-muted-foreground">
+                            {c.summary || c.description || "Descrição ainda não informada."}
+                          </p>
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                            {categoryName ? (
+                              <button
+                                type="button"
+                                className="rounded-full border px-3 py-1 text-sm hover:bg-muted"
+                                onClick={() => setCourseCategory(c.category_id || "")}
+                              >
+                                {categoryName}
+                              </button>
+                            ) : <span className="text-sm text-muted-foreground">Sem categoria</span>}
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                aria-label={"Editar curso " + c.title}
+                                title="Editar curso"
+                                onClick={() => setSelectedCourse(c.id)}
+                              >
+                                <Pencil className="h-4 w-4" aria-hidden="true" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                aria-label={"Duplicar curso " + c.title}
+                                title="Duplicar curso"
+                                disabled={busy}
+                                onClick={() => void (async () => {
+                                  setBusy(true);
+                                  setActionError("");
+                                  try {
+                                    const result = await duplicateCourse(c.id);
+                                    await reload();
+                                    setSelectedCourse(String(result.course.id));
+                                    const skipped = result.skippedDriveMedia + result.skippedDriveMaterials;
+                                    setNotice(skipped
+                                      ? "Curso duplicado como rascunho. Reenvie os " + skipped + " arquivo(s) privado(s) do Drive na cópia."
+                                      : "Curso duplicado como rascunho.");
+                                  } catch (e) {
+                                    setActionError(message(e));
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                })()}
+                              >
+                                <CopyPlus className="h-4 w-4" aria-hidden="true" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                aria-label={"Excluir curso " + c.title}
+                                title="Excluir curso"
+                                disabled={busy}
+                                onClick={() => void remove("courses", c.id)}
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </Button>
+                            </div>
+                          </div>
+                          {selectedCourse === c.id && (
+                            <p className="text-sm font-medium text-primary">Selecionado para edição</p>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
                 {!editingCourses.length && (
                   <Empty>
-                    Cadastre o primeiro curso. O catálogo começa vazio, sem
-                    conteúdos fictícios.
+                    Cadastre o primeiro curso. O catálogo começa vazio, sem conteúdos fictícios.
                   </Empty>
+                )}
+                {editingCourses.length > 0 && !managedCourseMatches.length && (
+                  <Empty>Nenhum curso corresponde à busca ou à categoria selecionada.</Empty>
                 )}
                 {managedCourse && (
                   <>

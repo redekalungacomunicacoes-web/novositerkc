@@ -133,6 +133,7 @@ export function DriveUploads({
               }));
               setItems((rows) => [...rows, ...next]);
               event.target.value = "";
+              if (next.length) void send(next);
             }}
           />
           <label
@@ -142,9 +143,9 @@ export function DriveUploads({
             {chooseLabel}
           </label>
           {pending.length > 0 && (
-            <Button disabled={busy} onClick={() => void send(pending)}>
-              Enviar {pending.length === 1 ? "arquivo" : pending.length + " arquivos"} ao Drive RKC
-            </Button>
+            <p className="text-sm text-muted-foreground" role="status">
+              Envio iniciado automaticamente para o Drive RKC.
+            </p>
           )}
         </div>
       )}

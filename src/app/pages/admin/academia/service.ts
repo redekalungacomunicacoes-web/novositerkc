@@ -135,6 +135,108 @@ export async function questionKey(id: string) {
   );
   return row?.answer || "";
 }
+export async function duplicateCourse(courseId: string) {
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) throw new Error("Entre novamente para duplicar o curso.");
+  type AcademyRow = Record<string, unknown> & { id: string };
+  const source = unwrap<AcademyRow>(
+    await supabase.from("academy_courses").select("*").eq("id", courseId).single(),
+  );
+  const [moduleResult, lessonResult, materialResult, activityResult, questionResult] = await Promise.all([
+    supabase.from("academy_modules").select("*").eq("course_id", courseId).order("position"),
+    supabase.from("academy_lessons").select("*").eq("course_id", courseId).order("position"),
+    supabase.from("academy_materials").select("*").eq("course_id", courseId),
+    supabase.from("academy_activities").select("*").eq("course_id", courseId),
+    supabase.from("academy_questions").select("*,academy_activities!inner(course_id)").eq("academy_activities.course_id", courseId),
+  ]);
+  const modules = unwrap<AcademyRow[]>(moduleResult) || [];
+  const lessons = unwrap<AcademyRow[]>(lessonResult) || [];
+  const materials = unwrap<AcademyRow[]>(materialResult) || [];
+  const activities = unwrap<AcademyRow[]>(activityResult) || [];
+  const questions = unwrap<AcademyRow[]>(questionResult) || [];
+  const omit = (row: Record<string, unknown>) => Object.fromEntries(
+    Object.entries(row).filter(([key]) => !["id", "created_at", "updated_at", "published_at"].includes(key)),
+  );
+  const insert = async (table: string, row: Record<string, unknown>): Promise<AcademyRow> =>
+    unwrap<AcademyRow>(await supabase.from(table).insert(row).select("*").single());
+  let createdId: string | null = null;
+  let skippedDriveMedia = 0;
+  let skippedDriveMaterials = 0;
+  try {
+    const createdCourse = await insert("academy_courses", {
+      ...omit(source),
+      title: "Cópia de " + source.title,
+      slug: String(source.slug) + "-copia-" + crypto.randomUUID().slice(0, 8),
+      status: "draft",
+      published_at: null,
+      created_by: auth.user.id,
+      cover_path: null,
+      cover_drive_file_id: null,
+      position: Number(source.position || 0) + 1,
+    });
+    createdId = createdCourse.id;
+    const moduleIds = new Map<string, string>();
+    for (const row of modules) {
+      const copy = await insert("academy_modules", {
+        ...omit(row),
+        course_id: createdCourse.id,
+      });
+      moduleIds.set(row.id, copy.id);
+    }
+    const lessonIds = new Map<string, string>();
+    for (const row of lessons) {
+      if (row.media_source === "drive" || row.media_drive_file_id) skippedDriveMedia++;
+      const copy = await insert("academy_lessons", {
+        ...omit(row),
+        course_id: createdCourse.id,
+        module_id: moduleIds.get(String(row.module_id)),
+        status: "draft",
+        media_source: ["youtube", "vimeo"].includes(String(row.media_source)) ? row.media_source : "none",
+        media_url: ["youtube", "vimeo"].includes(String(row.media_source)) && typeof row.media_url === "string" ? row.media_url : null,
+        media_drive_file_id: null,
+        media_path: null,
+      });
+      lessonIds.set(row.id, copy.id);
+    }
+    for (const row of materials) {
+      if (row.drive_file_id) {
+        skippedDriveMaterials++;
+        continue;
+      }
+      await insert("academy_materials", {
+        ...omit(row),
+        course_id: createdCourse.id,
+        lesson_id: row.lesson_id ? lessonIds.get(String(row.lesson_id)) : null,
+      });
+    }
+    const activityIds = new Map<string, string>();
+    for (const row of activities) {
+      const copy = await insert("academy_activities", {
+        ...omit(row),
+        course_id: createdCourse.id,
+        lesson_id: row.lesson_id ? lessonIds.get(String(row.lesson_id)) : null,
+        status: "draft",
+      });
+      activityIds.set(row.id, copy.id);
+    }
+    for (const row of questions) {
+      const key = await questionKey(row.id);
+      await saveQuestion({
+        activity_id: activityIds.get(String(row.activity_id)),
+        prompt: row.prompt,
+        type: row.type,
+        options: row.options,
+        points: row.points,
+        position: row.position,
+        time_limit_seconds: row.time_limit_seconds,
+      }, key);
+    }
+    return { course: createdCourse, skippedDriveMedia, skippedDriveMaterials };
+  } catch (error) {
+    if (createdId) await supabase.from("academy_courses").delete().eq("id", createdId);
+    throw error;
+  }
+}
 export function exportCsv(
   headers: string[],
   rows: (string | number | null)[][],
