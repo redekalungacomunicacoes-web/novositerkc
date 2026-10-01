@@ -138,7 +138,9 @@ export async function questionKey(id: string) {
 export async function duplicateCourse(courseId: string) {
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError || !auth.user) throw new Error("Entre novamente para duplicar o curso.");
-  const source = unwrap(await supabase.from("academy_courses").select("*").eq("id", courseId).single());
+  const source = unwrap<Record<string, any>>(
+    await supabase.from("academy_courses").select("*").eq("id", courseId).single(),
+  );
   const [moduleResult, lessonResult, materialResult, activityResult, questionResult] = await Promise.all([
     supabase.from("academy_modules").select("*").eq("course_id", courseId).order("position"),
     supabase.from("academy_lessons").select("*").eq("course_id", courseId).order("position"),
@@ -146,24 +148,23 @@ export async function duplicateCourse(courseId: string) {
     supabase.from("academy_activities").select("*").eq("course_id", courseId),
     supabase.from("academy_questions").select("*,academy_activities!inner(course_id)").eq("academy_activities.course_id", courseId),
   ]);
-  const modules = unwrap(moduleResult) || [];
-  const lessons = unwrap(lessonResult) || [];
-  const materials = unwrap(materialResult) || [];
-  const activities = unwrap(activityResult) || [];
-  const questions = unwrap(questionResult) || [];
-  const omit = (row: Record<string, unknown>) => Object.fromEntries(
+  const modules = unwrap<Record<string, any>[]>(moduleResult) || [];
+  const lessons = unwrap<Record<string, any>[]>(lessonResult) || [];
+  const materials = unwrap<Record<string, any>[]>(materialResult) || [];
+  const activities = unwrap<Record<string, any>[]>(activityResult) || [];
+  const questions = unwrap<Record<string, any>[]>(questionResult) || [];
+  const omit = (row: Record<string, any>) => Object.fromEntries(
     Object.entries(row).filter(([key]) => !["id", "created_at", "updated_at", "published_at"].includes(key)),
   );
-  const insert = async (table: string, row: Record<string, unknown>) =>
-    unwrap(await supabase.from(table).insert(row).select("*").single());
-  let created: Record<string, unknown> | null = null;
+  const insert = async (table: string, row: Record<string, any>): Promise<Record<string, any>> =>
+    unwrap<Record<string, any>>(await supabase.from(table).insert(row).select("*").single());
+  let createdId: string | null = null;
   let skippedDriveMedia = 0;
   let skippedDriveMaterials = 0;
   try {
-    const title = "Cópia de " + source.title;
-    created = await insert("academy_courses", {
+    const createdCourse = await insert("academy_courses", {
       ...omit(source),
-      title,
+      title: "Cópia de " + source.title,
       slug: String(source.slug) + "-copia-" + crypto.randomUUID().slice(0, 8),
       status: "draft",
       published_at: null,
@@ -172,11 +173,12 @@ export async function duplicateCourse(courseId: string) {
       cover_drive_file_id: null,
       position: Number(source.position || 0) + 1,
     });
+    createdId = createdCourse.id;
     const moduleIds = new Map<string, string>();
     for (const row of modules) {
       const copy = await insert("academy_modules", {
         ...omit(row),
-        course_id: created.id,
+        course_id: createdCourse.id,
       });
       moduleIds.set(row.id, copy.id);
     }
@@ -185,7 +187,7 @@ export async function duplicateCourse(courseId: string) {
       if (row.media_source === "drive" || row.media_drive_file_id) skippedDriveMedia++;
       const copy = await insert("academy_lessons", {
         ...omit(row),
-        course_id: created.id,
+        course_id: createdCourse.id,
         module_id: moduleIds.get(row.module_id),
         status: "draft",
         media_source: ["youtube", "vimeo"].includes(row.media_source) ? row.media_source : "none",
@@ -202,7 +204,7 @@ export async function duplicateCourse(courseId: string) {
       }
       await insert("academy_materials", {
         ...omit(row),
-        course_id: created.id,
+        course_id: createdCourse.id,
         lesson_id: row.lesson_id ? lessonIds.get(row.lesson_id) : null,
       });
     }
@@ -210,7 +212,7 @@ export async function duplicateCourse(courseId: string) {
     for (const row of activities) {
       const copy = await insert("academy_activities", {
         ...omit(row),
-        course_id: created.id,
+        course_id: createdCourse.id,
         lesson_id: row.lesson_id ? lessonIds.get(row.lesson_id) : null,
         status: "draft",
       });
@@ -228,11 +230,9 @@ export async function duplicateCourse(courseId: string) {
         time_limit_seconds: row.time_limit_seconds,
       }, key);
     }
-    return { course: created, skippedDriveMedia, skippedDriveMaterials };
+    return { course: createdCourse, skippedDriveMedia, skippedDriveMaterials };
   } catch (error) {
-    if (created?.id) {
-      await supabase.from("academy_courses").delete().eq("id", created.id);
-    }
+    if (createdId) await supabase.from("academy_courses").delete().eq("id", createdId);
     throw error;
   }
 }
