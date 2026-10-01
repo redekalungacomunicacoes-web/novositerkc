@@ -23,7 +23,7 @@ function AttachmentsCenter() {
   const [taskId, setTaskId] = useState("");
   const [link, setLink] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);\n  const [accessScope, setAccessScope] = useState<"assignees" | "team">("assignees");
 
   const attachments = useMemo(() => tasks.flatMap((task) => task.attachments.map((attachment) => ({ attachment, task }))).sort((a, b) => b.attachment.created_at.localeCompare(a.attachment.created_at)), [tasks]);
 
@@ -36,7 +36,7 @@ function AttachmentsCenter() {
   async function saveAttachment(event: React.FormEvent) {
     event.preventDefault();
     if (!taskId) return;
-    for (const file of files) await uploadAttachment.mutateAsync({ taskId, file });
+    for (const file of files) await uploadAttachment.mutateAsync({ taskId, file, accessScope });
     for (const url of link.split(/\n|,/).map((item) => item.trim()).filter(Boolean)) {
       await linkAttachment.mutateAsync({ taskId, url });
     }
@@ -63,7 +63,7 @@ function AttachmentsCenter() {
         {open ? (
           <form onSubmit={(event) => void saveAttachment(event)} className="grid gap-3 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70 md:grid-cols-2">
             <select required value={taskId} onChange={(event) => setTaskId(event.target.value)} className="h-11 rounded-2xl border border-emerald-100 bg-white px-3 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white"><option value="">Selecionar tarefa de destino</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select>
-            <input type="file" multiple onChange={(event) => handleFiles(Array.from(event.target.files ?? []))} className="h-11 rounded-2xl border border-emerald-100 bg-white px-3 py-2 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white" />
+            <input type="file" multiple onChange={(event) => handleFiles(Array.from(event.target.files ?? []))} className="h-11 rounded-2xl border border-emerald-100 bg-white px-3 py-2 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white" />\n            <select value={accessScope} onChange={(event) => setAccessScope(event.target.value as "assignees" | "team")} className="h-11 rounded-2xl border border-emerald-100 bg-white px-3 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white"><option value="assignees">Somente envolvidos na tarefa</option><option value="team">Toda a equipe RKC</option></select>
             <textarea value={link} onChange={(event) => setLink(event.target.value)} placeholder="Ou informe links (um por linha ou separados por vírgula)" className="min-h-20 rounded-2xl border border-emerald-100 bg-white px-3 py-2 text-sm dark:border-emerald-800/60 dark:bg-emerald-900/70 dark:text-white md:col-span-2" />
             {files.length ? <div className="rounded-2xl border border-emerald-100 p-3 dark:border-emerald-800/60 md:col-span-2"><p className="text-sm text-slate-600 dark:text-emerald-100/70">Selecionados: {files.map((file) => file.name).join(", ")}</p>{previews.length ? <div className="mt-3 flex flex-wrap gap-3">{previews.map((preview) => <img key={preview} src={preview} alt="Preview" className="max-h-56 rounded-xl object-contain" />)}</div> : null}</div> : null}
             {uploadAttachment.error ? <p className="text-sm text-rose-500 md:col-span-2">{uploadAttachment.error.message}</p> : null}
