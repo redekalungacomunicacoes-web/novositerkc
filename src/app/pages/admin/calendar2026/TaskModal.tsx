@@ -108,6 +108,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         return;
       }
     }
+    if (!taskId) return;
 
     const failures: string[] = [];
     if (comment.trim()) {
@@ -120,7 +121,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     }
 
     const uploadResults = await Promise.allSettled(
-      attachmentFiles.map((file) => uploadAttachment.mutateAsync({ taskId: taskId!, file })),
+      attachmentFiles.map((file) => uploadAttachment.mutateAsync({ taskId, file })),
     );
     const failedFiles: File[] = [];
     uploadResults.forEach((result, index) => {
