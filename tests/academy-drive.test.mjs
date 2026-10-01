@@ -69,10 +69,24 @@ function google({
       return json({ id: "shared", name: "Rede Kalunga Comunicações" });
     if (url.pathname.endsWith("/permissions")) {
       const fileId = url.pathname.split("/").at(-2);
+      const isAcademyOrFile = ["academy", "uploaded"].includes(fileId);
+      const directPublic = openAcademy && isAcademyOrFile;
+      const inheritedPublic = openRoot && isAcademyOrFile;
       return json({
-        permissions: fileId === "academy" && openAcademy
-          ? [{ id: "public", type: "anyone", role: "reader" }]
-          : [{ id: "service", type: "user", role: "writer" }],
+        permissions: [
+          ...(directPublic
+            ? [{ id: "public-direct", type: "anyone", role: "reader" }]
+            : []),
+          ...(inheritedPublic
+            ? [{
+                id: "public-inherited",
+                type: "anyone",
+                role: "reader",
+                permissionDetails: [{ inherited: true }],
+              }]
+            : []),
+          { id: "service", type: "user", role: "writer" },
+        ],
       });
     }
     if (url.pathname === "/drive/v3/files" && !init.method) {
@@ -190,6 +204,16 @@ test("existing limited-access Academy is reused; a public root is allowed", asyn
     ).length,
     0,
   );
+});
+test("public inherited permissions are ignored, direct public grants are rejected", async () => {
+  google({ openRoot: true });
+  assert.equal((await drive.resolveAcademyFolder("root")).id, "academy");
+  google({ openRoot: true });
+  await drive.assertPrivateDriveFile("uploaded");
+  google({ openAcademy: true });
+  await assert.rejects(drive.resolveAcademyFolder("root"), /permissão pública direta/);
+  google({ openAcademy: true });
+  await assert.rejects(drive.assertPrivateDriveFile("uploaded"), /acesso aberto/);
 });
 test("missing, duplicate, public and personal destinations stop before any folder/upload", async () => {
   for (const config of [
