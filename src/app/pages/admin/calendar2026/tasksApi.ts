@@ -3,7 +3,7 @@ import { getCurrentUserRoles } from "@/lib/rbac";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
-const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,data_conclusao,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao,context_type,context_id,progress,drive_folder_id";
+const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,data_conclusao,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao,context_type,context_id,progress,drive_folder_id,access_scope";
 
 type DbTask = {
   id: string;
@@ -22,6 +22,7 @@ type DbTask = {
   mentions?: unknown;
   external_link: string | null;
   link_reuniao: string | null;\n  context_type?: "internal" | "project" | "materia" | null;\n  context_id?: string | null;\n  progress?: number | null;\n  drive_folder_id?: string | null;
+  access_scope?: "assignees" | "team" | null;
   task_attachments?: TaskAttachment[] | null;
   task_comments?: TaskComment[] | null;
 };
@@ -130,6 +131,7 @@ function mapTask(task: DbTask): CalendarTask {
     contextId: task.context_id ?? null,
     progress: Math.max(0, Math.min(100, Number(task.progress ?? 0))),
     driveFolderId: task.drive_folder_id ?? null,
+    accessScope: task.access_scope === "team" ? "team" : "assignees",
   };
 }
 
@@ -304,6 +306,7 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     data_fim: endDate,
     context_type: input.context_type,
     context_id: input.context_type === "internal" ? null : input.context_id,
+    access_scope: input.access_scope,
     prioridade: input.prioridade,
     status: toDbStatus(input.status),
     assigned_to: assignedTo,
