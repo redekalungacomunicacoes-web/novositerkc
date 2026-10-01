@@ -21,6 +21,23 @@ function ManagerDashboard() {
   const byMember = teamMembers.map((member) => ({ member, count: tasks.filter((task) => task.assigneeId === member.id || task.assigneeId === member.userId).length })).sort((a, b) => b.count - a.count).slice(0, 8);
   const maxMemberCount = Math.max(1, ...byMember.map((item) => item.count));
 
+  function exportCsv() {
+    const header = ["Tarefa","Status","Prioridade","Inicio","Fim","Progresso","Contexto","Visibilidade","Responsavel"];
+    const rows = tasks.map((task) => {
+      const member = teamMembers.find((item) => item.id === task.assigneeId || item.userId === task.assigneeId);
+      return [task.title, task.status, task.priority, task.date, task.endDate, String(task.progress), task.contextType, task.accessScope, member?.name ?? "Nao definido"];
+    });
+    const escape = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+    const csv = [header, ...rows].map((row) => row.map(escape).join(";")).join("\\r\\n");
+    const blob = new Blob(["\\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `rkc-tarefas-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   function setQuickPeriod(period: "today" | "week" | "month") {
     const now = new Date();
     const start = new Date(now);
@@ -62,7 +79,7 @@ function ManagerDashboard() {
           </article>
           <article className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70">
             <h2 className="font-semibold text-slate-950 dark:text-white">Exportação</h2>
-            <div className="mt-4 flex flex-wrap gap-2"><button className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white"><FileText size={16} /> PDF</button><button className="inline-flex items-center gap-2 rounded-xl border border-emerald-100 px-4 py-2 text-sm dark:border-emerald-800/60"><FileSpreadsheet size={16} /> Excel</button><span className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-emerald-100/70"><Download size={16} /> Pronto para integração de exportadores.</span></div>
+            <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled title="PDF será habilitado após o relatório institucional diagramado" className="inline-flex items-center gap-2 rounded-xl border border-emerald-100 px-4 py-2 text-sm opacity-50 dark:border-emerald-800/60"><FileText size={16} /> PDF</button><button type="button" onClick={exportCsv} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white"><FileSpreadsheet size={16} /> CSV / Excel</button><span className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-emerald-100/70"><Download size={16} /> Exporta o período atualmente carregado.</span></div>
           </article>
         </section>
       </main>
