@@ -282,9 +282,9 @@ export async function ensureDrivePath(
   return { folderId: parentId, folders };
 }
 
-export async function getDriveFolder(id: string) {
+export async function getDriveFolder(id: string, requireLimitedAccess = false) {
   const response = await driveFetch(
-    `${DRIVE_API}/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id,name,mimeType,driveId,parents,trashed,capabilities(canAddChildren),owners(emailAddress,displayName),permissions(type,role)`,
+    `${DRIVE_API}/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id,name,mimeType,driveId,parents,trashed,capabilities(canAddChildren),owners(emailAddress,displayName),permissions(type,role),inheritedPermissionsDisabled`,
   );
   if (!response.ok)
     throw new Error("Não foi possível confirmar a pasta no Drive RKC.");
@@ -295,19 +295,24 @@ export async function getDriveFolder(id: string) {
   )
     throw new Error("Destino indisponível ou não é uma pasta.");
   if (
+    requireLimitedAccess &&
+    folder.inheritedPermissionsDisabled !== true
+  )
+    throw new Error(
+      "Ative Limitar acesso diretamente em 09_ACADEMIA antes de enviar materiais.",
+    );
+  if (
+    requireLimitedAccess &&
     folder.permissions?.some((p: { type: string }) =>
       ["anyone", "domain"].includes(p.type),
     )
   )
     throw new Error(
-      "A pasta permite acesso aberto. Configure acesso privado antes de enviar materiais.",
+      "09_ACADEMIA tem permissão pública direta. Remova-a antes de enviar materiais.",
     );
   return folder;
 }
-export async function resolveAcademyFolder(
-  rootId: string,
-  allowCreate = false,
-) {
+export async function resolveAcademyFolder(rootId: string) {
   // Use the already-configured RKC integration; never fall back to a personal Drive.
   const root = await getDriveFolder(rootId);
   if (root.name !== "RKC - SISTEMA DO SITE")
@@ -358,14 +363,12 @@ export async function resolveAcademyFolder(
       "Academia e 09_ACADEMIA existem: confirme qual pasta deve ser usada.",
     );
   const reused = candidates.length === 1;
-  if (!reused && !allowCreate)
+  if (!reused)
     throw new Error(
-      "Pasta Academia ou 09_ACADEMIA não encontrada. A criação de 09_ACADEMIA será confirmada pelo serviço autenticado.",
+      "Pasta Academia ou 09_ACADEMIA não encontrada. Crie 09_ACADEMIA no Drive da RKC e ative Limitar acesso.",
     );
-  // Creation is explicitly authorized by RKC; caller holds the global root lease.
-  const destination =
-    candidates[0] || (await createDriveFolder("09_ACADEMIA", root.id));
-  const academy = await getDriveFolder(destination.id);
+  const destination = candidates[0];
+  const academy = await getDriveFolder(destination.id, true);
   if (
     academy.driveId !== root.driveId ||
     !academy.parents?.includes(root.id) ||
