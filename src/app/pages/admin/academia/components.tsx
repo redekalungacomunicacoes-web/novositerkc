@@ -381,6 +381,7 @@ export function Asset({
       loader
         .then((blob) => {
           if (!active) return;
+          if (!(blob instanceof Blob)) throw new Error("O servidor não retornou um arquivo válido.");
           objectUrl = URL.createObjectURL(blob);
           setMime(blob.type);
           setSrc(objectUrl);
@@ -392,7 +393,7 @@ export function Asset({
     else if (path)
       signedAsset(path)
         .then((s) => {
-          if (active) setSrc(s);
+          if (active) setSrc(typeof s === "string" ? s : null);
         })
         .catch((e) => {
           if (active) setError(message(e));
