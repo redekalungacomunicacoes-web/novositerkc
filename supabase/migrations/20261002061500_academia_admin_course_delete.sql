@@ -3,6 +3,35 @@
 -- dos arquivos no Drive sem exigir limpeza manual arquivo por arquivo.
 begin;
 
+create or replace function public.academy_delete_enrollment(p_enrollment uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  target_course uuid;
+begin
+  select course_id into target_course
+    from public.academy_enrollments
+   where id = p_enrollment;
+
+  if target_course is null then
+    raise exception 'Matrícula não encontrada.';
+  end if;
+
+  if not public.academy_admin() then
+    raise exception 'Somente administradores podem desvincular matrículas com histórico.';
+  end if;
+
+  delete from public.academy_certificates where enrollment_id = p_enrollment;
+  delete from public.academy_enrollments where id = p_enrollment;
+end;
+$;
+
+revoke all on function public.academy_delete_enrollment(uuid) from public, anon;
+grant execute on function public.academy_delete_enrollment(uuid) to authenticated;
+
 create or replace function public.academy_delete_course(p_course uuid)
 returns void
 language plpgsql
