@@ -220,10 +220,7 @@ try {
     );
     await page.getByRole("button", { name: "Editar curso Curso próprio" }).click();
     await page.waitForURL("**/admin/academia/cursos/own/editar");
-    assert.equal(
-      await page.getByRole("button", { name: /^(Publicar|Despublicar)$/ }).count(),
-      1,
-    );
+    await page.getByText("Edição dedicada", { exact: true }).waitFor();
     assert.equal(
       await page.getByRole("button", { name: "Voltar aos cursos", exact: true }).count(),
       1,
