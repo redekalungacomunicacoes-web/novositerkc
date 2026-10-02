@@ -1,0 +1,29 @@
+name: Validate Tasks
+
+on:
+  pull_request:
+    paths:
+      - 'src/app/pages/admin/AdminTarefas*.tsx'
+      - 'src/app/pages/admin/calendar2026/**'
+      - 'src/services/driveFiles.ts'
+      - 'supabase/functions/drive-files/**'
+      - 'supabase/migrations/*task*'
+      - 'tests/*task*'
+      - 'package*.json'
+      - '.github/workflows/validate-tasks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
