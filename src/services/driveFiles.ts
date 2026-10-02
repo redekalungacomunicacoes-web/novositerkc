@@ -241,7 +241,7 @@ export async function uploadAcademyFile(input: {
   // This avoids browser -> Google resumable-session CORS/network inconsistencies.
   if (["cover", "banner"].includes(input.kind)) {
     const form = new FormData();
-    form.append("module", "academy");
+    form.append("module", input.kind === "banner" ? "academy-banner" : "academy");
     form.append("file", input.file);
     form.append("course_id", input.courseId);
     form.append("kind", input.kind);

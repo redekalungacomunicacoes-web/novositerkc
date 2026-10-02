@@ -207,7 +207,7 @@ try {
     );
     assert.equal(
       await page.getByRole("heading", { name: "Curso da equipe", exact: true }).count(),
-      1,
+      ["admin_alfa", "admin"].includes(role) ? 1 : 0,
     );
     await page.getByRole("searchbox", { name: /Buscar por curso/ }).fill("Curso próprio");
     assert.equal(
@@ -219,50 +219,31 @@ try {
       1,
     );
     await page.getByRole("button", { name: "Editar curso Curso próprio" }).click();
+    await page.waitForURL("**/admin/academia/cursos/own/editar");
+    await page.getByText("Edição dedicada", { exact: true }).waitFor();
     assert.equal(
-      await page.getByRole("button", { name: "Publicar", exact: true }).count(),
+      await page.getByRole("button", { name: "Voltar aos cursos", exact: true }).count(),
       1,
     );
     if (role === "autor") {
+      await page.getByRole("button", { name: "Voltar aos cursos", exact: true }).click();
+      await page.waitForURL("**/admin/academia");
       await page
-        .getByRole("button", { name: "Novo curso", exact: true })
-        .click();
-      await page
-        .getByLabel(/^Título(?: \*)?$/)
-        .fill("Novo curso da autora");
-      await page.getByRole("button", { name: "Salvar", exact: true }).click();
-      await page.getByText("Alteração salva.", { exact: true }).waitFor();
-      await page
-        .getByRole("button", { name: "Cursos publicados", exact: true })
+        .getByRole("button", { name: "Gestão de cursos", exact: true })
         .click();
       assert.equal(
-        await page.getByText("Alteração salva.", { exact: true }).count(),
-        0,
+        await page.getByRole("button", { name: "Novo curso", exact: true }).count(),
+        1,
       );
-      await page
-        .getByRole("button", { name: "Editar meus cursos", exact: true })
-        .click();
-      await page
-        .getByRole("button", { name: "Novo curso", exact: true })
-        .click();
-      await page.getByLabel(/^Título(?: \*)?$/).fill("Outro curso");
-      await page.getByRole("button", { name: "Salvar", exact: true }).click();
-      await page.getByText("Alteração salva.", { exact: true }).waitFor();
-      await page
-        .getByText("Alteração salva.", { exact: true })
-        .waitFor({ state: "hidden", timeout: 6000 });
     }
     assert.deepEqual(errors, []);
     await context.close();
     console.log(`Desktop ${role}: menu, biblioteca sem edição e autoria OK`);
   }
   const { page, context, errors } = await setup("autor", true);
-  await page
-    .getByRole("button", { name: "Cursos publicados", exact: true })
-    .click();
   assert.ok(
     await page
-      .getByRole("button", { name: "Editar meus cursos", exact: true })
+      .getByRole("button", { name: "Gestão de cursos", exact: true })
       .isVisible(),
   );
   assert.ok(

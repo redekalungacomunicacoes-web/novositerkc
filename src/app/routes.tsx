@@ -90,6 +90,7 @@ export const router = createBrowserRouter([
           { index: true, element: <Dashboard /> },
           { path: "academia", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <Academia /> },
           { path: "academia/cursos/:courseId", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <Academia /> },
+          { path: "academia/cursos/:courseId/editar", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <Academia /> },
           { path: "academia/cursos/:courseId/aulas/:lessonId", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <Academia /> },
           { path: "materias", loader: requireRoles(["admin", "editor", "autor"]), element: <AdminMateriasAlias /> },
           { path: "materias/nova", loader: requireRoles(["admin", "editor", "autor"]), element: <AdminMateriaForm /> },

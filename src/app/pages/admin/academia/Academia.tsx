@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useLocation, Link } from "react-router-dom";
+import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
 import { CopyPlus, GraduationCap, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAcademy } from "./useAcademy";
@@ -55,10 +55,12 @@ export function Academia() {
     academy;
   const { courseId, lessonId } = useParams();
   const location = useLocation();
-  const [tab, setTab] = useState("Minha Academia");
+  const navigate = useNavigate();
+  const isCourseEditor = location.pathname.endsWith("/editar");
+  const [tab, setTab] = useState(isCourseEditor ? "Gestão de cursos" : "Minha Academia");
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState(isCourseEditor ? (courseId || "") : "");
   const [courseSearch, setCourseSearch] = useState("");
   const [courseCategory, setCourseCategory] = useState("");
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -70,6 +72,12 @@ export function Academia() {
     setNotice("");
     setActionError("");
   }, [tab, selectedCourse, location.key]);
+  useEffect(() => {
+    if (isCourseEditor && courseId) {
+      setTab("Gestão de cursos");
+      setSelectedCourse(courseId);
+    }
+  }, [courseId, isCourseEditor]);
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 4000);
@@ -199,7 +207,7 @@ export function Academia() {
       </Card>
     );
   const course = data.courses.find((c) => c.id === courseId);
-  if (courseId)
+  if (courseId && !isCourseEditor)
     return course ? (
       <Study
         data={data}
@@ -693,6 +701,7 @@ export function Academia() {
           )}
           {tab === "Gestão de cursos" && manager && (
               <>
+                {!isCourseEditor && <>
                 <div className="flex flex-wrap items-end gap-3">
                   <label className="min-w-[240px] flex-1">
                     Buscar por curso, descrição ou categoria
@@ -778,7 +787,7 @@ export function Academia() {
                                 variant="outline"
                                 aria-label={"Editar curso " + c.title}
                                 title="Editar curso"
-                                onClick={() => setSelectedCourse(c.id)}
+                                onClick={() => navigate(`/admin/academia/cursos/${c.id}/editar`)}
                               >
                                 <Pencil className="h-4 w-4" aria-hidden="true" />
                               </Button>
@@ -794,7 +803,7 @@ export function Academia() {
                                   try {
                                     const result = await duplicateCourse(c.id);
                                     await reload();
-                                    setSelectedCourse(String(result.course.id));
+                                    navigate(`/admin/academia/cursos/${String(result.course.id)}/editar`);
                                     const skipped = result.skippedDriveMedia + result.skippedDriveMaterials;
                                     setNotice(skipped
                                       ? "Curso duplicado como rascunho. Reenvie os " + skipped + " arquivo(s) privado(s) do Drive na cópia."
@@ -835,6 +844,16 @@ export function Academia() {
                 )}
                 {editingCourses.length > 0 && !managedCourseMatches.length && (
                   <Empty>Nenhum curso corresponde à busca ou à categoria selecionada.</Empty>
+                )}
+                </>}
+                {isCourseEditor && managedCourse && (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Edição dedicada</p>
+                      <h2 className="text-xl font-semibold">{managedCourse.title}</h2>
+                    </div>
+                    <Button variant="outline" onClick={() => navigate("/admin/academia")}>Voltar aos cursos</Button>
+                  </div>
                 )}
                 {managedCourse && (
                   <>
