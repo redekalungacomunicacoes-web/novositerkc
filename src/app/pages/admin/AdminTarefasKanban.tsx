@@ -55,7 +55,7 @@ function KanbanCard({ task, onOpen }: { task: CalendarTask; onOpen: (task: Calen
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-emerald-100/60">{task.description || "Sem descrição."}</p>
       <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-emerald-100/60">
         <span>Prazo {new Date(`${task.endDate}T00:00:00`).toLocaleDateString("pt-BR")}</span>
-        <span className="font-medium">{task.assigneeName || "Equipe"}</span>
+        <span className="font-medium">{teamMembers.find((member) => member.id === task.assigneeId)?.name || "Equipe"}</span>
       </div>
       <TaskDeleteDialog taskId={task.id} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} />
     </article>
