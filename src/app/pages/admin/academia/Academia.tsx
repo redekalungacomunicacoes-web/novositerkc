@@ -171,8 +171,10 @@ export function Academia() {
   async function remove(entity: Entity, id: string) {
     if (!window.confirm(
       entity === "courses"
-        ? "Excluir este curso? Arquivos vinculados devem ser removidos do Drive pela própria Academia. Histórico acadêmico pode impedir a exclusão."
-        : "Excluir este registro? Registros com histórico acadêmico podem impedir a exclusão.",
+        ? "Excluir definitivamente este curso? Matrículas, progresso, tentativas, respostas, certificados e conteúdo acadêmico vinculado serão removidos. Os arquivos físicos permanecerão no Drive, mas serão desvinculados do curso."
+        : entity === "enrollments"
+          ? "Desvincular esta matrícula? O progresso, as tentativas, respostas e eventual certificado desta matrícula também serão removidos."
+          : "Excluir este registro? Registros com histórico acadêmico podem impedir a exclusão.",
     )) return;
     await run(async () => {
       try {
@@ -183,7 +185,7 @@ export function Academia() {
           throw new Error("Não foi possível excluir o curso porque o banco tentou recriar um slug já existente. Não é necessário apagar pastas manualmente no Drive; este conflito é de dados da Academia.");
         }
         if (entity === "courses" && /foreign key|violates.*constraint|still referenced/i.test(detail)) {
-          throw new Error("Este curso ainda possui histórico ou registros vinculados na Academia. A exclusão direta foi bloqueada para preservar os dados acadêmicos.");
+          throw new Error("A exclusão completa do curso ainda encontrou um vínculo protegido no banco. Verifique se a migration de exclusão administrativa foi aplicada.");
         }
         throw e;
       }
@@ -892,6 +894,53 @@ export function Academia() {
                           </div>
                         </div>
                       </div>
+                      {admin && (
+                        <div className="border-t p-4 sm:p-6">
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <h3 className="font-semibold">Matrículas deste curso</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Visualize e desvincule as matrículas relacionadas somente a este curso.
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => open("enrollments", "Matricular integrante", undefined, { courseId: managedCourse.id })}
+                            >
+                              Adicionar matrícula
+                            </Button>
+                          </div>
+                          {data.enrollments.filter((e) => e.course_id === managedCourse.id).length ? (
+                            <div className="space-y-2">
+                              {data.enrollments.filter((e) => e.course_id === managedCourse.id).map((e) => {
+                                const report = data.reports.find((r) => r.enrollment_id === e.id);
+                                return (
+                                  <div key={e.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                                    <div>
+                                      <p className="font-medium">{memberName(e.user_id)}</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {labels[e.status]} · {report?.progress ?? 0}% concluído
+                                        {e.completed_at ? ` · Concluído em ${new Date(e.completed_at).toLocaleDateString("pt-BR")}` : ""}
+                                      </p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Button size="sm" variant="outline" onClick={() => open("enrollments", "Editar matrícula", e)}>
+                                        Editar
+                                      </Button>
+                                      <Button size="sm" variant="outline" disabled={busy} onClick={() => remove("enrollments", e.id)}>
+                                        Desvincular
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">Nenhuma matrícula vinculada a este curso.</p>
+                          )}
+                        </div>
+                      )}
                       <div className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-4 py-3 sm:px-6">
                       <Button
                         disabled={busy}
