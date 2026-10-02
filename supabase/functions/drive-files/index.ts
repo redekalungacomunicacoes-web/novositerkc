@@ -339,17 +339,24 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (accessError || !permitted)
         return json({ ok: false, error: "Sem acesso a este material." }, 403);
-      if (action === "download" && file.status === "active") {
-        const response = await downloadDriveFile(file.drive_file_id);
+      if (["download", "stream"].includes(action) && file.status === "active") {
+        const range = action === "stream" ? req.headers.get("Range") : null;
+        const response = await downloadDriveFile(file.drive_file_id, range);
+        const headers: Record<string, string> = {
+          ...corsHeaders,
+          "Content-Type": file.mime_type || response.headers.get("Content-Type") || "application/octet-stream",
+          "Content-Disposition": `${action === "stream" ? "inline" : "attachment"}; filename="${safeName(file.name)}"`,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
+          "Accept-Ranges": "bytes",
+        };
+        for (const name of ["Content-Length", "Content-Range", "ETag", "Last-Modified"]) {
+          const value = response.headers.get(name);
+          if (value) headers[name] = value;
+        }
         return new Response(response.body, {
-          status: 200,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": file.mime_type || "application/octet-stream",
-            "Content-Disposition": `attachment; filename="${safeName(file.name)}"`,
-            "Cache-Control": "private, no-store",
-            "X-Content-Type-Options": "nosniff",
-          },
+          status: response.status === 206 ? 206 : 200,
+          headers,
         });
       }
       const { data: editable, error } = await userClient.rpc(

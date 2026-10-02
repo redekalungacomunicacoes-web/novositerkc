@@ -11,7 +11,7 @@ import {
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { signedAsset, safeLink, message } from "./service";
-import { downloadRkcDriveFile } from "@/services/driveFiles";
+import { downloadRkcDriveFile, rkcDriveMediaResponse } from "@/services/driveFiles";
 import { videoEmbed } from "./media";
 export { Button };
 export const labels: Record<string, string> = {
@@ -349,6 +349,7 @@ export function Asset({
   title,
   type,
   variant = "default",
+  showOpenLink = true,
 }: {
   path?: string | null;
   driveFileId?: string | null;
@@ -356,7 +357,8 @@ export function Asset({
   url?: string | null;
   title: string;
   type?: string;
-  variant?: "default" | "banner";
+  variant?: "default" | "banner" | "card";
+  showOpenLink?: boolean;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   const [mime, setMime] = useState("");
@@ -368,8 +370,15 @@ export function Asset({
     setSrc(null);
     setMime("");
     let objectUrl: string | null = null;
-    if (driveFileId)
-      downloadRkcDriveFile(driveFileId)
+    if (driveFileId) {
+      const wantsStream = ["video", "audio"].includes(type || "");
+      const loader = wantsStream
+        ? rkcDriveMediaResponse(driveFileId).then(async (response) => {
+            const blob = await response.blob();
+            return blob;
+          })
+        : downloadRkcDriveFile(driveFileId);
+      loader
         .then((blob) => {
           if (!active) return;
           objectUrl = URL.createObjectURL(blob);
@@ -379,6 +388,7 @@ export function Asset({
         .catch((e) => {
           if (active) setError(message(e));
         });
+    }
     else if (path)
       signedAsset(path)
         .then((s) => {
@@ -408,13 +418,12 @@ export function Asset({
     );
   if (!src)
     return path || driveFileId ? (
-      variant === "banner" ? (
-        <div className="h-full min-h-32 w-full animate-pulse bg-muted" role="status" aria-label="Carregando capa do curso" />
+      ["banner", "card"].includes(variant) ? (
+        <div className="h-full min-h-32 w-full animate-pulse bg-muted" role="status" aria-label="Carregando imagem" />
+      ) : type === "video" ? (
+        <div className="aspect-video w-full animate-pulse rounded-lg bg-muted" role="status" aria-label="Preparando vídeo" />
       ) : (
-        <div className="space-y-2" role="status">
-          <div className="h-2 w-2/3 animate-pulse rounded bg-muted" />
-          <p className="text-sm text-muted-foreground">Carregando material privado…</p>
-        </div>
+        <div className="h-16 w-full animate-pulse rounded-md bg-muted" role="status" aria-label="Carregando material" />
       )
     ) : null;
   const embed = videoEmbed(source || "", url);
@@ -441,6 +450,7 @@ export function Asset({
         <video
           aria-label={title}
           controls
+          playsInline
           preload="metadata"
           className="w-full max-h-96 rounded-lg"
           src={src}
@@ -451,20 +461,26 @@ export function Asset({
         <img
           alt={title}
           src={src}
+          loading="lazy"
+          decoding="async"
           className={variant === "banner"
             ? "h-full min-h-32 w-full object-cover"
-            : "w-full max-h-96 object-contain rounded-lg"}
+            : variant === "card"
+              ? "h-full w-full object-cover"
+              : "w-full max-h-96 object-contain rounded-lg"}
         />
       ) : null}
-      <a
-        className="text-primary underline break-words"
-        href={src}
-        target="_blank"
-        rel="noopener noreferrer"
-        download={driveFileId ? title : undefined}
-      >
-        Abrir {title}
-      </a>
+      {showOpenLink && (
+        <a
+          className="text-primary underline break-words"
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={driveFileId ? title : undefined}
+        >
+          Abrir {title}
+        </a>
+      )}
     </div>
   );
 }

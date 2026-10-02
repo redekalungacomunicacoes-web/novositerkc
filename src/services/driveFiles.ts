@@ -81,6 +81,33 @@ export async function uploadRkcDriveFile(input: {
   return data.file as DriveFileRecord;
 }
 
+export async function rkcDriveMediaResponse(id: string, range?: string): Promise<Response> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session) throw new Error("Sua sessão expirou. Entre novamente.");
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/drive-files`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${data.session.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+        ...(range ? { Range: range } : {}),
+      },
+      body: JSON.stringify({ action: "stream", id }),
+    },
+  );
+  if (!response.ok && response.status !== 206) {
+    let detail = "Não foi possível abrir a mídia privada no Drive RKC.";
+    try {
+      const body = await response.clone().json();
+      if (body.error) detail = body.error;
+    } catch { /* binary/network response */ }
+    throw new Error(detail);
+  }
+  return response;
+}
+
 export async function downloadRkcDriveFile(id: string): Promise<Blob> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session)

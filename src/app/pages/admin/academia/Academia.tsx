@@ -267,12 +267,16 @@ export function Academia() {
     return (
       <Card key={c.id}>
         {c.cover_path || c.cover_drive_file_id ? (
-          <Asset
-            path={c.cover_path}
-            driveFileId={c.cover_drive_file_id}
-            title={c.title}
-            type="image"
-          />
+          <Link to={`/admin/academia/cursos/${c.id}`} aria-label={`Abrir curso ${c.title}`} className="block overflow-hidden rounded-lg aspect-video bg-muted">
+            <Asset
+              path={c.cover_path}
+              driveFileId={c.cover_drive_file_id}
+              title={c.title}
+              type="image"
+              variant="card"
+              showOpenLink={false}
+            />
+          </Link>
         ) : (
           <div className="rounded-md bg-primary/10 p-8">
             <GraduationCap
@@ -289,7 +293,11 @@ export function Academia() {
           {c.required && <Badge>Obrigatório</Badge>}
           {r?.completed_at && <Badge>Concluído</Badge>}
         </div>
-        <h3 className="text-xl font-semibold break-words">{c.title}</h3>
+        <h3 className="text-xl font-semibold break-words">
+          <Link className="hover:text-primary hover:underline underline-offset-4" to={`/admin/academia/cursos/${c.id}`}>
+            {c.title}
+          </Link>
+        </h3>
         <p className="text-muted-foreground">{c.summary}</p>
         <p className="text-sm">
           Por {memberName(c.created_by || "")} ·{" "}
@@ -352,7 +360,7 @@ export function Academia() {
       </header>
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] items-start">
         <nav
-          className="rounded-lg border bg-card p-3 space-y-4 lg:sticky lg:top-4"
+          className="rounded-lg border bg-card p-2 lg:p-3 space-y-3 lg:space-y-4 lg:sticky lg:top-4 overflow-x-auto"
           aria-label="Áreas da Academia"
         >
           {[
@@ -379,11 +387,11 @@ export function Academia() {
                 <p className="text-xs font-semibold text-muted-foreground px-2">
                   {group.label}
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1">
+                <div className="flex min-w-max gap-1 lg:min-w-0 lg:grid lg:grid-cols-1">
                   {group.tabs.map((t) => (
                     <Button
                       key={t}
-                      className="justify-start h-auto whitespace-normal text-left py-2"
+                      className="justify-start h-auto whitespace-nowrap lg:whitespace-normal text-left py-2"
                       variant={tab === t ? "default" : "ghost"}
                       aria-current={tab === t ? "page" : undefined}
                       onClick={() => {

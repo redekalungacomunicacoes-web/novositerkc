@@ -27,7 +27,7 @@ function SelectedPreview({ file }: { file: File }) {
   }, [file]);
   if (!src) return null;
   if (file.type.startsWith("image/"))
-    return <img src={src} alt={"Prévia de " + file.name} className="max-h-48 max-w-full rounded-md object-contain" />;
+    return <img src={src} alt={"Prévia de " + file.name} loading="lazy" decoding="async" className="aspect-video max-h-48 w-full rounded-md object-cover" />;
   if (file.type.startsWith("video/"))
     return <video src={src} controls preload="metadata" className="max-h-64 w-full rounded-md bg-black" aria-label={"Prévia de " + file.name} />;
   if (file.type === "application/pdf")
@@ -119,7 +119,7 @@ export function DriveUploads({
       </p>
       <p className="text-xs text-muted-foreground">
         Selecione um arquivo e confira a prévia. O envio começa após a seleção. {kind === "cover"
-          ? "Capas privadas, até 25 MB."
+          ? "Recomendado: 1280 × 720 px (16:9), WebP ou JPG. Evite texto junto às bordas. Até 25 MB."
           : kind === "material"
             ? "Adicione quantos materiais complementares precisar, inclusive vários de uma vez. Até 15 GB por arquivo."
             : "Vídeos e arquivos da aula ficam no Drive RKC. Até 15 GB por arquivo."}
