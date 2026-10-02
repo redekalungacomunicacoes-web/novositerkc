@@ -227,9 +227,10 @@ export async function trashDriveFile(fileId: string) {
   return response.json();
 }
 
-export async function downloadDriveFile(fileId: string) {
+export async function downloadDriveFile(fileId: string, range?: string | null) {
   const response = await driveFetch(
     `${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
+    range ? { headers: { Range: range } } : undefined,
   );
   if (!response.ok)
     throw new Error(`Falha ao ler arquivo do Drive: ${await response.text()}`);
