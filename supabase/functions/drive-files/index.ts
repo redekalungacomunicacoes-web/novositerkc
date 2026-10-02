@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
 
       const { data: task, error: taskError } = await admin
         .from("tasks")
-        .select("id,titulo,context_type,context_id,drive_folder_id")
+        .select("id,titulo,context_type,context_id,drive_folder_id,assigned_to")
         .eq("id", taskId)
         .single();
       if (taskError || !task)
@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
                   "TAREFAS",
                   label,
                 ]
-              : ["06_TAREFAS", label];
+              : ["05_INTEGRANTES", String(task.assigned_to ?? "SEM_RESPONSAVEL"), "TAREFAS", label];
         const path = await ensureDrivePath(rootFolderId, segments);
         folderId = path.folderId;
         const { error } = await admin
