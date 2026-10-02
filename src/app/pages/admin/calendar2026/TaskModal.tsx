@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, FileText, MessageSquare, MoreVertical, Paperclip, Pencil, Trash2, UserCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, FileText, Link2, MessageSquare, MoreVertical, Paperclip, Pencil, Trash2, UserCircle, UserRound } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { openTaskAttachment, priorityLabels, statusLabels } from "./tasksApi";
 import { useDeleteTaskAttachmentMutation, useExternalAttachmentMutation, useSaveTaskMutation, useTaskAttachmentMutation, useTaskCommentMutation, useTaskDetailsQuery } from "./useTaskQueries";
@@ -94,12 +94,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       setSubmitError("Selecione o responsável pela tarefa.");
       return;
     }
-    if (!form.direcionamento.includes(form.assigned_to)) {
-      setSubmitError("O responsável deve fazer parte do direcionamento.");
-      return;
-    }
-
-    let taskId = savedTaskId;
+     let taskId = savedTaskId;
     if (!taskId) {
       try {
         taskId = await saveTask.mutateAsync({ input: form, taskId: editing?.id });
@@ -205,34 +200,38 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         </section>
       ) : null}
 
-      <form onSubmit={(event) => void handleSubmit(event)} className="mb-5 grid gap-2 md:grid-cols-2">
-        <input required value={form.titulo} onChange={(e) => setForm((old) => ({ ...old, titulo: e.target.value }))} className={inputClass} placeholder="Título" />
-        <input value={form.descricao ?? ""} onChange={(e) => setForm((old) => ({ ...old, descricao: e.target.value }))} className={inputClass} placeholder="Descrição" />
-        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200">Data inicial
-          <input required aria-label="Data inicial" type="date" value={form.data_inicio} onChange={(e) => setForm((old) => ({ ...old, data_inicio: e.target.value }))} className={inputClass} />
-        </label>
-        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200">Data final
-          <input required aria-label="Data final" type="date" min={form.data_inicio} value={form.data_fim} onChange={(e) => setForm((old) => ({ ...old, data_fim: e.target.value }))} className={inputClass} />
-        </label>
-        <select value={form.prioridade} onChange={(e) => setForm((old) => ({ ...old, prioridade: e.target.value as TaskPriority }))} className={inputClass}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-        <select value={form.status} onChange={(e) => setForm((old) => ({ ...old, status: e.target.value as TaskStatus }))} className={inputClass}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 md:col-span-2">Direcionamento
-          <select multiple value={form.direcionamento} onChange={(e) => { const ids = Array.from(e.currentTarget.selectedOptions, (option) => option.value); setForm((old) => ({ ...old, direcionamento: ids, assigned_to: old.assigned_to && ids.includes(old.assigned_to) ? old.assigned_to : null })); }} className={`${inputClass} min-h-28`}>
-            {teamMembers.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}
-          </select>
-          <span className="font-normal text-slate-500">Use Ctrl/Cmd para selecionar mais de um membro.</span>
-        </label>
-        <select required disabled={form.direcionamento.length === 0} value={form.assigned_to ?? ""} onChange={(e) => setForm((old) => ({ ...old, assigned_to: e.target.value || null }))} className={`${inputClass} md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60`}><option value="">{form.direcionamento.length ? "Selecione o responsável" : "Selecione o direcionamento primeiro"}</option>{teamMembers.filter((member) => form.direcionamento.includes(member.id)).map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select>
-        <textarea value={comment} onChange={(e) => setComment(e.target.value)} className={`${inputClass} min-h-20 md:col-span-2`} placeholder="Adicionar comentário" />
-        <label className="grid gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-200 md:col-span-2">Arquivos da tarefa
-          <input type="file" multiple onChange={handleFileChange} className={`${inputClass} md:col-span-2`} />
-          <span className="font-normal text-slate-500">Você pode adicionar vários arquivos. Os itens com falha ficam disponíveis para nova tentativa.</span>
-        </label>
-        {attachmentFiles.length ? <div className="grid gap-2 md:col-span-2">{attachmentFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-emerald-100 px-3 py-2 dark:border-emerald-800/60"><Paperclip size={15} className="shrink-0 text-emerald-700 dark:text-emerald-300" /><span className="min-w-0 flex-1 truncate text-sm">{file.name}</span><span className="shrink-0 text-xs text-slate-400">{(file.size / 1024 / 1024).toFixed(1)} MB</span><button type="button" aria-label={`Remover ${file.name}`} onClick={() => setAttachmentFiles((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50"><Trash2 size={15} /></button></div>)}</div> : null}
-        <textarea value={externalLinks} onChange={(e) => setExternalLinks(e.target.value)} className={`${inputClass} min-h-16 md:col-span-2`} placeholder="Links externos (um por linha ou separados por vírgula)" />
-        {attachmentFiles.length ? <p className="text-xs text-slate-500 dark:text-emerald-100/60 md:col-span-2">{attachmentFiles.length} arquivo(s) selecionado(s): {attachmentFiles.map((file) => file.name).join(", ")}</p> : null}
-        {submitNotice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100 md:col-span-2">{submitNotice}</p> : null}{submitError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200 md:col-span-2">{submitError}</p> : null}
-        <div className="flex flex-wrap gap-2 md:col-span-2"><button type="submit" disabled={isSaving} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400">{savedTaskId ? "Tentar novamente" : editing ? "Atualizar tarefa" : "Criar tarefa"}</button>{editing ? <button type="button" onClick={() => { setEditing(null); setForm(emptyForm(selectedDate)); }} className="rounded-xl border border-emerald-100 px-4 py-2 text-sm dark:border-emerald-800/60">Cancelar edição</button> : null}</div>
+      <form onSubmit={(event) => void handleSubmit(event)} className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/60 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/30">
+        <div className="border-b border-slate-200 bg-white px-5 py-4 dark:border-emerald-800/60 dark:bg-emerald-950">
+          <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100"><CheckCircle2 size={20}/></div><div><h4 className="font-semibold">{editing ? "Editar tarefa" : "Criar nova tarefa"}</h4><p className="text-xs text-slate-500 dark:text-emerald-100/60">O criador é identificado automaticamente pela conta conectada.</p></div></div>
+        </div>
+        <div className="grid gap-5 p-5">
+          <section className="grid gap-4">
+            <div><label className="mb-1.5 block text-sm font-semibold">Título da tarefa <span className="text-rose-500">*</span></label><input required autoFocus value={form.titulo} onChange={(e) => setForm((old) => ({ ...old, titulo: e.target.value }))} className={inputClass+" w-full min-h-11"} placeholder="Ex.: Finalizar matéria sobre o encontro comunitário" /></div>
+            <div><label className="mb-1.5 block text-sm font-semibold">Descrição e orientações</label><textarea value={form.descricao ?? ""} onChange={(e) => setForm((old) => ({ ...old, descricao: e.target.value }))} className={inputClass+" min-h-28 w-full resize-y"} placeholder="Descreva o objetivo, entregáveis e informações importantes para executar a tarefa." /></div>
+          </section>
+          <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-emerald-800/60 dark:bg-emerald-950">
+            <div className="flex items-center gap-2"><UserRound size={18} className="text-emerald-700"/><div><h5 className="text-sm font-semibold">Responsável</h5><p className="text-xs text-slate-500 dark:text-emerald-100/60">Escolha somente para quem esta tarefa será direcionada.</p></div></div>
+            <label className="grid gap-1.5 text-sm font-medium">Direcionar para <span className="sr-only">obrigatório</span><select required value={form.assigned_to ?? ""} onChange={(e) => { const id=e.target.value || null; setForm((old) => ({ ...old, assigned_to:id, direcionamento:id ? [id] : [] })); }} className={inputClass+" min-h-11 w-full"}><option value="">Selecione um integrante da equipe</option>{teamMembers.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role}</option>)}</select></label>
+          </section>
+          <section className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-1.5 text-sm font-medium">Data inicial<input required aria-label="Data inicial" type="date" value={form.data_inicio} onChange={(e) => setForm((old) => ({ ...old, data_inicio:e.target.value, data_fim: old.data_fim < e.target.value ? e.target.value : old.data_fim }))} className={inputClass+" min-h-11"} /></label>
+            <label className="grid gap-1.5 text-sm font-medium">Prazo final<input required aria-label="Data final" type="date" min={form.data_inicio} value={form.data_fim} onChange={(e) => setForm((old) => ({ ...old, data_fim:e.target.value }))} className={inputClass+" min-h-11"} /></label>
+            <label className="grid gap-1.5 text-sm font-medium">Prioridade<select value={form.prioridade} onChange={(e) => setForm((old) => ({ ...old, prioridade:e.target.value as TaskPriority }))} className={inputClass+" min-h-11"}>{Object.entries(priorityLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="grid gap-1.5 text-sm font-medium">Status<select value={form.status} onChange={(e) => setForm((old) => ({ ...old, status:e.target.value as TaskStatus }))} className={inputClass+" min-h-11"}>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+          </section>
+          <section className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-emerald-800/60 dark:bg-emerald-950">
+            <div><h5 className="flex items-center gap-2 text-sm font-semibold"><Paperclip size={17} className="text-emerald-700"/> Arquivos</h5><p className="mt-1 text-xs text-slate-500 dark:text-emerald-100/60">Os arquivos serão enviados ao Drive RKC e vinculados automaticamente à pasta desta tarefa após a criação.</p></div>
+            <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-4 text-center transition hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20"><Paperclip size={20}/><span className="mt-2 text-sm font-medium">Selecionar arquivos</span><span className="text-xs text-slate-500">Você pode selecionar vários arquivos</span><input type="file" multiple onChange={handleFileChange} className="sr-only"/></label>
+            {attachmentFiles.length ? <div className="grid gap-2">{attachmentFiles.map((file,index)=><div key={`${file.name}-${file.lastModified}-${index}`} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 dark:border-emerald-800/60"><Paperclip size={15} className="shrink-0 text-emerald-700"/><span className="min-w-0 flex-1 truncate text-sm">{file.name}</span><span className="text-xs text-slate-400">{(file.size/1024/1024).toFixed(1)} MB</span><button type="button" aria-label={`Remover ${file.name}`} onClick={()=>setAttachmentFiles((current)=>current.filter((_item,itemIndex)=>itemIndex!==index))} className="flex h-9 w-9 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50"><Trash2 size={15}/></button></div>)}</div>:null}
+          </section>
+          <section className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2"><label className="mb-1.5 flex items-center gap-2 text-sm font-medium"><MessageSquare size={16}/> Comentário inicial</label><textarea value={comment} onChange={(e)=>setComment(e.target.value)} className={inputClass+" min-h-20 w-full"} placeholder="Observação opcional para iniciar o histórico da tarefa."/></div>
+            <div className="md:col-span-2"><label className="mb-1.5 flex items-center gap-2 text-sm font-medium"><Link2 size={16}/> Links de apoio</label><textarea value={externalLinks} onChange={(e)=>setExternalLinks(e.target.value)} className={inputClass+" min-h-16 w-full"} placeholder="Cole links externos, um por linha."/></div>
+          </section>
+          {submitNotice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100">{submitNotice}</p>:null}
+          {submitError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">{submitError}</p>:null}
+        </div>
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-emerald-800/60 dark:bg-emerald-950/95"><p className="text-xs text-slate-500">{attachmentFiles.length ? `${attachmentFiles.length} arquivo(s) preparado(s)` : "Arquivos são opcionais"}</p><div className="flex gap-2"><button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-medium dark:border-emerald-800">Cancelar</button><button type="submit" disabled={isSaving} className="min-h-11 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60">{isSaving ? "Salvando..." : savedTaskId ? "Tentar arquivos novamente" : editing ? "Salvar alterações" : "Criar tarefa"}</button></div></div>
       </form>
 
       {selectedTask ? (
