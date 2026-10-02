@@ -38,12 +38,7 @@ type EditState = {
   activityId?: string;
   fields?: Field[];
 };
-const learnerTabs = [
-  "Minha Academia",
-  "Cursos publicados",
-  "Editar meus cursos",
-  "Contribuições",
-];
+const learnerTabs = ["Minha Academia"];
 const managementTabs = [
   "Dashboard",
   "Gestão de cursos",
@@ -544,6 +539,40 @@ export function Academia() {
                   automaticamente no perfil.
                 </p>
               </Card>
+              <section className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Catálogo de cursos</h2>
+                  <p className="text-sm text-muted-foreground">Cursos publicados disponíveis para sua aprendizagem.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <label className="flex-1">Buscar cursos
+                    <input type="search" className="block w-full border rounded-md px-3 py-2 bg-background" value={q} onChange={(e) => setQ(e.target.value)} />
+                  </label>
+                  <label>Categoria
+                    <select className="block border rounded-md px-3 py-2 bg-background" value={category} onChange={(e) => setCategory(e.target.value)}>
+                      <option value="">Todas</option>
+                      {data.categories.map((c) => <option value={c.id} key={c.id}>{c.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{filteredCatalog.map(courseCard)}</div>
+                {!filteredCatalog.length && <Empty>Nenhum curso publicado corresponde à sua busca ou às suas permissões.</Empty>}
+              </section>
+              <Card>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold">Contribuir com a Academia</h2>
+                    <p className="text-sm text-muted-foreground">Compartilhe tutoriais, experiências e referências para revisão editorial.</p>
+                  </div>
+                  <Button onClick={() => open("contributions", "Nova contribuição")}>Compartilhar conhecimento</Button>
+                </div>
+                {data.contributions.filter((item) => item.user_id === userId).slice(0, 5).map((item) => (
+                  <div key={item.id} className="mt-3 border-t pt-3">
+                    <div className="flex flex-wrap justify-between gap-2"><strong>{item.title}</strong><Badge>{labels[item.status]}</Badge></div>
+                    <p className="text-sm text-muted-foreground">{new Date(item.created_at).toLocaleDateString("pt-BR")}</p>
+                  </div>
+                ))}
+              </Card>
             </>
           )}
           {tab === "Cursos publicados" && (
@@ -662,8 +691,7 @@ export function Academia() {
               </p>
             </>
           )}
-          {["Editar meus cursos", "Gestão de cursos"].includes(tab) &&
-            manager && (
+          {tab === "Gestão de cursos" && manager && (
               <>
                 <div className="flex flex-wrap items-end gap-3">
                   <label className="min-w-[240px] flex-1">
