@@ -12,7 +12,7 @@ export type DriveFileRecord = {
   task_id?: string | null;
   academy_course_id?: string | null;
   academy_lesson_id?: string | null;
-  academy_kind?: "cover" | "media" | "material" | null;
+  academy_kind?: "cover" | "banner" | "media" | "material" | null;
   access_scope?: "assignees" | "team";
   category: string | null;
   web_view_link: string | null;
@@ -188,14 +188,14 @@ export async function uploadAcademyFile(input: {
   file: File;
   courseId: string;
   lessonId?: string;
-  kind: "cover" | "media" | "material";
+  kind: "cover" | "banner" | "media" | "material";
   uploadId: string;
   replaceMaterialId?: string;
   onProgress: (percent: number) => void;
 }): Promise<DriveFileRecord> {
-  const limit = input.kind === "cover" ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
+  const limit = ["cover", "banner"].includes(input.kind) ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
   if (input.file.size > limit)
-    throw new Error(input.kind === "cover" ? "A capa deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB.");
+    throw new Error(["cover", "banner"].includes(input.kind) ? "A imagem deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB.");
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) throw new Error("Sua sessão expirou. Entre novamente.");
 
