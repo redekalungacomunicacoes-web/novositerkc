@@ -94,6 +94,10 @@ export async function deleteEntity(entity: Entity, id: string) {
     unwrap(await supabase.rpc("academy_delete_course", { p_course: id }));
     return;
   }
+  if (entity === "enrollments") {
+    unwrap(await supabase.rpc("academy_delete_enrollment", { p_enrollment: id }));
+    return;
+  }
   unwrap(await supabase.from(tables[entity]).delete().eq("id", id));
 }
 export async function rpc(name: string, args: Record<string, unknown>) {
