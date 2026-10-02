@@ -45,7 +45,7 @@ export function DriveUploads({
 }: {
   courseId: string;
   lessonId?: string;
-  kind: "cover" | "media" | "material";
+  kind: "cover" | "banner" | "media" | "material";
   existing?: DriveFileRecord[];
   replaceMaterialId?: string;
   cleanupOnly?: boolean;
