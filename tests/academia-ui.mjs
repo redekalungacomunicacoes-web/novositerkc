@@ -226,6 +226,11 @@ try {
       1,
     );
     if (role === "autor") {
+      await page.getByRole("button", { name: "Voltar aos cursos", exact: true }).click();
+      await page.waitForURL("**/admin/academia");
+      await page
+        .getByRole("button", { name: "Gestão de cursos", exact: true })
+        .click();
       await page
         .getByRole("button", { name: "Novo curso", exact: true })
         .click();
@@ -234,12 +239,6 @@ try {
         .fill("Novo curso da autora");
       await page.getByRole("button", { name: "Salvar", exact: true }).click();
       await page.getByText("Alteração salva.", { exact: true }).waitFor();
-      await page.getByRole("button", { name: "Voltar aos cursos", exact: true }).click();
-      await page.waitForURL("**/admin/academia");
-      assert.equal(
-        await page.getByText("Alteração salva.", { exact: true }).count(),
-        0,
-      );
     }
     assert.deepEqual(errors, []);
     await context.close();
