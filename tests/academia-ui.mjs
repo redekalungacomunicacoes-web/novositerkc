@@ -183,9 +183,6 @@ try {
     const { page, context, errors } = await setup(role);
     const links = page.locator("aside nav a");
     assert.equal(await links.last().textContent(), "Academia");
-    await page
-      .getByRole("button", { name: "Cursos publicados", exact: true })
-      .click();
     assert.ok(
       await page
         .getByRole("heading", { name: "Curso da equipe", exact: true })
@@ -202,7 +199,7 @@ try {
       0,
     );
     await page
-      .getByRole("button", { name: "Editar meus cursos", exact: true })
+      .getByRole("button", { name: "Gestão de cursos", exact: true })
       .click();
     assert.equal(
       await page.getByRole("heading", { name: "Curso próprio", exact: true }).count(),
@@ -210,7 +207,7 @@ try {
     );
     assert.equal(
       await page.getByRole("heading", { name: "Curso da equipe", exact: true }).count(),
-      0,
+      1,
     );
     await page.getByRole("searchbox", { name: /Buscar por curso/ }).fill("Curso próprio");
     assert.equal(

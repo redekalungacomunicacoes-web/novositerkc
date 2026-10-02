@@ -170,7 +170,11 @@ function clients({
     },
   };
   const admin = {
-    from: () => query(existing),
+    from: (table) => {
+      if (table === "academy_courses") return query({ id: course, title: "Curso teste", drive_folder_id: "course-folder" });
+      if (table === "academy_lessons") return query({ id: lesson, title: "Aula teste", position: 1, drive_folder_id: "lesson-folder" });
+      return query(existing);
+    },
     rpc: async (name, args) => {
       calls.push({ name, args });
       return {
@@ -251,19 +255,29 @@ test("upload succeeds only after private Google file and committed metadata; sta
       (x) => x.url.pathname === "/drive/v3/files" && x.init.method === "POST",
     )
     .map((x) => JSON.parse(x.init.body).name);
-  assert.deepEqual(folders, [
-    "Cursos",
-    course,
-    "Módulos",
-    "module-id",
-    "Aulas",
-    lesson,
-    "Materiais",
-  ]);
+  assert.deepEqual(folders, ["MATERIAIS"]);
   assert.ok(c.calls.some((x) => x.name === "academy_commit_drive"));
   assert.ok(c.calls.includes("academy_drive_unlock"));
   const downloaded = await drive.downloadDriveFile("uploaded");
   assert.equal(await downloaded.text(), "private-content");
+});
+test("banner uses the canonical BANNER folder and commits as banner", async () => {
+  const calls = google();
+  const c = clients();
+  const bannerForm = new FormData();
+  bannerForm.set("file", new File(["IMG"], "banner.webp", { type: "image/webp" }));
+  bannerForm.set("course_id", course);
+  bannerForm.set("upload_id", upload);
+  bannerForm.set("kind", "banner");
+  const result = await academy.uploadAcademyDrive(bannerForm, "root", c.user, c.admin, "owner");
+  assert.equal(result.id, "metadata");
+  const folders = calls
+    .filter((x) => x.url.pathname === "/drive/v3/files" && x.init.method === "POST")
+    .map((x) => JSON.parse(x.init.body).name);
+  assert.deepEqual(folders, ["BANNER"]);
+  const commit = c.calls.find((x) => x.name === "academy_commit_drive");
+  assert.equal(commit.args.p_kind, "banner");
+  assert.equal(commit.args.p_file.folder_id, "child");
 });
 test("reader cannot upload; lease collision creates no folder", async () => {
   for (const config of [{ editable: false }, { locked: false }]) {
