@@ -31,7 +31,7 @@ function taskTime(task: CalendarTask) {
   return task.startTime ? `${task.startTime}${task.endTime ? `–${task.endTime}` : ""}` : "Dia todo";
 }
 
-export function Calendar({ onSelectDay }: { onSelectDay: () => void }) {
+export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => void; onSelectTask?: (task: CalendarTask) => void }) {
   const { month, setMonth, setSelectedDate, selectedDate, tasks, view, setView, isLoading, teamMembers } = useCalendarStore();
   const monthLabel = month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const days = useMemo(() => {
@@ -111,7 +111,7 @@ export function Calendar({ onSelectDay }: { onSelectDay: () => void }) {
                 {dayTasks.slice(0, view === "month" ? 4 : 12).map((task) => {
                   const assignee = getAssignee(task);
                   return (
-                    <div key={task.id} className={`group rounded-2xl border px-2.5 py-2 text-xs shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${priorityStyles[task.priority]}`}>
+                    <div key={task.id} role="button" tabIndex={0} onClick={(event) => { if (!onSelectTask) return; event.stopPropagation(); onSelectTask(task); }} onKeyDown={(event) => { if (onSelectTask && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); event.stopPropagation(); onSelectTask(task); } }} className={`group rounded-2xl border px-2.5 py-2 text-xs shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${onSelectTask ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" : ""} ${priorityStyles[task.priority]}`}>
                       <div className="flex items-center gap-2">
                         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${priorityDot[task.priority]}`} />
                         <span className="truncate font-semibold">{task.title}</span>
