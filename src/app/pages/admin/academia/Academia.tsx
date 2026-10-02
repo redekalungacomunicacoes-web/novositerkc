@@ -70,6 +70,7 @@ export function Academia() {
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [bannerPreview, setBannerPreview] = useState<{ courseId: string; url: string } | null>(null);
   useEffect(() => {
     setNotice("");
     setActionError("");
@@ -802,7 +803,9 @@ export function Academia() {
                   <>
                     <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
                       <div className="relative aspect-[3/1] min-h-44 overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
-                        {managedCourse.banner_drive_file_id ? (
+                        {bannerPreview?.courseId === managedCourse.id ? (
+                          <img src={bannerPreview.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                        ) : managedCourse.banner_drive_file_id ? (
                           <Asset
                             driveFileId={managedCourse.banner_drive_file_id}
                             title={`Banner de ${managedCourse.title}`}
@@ -881,7 +884,8 @@ export function Academia() {
                         kind="banner"
                         inputOnly
                         inputIdOverride={`academy-hero-banner-${managedCourse.id}`}
-                        onSaved={reload}
+                        onSelectedFile={previewBanner}
+                        onSaved={async () => { await reload(); setBannerPreview(null); }}
                       />
                           </div>
                         </div>
