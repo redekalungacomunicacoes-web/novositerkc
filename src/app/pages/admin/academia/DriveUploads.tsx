@@ -109,17 +109,21 @@ export function DriveUploads({
   };
   const chooseLabel = kind === "cover"
     ? (activeFiles.length ? "Substituir capa" : "Adicionar imagem da capa")
-    : kind === "media"
-      ? (activeFiles.length ? "Substituir conteúdo da aula" : "Adicionar vídeo ou arquivo da aula")
-      : (activeFiles.length ? "Adicionar outro material" : "Adicionar arquivo");
+    : kind === "banner"
+      ? (activeFiles.length ? "Substituir banner" : "Adicionar banner")
+      : kind === "media"
+        ? (activeFiles.length ? "Substituir conteúdo da aula" : "Adicionar vídeo ou arquivo da aula")
+        : (activeFiles.length ? "Adicionar outro material" : "Adicionar arquivo");
   return (
     <div className="rounded-md border p-3 space-y-3">
       <p className="text-sm font-medium">
-        {kind === "cover" ? "Capa do curso — Drive RKC" : kind === "media" ? "Conteúdo da aula — Drive RKC" : "Materiais — Drive RKC"}
+        {kind === "cover" ? "Capa do curso — Drive RKC" : kind === "banner" ? "Banner do curso — Drive RKC" : kind === "media" ? "Conteúdo da aula — Drive RKC" : "Materiais — Drive RKC"}
       </p>
       <p className="text-xs text-muted-foreground">
         Selecione um arquivo e confira a prévia. O envio começa após a seleção. {kind === "cover"
           ? "Recomendado: 1280 × 720 px (16:9), WebP ou JPG. Evite texto junto às bordas. Até 25 MB."
+          : kind === "banner"
+            ? "Recomendado: 1500 × 500 px (3:1), WebP ou JPG. Use a imagem como fundo; título, progresso e informações são inseridos pelo sistema. Até 25 MB."
           : kind === "material"
             ? "Adicione quantos materiais complementares precisar, inclusive vários de uma vez. Até 15 GB por arquivo."
             : "Vídeos e arquivos da aula ficam no Drive RKC. Até 15 GB por arquivo."}
@@ -132,7 +136,7 @@ export function DriveUploads({
             aria-label={chooseLabel}
             type="file"
             multiple={kind === "material" && !replaceMaterialId}
-            accept={kind === "cover" ? "image/jpeg,image/png,image/webp,image/gif" : kind === "media" ? "video/*,application/pdf,image/*,audio/*" : undefined}
+            accept={["cover", "banner"].includes(kind) ? "image/jpeg,image/png,image/webp,image/gif" : kind === "media" ? "video/*,application/pdf,image/*,audio/*" : undefined}
             disabled={busy}
             onChange={(event) => {
               const next = Array.from(event.target.files || []).map((file): Item => ({
@@ -197,7 +201,7 @@ export function DriveUploads({
             <p className="text-sm font-semibold">
               {kind === "material"
                 ? `${activeFiles.length} material${activeFiles.length === 1 ? "" : "is"} complementar${activeFiles.length === 1 ? "" : "es"}`
-                : "Arquivo atualmente vinculado"}
+                : kind === "banner" ? "Banner atualmente vinculado" : kind === "cover" ? "Capa atualmente vinculada" : "Arquivo atualmente vinculado"}
             </p>
             {kind === "material" && (
               <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
@@ -228,6 +232,11 @@ export function DriveUploads({
                   ) : file.mime_type === "application/pdf" ? (
                     <Asset driveFileId={file.id} title={file.name} />
                   ) : null}
+                  {!cleanupOnly && (kind === "cover" || kind === "banner") && (
+                    <label htmlFor={inputId} className={"inline-flex cursor-pointer items-center justify-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted " + (busy ? "pointer-events-none opacity-50" : "")}>
+                      {kind === "banner" ? "Substituir banner" : "Substituir capa"}
+                    </label>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
