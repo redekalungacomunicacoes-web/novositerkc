@@ -112,7 +112,7 @@ export function DriveUploads({
         {kind === "cover" ? "Capa do curso — Drive RKC" : kind === "media" ? "Conteúdo da aula — Drive RKC" : "Materiais — Drive RKC"}
       </p>
       <p className="text-xs text-muted-foreground">
-        Selecione um arquivo e confira a prévia. Ele só será enviado depois de pressionar “Enviar ao Drive RKC”. Arquivos privados, até 50 MB.
+        Selecione um arquivo e confira a prévia. O envio começa após a seleção. {kind === "cover" ? "Capas privadas, até 25 MB." : "Vídeos e materiais privados, até 15 GB."}
       </p>
       {!cleanupOnly && (
         <div className="flex flex-wrap items-center gap-2">
