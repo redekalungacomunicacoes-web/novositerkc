@@ -11,10 +11,6 @@ function localDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function shortDate(date: string) {
-  return new Date(`${date}T00:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-}
-
 export function ExecutiveDashboard() {
   const { tasks, teamMembers } = useCalendarStore();
   const today = localDateKey(new Date());
@@ -70,6 +66,7 @@ export function ExecutiveDashboard() {
           <h3 className="font-semibold text-slate-900 dark:text-white">Leitura rápida</h3>
           <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-emerald-100/70">O painel usa somente os dados já carregados do calendário. Gráficos pesados foram removidos desta tela para reduzir custo de renderização e tornar a entrada em Tarefas mais imediata.</p>
         </article>
+      </div>
     </section>
   );
 }
