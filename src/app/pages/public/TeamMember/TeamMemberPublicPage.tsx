@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ExternalLink, Instagram, Linkedin, Facebook, Globe, MessageCircle, FileText, Link as LinkIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { driveMediaUrl, driveSlug } from "@/lib/teamAvatar";
 import {
   getMemberById,
   getMemberBySlug,
@@ -53,6 +54,8 @@ function socialLinks(member: TeamMemberPublic) {
 }
 
 function getAvatar(member: TeamMemberPublic) {
+  const driveUrl = driveMediaUrl(driveSlug(member.avatar_thumb_drive) || driveSlug(member.avatar_drive));
+  if (driveUrl) return driveUrl;
   if (member.avatar_thumb_path) {
     return supabase.storage.from("team-avatars").getPublicUrl(member.avatar_thumb_path).data.publicUrl;
   }
