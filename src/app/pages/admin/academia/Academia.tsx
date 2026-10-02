@@ -833,6 +833,15 @@ export function Academia() {
                               <label htmlFor={`academy-hero-banner-${managedCourse.id}`} className="inline-flex min-h-9 cursor-pointer items-center rounded-md border bg-background/90 px-3 text-sm font-medium text-foreground shadow-sm backdrop-blur hover:bg-background">
                                 <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> {managedCourse.banner_drive_file_id ? "Trocar banner" : "Adicionar banner"}
                               </label>
+                               <DriveUploads
+                                 key={`hero-banner-input-${managedCourse.id}`}
+                                 courseId={managedCourse.id}
+                                 kind="banner"
+                                 inputOnly
+                                 inputIdOverride={`academy-hero-banner-${managedCourse.id}`}
+                                 onSelectedFile={previewBanner}
+                                 onSaved={async () => { await reload(); setBannerPreview(null); }}
+                               />
                               <Button size="sm" variant="outline" className="bg-background/90 backdrop-blur" onClick={() => open("courses", "Editar curso", managedCourse)}>
                                 <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Editar informações
                               </Button>
@@ -879,15 +888,7 @@ export function Academia() {
                         existing={data.driveFiles.filter((f) => f.id === managedCourse.cover_drive_file_id)}
                         onSaved={reload}
                       />
-                      <DriveUploads
-                        key={`hero-banner-input-${managedCourse.id}`}
-                        courseId={managedCourse.id}
-                        kind="banner"
-                        inputOnly
-                        inputIdOverride={`academy-hero-banner-${managedCourse.id}`}
-                        onSelectedFile={previewBanner}
-                        onSaved={async () => { await reload(); setBannerPreview(null); }}
-                      />
+                      
                           </div>
                         </div>
                       </div>
