@@ -284,11 +284,9 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   const assignedTo = await ensureEquipeMemberExists(input.assigned_to, "responsável");
   if (!assignedTo) throw new Error("Selecione o responsável pela tarefa.");
 
-  const direcionamento = [...new Set(input.direcionamento ?? [])];
-  await Promise.all(direcionamento.map((memberId) => ensureEquipeMemberExists(memberId, "direcionamento")));
-  if (!direcionamento.includes(assignedTo)) {
-    throw new Error("O responsável deve fazer parte do direcionamento.");
-  }
+  // V3: existe um único destino da tarefa. O criador é sempre derivado
+  // da sessão autenticada e não deve ser escolhido no formulário.
+  const direcionamento = [assignedTo];
 
   const startDate = requireDatabaseDate(input.data_inicio, "Data inicial");
   const endDate = requireDatabaseDate(input.data_fim, "Data final");
