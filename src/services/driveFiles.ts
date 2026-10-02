@@ -178,6 +178,18 @@ export async function listRkcDriveFiles(module: string, entityId?: string) {
   return (data || []) as DriveFileRecord[];
 }
 
+export async function listTaskDriveFiles(taskId: string) {
+  const { data, error } = await supabase
+    .from("drive_files")
+    .select("*")
+    .eq("module", "tasks")
+    .eq("task_id", taskId)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+  if (error) throw await driveError(error);
+  return (data || []) as DriveFileRecord[];
+}
+
 export async function checkAcademyDrive() {
   return (await invoke({ action: "academy-health" })).drive;
 }
