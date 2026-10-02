@@ -90,7 +90,22 @@ function KanbanBoard() {
   const selectedTask = selectedTaskId ? taskById.get(selectedTaskId) ?? null : null;
 
   async function moveTask(task: CalendarTask, status: TaskStatus) {
-    await moveTask(task, status);
+    if (statusMutation.isPending) return;
+    if (!canMoveTask(task, status, currentMemberId, isAdmin)) {
+      setFeedback("Movimentação não permitida para seu perfil.");
+      return;
+    }
+    try {
+      await statusMutation.mutateAsync({ taskId: task.id, status, oldStatus: task.status });
+      setFeedback(`Tarefa movida para ${statusLabels[status]}.`);
+    } catch { setFeedback(null); }
+  }
+
+  async function handleDrop(status: TaskStatus) {
+    const task = draggingId ? taskById.get(draggingId) : null;
+    setDraggingId(null);
+    setTargetStatus(null);
+    if (task) await moveTask(task, status);
   }
 
   return (

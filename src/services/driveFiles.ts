@@ -53,6 +53,8 @@ export async function checkRkcDrive() {
   return (await invoke({ action: "health" })).drive;
 }
 
+const taskUploadIds = new WeakMap<File, string>();
+
 export async function uploadRkcDriveFile(input: {
   file: File;
   module: string;
@@ -69,14 +71,21 @@ export async function uploadRkcDriveFile(input: {
   form.append("category", input.category || "arquivo");
   form.append("visibility", input.visibility || "private");
   if (input.entityId) form.append("entity_id", input.entityId);
-  if (input.taskId) form.append("task_id", input.taskId);
+  if (input.taskId) {
+    form.append("task_id", input.taskId);
+    let uploadId = taskUploadIds.get(input.file);
+    if (!uploadId) { uploadId = crypto.randomUUID(); taskUploadIds.set(input.file, uploadId); }
+    form.append("upload_id", uploadId);
+  }
   if (input.folderId) form.append("folder_id", input.folderId);
   if (input.accessScope) form.append("access_scope", input.accessScope);
+  if (input.file.size > 50 * 1024 * 1024) throw new Error("O limite por arquivo é 50 MB.");
   const invocation = supabase.functions.invoke("drive-files", { body: form });
+  let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
-    window.setTimeout(() => reject(new Error("O Drive demorou demais para responder. A tarefa foi salva; tente reenviar somente o arquivo.")), 45_000);
+    timer = setTimeout(() => reject(new Error("O Drive demorou demais para responder. A tarefa foi salva; tente reenviar somente o arquivo.")), 45_000);
   });
-  const { data, error } = await Promise.race([invocation, timeout]);
+  const { data, error } = await Promise.race([invocation, timeout]).finally(() => clearTimeout(timer));
   if (error) throw await driveError(error);
   if (!data?.ok || !data?.file)
     throw new Error(data?.error || "Falha no upload ao Drive da RKC.");
@@ -343,4 +352,12 @@ export async function uploadAcademyFile(input: {
     expected_size: input.file.size,
   });
   return committed.file as DriveFileRecord;
+}
+
+export async function deleteTaskWithFiles(taskId: string) {
+  return invoke({ action: "task-delete", task_id: taskId });
+}
+
+export async function retryPendingTaskCleanup() {
+  return invoke({ action: "task-cleanup-pending" });
 }

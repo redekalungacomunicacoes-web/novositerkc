@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import {
   BarChart3,
@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { retryPendingTaskCleanup } from "@/services/driveFiles";
 import { supabase } from "@/lib/supabase";
 import { getCurrentEquipeMember } from "./tasksApi";
 import { useCurrentMemberQuery, useNotificationsQuery } from "./useTaskQueries";
@@ -160,7 +161,7 @@ function UserMenu() {
         onClick={() => setOpen((current) => !current)}
         className="flex items-center gap-3 rounded-3xl border border-emerald-100 bg-white py-1.5 pl-1.5 pr-3 text-left shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/60 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/70"
       >
-        <img src={avatar} alt={displayName} className="h-10 w-10 rounded-2xl object-cover" />
+        <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl bg-emerald-100 text-sm font-semibold text-emerald-800">{member?.foto_url ? <img src={avatar} alt={displayName} className="h-full w-full object-cover" /> : getInitials(displayName)}</span>
         <span className="hidden min-w-0 sm:block">
           <span className="block max-w-40 truncate text-sm font-semibold text-slate-900 dark:text-white">{displayName}</span>
           <span className="block max-w-40 truncate text-xs text-slate-500 dark:text-emerald-100/70">{role}</span>
@@ -190,13 +191,13 @@ function UserMenu() {
 
 export function TasksTopBar() {
   return (
-    <header className="sticky top-0 z-30 -mx-4 border-b border-emerald-100/80 bg-white/90 px-4 py-4 backdrop-blur-xl dark:border-emerald-900/70 dark:bg-emerald-950/90 md:-mx-6 md:px-6">
+    <header className="sticky top-0 z-30 border-b border-emerald-100/80 bg-white/90 px-4 py-4 backdrop-blur-xl dark:border-emerald-900/70 dark:bg-emerald-950/90 md:px-6">
       <div className="mx-auto flex max-w-[1920px] flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700 dark:text-emerald-300">Rede Kalunga Comunicações</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 dark:text-white md:text-3xl">Tarefas e Projetos</h1>
-            <p className="text-sm text-slate-500 dark:text-emerald-100/70">Gestão Operacional</p>
+            <p className="hidden text-xs font-semibold uppercase tracking-[0.24em] sm:block text-emerald-700 dark:text-emerald-300">Rede Kalunga Comunicações</p>
+            <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-950 dark:text-white md:text-3xl">Tarefas e Projetos</h1>
+            <p className="hidden text-sm text-slate-500 sm:block dark:text-emerald-100/70">Gestão Operacional</p>
           </div>
           <div className="flex items-center gap-3">
             <NotificationsMenu />
@@ -222,10 +223,11 @@ export function TasksTopBar() {
 }
 
 export function TasksPageShell({ children }: { children: ReactNode }) {
+  useEffect(() => { void retryPendingTaskCleanup().catch((error) => console.error("[tasks] pending cleanup", error.message)); }, []);
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#05241f] dark:text-emerald-50">
       <TasksTopBar />
-      <main className="mx-auto max-w-[1920px] px-4 py-5 md:px-6">{children}</main>
+      <main className="mx-auto max-w-[1920px] px-2 py-4 md:px-4">{children}</main>
     </div>
   );
 }

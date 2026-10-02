@@ -17,10 +17,10 @@
 - O calendário renderiza apenas o mês selecionado e consulta tasks por intervalo `YYYY-MM-DD` (início/fim do mês), reduzindo payload.
 - O drawer lateral combina listagem da data + formulário para criação rápida.
 - Upload de anexos:
-  - Arquivos binários em `storage` bucket `task-files`.
-  - Metadados em `task_attachments`.
+  - Novos arquivos binários no Google Drive, em `04_EQUIPE/<criador>/TAREFAS/<título - código>`. O bucket `task-files` é mantido para leitura/limpeza de legados.
+  - Metadados novos em `drive_files`; legados e links em `task_attachments`.
   - Links externos em `task_attachments` com `tipo = link`.
-- Notificações são geradas no banco por trigger (`notify_task_assignment_v2`) para consistência mesmo fora do frontend.
+- A interface atual deriva avisos das tarefas do intervalo consultado. O banco conectado não possui os triggers de atribuição das migrations antigas.
 
 ## Tratamento de erros e validações
 
@@ -31,3 +31,5 @@
   - Hora fim >= hora início.
   - URLs externas válidas (`http://` ou `https://`).
 - Erros de Supabase são exibidos no topo da tela de tarefas.
+
+Consulte `tasks-auditoria.md` para contratos de criação, retry, exclusão, RLS e validação.

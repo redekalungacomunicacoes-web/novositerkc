@@ -13,6 +13,8 @@ import {
   assertPrivateDriveFile,
 } from "../_shared/google-drive.ts";
 
+import { deleteTaskAndQueueCleanup, retryTaskCleanup } from "../_shared/task-delete.ts";
+import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
 
 // Root ID provided and named by RKC in this task; the academy child ID is discovered at runtime.
@@ -116,45 +118,15 @@ Deno.serve(async (req) => {
           500,
         );
 
-      const { data: task, error: taskError } = await admin
-        .from("tasks")
-        .select("id,titulo,context_type,context_id,drive_folder_id,assigned_to")
-        .eq("id", taskId)
-        .single();
-      if (taskError || !task)
-        return json({ ok: false, error: "Tarefa não encontrada." }, 404);
-      let folderId = task.drive_folder_id as string | null;
-      let assigneeFolder = String(task.assigned_to ?? "SEM_RESPONSAVEL");
-      if (task.assigned_to) {
-        const { data: member } = await admin.from("equipe").select("nome").eq("id", task.assigned_to).maybeSingle();
-        if (member?.nome) assigneeFolder = safeName(member.nome);
+      const uploadId = String(form.get("upload_id") || "") || null;
+      if (uploadId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uploadId))
+        return json({ ok: false, error: "Identificador de upload inválido." }, 400);
+      if (uploadId) {
+        const existing = await admin.from("drive_files").select("*").eq("task_id", taskId).eq("module", "tasks").eq("task_upload_id", uploadId).eq("status", "active").maybeSingle();
+        if (existing.error) throw existing.error;
+        if (existing.data) return json({ ok: true, file: existing.data });
       }
-      if (!folderId) {
-        const label = safeName(`${task.titulo ?? "Tarefa"} - ${String(task.id).slice(0, 8)}`);
-        const segments =
-          task.context_type === "project"
-            ? [
-                "03_PROJETOS",
-                String(task.context_id ?? "geral"),
-                "TAREFAS",
-                label,
-              ]
-            : task.context_type === "materia"
-              ? [
-                  "02_MATERIAS",
-                  String(task.context_id ?? "geral"),
-                  "TAREFAS",
-                  label,
-                ]
-              : ["05_INTEGRANTES", assigneeFolder, "TAREFAS", label];
-        const path = await ensureDrivePath(rootFolderId, segments);
-        folderId = path.folderId;
-        const { error } = await admin
-          .from("tasks")
-          .update({ drive_folder_id: folderId })
-          .eq("id", taskId);
-        if (error) throw error;
-      }
+      const folderId = await prepareTaskFolder(taskId, rootFolderId, admin);
 
       const uploaded = await uploadDriveFile(file, folderId);
       const row = {
@@ -166,6 +138,7 @@ Deno.serve(async (req) => {
         module: "tasks",
         entity_id: taskId,
         task_id: taskId,
+        task_upload_id: uploadId,
         category: String(form.get("category") ?? "arquivo"),
         uploaded_by: auth.user.id,
         web_view_link: uploaded.webViewLink ?? null,
@@ -183,6 +156,10 @@ Deno.serve(async (req) => {
         await trashDriveFile(uploaded.id).catch((cleanupError) =>
           console.error("[drive-files] cleanup", cleanupError),
         );
+        if (uploadId && error.code === "23505") {
+          const existing = await admin.from("drive_files").select("*").eq("task_id", taskId).eq("module", "tasks").eq("task_upload_id", uploadId).eq("status", "active").maybeSingle();
+          if (!existing.error && existing.data) return json({ ok: true, file: existing.data });
+        }
         throw error;
       }
       return json({ ok: true, file: data });
@@ -195,25 +172,25 @@ Deno.serve(async (req) => {
       if (!taskId) return json({ ok: false, error: "Tarefa obrigatória." }, 400);
       await requireTaskAccess(taskId);
       if (!rootFolderId) return json({ ok: false, error: "Pasta raiz do Drive não configurada." }, 503);
-      const { data: task, error: taskError } = await admin.from("tasks")
-        .select("id,titulo,context_type,context_id,drive_folder_id,assigned_to").eq("id", taskId).single();
-      if (taskError || !task) return json({ ok: false, error: "Tarefa não encontrada." }, 404);
-      if (task.drive_folder_id) return json({ ok: true, folder_id: task.drive_folder_id });
-      let assigneeFolder = "SEM_RESPONSAVEL";
-      if (task.assigned_to) {
-        const { data: member } = await admin.from("equipe").select("nome").eq("id", task.assigned_to).maybeSingle();
-        assigneeFolder = safeName(member?.nome || String(task.assigned_to));
-      }
-      const label = safeName(`${task.titulo ?? "Tarefa"} - ${String(task.id).slice(0, 8)}`);
-      const segments = task.context_type === "project"
-        ? ["03_PROJETOS", String(task.context_id ?? "geral"), "TAREFAS", label]
-        : task.context_type === "materia"
-          ? ["02_MATERIAS", String(task.context_id ?? "geral"), "TAREFAS", label]
-          : ["05_INTEGRANTES", assigneeFolder, "TAREFAS", label];
-      const path = await ensureDrivePath(rootFolderId, segments);
-      const { error } = await admin.from("tasks").update({ drive_folder_id: path.folderId }).eq("id", taskId);
+      const folderId = await prepareTaskFolder(taskId, rootFolderId, admin);
+      return json({ ok: true, folder_id: folderId });
+    }
+    if (action === "task-cleanup-pending") {
+      const role = await userClient.rpc("is_team_admin");
+      if (role.error) throw role.error;
+      let query = admin.from("task_cleanup_jobs").select("task_id").eq("status", "pending").order("created_at").limit(5);
+      if (role.data !== true) query = query.eq("requested_by", auth.user.id);
+      const { data: jobs, error } = await query;
       if (error) throw error;
-      return json({ ok: true, folder_id: path.folderId });
+      const results = await Promise.allSettled((jobs || []).map((job: { task_id: string }) => retryTaskCleanup(job.task_id, userClient, admin, auth.user.id)));
+      return json({ ok: true, pending: results.filter((result) => result.status === "rejected" || result.value.cleanup_pending).length });
+    }
+    if (action === "task-delete" || action === "task-cleanup") {
+      const taskId = String(body.task_id || "");
+      if (!taskId) return json({ ok: false, error: "Tarefa obrigatória." }, 400);
+      return json(await (action === "task-delete"
+        ? deleteTaskAndQueueCleanup(taskId, userClient, admin, auth.user.id)
+        : retryTaskCleanup(taskId, userClient, admin, auth.user.id)));
     }
     if (action === "academy-upload-start") {
       if (!rootFolderId) return json({ ok: false, error: "Pasta raiz do Drive não configurada." }, 503);

@@ -1,5 +1,7 @@
-import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { toast } from "sonner";
+import { ensureTaskDriveFolder } from "@/services/driveFiles";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, CheckCircle2, FileText, Link2, MessageSquare, MoreVertical, Paperclip, Pencil, Trash2, UserCircle, UserRound } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { openTaskAttachment, priorityLabels, statusLabels } from "./tasksApi";
@@ -39,13 +41,15 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
   const uploadAttachment = useTaskAttachmentMutation();
   const linkAttachment = useExternalAttachmentMutation();
   const removeAttachment = useDeleteTaskAttachmentMutation();
-  const isSaving = saveTask.isPending || addComment.isPending || uploadAttachment.isPending || linkAttachment.isPending;
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStage, setSaveStage] = useState("");
+  const submitting = useRef(false);
   const details = useTaskDetailsQuery(editing?.id);
   const selectedTask = useMemo(() => editing ? {
-    ...editing,
+    ...(tasks.find((task) => task.id === editing.id) ?? editing),
     attachments: details.data?.attachments ?? editing.attachments,
     comments: details.data?.comments ?? editing.comments,
-  } : null, [editing, details.data]);
+  } : null, [editing, details.data, tasks]);
 
   function editTask(task: CalendarTask) {
     setEditing(task);
@@ -80,6 +84,10 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
+    setIsSaving(true);
+    try {
     setSubmitError(null);
     setSubmitNotice(null);
 
@@ -100,10 +108,11 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       return;
     }
      let taskId = savedTaskId;
-    if (!taskId) {
+    {
       try {
-        taskId = await saveTask.mutateAsync({ input: form, taskId: editing?.id });
-        if (!editing) setSavedTaskId(taskId);
+        setSaveStage("Salvando tarefa...");
+        taskId = await saveTask.mutateAsync({ input: form, taskId: savedTaskId ?? editing?.id });
+        setSavedTaskId(taskId);
       } catch (error) {
         console.error("[TASK CREATE] erro ao salvar tarefa:", error);
         const message = error instanceof Error ? error.message : "Erro inesperado ao salvar a tarefa.";
@@ -116,6 +125,15 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     if (!taskId) return;
 
     const failures: string[] = [];
+    setSaveStage("Preparando pasta...");
+    try {
+      await ensureTaskDriveFolder(taskId);
+    } catch (error) {
+      setSubmitNotice("A tarefa foi salva. Tente novamente para preparar a pasta e enviar os arquivos.");
+      setSubmitError(error instanceof Error ? error.message : "Não foi possível preparar a pasta.");
+      return;
+    }
+    setSaveStage("Enviando arquivos e comentários...");
     if (comment.trim()) {
       try {
         await addComment.mutateAsync({ taskId, comentario: comment.trim() });
@@ -125,9 +143,12 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       }
     }
 
-    const uploadResults = await Promise.allSettled(
-      attachmentFiles.map((file) => uploadAttachment.mutateAsync({ taskId, file })),
-    );
+    // Limit simultaneous uploads to avoid exhausting memory on mobile.
+    const uploadResults: PromiseSettledResult<unknown>[] = [];
+    for (let offset = 0; offset < attachmentFiles.length; offset += 2) {
+      uploadResults.push(...await Promise.allSettled(attachmentFiles.slice(offset, offset + 2)
+        .map((file) => uploadAttachment.mutateAsync({ taskId, file }))));
+    }
     const failedFiles: File[] = [];
     uploadResults.forEach((result, index) => {
       if (result.status === "rejected") {
@@ -138,7 +159,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     });
     setAttachmentFiles(failedFiles);
 
-    const links = externalLinks.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+    const links = externalLinks.split(/\n/).map((item) => item.trim()).filter(Boolean);
     const failedLinks: string[] = [];
     for (const url of links) {
       try {
@@ -151,7 +172,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     setExternalLinks(failedLinks.join("\n"));
 
     if (failures.length) {
-      setSubmitNotice(`Tarefa salva com sucesso (código ${taskId.slice(0, 8)}). Ela já aparece na lista de tarefas. Reenvie os itens pendentes abaixo; a tarefa não será criada novamente.`);
+      setSubmitNotice(`Tarefa salva com sucesso (código ${taskId.slice(0, 8)}). Reenvie os itens pendentes abaixo; a tarefa não será criada novamente.`);
       setSubmitError(`Não foi possível concluir: ${failures.join(" · ")}`);
       return;
     }
@@ -162,8 +183,14 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
     setComment("");
     setAttachmentFiles([]);
     setExternalLinks("");
+    toast.success(editing ? "Tarefa atualizada com sucesso." : "Tarefa criada com sucesso.");
     setSubmitNotice(editing ? "Tarefa atualizada com sucesso." : "Tarefa criada com sucesso.");
     if (!initialTask && !editing) onClose();
+    } finally {
+      submitting.current = false;
+      setIsSaving(false);
+      setSaveStage("");
+    }
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -177,12 +204,14 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
   const assignee = teamMembers.find((member) => member.id === selectedTask?.assigneeId || member.userId === selectedTask?.assigneeId);
   const creator = teamMembers.find((member) => member.id === selectedTask?.creatorId || member.userId === selectedTask?.creatorId);
 
-  return <AnimatePresence>{open && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }} className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-emerald-100 bg-white p-5 text-slate-900 shadow-2xl dark:border-emerald-800/60 dark:bg-emerald-950 dark:text-emerald-50">
+  return <Dialog.Root open={open} onOpenChange={(next) => { if (!next && !isSaving) onClose(); }}><Dialog.Portal>
+    <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+    <Dialog.Content onEscapeKeyDown={(event) => { if (isSaving) event.preventDefault(); }} onPointerDownOutside={(event) => event.preventDefault()} className="fixed left-1/2 top-1/2 z-50 max-h-[94dvh] w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-emerald-100 bg-white p-3 text-slate-900 shadow-2xl sm:rounded-3xl sm:p-5 dark:border-emerald-800/60 dark:bg-emerald-950 dark:text-emerald-50">
+    <Dialog.Description className="sr-only">Crie e acompanhe tarefas, comentários e arquivos da equipe.</Dialog.Description>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-emerald-100 pb-4 dark:border-emerald-800/60">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">{selectedTask ? "Detalhes da tarefa" : "Nova tarefa"}</p>
-          <h3 className="mt-1 text-2xl font-semibold">{selectedTask?.title ?? `Tarefas • ${formatDate(selectedDate)}`}</h3>
+          <Dialog.Title className="mt-1 break-words text-xl font-semibold sm:text-2xl">{selectedTask?.title ?? `Tarefas • ${formatDate(selectedDate)}`}</Dialog.Title>
         </div>
         <div className="flex items-center gap-2">
           {selectedTask ? <DropdownMenu>
@@ -192,7 +221,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
               <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialogOpen(true)}><Trash2 /> Excluir</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu> : null}
-          <button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-emerald-100 px-4 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50 dark:border-emerald-800/60 dark:text-emerald-100 dark:hover:bg-emerald-900/50">Fechar</button>
+          <button type="button" disabled={isSaving} onClick={onClose} className="min-h-11 rounded-xl border border-emerald-100 px-4 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50 dark:border-emerald-800/60 dark:text-emerald-100 dark:hover:bg-emerald-900/50">Fechar</button>
         </div>
       </div>
 
@@ -209,7 +238,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         <div className="border-b border-slate-200 bg-white px-5 py-4 dark:border-emerald-800/60 dark:bg-emerald-950">
           <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100"><CheckCircle2 size={20}/></div><div><h4 className="font-semibold">{isEditing ? "Editar tarefa" : "Criar nova tarefa"}</h4><p className="text-xs text-slate-500 dark:text-emerald-100/60">O criador é identificado automaticamente pela conta conectada.</p></div></div>
         </div>
-        <div className="grid gap-5 p-5">
+        <fieldset disabled={isSaving} className="grid min-w-0 gap-5 p-3 sm:p-5">
           <section className="grid gap-4">
             <div><label className="mb-1.5 block text-sm font-semibold">Título da tarefa <span className="text-rose-500">*</span></label><input required autoFocus value={form.titulo} onChange={(e) => setForm((old) => ({ ...old, titulo: e.target.value }))} className={inputClass+" w-full min-h-11"} placeholder="Ex.: Finalizar matéria sobre o encontro comunitário" /></div>
             <div><label className="mb-1.5 block text-sm font-semibold">Descrição e orientações</label><textarea value={form.descricao ?? ""} onChange={(e) => setForm((old) => ({ ...old, descricao: e.target.value }))} className={inputClass+" min-h-28 w-full resize-y"} placeholder="Descreva o objetivo, entregáveis e informações importantes para executar a tarefa." /></div>
@@ -235,8 +264,8 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
           </section>
           {submitNotice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100">{submitNotice}</p>:null}
           {submitError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">{submitError}</p>:null}
-        </div>
-        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-emerald-800/60 dark:bg-emerald-950/95"><p className="text-xs text-slate-500">{attachmentFiles.length ? `${attachmentFiles.length} arquivo(s) preparado(s)` : "Arquivos são opcionais"}</p><div className="flex gap-2"><button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-medium dark:border-emerald-800">Cancelar</button><button type="submit" disabled={isSaving} className="min-h-11 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60">{isSaving ? "Salvando..." : savedTaskId ? "Tentar arquivos novamente" : isEditing ? "Salvar alterações" : "Criar tarefa"}</button></div></div>
+        </fieldset>
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-emerald-800/60 dark:bg-emerald-950/95"><p className="text-xs text-slate-500">{attachmentFiles.length ? `${attachmentFiles.length} arquivo(s) preparado(s)` : "Arquivos são opcionais"}</p><div className="flex gap-2"><button type="button" disabled={isSaving} onClick={onClose} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-medium dark:border-emerald-800">Cancelar</button><button type="submit" disabled={isSaving} className="min-h-11 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60">{isSaving ? saveStage || "Salvando..." : savedTaskId ? "Concluir envio" : editing ? "Salvar alterações" : "Criar tarefa"}</button></div></div>
       </form> : null}
 
       {selectedTask ? (
@@ -246,12 +275,14 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60 lg:col-span-2"><h4 className="flex items-center gap-2 font-semibold"><FileText size={16} /> Descrição</h4><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-emerald-100/70">{selectedTask.description || "Sem descrição."}</p></div>
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><CalendarDays size={16} /> Histórico</h4><p className="mt-2 text-sm text-slate-600 dark:text-emerald-100/70">Criada em {formatDate(selectedTask.createdAt?.slice(0,10))}</p><p className="text-sm text-slate-600 dark:text-emerald-100/70">Atualizada em {formatDate(selectedTask.updatedAt?.slice(0,10))}</p></div>
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60 lg:col-span-2"><h4 className="flex items-center gap-2 font-semibold"><MessageSquare size={16} /> Comentários</h4><div className="mt-2 space-y-2">{selectedTask.comments.length ? selectedTask.comments.map((item) => <p key={item.id} className="rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40">{item.comentario}</p>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum comentário.</p>}</div></div>
-          <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><Paperclip size={16} /> Anexos</h4><div className="mt-2 space-y-2">{selectedTask.attachments.length ? selectedTask.attachments.map((item) => <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40"><button type="button" onClick={() => void openTaskAttachment(item)} className="min-w-0 flex-1 truncate text-left text-emerald-800 underline-offset-2 hover:underline dark:text-emerald-100">{item.file_name ?? "Anexo"}</button><button type="button" disabled={removeAttachment.isPending} aria-label={`Remover ${item.file_name ?? "anexo"}`} onClick={() => void removeAttachment.mutateAsync(item)} className="flex min-h-10 min-w-10 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-100 disabled:opacity-50"><Trash2 size={16} /></button></div>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum anexo.</p>}</div></div>
+          <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><Paperclip size={16} /> Anexos</h4><div className="mt-2 space-y-2">{selectedTask.attachments.length ? selectedTask.attachments.map((item) => <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40"><button type="button" onClick={() => void openTaskAttachment(item).catch((error) => toast.error(error.message))} className="min-w-0 flex-1 truncate text-left text-emerald-800 underline-offset-2 hover:underline dark:text-emerald-100">{item.file_name ?? "Anexo"}</button><button type="button" disabled={removeAttachment.isPending} aria-label={`Remover ${item.file_name ?? "anexo"}`} onClick={() => void removeAttachment.mutateAsync(item).catch((error) => toast.error(error.message))} className="flex min-h-10 min-w-10 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-100 disabled:opacity-50"><Trash2 size={16} /></button></div>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum anexo.</p>}</div></div>
         </section>
       ) : (
         <div className="space-y-2">{dayTasks.length === 0 ? <div className="rounded-2xl border border-dashed border-emerald-200 p-6 text-center text-slate-500 dark:border-emerald-800/60 dark:text-emerald-100/60">Nenhuma tarefa para este dia.</div> : dayTasks.map((t) => <button type="button" key={t.id} onClick={() => editTask(t)} className="w-full rounded-2xl border border-emerald-100 p-3 text-left transition hover:bg-emerald-50 dark:border-emerald-800/60 dark:hover:bg-emerald-900/40"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{t.title}</p><p className="text-xs text-slate-500 dark:text-emerald-100/60">{formatDate(t.date)} · {t.description}</p><p className="mt-1 text-xs text-slate-500 dark:text-emerald-100/60">{statusLabels[t.status]} · {priorityLabels[t.priority]}</p></div><span className="text-xs text-emerald-700 dark:text-emerald-300"><UserCircle size={14} /></span></div></button>)}</div>
       )}
-    </motion.div>
+      {details.isLoading ? <p role="status" className="py-3 text-sm">Carregando comentários e arquivos...</p> : null}
+      {details.error ? <p role="alert" className="py-3 text-sm text-rose-700">{details.error.message} <button type="button" onClick={() => void details.refetch()} className="underline">Tentar novamente</button></p> : null}
+    </Dialog.Content>
       {selectedTask ? <TaskDeleteDialog taskId={selectedTask.id} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} onDeleted={onClose} /> : null}
-  </motion.div>}</AnimatePresence>;
+  </Dialog.Portal></Dialog.Root>;
 }

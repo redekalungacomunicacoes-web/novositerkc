@@ -7,6 +7,8 @@ import { getCurrentUserRoles } from "@/lib/rbac";
 import { supabase } from "@/lib/supabase";
 
 export function AdminLayout() {
+  const location = useLocation();
+  const isTaskArea = location.pathname.startsWith("/admin/tarefas");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
@@ -35,7 +37,7 @@ export function AdminLayout() {
       )}
 
       <main className="md:pl-64 min-h-screen transition-all duration-300 ease-in-out">
-        <div className="container mx-auto p-6 md:p-8 max-w-7xl">
+        <div className={isTaskArea ? "mx-auto max-w-[1920px] p-2 md:p-4" : "container mx-auto p-6 md:p-8 max-w-7xl"}>
           <Outlet />
         </div>
       </main>

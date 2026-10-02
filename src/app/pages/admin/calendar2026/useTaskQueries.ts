@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addTaskComment, createExternalAttachment, deleteTask, deleteTaskAttachment, fetchNotifications, fetchTaskDetails, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, getPermissionLevel, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
+import { addTaskComment, createExternalAttachment, deleteTask, deleteTaskAttachment, fetchAttachmentCenter, fetchNotifications, fetchTaskDetails, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, getPermissionLevel, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
 import type { CalendarTask, TaskAttachment, TaskInput, TaskStatus } from "./types";
 
 export const taskKeys = {
   all: ["admin-tasks"] as const,
+  attachments: ["admin-tasks", "attachments"] as const,
   members: ["admin-task-members"] as const,
   notifications: ["admin-task-notifications"] as const,
   currentMember: ["admin-task-current-member"] as const,
@@ -32,19 +33,23 @@ function replaceTaskInCache(
 }
 
 export function useTeamMembersQuery() {
-  return useQuery({ queryKey: taskKeys.members, queryFn: fetchTeamMembers });
+  return useQuery({ queryKey: taskKeys.members, queryFn: fetchTeamMembers, staleTime: 300_000 });
 }
 
 export function useCurrentMemberQuery() {
-  return useQuery({ queryKey: taskKeys.currentMember, queryFn: getCurrentEquipeMember });
+  return useQuery({ queryKey: taskKeys.currentMember, queryFn: getCurrentEquipeMember, staleTime: 300_000 });
 }
 
 export function usePermissionQuery() {
-  return useQuery({ queryKey: taskKeys.permission, queryFn: getPermissionLevel });
+  return useQuery({ queryKey: taskKeys.permission, queryFn: getPermissionLevel, staleTime: 300_000 });
 }
 
 export function useTasksQuery(startDate: string, endDate: string, assignee: string) {
   return useQuery({ queryKey: taskKeys.range(startDate, endDate, assignee), queryFn: () => fetchTasks(startDate, endDate, { assignee }), enabled: Boolean(startDate && endDate), staleTime: 30_000, placeholderData: (previous) => previous });
+}
+
+export function useAttachmentCenterQuery() {
+  return useQuery({ queryKey: taskKeys.attachments, queryFn: fetchAttachmentCenter, staleTime: 30_000 });
 }
 
 export function useTaskDetailsQuery(taskId?: string | null) {
@@ -64,7 +69,7 @@ export function useSaveTaskMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ input, taskId }: { input: TaskInput; taskId?: string }) => saveTask(input, taskId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: taskKeys.all }); void queryClient.invalidateQueries({ queryKey: taskKeys.notifications }); },
   });
 }
 
@@ -87,7 +92,6 @@ export function useTaskStatusMutation() {
   return useMutation({
     mutationFn: ({ taskId, status, oldStatus }: { taskId: string; status: TaskStatus; oldStatus?: TaskStatus }) => updateTaskStatus(taskId, status, oldStatus),
     onSuccess: (updatedTask) => {
-      // replaceTaskInCache(queryClient, updatedTask);
       replaceTaskInCache(queryClient, updatedTask);
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       void queryClient.invalidateQueries({ queryKey: taskKeys.notifications });
@@ -107,6 +111,7 @@ export function useTaskAttachmentMutation() {
   const queryClient = useQueryClient();
   return useMutation({ mutationFn: ({ taskId, file }: { taskId: string; file: File }) => uploadTaskAttachment(taskId, file), onSuccess: (_data, variables) => {
     void queryClient.invalidateQueries({ queryKey: taskKeys.detail(variables.taskId) });
+    void queryClient.invalidateQueries({ queryKey: taskKeys.attachments });
   } });
 }
 
@@ -114,6 +119,7 @@ export function useExternalAttachmentMutation() {
   const queryClient = useQueryClient();
   return useMutation({ mutationFn: ({ taskId, url }: { taskId: string; url: string }) => createExternalAttachment(taskId, url), onSuccess: (_data, variables) => {
     void queryClient.invalidateQueries({ queryKey: taskKeys.detail(variables.taskId) });
+    void queryClient.invalidateQueries({ queryKey: taskKeys.attachments });
   } });
 }
 
@@ -122,6 +128,7 @@ export function useDeleteTaskAttachmentMutation() {
   return useMutation({
     mutationFn: (attachment: Pick<TaskAttachment, "id" | "file_url">) => deleteTaskAttachment(attachment),
     onSuccess: (_data, attachment) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.attachments });
       const entries = queryClient.getQueriesData<{ attachments?: TaskAttachment[] }>({ queryKey: taskKeys.all });
       entries.forEach(([queryKey, data]) => {
         if (!data || Array.isArray(data) || !Array.isArray(data.attachments)) return;
