@@ -129,7 +129,7 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
           );
         })}
       </div>
-      {isLoading ? <p className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-100">Carregando tarefas...</p> : null}
+      {isLoading ? <div className="mt-4 grid gap-2 md:grid-cols-3" aria-label="Carregando tarefas"><div className="h-14 animate-pulse rounded-2xl bg-emerald-50 dark:bg-emerald-900/60"/><div className="h-14 animate-pulse rounded-2xl bg-emerald-50 dark:bg-emerald-900/60"/><div className="h-14 animate-pulse rounded-2xl bg-emerald-50 dark:bg-emerald-900/60"/></div> : null}
     </section>
   );
 }
