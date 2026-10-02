@@ -24,7 +24,7 @@ function canMoveTask(task: CalendarTask, targetStatus: TaskStatus, currentMember
   return false;
 }
 
-function KanbanCard({ task, onOpen }: { task: CalendarTask; onOpen: (task: CalendarTask) => void }) {
+function KanbanCard({ task, assigneeName, onOpen }: { task: CalendarTask; assigneeName: string; onOpen: (task: CalendarTask) => void }) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   return (
     <article
@@ -55,14 +55,14 @@ function KanbanCard({ task, onOpen }: { task: CalendarTask; onOpen: (task: Calen
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-emerald-100/60">{task.description || "Sem descrição."}</p>
       <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-emerald-100/60">
         <span>Prazo {new Date(`${task.endDate}T00:00:00`).toLocaleDateString("pt-BR")}</span>
-        <span className="font-medium">{teamMembers.find((member) => member.id === task.assigneeId)?.name || "Equipe"}</span>
+        <span className="font-medium">{assigneeName}</span>
       </div>
       <TaskDeleteDialog taskId={task.id} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} />
     </article>
   );
 }
 
-function Column({ status, tasks, draggingId, highlighted, onDragOver, onDrop, onOpen }: { status: TaskStatus; tasks: CalendarTask[]; draggingId: string | null; highlighted: boolean; onDragOver: (status: TaskStatus) => void; onDrop: (status: TaskStatus) => void; onOpen: (task: CalendarTask) => void }) {
+function Column({ status, tasks, teamMembers, draggingId, highlighted, onDragOver, onDrop, onOpen }: { status: TaskStatus; tasks: CalendarTask[]; teamMembers: Array<{ id: string; name: string }>; draggingId: string | null; highlighted: boolean; onDragOver: (status: TaskStatus) => void; onDrop: (status: TaskStatus) => void; onOpen: (task: CalendarTask) => void }) {
   return (
     <section
       onDragOver={(event) => { event.preventDefault(); onDragOver(status); }}
@@ -75,7 +75,7 @@ function Column({ status, tasks, draggingId, highlighted, onDragOver, onDrop, on
         <span className="rounded-full bg-emerald-700 px-2.5 py-1 text-xs text-white dark:bg-emerald-500 dark:text-emerald-950">{tasks.length}</span>
       </h2>
       <div className="space-y-3">
-        {tasks.map((task) => <KanbanCard key={task.id} task={task} onOpen={onOpen} />)}
+        {tasks.map((task) => <KanbanCard key={task.id} task={task} assigneeName={teamMembers.find((member) => member.id === task.assigneeId)?.name || "Equipe"} onOpen={onOpen} />)}
         {tasks.length === 0 ? <div className="rounded-2xl border border-dashed border-emerald-200 p-6 text-center text-xs text-slate-500 dark:border-emerald-800/60 dark:text-emerald-100/60">Arraste cards para esta coluna.</div> : null}
         {highlighted && draggingId ? <div className="rounded-2xl border border-emerald-400 bg-white/70 p-4 text-center text-xs font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100">Solte para mover para {statusLabels[status]}</div> : null}
       </div>
