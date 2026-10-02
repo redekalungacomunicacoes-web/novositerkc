@@ -7,24 +7,13 @@ import { TaskDeleteDialog } from "./calendar2026/TaskDeleteDialog";
 import { TasksPageShell } from "./calendar2026/TasksShell";
 import { CalendarProvider, useCalendarStore } from "./calendar2026/store";
 import { priorityLabels, statusLabels } from "./calendar2026/tasksApi";
+import { allowedTaskStatuses, canMoveTask, kanbanStatuses } from "./calendar2026/taskPermissions";
 import { useCurrentMemberQuery, usePermissionQuery, useTaskStatusMutation } from "./calendar2026/useTaskQueries";
 import type { CalendarTask, TaskStatus } from "./calendar2026/types";
 
-const columns: TaskStatus[] = ["pendente", "em_andamento", "revisao", "concluida"];
-const allowedResponsibleMoves: Partial<Record<TaskStatus, TaskStatus[]>> = {
-  pendente: ["em_andamento"],
-  em_andamento: ["concluida"],
-};
+const columns: TaskStatus[] = kanbanStatuses;
 
-function canMoveTask(task: CalendarTask, targetStatus: TaskStatus, currentMemberId?: string | null, isAdmin?: boolean) {
-  if (task.status === targetStatus) return false;
-  if (targetStatus === "cancelada") return isAdmin || task.creatorId === currentMemberId;
-  if (isAdmin || task.creatorId === currentMemberId) return true;
-  if (task.assigneeId === currentMemberId) return allowedResponsibleMoves[task.status]?.includes(targetStatus) ?? false;
-  return false;
-}
-
-function KanbanCard({ task, assigneeName, onOpen }: { task: CalendarTask; assigneeName: string; onOpen: (task: CalendarTask) => void }) {
+function KanbanCard({ task, assigneeName, onOpen, onMove, moveOptions, moving }: { task: CalendarTask; assigneeName: string; onOpen: (task: CalendarTask) => void; onMove: (status: TaskStatus) => void; moveOptions: TaskStatus[]; moving: boolean }) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   return (
     <article
@@ -46,7 +35,8 @@ function KanbanCard({ task, assigneeName, onOpen }: { task: CalendarTask; assign
           <DropdownMenu>
             <DropdownMenuTrigger asChild><button type="button" aria-label={`Ações de ${task.title}`} onClick={(event) => event.stopPropagation()} className="flex min-h-10 min-w-10 items-center justify-center rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-800"><MoreVertical size={18} /></button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-white dark:bg-emerald-950" onClick={(event) => event.stopPropagation()}>
-              <DropdownMenuItem onSelect={() => onOpen(task)}><Pencil /> Editar</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onOpen(task)}><Pencil /> Abrir tarefa</DropdownMenuItem>
+              {moveOptions.map((status) => <DropdownMenuItem key={status} disabled={moving} onSelect={() => onMove(status)}><CheckCircle2 /> Mover para {statusLabels[status]}</DropdownMenuItem>)}
               <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialogOpen(true)}><Trash2 /> Excluir</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -62,11 +52,11 @@ function KanbanCard({ task, assigneeName, onOpen }: { task: CalendarTask; assign
   );
 }
 
-function Column({ status, tasks, teamMembers, draggingId, highlighted, onDragOver, onDrop, onOpen }: { status: TaskStatus; tasks: CalendarTask[]; teamMembers: Array<{ id: string; name: string }>; draggingId: string | null; highlighted: boolean; onDragOver: (status: TaskStatus) => void; onDrop: (status: TaskStatus) => void; onOpen: (task: CalendarTask) => void }) {
+function Column({ status, tasks, teamMembers, draggingId, highlighted, onDragOver, onDrop, onOpen, onMove, moveOptions, moving }: { status: TaskStatus; tasks: CalendarTask[]; teamMembers: Array<{ id: string; name: string }>; draggingId: string | null; highlighted: boolean; onDragOver: (status: TaskStatus) => void; onDrop: (status: TaskStatus) => void; onOpen: (task: CalendarTask) => void; onMove: (task: CalendarTask, status: TaskStatus) => void; moveOptions: (task: CalendarTask) => TaskStatus[]; moving: boolean }) {
   return (
     <section
       onDragOver={(event) => { event.preventDefault(); onDragOver(status); }}
-      onDragLeave={() => onDragOver(status)}
+      onDragLeave={() => undefined}
       onDrop={(event) => { event.preventDefault(); onDrop(status); }}
       className={`min-h-[520px] rounded-3xl border p-4 transition ${highlighted ? "border-emerald-500 bg-emerald-100/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/70" : "border-emerald-100 bg-emerald-50/60 dark:border-emerald-800/60 dark:bg-emerald-950/70"}`}
     >
@@ -75,7 +65,7 @@ function Column({ status, tasks, teamMembers, draggingId, highlighted, onDragOve
         <span className="rounded-full bg-emerald-700 px-2.5 py-1 text-xs text-white dark:bg-emerald-500 dark:text-emerald-950">{tasks.length}</span>
       </h2>
       <div className="space-y-3">
-        {tasks.map((task) => <KanbanCard key={task.id} task={task} assigneeName={teamMembers.find((member) => member.id === task.assigneeId)?.name || "Equipe"} onOpen={onOpen} />)}
+        {tasks.map((task) => <KanbanCard key={task.id} task={task} assigneeName={teamMembers.find((member) => member.id === task.assigneeId)?.name || "Equipe"} onOpen={onOpen} onMove={(next) => onMove(task, next)} moveOptions={moveOptions(task)} moving={moving} />)}
         {tasks.length === 0 ? <div className="rounded-2xl border border-dashed border-emerald-200 p-6 text-center text-xs text-slate-500 dark:border-emerald-800/60 dark:text-emerald-100/60">Arraste cards para esta coluna.</div> : null}
         {highlighted && draggingId ? <div className="rounded-2xl border border-emerald-400 bg-white/70 p-4 text-center text-xs font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100">Solte para mover para {statusLabels[status]}</div> : null}
       </div>
@@ -99,25 +89,23 @@ function KanbanBoard() {
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const selectedTask = selectedTaskId ? taskById.get(selectedTaskId) ?? null : null;
 
-  async function handleDrop(status: TaskStatus) {
-    const taskId = draggingId;
-    setDraggingId(null);
-    setTargetStatus(null);
-    if (!taskId) return;
-    const task = taskById.get(taskId);
-    if (!task) return;
+  async function moveTask(task: CalendarTask, status: TaskStatus) {
+    if (statusMutation.isPending) return;
     if (!canMoveTask(task, status, currentMemberId, isAdmin)) {
       setFeedback("Movimentação não permitida para seu perfil.");
-      setTimeout(() => setFeedback(null), 2600);
       return;
     }
     try {
-      await statusMutation.mutateAsync({ taskId, status, oldStatus: task.status });
+      await statusMutation.mutateAsync({ taskId: task.id, status, oldStatus: task.status });
       setFeedback(`Tarefa movida para ${statusLabels[status]}.`);
-      setTimeout(() => setFeedback(null), 2600);
-    } catch {
-      setFeedback(null);
-    }
+    } catch { setFeedback(null); }
+  }
+
+  async function handleDrop(status: TaskStatus) {
+    const task = draggingId ? taskById.get(draggingId) : null;
+    setDraggingId(null);
+    setTargetStatus(null);
+    if (task) await moveTask(task, status);
   }
 
   return (
@@ -139,7 +127,7 @@ function KanbanBoard() {
         <div onDragStart={(event) => setDraggingId(event.dataTransfer.getData("text/task-id"))}>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {columns.map((status) => (
-              <Column teamMembers={teamMembers} key={status} status={status} draggingId={draggingId} highlighted={targetStatus === status} onDragOver={setTargetStatus} onDrop={(dropStatus) => void handleDrop(dropStatus)} onOpen={(task) => setSelectedTaskId(task.id)} tasks={tasks.filter((task) => task.status === status)} />
+              <Column key={status} status={status} teamMembers={teamMembers} draggingId={draggingId} highlighted={targetStatus === status} onDragOver={setTargetStatus} onDrop={(dropStatus) => void handleDrop(dropStatus)} onOpen={(task) => setSelectedTaskId(task.id)} onMove={(task, next) => void moveTask(task, next)} moveOptions={(task) => allowedTaskStatuses(task, currentMemberId, isAdmin)} moving={statusMutation.isPending} tasks={tasks.filter((task) => task.status === status)} />
             ))}
           </div>
         </div>

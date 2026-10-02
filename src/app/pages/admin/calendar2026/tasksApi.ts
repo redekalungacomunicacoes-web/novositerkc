@@ -273,7 +273,9 @@ export async function fetchTaskDetails(taskId: string): Promise<{ attachments: T
       file_name: file.name,
       created_at: file.created_at,
     } as TaskAttachment));
-  return { attachments: [...attachments, ...(legacyResult.data ?? []) as TaskAttachment[]], comments: (commentsResult.data ?? []) as TaskComment[] };
+  const seen = new Set(attachments.map((item) => item.id));
+  const allAttachments = [...attachments, ...((legacyResult.data ?? []) as TaskAttachment[]).filter((item) => !seen.has(item.id))].sort((a,b) => b.created_at.localeCompare(a.created_at));
+  return { attachments: allAttachments, comments: (commentsResult.data ?? []) as TaskComment[] };
 }
 
 export async function fetchAttachmentCenter(): Promise<CalendarTask[]> {

@@ -58,3 +58,7 @@ As capturas usam fixtures, sem arquivos ou informações da produção.
 - [Formulário tablet (768 px)](tasks-ui/tablet.png)
 - [Formulário desktop (1440 px)](tasks-ui/desktop.png)
 - [Central de anexos mobile](tasks-ui/anexos-mobile.png)
+
+## Compatibilidade com Tarefas V4
+
+A proposta incorpora o commit ca4c7271 recebido em main durante a auditoria: preserva regras centrais de transição, movimentação pelo menu no mobile e calendário sem interativos aninhados. Corrige também a chamada recursiva de moveTask e restaura o handler de drop, encontrados nessa atualização. O teste responsivo cobre a movimentação pelo menu após a integração.

@@ -95,16 +95,15 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
           const isToday = key === dateKey(new Date());
           const isSelected = key === selected;
           return (
-            <motion.button
+            <motion.div
               whileHover={{ y: -2 }}
               key={key}
-              type="button"
-              aria-label={`Abrir tarefas de ${day.toLocaleDateString("pt-BR")}`}
-              onClick={() => openDay(key)}
+              role="group"
               className={`min-h-[72px] rounded-2xl border p-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:min-h-40 md:rounded-3xl md:p-3 ${isSelected ? "border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/60" : "border-emerald-100 bg-slate-50/80 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/50 dark:bg-[#07352d]/70 dark:hover:bg-emerald-900/50"} ${view === "day" ? "min-h-[520px]" : ""}`}
             >
               <div className="mb-1 flex items-center justify-between gap-1 md:mb-3 md:gap-2">
-                <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-bold md:h-8 md:w-8 md:rounded-2xl md:text-sm ${isToday ? "bg-emerald-700 text-white" : "text-slate-700 dark:text-emerald-50"}`}>{day.getDate()}</span>
+                <button type="button" aria-label={`Abrir tarefas de ${day.toLocaleDateString("pt-BR")}`} onClick={() => openDay(key)} className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+                <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-bold md:h-8 md:w-8 md:rounded-2xl md:text-sm ${isToday ? "bg-emerald-700 text-white" : "text-slate-700 dark:text-emerald-50"}`}>{day.getDate()}</span></button>
                 {view === "week" ? <span className="min-w-0 flex-1 text-[10px] font-semibold capitalize text-slate-500 md:hidden">{day.toLocaleDateString("pt-BR", { weekday: "short", month: "short" })}</span> : null}
                 <span className="hidden rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 shadow-sm md:inline-flex dark:bg-emerald-950 dark:text-emerald-100">{dayTasks.length}</span>
               </div>
@@ -113,7 +112,7 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
                 {dayTasks.slice(0, view === "month" ? 4 : 12).map((task) => {
                   const assignee = getAssignee(task);
                   return (
-                    <div key={task.id} role="button" tabIndex={0} onClick={(event) => { if (!onSelectTask) return; event.stopPropagation(); onSelectTask(task); }} onKeyDown={(event) => { if (onSelectTask && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); event.stopPropagation(); onSelectTask(task); } }} className={`group rounded-2xl border px-2.5 py-2 text-xs shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${onSelectTask ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" : ""} ${priorityStyles[task.priority]}`}>
+                    <button type="button" key={task.id} onClick={(event) => { if (!onSelectTask) return; event.stopPropagation(); onSelectTask(task); }} className={`group rounded-2xl border px-2.5 py-2 text-xs shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${onSelectTask ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" : ""} ${priorityStyles[task.priority]}`}>
                       <div className="flex items-center gap-2">
                         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${priorityDot[task.priority]}`} />
                         <span className="truncate font-semibold">{task.title}</span>
@@ -122,12 +121,12 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
                         <span>{taskTime(task)}</span>
                         {assignee ? <img src={assignee.avatar} alt={assignee.name} title={assignee.name} className="h-5 w-5 rounded-full object-cover ring-2 ring-white dark:ring-emerald-950" /> : null}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
                 {dayTasks.length > (view === "month" ? 4 : 12) ? <p className="rounded-xl bg-white/70 px-2 py-1 text-xs font-medium text-slate-500 dark:bg-emerald-950/50 dark:text-emerald-100/70">+{dayTasks.length - (view === "month" ? 4 : 12)} tarefas</p> : null}
               </div>
-            </motion.button>
+            </motion.div>
           );
         })}
       </div>

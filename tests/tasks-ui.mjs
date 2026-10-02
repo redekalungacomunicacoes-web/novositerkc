@@ -66,6 +66,11 @@ for(const width of [390,768,1440]) {
  await page.getByRole('link',{name:'Anexos',exact:true}).click();
  await page.getByRole('button',{name:/Tarefa de teste/}).click();await page.getByText('arquivo.pdf',{exact:true}).waitFor();
  await page.screenshot({path:`/tmp/rkc-tasks-qa/anexos-${width}.png`,fullPage:true});
+ await page.getByRole('link',{name:'Tarefas',exact:true}).last().click();
+ await page.getByRole('button',{name:'Ações de Tarefa de teste',exact:true}).click();
+ await page.getByRole('menuitem',{name:'Mover para Em andamento',exact:true}).click();
+ await page.getByText('Tarefa movida para Em andamento.',{exact:true}).waitFor();
+ assert.equal(tasks[0].status,'em_andamento');
  await page.getByRole('link',{name:'Calendário',exact:true}).click();
  // Open the day from the month grid on every breakpoint.
  const day=tasks[0].data_inicio.split('-').reverse().join('/');
