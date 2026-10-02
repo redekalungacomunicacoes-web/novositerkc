@@ -42,7 +42,7 @@ async function commitAvatar(file: File, memberId: string, kind: "avatar" | "thum
     row = inserted.data;
     const column = kind === "thumb" ? "avatar_thumb_drive_file_id" : "avatar_drive_file_id";
     const previous = await admin.from("equipe").select(column).eq("id", memberId).single();
-    const oldId = previous.data?.[column] || null;
+    const previousData = previous.data as Record<string, string | null> | null;\n    const oldId = previousData?.[column] || null;
     const linked = await admin.from("equipe").update({ drive_folder_id: memberFolder, [column]: row.id }).eq("id", memberId).select("id").single();
     if (linked.error) throw linked.error;
     if (oldId && oldId !== row.id) await admin.from("drive_files").update({ status: "archived", updated_at: new Date().toISOString() }).eq("id", oldId);
