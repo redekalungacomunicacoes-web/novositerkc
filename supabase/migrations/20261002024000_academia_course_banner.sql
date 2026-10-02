@@ -22,7 +22,7 @@ begin
   end loop;
 end $$;
 -- Adapta as RPCs já instaladas sem duplicar sua lógica de autorização/metadados.
-do $
+do $$
 declare src text;
 begin
   select pg_get_functiondef('public.academy_commit_drive(uuid,uuid,uuid,text,uuid,jsonb,uuid)'::regprocedure) into src;
@@ -36,7 +36,7 @@ begin
     'update academy_courses set cover_drive_file_id=record_id,updated_at=now() where id=p_course',
     'if p_kind = ''banner'' then update academy_courses set banner_drive_file_id=record_id,updated_at=now() where id=p_course; else update academy_courses set cover_drive_file_id=record_id,updated_at=now() where id=p_course; end if');
   execute src;
-end $;
+end $$;
 
 notify pgrst,'reload schema';
 commit;

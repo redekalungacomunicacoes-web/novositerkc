@@ -1,3 +1,4 @@
+import { CourseBannerUpload } from "./CourseBannerUpload";
 import { useEffect, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
 import { CopyPlus, GraduationCap, Pencil, Trash2 } from "lucide-react";
@@ -857,8 +858,8 @@ export function Academia() {
                 )}
                 {managedCourse && (
                   <>
-                    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-                      <div className="relative aspect-[3/1] min-h-44 overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
+                    <section className="min-w-0 overflow-hidden rounded-2xl border bg-card shadow-sm">
+                      <div className="relative w-full min-w-0 aspect-[3/1] min-h-64 sm:min-h-44 overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
                         {bannerPreview?.courseId === managedCourse.id ? (
                           <img src={bannerPreview.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
                         ) : managedCourse.banner_drive_file_id ? (
@@ -873,21 +874,20 @@ export function Academia() {
                           <div className="flex h-full items-center justify-center"><GraduationCap className="h-16 w-16 text-primary/50" aria-hidden="true" /></div>
                         )}
                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent p-4 pt-16 sm:p-6">
-                          <div className="flex items-end justify-between gap-4">
+                          <div className="flex flex-wrap items-end justify-between gap-4">
                             <div className="min-w-0 text-white">
                               <p className="mb-1 text-xs font-medium uppercase tracking-[0.16em] text-white/75">Editor visual do curso</p>
                               <h2 className="truncate text-2xl font-bold sm:text-3xl">{managedCourse.title}</h2>
                             </div>
-                            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                            <div className="flex w-full min-w-0 flex-wrap justify-end gap-2 sm:w-auto">
                               <label htmlFor={`academy-hero-banner-${managedCourse.id}`} className="inline-flex min-h-9 cursor-pointer items-center rounded-md border bg-background/90 px-3 text-sm font-medium text-foreground shadow-sm backdrop-blur hover:bg-background">
                                 <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> {managedCourse.banner_drive_file_id ? "Trocar banner" : "Adicionar banner"}
                               </label>
-                               <DriveUploads
+                               <CourseBannerUpload
                                  key={`hero-banner-input-${managedCourse.id}`}
                                  courseId={managedCourse.id}
-                                 kind="banner"
-                                 inputOnly
-                                 inputIdOverride={`academy-hero-banner-${managedCourse.id}`}
+                                 fileId={managedCourse.banner_drive_file_id}
+                                 inputId={`academy-hero-banner-${managedCourse.id}`}
                                  onSelectedFile={previewBanner}
                                  onSaved={async () => { await reload(); setBannerPreview(null); }}
                                />
@@ -898,7 +898,7 @@ export function Academia() {
                           </div>
                         </div>
                       </div>
-                      <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+                      <div className="grid min-w-0 grid-cols-1 gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
                         <div className="space-y-3">
                           <p className="text-lg leading-relaxed text-muted-foreground">{managedCourse.summary || "Adicione um resumo para apresentar o curso ao aluno."}</p>
                           <div className="flex flex-wrap gap-2">

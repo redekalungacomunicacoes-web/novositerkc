@@ -87,6 +87,7 @@ async function setup(role, mobile = false) {
     course("own", "Curso próprio", user, "draft"),
     course("published", "Curso da equipe", other),
   ];
+  const artwork = []; const artworkRequests = []; let failArtwork = true;
   const publishedLesson = {
     id: "lesson",
     course_id: "published",
@@ -146,6 +147,26 @@ async function setup(role, mobile = false) {
       ];
     if (table === "academy_lessons") body = [publishedLesson];
     if (table === "user") body = { id: user };
+    if (table === "drive_files") body = artwork;
+    if (table === "drive-files" && req.headers()["content-type"]?.includes("multipart/form-data")) {
+      const raw = req.postDataBuffer().toString();
+      const field = name => raw.match(new RegExp('name="' + name + '"\\r\\n\\r\\n([^\\r]+)'))?.[1];
+      assert.equal(field("kind"), "banner"); assert.equal(field("module"), "academy-banner");
+      const op = field("upload_id"); artworkRequests.push(op);
+      if (failArtwork) { failArtwork=false; return route.fulfill({status:500,contentType:"application/json",body:JSON.stringify({ok:false,error:"Falha simulada no banco; tente novamente."})}); }
+      let file = artwork.find(f=>f.academy_upload_id===op);
+      if (!file) {
+        artwork.forEach(f=>{f.status="trashed";});
+        file={id:crypto.randomUUID(),name:"banner.png",academy_course_id:"own",academy_kind:"banner",academy_upload_id:op,status:"active",visibility:"private",module:"academy",mime_type:"image/png",created_at:new Date().toISOString()};
+        artwork.push(file); courses.find(c=>c.id==="own").banner_drive_file_id=file.id;
+      }
+      return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({ok:true,file})});
+    }
+    if (table === "drive-files" && req.headers()["content-type"]?.includes("application/json")) {
+      const request=req.postDataJSON();
+      if(request.action==="download")return route.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7V0AAAAASUVORK5CYII=","base64")});
+      if(request.action==="academy-trash") {artwork.find(f=>f.id===request.id).status="trashed";courses.find(c=>c.id==="own").banner_drive_file_id=null;return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({ok:true})});}
+    }
     if (table === "drive-files")
       return route.fulfill({
         status: 503,
@@ -176,11 +197,11 @@ async function setup(role, mobile = false) {
   await page
     .getByRole("heading", { name: "Minha Academia", exact: true })
     .waitFor();
-  return { page, context, errors };
+  return { page, context, errors, artwork, artworkRequests };
 }
 try {
   for (const role of ["admin_alfa", "admin", "editor", "autor", "financeiro"]) {
-    const { page, context, errors } = await setup(role);
+    const { page, context, errors, artwork, artworkRequests } = await setup(role, role === "autor");
     const links = page.locator("aside nav a");
     assert.equal(await links.last().textContent(), "Academia");
     assert.ok(
@@ -225,6 +246,24 @@ try {
       await page.getByRole("button", { name: "Voltar aos cursos", exact: true }).count(),
       1,
     );
+    // Banner starts automatically, retains selection on failure and reuses the upload token.
+    const image={name:"banner.png",mimeType:"image/png",buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7V0AAAAASUVORK5CYII=","base64")};
+    await page.locator('#academy-hero-banner-own').setInputFiles(image);
+    await page.getByText("Falha simulada no banco; tente novamente.",{exact:true}).waitFor();
+    await page.getByRole("button",{name:"Tentar salvar banner",exact:true}).click();
+    await page.getByRole("button",{name:"Remover banner",exact:true}).waitFor();
+    assert.equal(artworkRequests.length,2);assert.equal(artworkRequests[0],artworkRequests[1]);assert.equal(artwork.length,1);
+    await page.getByRole("img",{name:"Banner de Curso próprio",exact:true}).waitFor();
+    await Promise.all([page.waitForResponse(r=>r.url().endsWith('/functions/v1/drive-files') && r.request().headers()['content-type']?.includes('multipart/form-data')), page.locator('#academy-hero-banner-own').setInputFiles({...image,name:"banner-novo.png"})]);
+    await page.waitForFunction(()=>!document.querySelector('[role=status]')?.textContent?.includes("Salvando"));
+    await page.getByRole("img",{name:"Banner de Curso próprio",exact:true}).waitFor();
+    await page.waitForFunction(()=>Array.from(document.querySelectorAll("button")).some(b=>b.textContent==="Remover banner" && !b.disabled));
+    assert.equal(artwork.length,2);assert.equal(artwork.filter(f=>f.status==="active").length,1);
+    assert.ok(await page.locator("section").evaluateAll(sections=>sections.every(s=>s.scrollWidth<=s.clientWidth)),"Course sections must not clip their content horizontally");
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),"Banner editor must fit viewport");
+    await page.screenshot({path:"/tmp/rkc-academia-qa/banner-"+role+".png",fullPage:true});
+    page.once("dialog",dialog=>dialog.accept());await Promise.all([page.waitForResponse(r=>r.url().endsWith("/functions/v1/drive-files") && r.request().headers()["content-type"]?.includes("application/json") && r.request().postDataJSON().action==="academy-trash"), page.getByRole("button",{name:"Remover banner",exact:true}).click()]);
+    await page.getByRole("button",{name:"Remover banner",exact:true}).waitFor({state:"hidden"});assert.equal(artwork.filter(f=>f.status==="active").length,0);
     if (role === "autor") {
       await page.getByRole("button", { name: "Voltar aos cursos", exact: true }).click();
       await page.waitForURL("**/admin/academia");

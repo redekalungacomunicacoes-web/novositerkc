@@ -12,6 +12,7 @@ type Item = {
 };
 // Keep selected files and failures while navigating between academy views.
 const queues = new Map<string, Item[]>();
+const runningQueues = new Set<string>();
 const listeners = new Set<() => void>();
 const emptyQueue: Item[] = [];
 function subscribe(listener: () => void) {
@@ -44,6 +45,8 @@ export function DriveUploads({
   inputIdOverride,
   inputOnly = false,
   onSelectedFile,
+  onBusyChange,
+  disabled = false,
   onSaved,
 }: {
   courseId: string;
@@ -55,6 +58,8 @@ export function DriveUploads({
   inputIdOverride?: string;
   inputOnly?: boolean;
   onSelectedFile?: (file: File | null) => void;
+  onBusyChange?: (busy: boolean) => void;
+  disabled?: boolean;
   onSaved: () => Promise<void>;
 }) {
   const generatedInputId = useId();
@@ -67,13 +72,17 @@ export function DriveUploads({
   };
   const [error, setError] = useState("");
   const [removing, setRemoving] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const working = useRef(false);
   const change = (id: string, patch: Partial<Item>) => {
     setItems((rows) => rows.map((row) => row.id === id ? { ...row, ...patch } : row));
   };
   async function send(queue: Item[]) {
-    if (working.current) return;
+    if (working.current || runningQueues.has(queueKey)) return;
     working.current = true;
+    setProcessing(true);
+    runningQueues.add(queueKey);
+    let saved = false;
     setError("");
     try {
       for (const item of queue) {
@@ -93,19 +102,23 @@ export function DriveUploads({
             }),
           });
           change(item.id, { state: "done", progress: 100 });
+          saved = true;
         } catch (e) {
           change(item.id, { state: "error", error: message(e) });
         }
       }
-      await onSaved();
+      if (saved) await onSaved();
       setItems((rows) => rows.filter((row) => row.state !== "done"));
     } catch (e) {
       setError(message(e));
     } finally {
       working.current = false;
+      runningQueues.delete(queueKey);
+      setProcessing(false);
     }
   }
-  const busy = removing || items.some((item) => ["sending", "confirming"].includes(item.state));
+  const busy = disabled || processing || removing || items.some((item) => ["sending", "confirming"].includes(item.state));
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   const pending = items.filter((item) => item.state === "pending");
   const activeFiles = (existing || []).filter((file) => file.status === "active");
   const formatSize = (bytes: number | null) => {
@@ -139,9 +152,13 @@ export function DriveUploads({
               state: "pending",
               progress: 0,
             }));
-            setItems(() => next);
-            onSelectedFile?.(next[0]?.file || null);
+            if (!next.length) return;
+            const previous = items.find(item => item.file.name === next[0].file.name && item.file.size === next[0].file.size && item.file.lastModified === next[0].file.lastModified && item.file.type === next[0].file.type);
+            const selected = previous || next[0];
+            setItems(() => [selected]);
+            onSelectedFile?.(selected.file);
             event.target.value = "";
+            void send([selected]);
           }}
         />
         {selected && (
@@ -151,7 +168,7 @@ export function DriveUploads({
               disabled={busy}
               onClick={() => void send([selected])}
             >
-              {selected.state === "error" ? "Tentar salvar banner" : "Salvar banner"}
+              {selected.state === "error" ? "Tentar salvar banner" : busy ? "Salvando banner…" : "Salvar banner"}
             </Button>
             {["sending", "confirming"].includes(selected.state) && (
               <span className="text-xs text-white/90" role="status">
