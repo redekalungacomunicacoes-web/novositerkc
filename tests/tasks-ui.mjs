@@ -78,6 +78,11 @@ for(const width of [390,768,1440]) {
  const taskRow=page.getByRole('dialog').getByRole('button',{name:/Tarefa de teste/});
  if(await taskRow.count())await taskRow.click();
  await page.getByRole('button',{name:'Ações da tarefa'}).waitFor();
+ await page.getByRole('button',{name:'Ações da tarefa'}).click();await page.getByRole('menuitem',{name:'Editar',exact:true}).click();
+ await page.getByRole('dialog').getByPlaceholder('Ex.: Finalizar matéria sobre o encontro comunitário').fill('Tarefa revisada');
+ await page.getByRole('dialog').getByRole('button',{name:'Salvar alterações',exact:true}).click();
+ await page.getByRole('dialog').getByRole('heading',{name:'Tarefa revisada',exact:true}).waitFor();
+ assert.equal(inserts,1);assert.equal(await page.getByRole('dialog').getByPlaceholder('Ex.: Finalizar matéria sobre o encontro comunitário').count(),0);
  await page.getByRole('button',{name:'Ações da tarefa'}).click();await page.getByRole('menuitem',{name:'Excluir',exact:true}).click();
  await page.getByRole('alertdialog').getByRole('button',{name:'Excluir tarefa',exact:true}).click();
  await page.getByRole('alertdialog').waitFor({state:'hidden'});assert.equal(tasks.length,0);assert.deepEqual(errors,[]);

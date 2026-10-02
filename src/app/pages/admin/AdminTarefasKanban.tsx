@@ -74,7 +74,7 @@ function Column({ status, tasks, teamMembers, draggingId, highlighted, onDragOve
 }
 
 function KanbanBoard() {
-  const { tasks, filters, setSearch, setPriority, setAssignee, teamMembers } = useCalendarStore();
+  const { tasks, filters, setSearch, setPriority, setAssignee, teamMembers, error, retry } = useCalendarStore();
   const statusMutation = useTaskStatusMutation();
   const currentMember = useCurrentMemberQuery();
   const permission = usePermissionQuery();
@@ -123,6 +123,7 @@ function KanbanBoard() {
           </div>
           {feedback ? <p className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 size={14}/>{feedback}</p> : null}
           {statusMutation.error ? <p className="inline-flex items-center gap-2 text-sm font-medium text-rose-700"><Lock size={14}/>{statusMutation.error.message}</p> : null}
+          {error ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><span>Não foi possível carregar as tarefas: {error}</span><button type="button" onClick={retry} className="min-h-10 rounded-xl border border-rose-300 px-3 font-semibold hover:bg-rose-100">Tentar novamente</button></div> : null}
         </div>
         <div onDragStart={(event) => setDraggingId(event.dataTransfer.getData("text/task-id"))}>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

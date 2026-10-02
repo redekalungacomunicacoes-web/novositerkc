@@ -10,6 +10,8 @@ interface CalendarCtx {
   tasks: CalendarTask[];
   teamMembers: TeamMember[];
   isLoading: boolean;
+  error: string | null;
+  retry: () => void;
   filters: TaskFilters;
   setView: (v: ViewMode) => void;
   setMonth: (d: Date) => void;
@@ -92,7 +94,10 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     return matchesStatus && matchesPriority && matchesSearch;
   }), [tasksQuery.data, filters]);
 
-  return <Ctx.Provider value={{ selectedTeam, selectedDate, month, view, tasks, teamMembers: membersQuery.data ?? [], isLoading: tasksQuery.isLoading || membersQuery.isLoading, filters, setView: updateView, setMonth: updateMonth, setSelectedDate: updateSelectedDate, setTeam, setSearch: (search) => setFilters((f) => ({ ...f, search })), setStatus: (status) => setFilters((f) => ({ ...f, status })), setPriority: (priority) => setFilters((f) => ({ ...f, priority })), setAssignee: (assignee) => setFilters((f) => ({ ...f, assignee })), setPeriod: (periodStart, periodEnd) => setFilters((f) => ({ ...f, periodStart, periodEnd })) }}>{tasksQuery.error || membersQuery.error ? <div role="alert" className="m-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">Não foi possível carregar as tarefas: {(tasksQuery.error || membersQuery.error)?.message} <button type="button" className="ml-2 underline" onClick={() => { void tasksQuery.refetch(); void membersQuery.refetch(); }}>Tentar novamente</button></div> : null}{children}</Ctx.Provider>;
+  const error = tasksQuery.error ?? membersQuery.error;
+  const retry = () => { void tasksQuery.refetch(); void membersQuery.refetch(); };
+
+  return <Ctx.Provider value={{ selectedTeam, selectedDate, month, view, tasks, teamMembers: membersQuery.data ?? [], isLoading: tasksQuery.isLoading || membersQuery.isLoading, error: error instanceof Error ? error.message : error ? "Não foi possível carregar as tarefas." : null, retry, filters, setView: updateView, setMonth: updateMonth, setSelectedDate: updateSelectedDate, setTeam, setSearch: (search) => setFilters((f) => ({ ...f, search })), setStatus: (status) => setFilters((f) => ({ ...f, status })), setPriority: (priority) => setFilters((f) => ({ ...f, priority })), setAssignee: (assignee) => setFilters((f) => ({ ...f, assignee })), setPeriod: (periodStart, periodEnd) => setFilters((f) => ({ ...f, periodStart, periodEnd })) }}>{children}</Ctx.Provider>;
 }
 
 export function useCalendarStore() {
