@@ -1,4 +1,4 @@
-import { ensureDrivePath } from "./google-drive.ts";
+import { ensureDrivePath, createDriveFolder, getDriveFileMetadata, renameDriveFile } from "./google-drive.ts";
 
 type Client = any;
 
@@ -11,8 +11,16 @@ export async function prepareTaskFolder(taskId: string, root: string, admin: Cli
     if (error || !data) throw new Error("Tarefa não encontrada.");
     return data;
   };
+  const title = (task: any) => String(task.titulo || "Tarefa").replace(/[\\/\r\n"]/g, "_").trim().slice(0, 120) || "Tarefa";
+  const reuse = async (task: any) => {
+    const folder = await getDriveFileMetadata(String(task.drive_folder_id));
+    if (folder.trashed || folder.mimeType !== "application/vnd.google-apps.folder")
+      throw new Error("A pasta da tarefa foi removida ou está indisponível.");
+    if (folder.name !== title(task)) await renameDriveFile(folder.id, title(task));
+    return String(folder.id);
+  };
   let task = await read();
-  if (task.drive_folder_id) return String(task.drive_folder_id);
+  if (task.drive_folder_id) return reuse(task);
   const token = crypto.randomUUID();
   const { error: insertError } = await admin.from("task_drive_locks")
     .upsert({ task_id: taskId, token, locked_at: new Date().toISOString() }, { onConflict: "task_id", ignoreDuplicates: true });
@@ -25,7 +33,7 @@ export async function prepareTaskFolder(taskId: string, root: string, admin: Cli
     for (let attempt = 0; attempt < 15; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, 500));
       task = await read();
-      if (task.drive_folder_id) return String(task.drive_folder_id);
+      if (task.drive_folder_id) return reuse(task);
     }
     throw new Error("A pasta da tarefa está sendo preparada. Tente novamente em alguns segundos.");
   }
@@ -46,16 +54,17 @@ export async function prepareTaskFolder(taskId: string, root: string, admin: Cli
     }
     if (!rootLease) throw new Error("O Drive está preparando outra pasta. Tente novamente em alguns segundos.");
     task = await read();
-    if (task.drive_folder_id) return String(task.drive_folder_id);
+    if (task.drive_folder_id) return reuse(task);
     if (!task.created_by) throw new Error("A tarefa não possui um criador vinculado à equipe.");
     const { data: member, error } = await admin.from("equipe").select("id,nome").eq("id", task.created_by).single();
     if (error || !member) throw new Error("O criador da tarefa não foi encontrado na equipe.");
     const safe = (name: string) => name.replace(/[\\/\r\n"]/g, "_").trim().slice(0, 120);
     // Reuse the canonical team root, not the obsolete 05_INTEGRANTES tree.
-    const path = await ensureDrivePath(root, ["04_EQUIPE", safe(member.nome || member.id), "TAREFAS", safe(`${task.titulo || "Tarefa"} - ${task.id.slice(0, 8)}`)]);
-    const result = await admin.from("tasks").update({ drive_folder_id: path.folderId }).eq("id", taskId).select("id").single();
+    const path = await ensureDrivePath(root, ["04_EQUIPE", safe(member.nome || member.id), "TAREFAS"]);
+    const folder = await createDriveFolder(title(task), path.folderId);
+    const result = await admin.from("tasks").update({ drive_folder_id: folder.id }).eq("id", taskId).select("id").single();
     if (result.error) throw result.error;
-    return path.folderId as string;
+    return folder.id as string;
   } finally {
     if (rootLease) {
       const { error } = await admin.from("task_drive_root_locks").update({ locked_at: "1970-01-01T00:00:00Z" }).eq("root_folder_id", root).eq("token", token);

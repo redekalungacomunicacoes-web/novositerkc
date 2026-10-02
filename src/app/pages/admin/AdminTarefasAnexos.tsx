@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Download, ExternalLink, File, FileImage, FileStack, FileText, FolderOpen, Link as LinkIcon, Paperclip, Plus, Search, Trash2, Upload } from "lucide-react";
 
+import { CenterFileActions, FileCenterManager } from "./calendar2026/FileCenterManager";
 import { CalendarProvider, useCalendarStore } from "./calendar2026/store";
 import { TasksPageShell } from "./calendar2026/TasksShell";
 import { useExternalAttachmentMutation, useTaskAttachmentMutation, useAttachmentCenterQuery } from "./calendar2026/useTaskQueries";
@@ -137,7 +138,7 @@ function AttachmentsCenter() {
               <div>
                 <div className="flex items-center gap-3 text-emerald-700 dark:text-emerald-300"><FileStack size={22} /><span className="text-sm font-semibold uppercase tracking-[0.18em]">Arquivos das tarefas</span></div>
                 <h1 className="mt-3 text-2xl font-semibold text-slate-950 dark:text-white md:text-3xl">Central de arquivos</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-emerald-100/70">Encontre anexos agrupados por tarefa, pesquise pelo nome e adicione vários arquivos de uma vez.</p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-emerald-100/70">Organize pastas de coberturas, envie arquivos e mova materiais para as tarefas da equipe.</p>
               </div>
               <button type="button" onClick={() => { setOpen((value) => !value); setSubmitError(""); setSubmitNotice(""); }} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-lg shadow-emerald-900/15 transition hover:bg-emerald-600 dark:bg-emerald-500 dark:text-emerald-950"><Plus size={16} /> {open ? "Fechar envio" : "Adicionar arquivos"}</button>
             </div>
@@ -147,6 +148,8 @@ function AttachmentsCenter() {
             </div>
           </div>
         </section>
+
+        <FileCenterManager tasks={tasks} />
 
         {open ? (
           <form onSubmit={(event) => void saveAttachment(event)} className="grid gap-4 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70 md:grid-cols-2">
@@ -184,7 +187,7 @@ function AttachmentsCenter() {
                     <span className="hidden text-xs text-slate-500 dark:text-emerald-100/60 sm:block">{new Date(`${task.date}T00:00:00`).toLocaleDateString("pt-BR")}</span>
                     {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   </button>
-                  {isExpanded ? <div className="mt-4 grid gap-2 pl-0 sm:pl-13">{task.attachments.map((attachment) => <div key={attachment.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-emerald-900/30"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm dark:bg-emerald-950 dark:text-emerald-200"><AttachmentIcon attachment={attachment} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800 dark:text-emerald-50">{attachment.file_name || attachment.file_url.split("/").pop() || "Anexo"}</span><span className="mt-0.5 block text-xs text-slate-500 dark:text-emerald-100/60">{getFileKind(attachment).toUpperCase()} · {new Date(attachment.created_at).toLocaleDateString("pt-BR")}</span></span><AttachmentOpenButton attachment={attachment} /></div>)}</div> : null}
+                  {isExpanded ? <div className="mt-4 grid gap-2 pl-0 sm:pl-13">{task.attachments.map((attachment) => <div key={attachment.id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-emerald-900/30"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm dark:bg-emerald-950 dark:text-emerald-200"><AttachmentIcon attachment={attachment} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800 dark:text-emerald-50">{attachment.file_name || attachment.file_url.split("/").pop() || "Anexo"}</span><span className="mt-0.5 block text-xs text-slate-500 dark:text-emerald-100/60">{getFileKind(attachment).toUpperCase()} · {new Date(attachment.created_at).toLocaleDateString("pt-BR")}</span></span><AttachmentOpenButton attachment={attachment} /><CenterFileActions attachment={attachment} tasks={tasks} /></div>)}</div> : null}
                 </article>;
               })}
             </div> : <div className="p-10 text-center text-sm text-slate-500 dark:text-emerald-100/70">{search ? "Nenhum arquivo corresponde à busca." : "Nenhuma tarefa possui arquivos."}</div>}
