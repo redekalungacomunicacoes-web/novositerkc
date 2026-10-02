@@ -494,3 +494,30 @@ test("global root lease serializes first folder creation across different course
     await db.close();
   }
 });
+
+test("published banner contract: independent cover, replacement, replay, removal and scope guard", async () => {
+  const db = await fixture();
+  try {
+    await db.exec("reset role");
+    for (const name of ["20261002024000_academia_course_banner.sql", "20261002063500_academia_banner_persistence_repair.sql", "20261002140637_academia_banner_integrity.sql"]) {
+      await db.exec(await readFile(new URL("../supabase/migrations/" + name, import.meta.url), "utf8"));
+    }
+    const cover = await commit(db, "cover", null, crypto.randomUUID());
+    const operation = crypto.randomUUID();
+    const banner = await commit(db, "banner", null, operation);
+    const retry = await commit(db, "banner", null, operation);
+    assert.equal(retry.id, banner.id);
+    assert.equal((await db.query("select count(*)::int n from drive_files where academy_kind='banner'")).rows[0].n, 1);
+    assert.deepEqual((await db.query("select cover_drive_file_id,banner_drive_file_id from academy_courses where id=$1", [course])).rows[0], {cover_drive_file_id:cover.id,banner_drive_file_id:banner.id});
+    const replacement = await commit(db, "banner", null, crypto.randomUUID());
+    assert.equal((await db.query("select status from drive_files where id=$1", [banner.id])).rows[0].status, "archived");
+    assert.equal((await db.query("select status from drive_files where id=$1", [cover.id])).rows[0].status, "active");
+    await assert.rejects(db.query("update academy_courses set banner_drive_file_id=$1 where id=$2", [cover.id,course]), /Banner do Drive incompatível/);
+    await assert.rejects(commit(db, "cover", null, operation), /Envio incompatível/);
+    await db.query("select academy_unlink_drive($1)", [replacement.id]);
+    assert.deepEqual((await db.query("select cover_drive_file_id,banner_drive_file_id from academy_courses where id=$1", [course])).rows[0], {cover_drive_file_id:cover.id,banner_drive_file_id:null});
+    await assert.rejects(commit(db, "banner", null, operation), /Envio incompatível/);
+    await as(db, reader);
+    await assert.rejects(db.query("select academy_commit_drive($1,$2,null,'banner',$3,$4::jsonb)",[reader,course,crypto.randomUUID(),JSON.stringify({id:'unauthorized'})]), /permission denied/);
+  } finally { await db.close(); }
+});
