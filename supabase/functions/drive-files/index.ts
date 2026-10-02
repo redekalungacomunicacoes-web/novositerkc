@@ -17,6 +17,7 @@ import { deleteTaskAndQueueCleanup, retryTaskCleanup } from "../_shared/task-del
 import { createCenterFolder, manageCenterFolder, moveCenterFile, uploadCenterFile, withCenterLease } from "../_shared/file-center.ts";
 import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
+import { importLegacyTeamAvatar, uploadTeamAvatar } from "../_shared/team-drive.ts";
 
 // Root ID provided and named by RKC in this task; the academy child ID is discovered at runtime.
 const academyRootId = "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD";
@@ -140,6 +141,10 @@ Deno.serve(async (req) => {
           }, 500);
         }
       }
+      if (form.get("module") === "team") {
+        if (!rootFolderId) return json({ ok:false,error:"Pasta raiz do Drive não configurada."},503);
+        return json({ ok:true,file:await uploadTeamAvatar(form,rootFolderId,userClient,admin,auth.user.id) });
+      }
       if (form.get("module") === "file-center") {
         if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
         const file=await withCenterLease(rootFolderId,admin,()=>uploadCenterFile(form,userClient,admin,auth.user!.id));
@@ -218,6 +223,11 @@ Deno.serve(async (req) => {
         return {folder:await manageCenterFolder(body,userClient,admin,auth.user!.id)};
       });
       return json({ok:true,...result});
+    }
+    if (action === "team-import-legacy") {
+      if (!rootFolderId) return json({ ok:false,error:"Pasta raiz do Drive não configurada."},503);
+      const memberId=String(body.member_id || "");
+      return json({ok:true,files:await importLegacyTeamAvatar(memberId,rootFolderId,userClient,admin,auth.user.id)});
     }
     if (action === "task-ensure-folder") {
       const taskId = String(body.task_id || "");

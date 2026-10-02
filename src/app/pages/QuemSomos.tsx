@@ -13,6 +13,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { getSiteSettings, SiteSettings } from "@/lib/siteSettings";
 import avatarPlaceholder from "@/assets/avatar-placeholder.svg";
+import { driveMediaUrl, driveSlug } from "@/lib/teamAvatar";
 
 const TEAM_AVATARS_BUCKET = "team-avatars";
 
@@ -137,6 +138,8 @@ export function QuemSomos() {
   };
 
   const getAvatarUrl = (member: any) => {
+    const driveUrl = driveMediaUrl(driveSlug(member.avatar_thumb_drive) || driveSlug(member.avatar_drive));
+    if (driveUrl) return driveUrl;
     const rawAvatarUrl = typeof member.avatar_url === "string" ? member.avatar_url.trim() : "";
     if (rawAvatarUrl) {
       if (/^https?:\/\//i.test(rawAvatarUrl)) return rawAvatarUrl;
@@ -226,7 +229,7 @@ export function QuemSomos() {
 
             supabase
               .from("equipe")
-              .select("id, nome, cargo, slug, avatar_thumb_path, avatar_path, avatar_url, foto_url, is_public, order_index")
+              .select("id, nome, cargo, slug, avatar_thumb_path, avatar_path, avatar_url, foto_url, is_public, order_index, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)")
               .eq("is_public", true)
               .order("order_index", { ascending: true })
               .order("nome", { ascending: true }),

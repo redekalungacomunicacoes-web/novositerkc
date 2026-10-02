@@ -5,7 +5,7 @@ function isMissingColumnError(message?: string | null) {
 }
 
 const TEAM_MEMBER_COLUMNS =
-  "id, nome, cargo, bio, curriculo_md, foto_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url";
+  "id, nome, cargo, bio, curriculo_md, foto_url, avatar_path, avatar_thumb_path, slug, instagram, whatsapp, facebook_url, linkedin_url, website_url, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)";
 
 const TEAM_MEMBER_COLUMNS_FALLBACK =
   "id, nome, cargo, bio, foto_url, slug";
@@ -20,6 +20,8 @@ export type TeamMemberPublic = {
   avatar_url?: string | null;
   avatar_path?: string | null;
   avatar_thumb_path?: string | null;
+  avatar_drive?: { public_slug?: string | null } | Array<{ public_slug?: string | null }> | null;
+  avatar_thumb_drive?: { public_slug?: string | null } | Array<{ public_slug?: string | null }> | null;
   slug: string;
   instagram: string | null;
   whatsapp: string | null;
