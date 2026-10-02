@@ -254,11 +254,9 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
           thumbForm.set("kind", "thumb");
           thumbForm.set("file", thumbFile);
 
-          const [originalDrive, thumbDrive] = await Promise.all([
-            supabase.functions.invoke("drive-files", { body: originalForm }),
-            supabase.functions.invoke("drive-files", { body: thumbForm }),
-          ]);
+          const originalDrive = await supabase.functions.invoke("drive-files", { body: originalForm });
           if (originalDrive.error || originalDrive.data?.ok === false) throw new Error(getInvokeErrorMessage(originalDrive.error, originalDrive.data, "Falha ao enviar avatar ao Drive."));
+          const thumbDrive = await supabase.functions.invoke("drive-files", { body: thumbForm });
           if (thumbDrive.error || thumbDrive.data?.ok === false) throw new Error(getInvokeErrorMessage(thumbDrive.error, thumbDrive.data, "Falha ao enviar thumbnail ao Drive."));
           driveSaved = true;
         } catch (driveError) {
@@ -278,7 +276,11 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
             uploadToBucket(TEAM_AVATARS_BUCKET, avatarThumbPath, thumbBlob, thumbContentType),
           ]);
           const { error: avatarUpdateError } = await supabase.from("equipe").update({
-            foto_url: avatarUrl, avatar_path: avatarPath, avatar_thumb_path: avatarThumbPath,
+            foto_url: avatarUrl,
+            avatar_path: avatarPath,
+            avatar_thumb_path: avatarThumbPath,
+            avatar_drive_file_id: null,
+            avatar_thumb_drive_file_id: null,
           }).eq("id", equipeId);
           if (avatarUpdateError) throw avatarUpdateError;
           setSavedFotoUrl(avatarUrl);
