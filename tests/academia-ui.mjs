@@ -233,7 +233,7 @@ try {
         .click();
       assert.equal(
         await page.getByRole("button", { name: "Novo curso", exact: true }).count(),
-        0,
+        1,
       );
     }
     assert.deepEqual(errors, []);
