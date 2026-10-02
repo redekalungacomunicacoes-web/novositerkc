@@ -28,3 +28,11 @@ A migração antiga `20261002024000_academia_course_banner.sql` também continha
 TypeScript de Academia/tarefas, lint Academia, build; 31 testes Academia, 15 tarefas e 6 central. O teste SQL cobre migrações, independência capa/banner, substituição, replay, estado removido e permissões. Playwright cobre upload automático, falha, retry com o mesmo token, download da prévia privada, troca/remoção e editor sem corte horizontal, incluindo 390 px e 1440 px. CI também verifica Deno. Capturas no artefato `academia-ui-evidence`.
 
 Limite: não foi utilizado um login real do usuário para enviar uma imagem pelo navegador ao Drive. O banco publicado foi testado diretamente; Drive/HTTP e interface foram exercitados com fixtures. A consulta de advisors não apontou novos problemas nos objetos modificados; há avisos preexistentes fora do escopo (financeiro, newsletter e views legadas), listados pelo [linter do Supabase](https://supabase.com/docs/guides/database/database-linter).
+
+## Complemento: leitura da prévia privada
+
+A captura seguinte mostrou `Sem acesso a este material`: o banner real estava ativo e vinculado, mas a política restritiva `academy_drive_read_guard` verificava capa, aulas e materiais sem incluir `banner_drive_file_id`. A migração `20261002150955_academia_banner_read_policy.sql` inclui essa referência com as mesmas regras de curso privado, publicação e remoção.
+
+Reprodução no banco publicado, em transação com rollback: a consulta do banner real com o papel `authenticated` e a identidade do criador retornava zero registros antes; após aplicar a migração, retornou o registro esperado. Nenhum arquivo foi reenviado ou alterado. A função de main que permite a prévia pelo editor autorizado (PR #192) foi publicada como `drive-files` v21, ACTIVE, JWT obrigatório; todas as fontes publicadas conferem com main.
+
+Validação adicional: 32 testes Academia aprovados, incluindo leitura pelo editor, acesso do aluno após publicação, bloqueio do rascunho e do arquivo removido, acesso anônimo e download autorizado do banner. TypeScript Academia, lint, build e diff-check aprovados. Advisors sem novos achados nos objetos alterados. Continua pendente observar a imagem no navegador com o login real do usuário; a validação publicada comprova a autorização do registro, e o transporte HTTP foi testado com fixtures.

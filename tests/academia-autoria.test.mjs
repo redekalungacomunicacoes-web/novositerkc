@@ -521,3 +521,29 @@ test("published banner contract: independent cover, replacement, replay, removal
     await assert.rejects(db.query("select academy_commit_drive($1,$2,null,'banner',$3,$4::jsonb)",[reader,course,crypto.randomUUID(),JSON.stringify({id:'unauthorized'})]), /permission denied/);
   } finally { await db.close(); }
 });
+
+test("banner metadata readable under caller RLS: editor, learner, anonymous and retired files", async () => {
+  const db=await fixture();
+  try {
+    await db.exec("reset role");
+    for(const name of ["20261002063500_academia_banner_persistence_repair.sql","20261002140637_academia_banner_integrity.sql"])
+      await db.exec(await readFile(new URL("../supabase/migrations/"+name,import.meta.url),"utf8"));
+    const banner=await commit(db,"banner",null,crypto.randomUUID());
+    await as(db,owner);
+    assert.equal((await db.query("select id from drive_files where id=$1",[banner.id])).rows.length,0,"reproduce missing banner link in restrictive policy");
+    await db.exec("reset role");
+    await db.exec(await readFile(new URL("../supabase/migrations/20261002150955_academia_banner_read_policy.sql",import.meta.url),"utf8"));
+    await as(db,owner);
+    assert.equal((await db.query("select id from drive_files where id=$1",[banner.id])).rows.length,1);
+    await as(db,reader);
+    assert.equal((await db.query("select id from drive_files where id=$1",[banner.id])).rows.length,0,"draft remains private");
+    await as(db,owner);await db.query("update academy_courses set status='published' where id=$1",[course]);
+    await as(db,reader);
+    assert.equal((await db.query("select id from drive_files where id=$1",[banner.id])).rows.length,1);
+    await as(db,null,"anon");
+    await assert.rejects(db.query("select id from drive_files where id=$1",[banner.id]), /permission denied/);
+    await db.exec("reset role");await db.query("select academy_unlink_drive($1)",[banner.id]);
+    await as(db,owner);
+    assert.equal((await db.query("select id from drive_files where id=$1",[banner.id])).rows.length,0);
+  } finally {await db.close();}
+});

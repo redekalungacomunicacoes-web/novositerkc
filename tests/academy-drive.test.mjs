@@ -476,6 +476,11 @@ test("HTTP endpoint denies anonymous access, reader writes and out-of-scope down
   assert.equal(await response.text(), "private-content");
   assert.equal(response.headers.get("Cache-Control"), "private, no-store");
   editable = true;
+  readable = false;
+  file.academy_kind = "banner";
+  response = await send("download");
+  assert.equal(response.status, 200, "course editor previews banner even with stale caller metadata policy");
+  assert.equal(await response.text(), "private-content");
   assert.equal((await send("visibility")).status, 403);
   response = await send("academy-trash");
   assert.equal(response.status, 200);
