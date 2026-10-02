@@ -142,6 +142,7 @@ function clients({
   editable = true,
   commitError = false,
   existing = null,
+  existingAfterLock,
   locked = true,
 } = {}) {
   const calls = [];
@@ -173,7 +174,7 @@ function clients({
     from: (table) => {
       if (table === "academy_courses") return query({ id: course, title: "Curso teste", drive_folder_id: "course-folder" });
       if (table === "academy_lessons") return query({ id: lesson, title: "Aula teste", position: 1, drive_folder_id: "lesson-folder" });
-      return query(existing);
+      return query(existingAfterLock !== undefined && calls.includes("academy_drive_lock") ? existingAfterLock : existing);
     },
     rpc: async (name, args) => {
       calls.push({ name, args });
@@ -518,4 +519,13 @@ test("authenticated downloads preserve exact bytes for JSON and text materials",
     assert.equal(await blob.text(), content);
     assert.equal(blob.type, mime);
   }
+});
+
+test("retry acquiring a released lease rechecks commit before creating another physical file", async () => {
+  const calls = google();
+  const c = clients({existingAfterLock:{id:"metadata",uploaded_by:"owner",academy_course_id:course,academy_lesson_id:lesson,academy_kind:"material",status:"active"}});
+  const result=await academy.uploadAcademyDrive(form(),"root",c.user,c.admin,"owner");
+  assert.equal(result.id,"metadata");
+  assert.equal(calls.length,0);
+  assert.ok(c.calls.includes("academy_drive_unlock"));
 });

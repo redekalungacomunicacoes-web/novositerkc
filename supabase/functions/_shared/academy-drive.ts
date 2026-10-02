@@ -124,6 +124,17 @@ export async function uploadAcademyDrive(
     );
   let uploadedId: string | null = null;
   let previous: string | null = null;
+  try {
+    // A retry may have read before another request committed, then acquired its released lease.
+    const { data: committedBeforeLease, error: recheckError } = await admin
+      .from("drive_files").select("*").eq("academy_upload_id", upload).maybeSingle();
+    if (recheckError) throw recheckError;
+    if (committedBeforeLease) {
+      if (committedBeforeLease.uploaded_by !== actor || committedBeforeLease.academy_course_id !== course ||
+          committedBeforeLease.academy_lesson_id !== lesson || committedBeforeLease.academy_kind !== kind ||
+          committedBeforeLease.status !== "active") throw new Error("Envio anterior incompatível ou removido.");
+      return committedBeforeLease;
+    }
   if (kind === "cover" || kind === "banner" || kind === "media" || material) {
     const table =
       kind === "cover" || kind === "banner"
@@ -149,7 +160,6 @@ export async function uploadAcademyDrive(
       .single();
     previous = (data as Record<string, string | null> | null)?.[column] || null;
   }
-  try {
     // Resolve/create folders only after acquiring the course upload lease.
     // A concurrent upload must never create a parallel folder tree.
     const folderId = await prepareAcademyDestination(
@@ -193,6 +203,9 @@ export async function uploadAcademyDrive(
       throw new Error(`O banco não confirmou o banner/material: ${error.message}`);
     if (!record)
       throw new Error("O banco não confirmou os metadados do arquivo.");
+    if (record.drive_file_id && record.drive_file_id !== uploadedId) {
+      await trashDriveFile(uploadedId).catch(() => console.error("[academy-drive] redundant upload pending cleanup", uploadedId));
+    }
     uploadedId = null; // Commit confirmed. Retried HTTP requests reuse academy_upload_id.
     if (previous && previous !== record.id) {
       const { data: oldFile } = await admin
