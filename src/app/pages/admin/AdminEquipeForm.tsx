@@ -237,32 +237,53 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
 
       if (pendingAvatarFile) {
         const thumbBlob = await createThumbnail(pendingAvatarFile, 320, 0.75);
-        const thumbContentType = thumbBlob.type || "image/jpeg";
-        const isThumbWebp = thumbContentType.includes("webp");
-        const thumbExt = isThumbWebp ? "webp" : "jpg";
-        const originalIsWebp = pendingAvatarFile.type.includes("webp");
-        const originalExt = originalIsWebp ? "webp" : "jpg";
-        const originalType = originalIsWebp ? "image/webp" : "image/jpeg";
+        const thumbContentType = thumbBlob.type || "image/webp";
+        const thumbFile = new File([thumbBlob], "avatar-thumb.webp", { type: thumbContentType });
+        let driveSaved = false;
 
-        const avatarPath = `avatars/${equipeId}/avatar.${originalExt}`;
-        const avatarThumbPath = `avatars/${equipeId}/thumb.${thumbExt}`;
+        try {
+          const originalForm = new FormData();
+          originalForm.set("module", "team");
+          originalForm.set("member_id", equipeId);
+          originalForm.set("kind", "avatar");
+          originalForm.set("file", pendingAvatarFile);
 
-        const [avatarUrl] = await Promise.all([
-          uploadToBucket(TEAM_AVATARS_BUCKET, avatarPath, pendingAvatarFile, originalType),
-          uploadToBucket(TEAM_AVATARS_BUCKET, avatarThumbPath, thumbBlob, thumbContentType),
-        ]);
+          const thumbForm = new FormData();
+          thumbForm.set("module", "team");
+          thumbForm.set("member_id", equipeId);
+          thumbForm.set("kind", "thumb");
+          thumbForm.set("file", thumbFile);
 
-        const { error: avatarUpdateError } = await supabase
-          .from("equipe")
-          .update({
-            foto_url: avatarUrl,
-            avatar_path: avatarPath,
-            avatar_thumb_path: avatarThumbPath,
-          })
-          .eq("id", equipeId);
+          const [originalDrive, thumbDrive] = await Promise.all([
+            supabase.functions.invoke("drive-files", { body: originalForm }),
+            supabase.functions.invoke("drive-files", { body: thumbForm }),
+          ]);
+          if (originalDrive.error || originalDrive.data?.ok === false) throw new Error(getInvokeErrorMessage(originalDrive.error, originalDrive.data, "Falha ao enviar avatar ao Drive."));
+          if (thumbDrive.error || thumbDrive.data?.ok === false) throw new Error(getInvokeErrorMessage(thumbDrive.error, thumbDrive.data, "Falha ao enviar thumbnail ao Drive."));
+          driveSaved = true;
+        } catch (driveError) {
+          console.warn("Drive indisponível para avatar; mantendo fallback no Storage.", driveError);
+        }
 
-        if (avatarUpdateError) throw avatarUpdateError;
-        setSavedFotoUrl(avatarUrl);
+        if (!driveSaved) {
+          const isThumbWebp = thumbContentType.includes("webp");
+          const thumbExt = isThumbWebp ? "webp" : "jpg";
+          const originalIsWebp = pendingAvatarFile.type.includes("webp");
+          const originalExt = originalIsWebp ? "webp" : "jpg";
+          const originalType = originalIsWebp ? "image/webp" : "image/jpeg";
+          const avatarPath = `avatars/${equipeId}/avatar.${originalExt}`;
+          const avatarThumbPath = `avatars/${equipeId}/thumb.${thumbExt}`;
+          const [avatarUrl] = await Promise.all([
+            uploadToBucket(TEAM_AVATARS_BUCKET, avatarPath, pendingAvatarFile, originalType),
+            uploadToBucket(TEAM_AVATARS_BUCKET, avatarThumbPath, thumbBlob, thumbContentType),
+          ]);
+          const { error: avatarUpdateError } = await supabase.from("equipe").update({
+            foto_url: avatarUrl, avatar_path: avatarPath, avatar_thumb_path: avatarThumbPath,
+          }).eq("id", equipeId);
+          if (avatarUpdateError) throw avatarUpdateError;
+          setSavedFotoUrl(avatarUrl);
+        }
+
         setPendingAvatarFile(null);
         if (avatarPreviewUrl) {
           URL.revokeObjectURL(avatarPreviewUrl);
