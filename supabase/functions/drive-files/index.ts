@@ -205,6 +205,43 @@ Deno.serve(async (req) => {
       const uploadUrl = await startDriveResumableUpload({ name, mimeType, size, folderId });
       return json({ ok:true, upload_url:uploadUrl, folder_id:folderId });
     }
+    if (action === "academy-upload-status") {
+      const uploadUrl = String(body.upload_url || "");
+      const size = Number(body.size || 0);
+      let sessionUrl: URL;
+      try {
+        sessionUrl = new URL(uploadUrl);
+      } catch {
+        return json({ ok: false, error: "Sessão resumível inválida." }, 400);
+      }
+      const allowedHost = sessionUrl.protocol === "https:" &&
+        ["www.googleapis.com", "www.googleapisusercontent.com"].includes(sessionUrl.hostname);
+      const allowedPath = sessionUrl.pathname.startsWith("/upload/drive/");
+      if (!allowedHost || !allowedPath || !sessionUrl.searchParams.get("upload_id"))
+        return json({ ok: false, error: "Sessão resumível não pertence ao Google Drive." }, 400);
+      if (!Number.isFinite(size) || size <= 0 || size > 15 * 1024 * 1024 * 1024)
+        return json({ ok: false, error: "Tamanho de upload inválido." }, 400);
+
+      const response = await fetch(sessionUrl.toString(), {
+        method: "PUT",
+        signal: AbortSignal.timeout(30000),
+        headers: { "Content-Range": `bytes */${size}` },
+        redirect: "manual",
+      });
+      const responseBody = await response.text();
+      // 308 = sessão ativa/incompleta; 2xx = o último bloco já concluiu o arquivo.
+      if (response.status === 308 || (response.status >= 200 && response.status < 300))
+        return json({
+          ok: true,
+          upload_status: response.status,
+          range: response.headers.get("Range"),
+          body: responseBody,
+        });
+      return json({
+        ok: false,
+        error: `A sessão resumível expirou ou foi recusada (${response.status}).`,
+      }, response.status >= 400 && response.status < 600 ? response.status : 502);
+    }
     if (action === "academy-upload-commit") {
       if (!rootFolderId) return json({ ok:false,error:"Pasta raiz do Drive não configurada."},503);
       const course = String(body.course_id || "");
