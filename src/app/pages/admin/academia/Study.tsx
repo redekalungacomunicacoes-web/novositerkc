@@ -20,6 +20,7 @@ export function Study({
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [courseTab, setCourseTab] = useState<"overview" | "curriculum" | "materials" | "activities">("overview");
   const enrollment = data.enrollments.find(
     (e) =>
       e.course_id === course.id &&
@@ -158,8 +159,23 @@ export function Study({
           {error}
         </p>
       )}
+      {!lesson && (
+        <nav className="flex gap-2 overflow-x-auto rounded-xl border bg-card p-2 shadow-sm" aria-label="Navegação do curso">
+          {([
+            ["overview", "Visão geral"],
+            ["curriculum", `Módulos e aulas · ${lessons.length}`],
+            ["materials", `Materiais · ${data.materials.filter((m) => m.course_id === course.id && !m.lesson_id).length}`],
+            ["activities", `Atividades · ${activities.length}`],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setCourseTab(id)}
+              className={`min-h-11 shrink-0 rounded-lg px-4 text-sm font-semibold transition-colors ${courseTab === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
       <div className={lesson ? "space-y-6" : "grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]"}>
-        {!lesson && <aside className="space-y-4" aria-label="Módulos e aulas">
+        {!lesson && courseTab === "curriculum" && <aside className="space-y-4 lg:col-span-2" aria-label="Módulos e aulas">
           {modules.map((m) => (
             <Card key={m.id}>
               <h2 className="font-semibold">{m.title}</h2>
@@ -253,7 +269,7 @@ export function Study({
                 </div>
               )}
             </Card>
-          ) : (
+          ) : courseTab === "overview" ? (
             <Card>
               <h2 className="text-xl font-semibold">Sobre o curso</h2>
               <p className="whitespace-pre-wrap">
@@ -269,8 +285,8 @@ export function Study({
                 {course.prerequisites || "Nenhum pré-requisito informado"}
               </p>
             </Card>
-          )}
-          <Card>
+          ) : null}
+          {(lesson || courseTab === "materials") && <Card>
             <h2 className="font-semibold">Materiais complementares</h2>
             {data.materials
               .filter(
@@ -296,8 +312,8 @@ export function Study({
                 Nenhum material disponível.
               </p>
             )}
-          </Card>
-          {activities.map((a) => (
+          </Card>}
+          {(lesson || courseTab === "activities") && activities.map((a) => (
             <Card key={a.id}>
               <Badge>
                 {labels[a.kind]}
