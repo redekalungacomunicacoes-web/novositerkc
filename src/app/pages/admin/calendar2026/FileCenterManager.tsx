@@ -56,7 +56,7 @@ export function CenterFileActions({attachment,tasks}:{attachment:TaskAttachment;
  {folders.error?<p role="alert" className="text-sm text-rose-700">Não foi possível carregar os destinos. <button type="button" onClick={()=>void folders.refetch()} className="underline">Tentar novamente</button></p>:null}
  <p className="text-sm text-slate-500">O arquivo sai do local atual e passa a usar o acesso da tarefa ou pasta escolhida.</p></>}
  {error?<p role="alert" className="text-sm text-rose-700">{error}</p>:null}
- <div className="flex justify-end gap-2"><button type="button" disabled={busy} onClick={()=>setMode(null)} className={button}>Cancelar</button><button type="button" disabled={busy || (mode==="move"&&!target)} onClick={()=>void submit()} className={button+(mode==="delete"?" bg-rose-50 text-rose-700":" bg-emerald-100 text-emerald-900")}>{busy?"Processando…":mode==="delete"?"Excluir arquivo":"Mover arquivo"}</button></div>
+ {mode==="move" ? <p className="text-sm">Mover para outra tarefa ou pasta remove os vínculos com etapas e entrega final da tarefa original. O arquivo será preservado no destino.</p> : null}<div className="flex justify-end gap-2"><button type="button" disabled={busy} onClick={()=>setMode(null)} className={button}>Cancelar</button><button type="button" disabled={busy || (mode==="move"&&!target)} onClick={()=>void submit()} className={button+(mode==="delete"?" bg-rose-50 text-rose-700":" bg-emerald-100 text-emerald-900")}>{busy?"Processando…":mode==="delete"?"Excluir arquivo":"Mover arquivo"}</button></div>
  </Sheet></>;
 }
 export function FileCenterManager({tasks}:{tasks:CalendarTask[]}){

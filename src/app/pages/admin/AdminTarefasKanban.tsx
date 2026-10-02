@@ -1,3 +1,4 @@
+import { progressLabel } from "./calendar2026/taskWorkflow";
 import { useMemo, useState } from "react";
 import { CheckCircle2, Lock, MoreVertical, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
@@ -42,6 +43,7 @@ function KanbanCard({ task, assigneeName, onOpen, onMove, moveOptions, moving }:
           </DropdownMenu>
         </div>
       </div>
+      <p className="mt-2 text-xs">{progressLabel(task.checklistTotal, task.checklistCompleted)}{task.blockedReason ? " · Bloqueada" : ""}</p>
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-emerald-100/60">{task.description || "Sem descrição."}</p>
       <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-emerald-100/60">
         <span>Prazo {new Date(`${task.endDate}T00:00:00`).toLocaleDateString("pt-BR")}</span>
