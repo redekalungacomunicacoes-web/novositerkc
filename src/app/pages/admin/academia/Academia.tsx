@@ -788,14 +788,46 @@ export function Academia() {
                 )}
                 {managedCourse && (
                   <>
-                    <Card>
-                      <div className="flex flex-wrap gap-3 justify-between">
-                        <h2 className="text-xl font-semibold">
-                          {managedCourse.title}
-                        </h2>
-                        {actions("courses", managedCourse, "Editar curso")}
+                    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                      <div className="relative aspect-[3/1] min-h-44 overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
+                        {managedCourse.cover_path || managedCourse.cover_drive_file_id ? (
+                          <Asset
+                            path={managedCourse.cover_path}
+                            driveFileId={managedCourse.banner_drive_file_id || managedCourse.cover_drive_file_id}
+                            title={managedCourse.title}
+                            type="image"
+                            variant="banner"
+                            showOpenLink={false}
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center"><GraduationCap className="h-16 w-16 text-primary/50" aria-hidden="true" /></div>
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent p-4 pt-16 sm:p-6">
+                          <div className="flex items-end justify-between gap-4">
+                            <div className="min-w-0 text-white">
+                              <p className="mb-1 text-xs font-medium uppercase tracking-[0.16em] text-white/75">Editor visual do curso</p>
+                              <h2 className="truncate text-2xl font-bold sm:text-3xl">{managedCourse.title}</h2>
+                            </div>
+                            <Button size="sm" variant="outline" className="shrink-0 bg-background/90 backdrop-blur" onClick={() => open("courses", "Editar curso", managedCourse)}>
+                              <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Editar informações
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <p>{managedCourse.summary}</p>
+                      <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+                        <div className="space-y-3">
+                          <p className="text-lg leading-relaxed text-muted-foreground">{managedCourse.summary || "Adicione um resumo para apresentar o curso ao aluno."}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge tone={managedCourse.status === "published" ? "published" : "draft"}>{labels[managedCourse.status]}</Badge>
+                            <Badge>{labels[managedCourse.level]}</Badge>
+                            {managedCourse.required && <Badge>Obrigatório</Badge>}
+                            <Badge>{managedCourse.hours || 0}h</Badge>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border bg-muted/30 p-4">
+                          <p className="text-sm font-semibold">Imagem de apresentação</p>
+                          <p className="mt-1 text-xs text-muted-foreground">Capa e banner são independentes. A capa aparece nos cards e o banner apresenta a página do curso.</p>
+                          <div className="mt-3">
                       {data.driveFiles.some(
                         (f) =>
                           f.academy_course_id === managedCourse.id &&
@@ -818,20 +850,19 @@ export function Academia() {
                         key={`cover-${managedCourse.id}`}
                         courseId={managedCourse.id}
                         kind="cover"
-                        existing={data.driveFiles.filter(
-                          (f) => f.id === managedCourse.cover_drive_file_id,
-                        )}
+                        existing={data.driveFiles.filter((f) => f.id === managedCourse.cover_drive_file_id)}
                         onSaved={reload}
                       />
-                      <Badge
-                        tone={
-                          managedCourse.status === "published"
-                            ? "published"
-                            : "draft"
-                        }
-                      >
-                        {labels[managedCourse.status]}
-                      </Badge>
+                      <DriveUploads
+                        courseId={managedCourse.id}
+                        kind="banner"
+                        existing={data.driveFiles.filter((f) => f.id === managedCourse.banner_drive_file_id)}
+                        onSaved={reload}
+                      />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 border-t bg-muted/20 px-4 py-3 sm:px-6">
                       <Button
                         disabled={busy}
                         variant="outline"
@@ -862,9 +893,16 @@ export function Academia() {
                       >
                         Visualizar área de estudo
                       </Link>
-                    </Card>
+                      </div>
+                    </section>
                     <Card>
-                      <h2 className="text-xl font-semibold">Módulos e aulas</h2>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Conteúdo do curso</p>
+                          <h2 className="text-xl font-semibold">Módulos e aulas</h2>
+                        </div>
+                        <Badge>{data.modules.filter((m) => m.course_id === managedCourse.id).length} módulos</Badge>
+                      </div>
                       <Button
                         variant="outline"
                         onClick={() =>
@@ -881,7 +919,7 @@ export function Academia() {
                         .map((m) => (
                           <div
                             key={m.id}
-                            className="border rounded-md p-4 space-y-3"
+                            className="rounded-xl border bg-background p-4 space-y-3 shadow-sm"
                           >
                             <h3 className="font-semibold">
                               {m.position}. {m.title}
@@ -908,7 +946,7 @@ export function Academia() {
                               .map((l) => (
                                 <div
                                   key={l.id}
-                                  className="border-l-2 pl-4 space-y-2"
+                                  className="rounded-lg border bg-muted/20 p-3 space-y-2"
                                 >
                                   <p>
                                     {l.position}. {l.title} · {labels[l.status]}{" "}

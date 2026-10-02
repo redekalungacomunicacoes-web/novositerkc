@@ -28,6 +28,7 @@ export async function prepareAcademyDestination(
     if (error) throw error;
   }
   if (kind === "cover") return (await ensureDrivePath(courseFolder, ["CAPA"])).folderId;
+  if (kind === "banner") return (await ensureDrivePath(courseFolder, ["BANNER"])).folderId;
   if (!lesson) return (await ensureDrivePath(courseFolder, ["MATERIAIS"])).folderId;
   const { data: lessonRow, error: lessonError } = await admin.from("academy_lessons").select("id,title,position,drive_folder_id").eq("id", lesson).eq("course_id", course).single();
   if (lessonError || !lessonRow) throw new Error("Aula não encontrada neste curso.");
@@ -66,14 +67,14 @@ export async function uploadAcademyDrive(
   if (file.size > 50 * 1024 * 1024)
     throw new Error("O limite por arquivo é 50 MB.");
   if (
-    !["cover", "media", "material"].includes(kind) ||
-    (kind === "cover" && lesson) ||
+    !["cover", "banner", "media", "material"].includes(kind) ||
+    (["cover", "banner"].includes(kind) && lesson) ||
     (kind === "media" && !lesson) ||
     (material && kind !== "material")
   )
     throw new Error("Destino acadêmico inválido.");
   if (
-    kind === "cover" &&
+    ["cover", "banner"].includes(kind) &&
     !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)
   )
     throw new Error("A capa precisa ser uma imagem JPEG, PNG, WebP ou GIF.");
