@@ -377,13 +377,22 @@ Deno.serve(async (req) => {
     if (error || !file)
       return json({ ok: false, error: "Arquivo não encontrado." }, 404);
     if (file.module === "academy") {
-      // Always query through the caller's RLS, even though metadata is loaded with service_role.
-      const { data: permitted, error: accessError } = await userClient
-        .from("drive_files")
-        .select("id")
-        .eq("id", id)
-        .maybeSingle();
-      if (accessError || !permitted)
+      // Academy media stays private, but course editors must be able to preview it
+      // even when drive_files RLS is learner/enrollment oriented.
+      const { data: editable, error: editAccessError } = await userClient.rpc(
+        "academy_can_edit",
+        { p_course: file.academy_course_id },
+      );
+      let canRead = Boolean(editable) && !editAccessError;
+      if (!canRead) {
+        const { data: permitted, error: accessError } = await userClient
+          .from("drive_files")
+          .select("id")
+          .eq("id", id)
+          .maybeSingle();
+        canRead = Boolean(permitted) && !accessError;
+      }
+      if (!canRead)
         return json({ ok: false, error: "Sem acesso a este material." }, 403);
       if (["download", "stream"].includes(action) && file.status === "active") {
         const range = action === "stream" ? req.headers.get("Range") : null;
