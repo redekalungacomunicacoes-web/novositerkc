@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
-import { downloadRkcDriveFile, listTaskDriveFiles, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
+import { downloadRkcDriveFile, ensureTaskDriveFolder, listTaskDriveFiles, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
@@ -284,11 +284,9 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   const assignedTo = await ensureEquipeMemberExists(input.assigned_to, "responsável");
   if (!assignedTo) throw new Error("Selecione o responsável pela tarefa.");
 
-  const direcionamento = [...new Set(input.direcionamento ?? [])];
-  await Promise.all(direcionamento.map((memberId) => ensureEquipeMemberExists(memberId, "direcionamento")));
-  if (!direcionamento.includes(assignedTo)) {
-    throw new Error("O responsável deve fazer parte do direcionamento.");
-  }
+  // V3: existe um único destino da tarefa. O criador é sempre derivado
+  // da sessão autenticada e não deve ser escolhido no formulário.
+  const direcionamento = [assignedTo];
 
   const startDate = requireDatabaseDate(input.data_inicio, "Data inicial");
   const endDate = requireDatabaseDate(input.data_fim, "Data final");
@@ -343,7 +341,14 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     throw error;
   }
   if (!data) throw new Error("A tarefa não foi retornada após a criação.");
-  return data.id as string;
+  const createdTaskId = data.id as string;
+  try {
+    await ensureTaskDriveFolder(createdTaskId);
+  } catch (folderError) {
+    console.error("[TASK CREATE][DRIVE FOLDER]", folderError);
+    // A tarefa permanece criada: o primeiro upload tentará preparar a pasta novamente.
+  }
+  return createdTaskId;
 }
 
 export async function updateTaskStatus(
