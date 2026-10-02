@@ -183,8 +183,7 @@ export function Study({
                   .map((l) => (
                     <li key={l.id}>
                       <Link
-                        aria-current={lesson?.id === l.id ? "page" : undefined}
-                        className={`block rounded-md p-2 text-sm hover:bg-muted ${lesson?.id === l.id ? "bg-primary/10 text-primary font-semibold" : ""}`}
+                        className="block rounded-md p-2 text-sm hover:bg-muted"
                         to={`/admin/academia/cursos/${course.id}/aulas/${l.id}`}
                       >
                         {data.progress.some(
