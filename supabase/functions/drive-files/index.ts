@@ -124,8 +124,13 @@ Deno.serve(async (req) => {
       if (taskError || !task)
         return json({ ok: false, error: "Tarefa não encontrada." }, 404);
       let folderId = task.drive_folder_id as string | null;
+      let assigneeFolder = String(task.assigned_to ?? "SEM_RESPONSAVEL");
+      if (task.assigned_to) {
+        const { data: member } = await admin.from("equipe").select("nome").eq("id", task.assigned_to).maybeSingle();
+        if (member?.nome) assigneeFolder = safeName(member.nome);
+      }
       if (!folderId) {
-        const label = safeName(`${task.id} - ${task.titulo ?? "Tarefa"}`);
+        const label = safeName(`${task.titulo ?? "Tarefa"} - ${String(task.id).slice(0, 8)}`);
         const segments =
           task.context_type === "project"
             ? [
@@ -141,7 +146,7 @@ Deno.serve(async (req) => {
                   "TAREFAS",
                   label,
                 ]
-              : ["05_INTEGRANTES", String(task.assigned_to ?? "SEM_RESPONSAVEL"), "TAREFAS", label];
+              : ["05_INTEGRANTES", assigneeFolder, "TAREFAS", label];
         const path = await ensureDrivePath(rootFolderId, segments);
         folderId = path.folderId;
         const { error } = await admin
