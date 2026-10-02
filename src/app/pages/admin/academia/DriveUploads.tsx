@@ -101,6 +101,12 @@ export function DriveUploads({
   const busy = removing || items.some((item) => ["sending", "confirming"].includes(item.state));
   const pending = items.filter((item) => item.state === "pending");
   const activeFiles = (existing || []).filter((file) => file.status === "active");
+  const formatSize = (bytes: number | null) => {
+    if (!bytes || bytes < 1) return "";
+    const units = ["B", "KB", "MB", "GB"];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / 1024 ** index).toLocaleString("pt-BR", { maximumFractionDigits: index ? 1 : 0 })} ${units[index]}`;
+  };
   const chooseLabel = kind === "cover"
     ? (activeFiles.length ? "Substituir capa" : "Adicionar imagem da capa")
     : kind === "media"
@@ -112,7 +118,11 @@ export function DriveUploads({
         {kind === "cover" ? "Capa do curso — Drive RKC" : kind === "media" ? "Conteúdo da aula — Drive RKC" : "Materiais — Drive RKC"}
       </p>
       <p className="text-xs text-muted-foreground">
-        Selecione um arquivo e confira a prévia. O envio começa após a seleção. {kind === "cover" ? "Capas privadas, até 25 MB." : "Vídeos e materiais privados, até 15 GB."}
+        Selecione um arquivo e confira a prévia. O envio começa após a seleção. {kind === "cover"
+          ? "Capas privadas, até 25 MB."
+          : kind === "material"
+            ? "Adicione quantos materiais complementares precisar, inclusive vários de uma vez. Até 15 GB por arquivo."
+            : "Vídeos e arquivos da aula ficam no Drive RKC. Até 15 GB por arquivo."}
       </p>
       {!cleanupOnly && (
         <div className="flex flex-wrap items-center gap-2">
@@ -122,7 +132,7 @@ export function DriveUploads({
             aria-label={chooseLabel}
             type="file"
             multiple={kind === "material" && !replaceMaterialId}
-            accept={kind === "cover" ? "image/jpeg,image/png,image/webp,image/gif" : undefined}
+            accept={kind === "cover" ? "image/jpeg,image/png,image/webp,image/gif" : kind === "media" ? "video/*,application/pdf,image/*,audio/*" : undefined}
             disabled={busy}
             onChange={(event) => {
               const next = Array.from(event.target.files || []).map((file): Item => ({
@@ -181,35 +191,69 @@ export function DriveUploads({
           </li>
         ))}
       </ul>
-      {activeFiles.map((file) => (
-        <div key={file.id} className="space-y-2 border-t pt-3">
-          {file.mime_type?.startsWith("video/") ? (
-            <Asset driveFileId={file.id} title={file.name} type="video" />
-          ) : (
-            <Asset driveFileId={file.id} title={file.name} type={file.mime_type?.startsWith("image/") ? "image" : undefined} />
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={async () => {
-              if (!window.confirm("Remover este arquivo do conteúdo e movê-lo para a lixeira do Drive?")) return;
-              setRemoving(true);
-              setError("");
-              try {
-                await removeAcademyFile(file.id);
-                await onSaved();
-              } catch (e) {
-                setError(message(e));
-              } finally {
-                setRemoving(false);
-              }
-            }}
-          >
-            Remover arquivo do curso
-          </Button>
+      {activeFiles.length > 0 && (
+        <div className="border-t pt-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold">
+              {kind === "material"
+                ? `${activeFiles.length} material${activeFiles.length === 1 ? "" : "is"} complementar${activeFiles.length === 1 ? "" : "es"}`
+                : "Arquivo atualmente vinculado"}
+            </p>
+            {kind === "material" && (
+              <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                Sem limite de quantidade
+              </span>
+            )}
+          </div>
+          <div className={kind === "material" ? "grid gap-3 md:grid-cols-2" : "space-y-3"}>
+            {activeFiles.map((file) => (
+              <article key={file.id} className="overflow-hidden rounded-lg border bg-background">
+                <div className="space-y-2 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {file.mime_type || "Arquivo"}
+                        {formatSize(file.size_bytes) ? ` · ${formatSize(file.size_bytes)}` : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
+                      Drive RKC
+                    </span>
+                  </div>
+                  {file.mime_type?.startsWith("video/") ? (
+                    <Asset driveFileId={file.id} title={file.name} type="video" />
+                  ) : file.mime_type?.startsWith("image/") ? (
+                    <Asset driveFileId={file.id} title={file.name} type="image" />
+                  ) : file.mime_type === "application/pdf" ? (
+                    <Asset driveFileId={file.id} title={file.name} />
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!window.confirm("Remover este arquivo do conteúdo e movê-lo para a lixeira do Drive?")) return;
+                      setRemoving(true);
+                      setError("");
+                      try {
+                        await removeAcademyFile(file.id);
+                        await onSaved();
+                      } catch (e) {
+                        setError(message(e));
+                      } finally {
+                        setRemoving(false);
+                      }
+                    }}
+                  >
+                    Remover do curso
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
-      ))}
+      )}
       {error && <p role="alert" className="text-destructive">{error}</p>}
     </div>
   );
