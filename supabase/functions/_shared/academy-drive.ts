@@ -141,9 +141,9 @@ export async function uploadAcademyDrive(
     );
   let uploadedId: string | null = null;
   let previous: string | null = null;
-  if (kind === "cover" || kind === "media" || material) {
+  if (kind === "cover" || kind === "banner" || kind === "media" || material) {
     const table =
-      kind === "cover"
+      kind === "cover" || kind === "banner"
         ? "academy_courses"
         : kind === "media"
           ? "academy_lessons"
@@ -151,15 +151,17 @@ export async function uploadAcademyDrive(
     const column =
       kind === "cover"
         ? "cover_drive_file_id"
-        : kind === "media"
-          ? "media_drive_file_id"
-          : "drive_file_id";
+        : kind === "banner"
+          ? "banner_drive_file_id"
+          : kind === "media"
+            ? "media_drive_file_id"
+            : "drive_file_id";
     const { data } = await user
       .from(table)
       .select(column)
       .eq(
         "id",
-        kind === "cover" ? course : kind === "media" ? lesson : material,
+        kind === "cover" || kind === "banner" ? course : kind === "media" ? lesson : material,
       )
       .single();
     previous = (data as Record<string, string | null> | null)?.[column] || null;
@@ -170,7 +172,9 @@ export async function uploadAcademyDrive(
       course,
       ...(kind === "cover"
         ? ["Capa"]
-        : lesson
+        : kind === "banner"
+          ? ["Banner"]
+          : lesson
           ? [
               "Módulos",
               module!,
