@@ -189,7 +189,7 @@ export async function uploadAcademyFile(input: {
   const mimeType = input.file.type || "application/octet-stream";
   const chunkSize = 8 * 1024 * 1024; // Google requires chunk sizes to be multiples of 256 KiB.
   const parseConfirmedByte = (range: string | null) => {
-    const match = range?.match(/bytes=0-(\\d+)/i);
+    const match = range?.match(/bytes=0-(\d+)/i);
     return match ? Number(match[1]) : -1;
   };
   const sendChunk = (startByte: number, endByte: number) =>
@@ -212,20 +212,21 @@ export async function uploadAcademyFile(input: {
       });
       xhr.send(input.file.slice(startByte, endByte + 1));
     });
-  const querySession = () =>
-    new Promise<{ status: number; range: string | null; body: string }>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", uploadUrl);
-      xhr.setRequestHeader("Content-Range", `bytes */${input.file.size}`);
-      xhr.timeout = 30000;
-      xhr.onerror = () => reject(new Error("Não foi possível consultar a sessão de upload."));
-      xhr.onload = () => resolve({
-        status: xhr.status,
-        range: xhr.getResponseHeader("Range"),
-        body: xhr.responseText || "",
-      });
-      xhr.send();
+  // Google can accept a browser PUT and still hide the response from XHR because
+  // the resumable session endpoint does not consistently expose CORS headers.
+  // Query the same session through our authenticated Edge Function instead.
+  const querySession = async (): Promise<{ status: number; range: string | null; body: string }> => {
+    const status = await invoke({
+      action: "academy-upload-status",
+      upload_url: uploadUrl,
+      size: input.file.size,
     });
+    return {
+      status: Number(status.upload_status),
+      range: typeof status.range === "string" ? status.range : null,
+      body: typeof status.body === "string" ? status.body : "",
+    };
+  };
 
   let offset = 0;
   let uploaded: Record<string, unknown> | null = null;
