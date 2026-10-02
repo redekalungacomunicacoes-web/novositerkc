@@ -83,12 +83,15 @@ export function Study({
     .map((ci) => data.instructors.find((i) => i.id === ci.instructor_id))
     .filter(Boolean);
   const route = safeContextRoute(lesson?.context_route);
+  const lessonIndex = lesson ? lessons.indexOf(lesson) : -1;
+  const previousLesson = lessonIndex > 0 ? lessons[lessonIndex - 1] : null;
+  const nextLesson = lessonIndex >= 0 ? lessons[lessonIndex + 1] : null;
   return (
     <div className="space-y-6">
-      <Link to="/admin/academia" className="text-primary underline">
-        ← Minha Academia
+      <Link to={lesson ? `/admin/academia/cursos/${course.id}` : "/admin/academia"} className="text-primary underline">
+        {lesson ? `← Voltar para ${course.title}` : "← Minha Academia"}
       </Link>
-      <Card>
+      {!lesson && <Card>
         <div className="flex flex-wrap items-center gap-2">
           <Badge>Formação interna</Badge>
           <Badge>{labels[course.level]}</Badge>
@@ -104,6 +107,7 @@ export function Study({
               title={`Capa de ${course.title}`}
               type="image"
               variant="banner"
+              showOpenLink={false}
             />
           </div>
         )}
@@ -161,14 +165,14 @@ export function Study({
             Solicite sua matrícula ao administrador para registrar progresso.
           </p>
         )}
-      </Card>
+      </Card>}
       {error && (
         <p role="alert" className="text-destructive">
           {error}
         </p>
       )}
-      <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="space-y-4" aria-label="Módulos e aulas">
+      <div className={lesson ? "space-y-6" : "grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]"}>
+        {!lesson && <aside className="space-y-4" aria-label="Módulos e aulas">
           {modules.map((m) => (
             <Card key={m.id}>
               <h2 className="font-semibold">{m.title}</h2>
@@ -202,13 +206,14 @@ export function Study({
           {!lessons.length && (
             <Empty>Nenhuma aula publicada neste curso.</Empty>
           )}
-        </aside>
+        </aside>}
         <div className="space-y-6">
           {lessonId && !lesson ? (
             <Empty>Aula indisponível.</Empty>
           ) : lesson ? (
             <Card>
-              <h2 className="text-2xl font-bold">{lesson.title}</h2>
+              <p className="text-sm text-muted-foreground">{modules.find((m) => m.id === lesson.module_id)?.title} · {course.title}</p>
+              <h1 className="text-3xl font-bold">{lesson.title}</h1>
               <p className="text-muted-foreground">
                 {lesson.description} · {lesson.duration_minutes} min
               </p>
@@ -222,6 +227,7 @@ export function Study({
                 url={lesson.media_url}
                 title={lesson.title}
                 type={lesson.type}
+                showOpenLink={false}
               />
               {route && (
                 <Link
@@ -248,16 +254,14 @@ export function Study({
                   >
                     {complete ? "Aula concluída" : "Marcar aula como concluída"}
                   </Button>
-                  {lessons[lessons.indexOf(lesson) + 1] && (
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        navigate(
-                          `/admin/academia/cursos/${course.id}/aulas/${lessons[lessons.indexOf(lesson) + 1].id}`,
-                        )
-                      }
-                    >
-                      Próxima aula
+                  {previousLesson && (
+                    <Button variant="outline" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${previousLesson.id}`)}>
+                      ← Aula anterior
+                    </Button>
+                  )}
+                  {nextLesson && (
+                    <Button variant="outline" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${nextLesson.id}`)}>
+                      Próxima aula →
                     </Button>
                   )}
                 </div>
