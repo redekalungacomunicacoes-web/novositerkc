@@ -42,6 +42,7 @@ export function DriveUploads({
   replaceMaterialId,
   cleanupOnly,
   inputIdOverride,
+  inputOnly = false,
   onSaved,
 }: {
   courseId: string;
@@ -51,6 +52,7 @@ export function DriveUploads({
   replaceMaterialId?: string;
   cleanupOnly?: boolean;
   inputIdOverride?: string;
+  inputOnly?: boolean;
   onSaved: () => Promise<void>;
 }) {
   const generatedInputId = useId();
@@ -117,6 +119,29 @@ export function DriveUploads({
       : kind === "media"
         ? (activeFiles.length ? "Substituir conteúdo da aula" : "Adicionar vídeo ou arquivo da aula")
         : (activeFiles.length ? "Adicionar outro material" : "Adicionar arquivo");
+  if (inputOnly) {
+    return (
+      <input
+        id={inputId}
+        className="sr-only"
+        aria-label={chooseLabel}
+        type="file"
+        accept={["cover", "banner"].includes(kind) ? "image/jpeg,image/png,image/webp,image/gif" : undefined}
+        disabled={busy}
+        onChange={(event) => {
+          const next = Array.from(event.target.files || []).map((file): Item => ({
+            id: crypto.randomUUID(),
+            file,
+            state: "pending",
+            progress: 0,
+          }));
+          setItems((rows) => [...rows, ...next]);
+          event.target.value = "";
+          if (next.length) void send(next);
+        }}
+      />
+    );
+  }
   return (
     <div className="rounded-md border p-3 space-y-3">
       <p className="text-sm font-medium">
