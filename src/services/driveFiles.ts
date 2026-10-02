@@ -72,9 +72,11 @@ export async function uploadRkcDriveFile(input: {
   if (input.taskId) form.append("task_id", input.taskId);
   if (input.folderId) form.append("folder_id", input.folderId);
   if (input.accessScope) form.append("access_scope", input.accessScope);
-  const { data, error } = await supabase.functions.invoke("drive-files", {
-    body: form,
+  const invocation = supabase.functions.invoke("drive-files", { body: form });
+  const timeout = new Promise<never>((_, reject) => {
+    window.setTimeout(() => reject(new Error("O Drive demorou demais para responder. A tarefa foi salva; tente reenviar somente o arquivo.")), 45_000);
   });
+  const { data, error } = await Promise.race([invocation, timeout]);
   if (error) throw await driveError(error);
   if (!data?.ok || !data?.file)
     throw new Error(data?.error || "Falha no upload ao Drive da RKC.");
