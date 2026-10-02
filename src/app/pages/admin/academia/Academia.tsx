@@ -80,6 +80,7 @@ export function Academia() {
     const timer = window.setTimeout(() => setNotice(""), 4000);
     return () => window.clearTimeout(timer);
   }, [notice]);
+  useEffect(() => () => { if (bannerPreview?.url) URL.revokeObjectURL(bannerPreview.url); }, [bannerPreview]);
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setActionError("");
@@ -242,7 +243,6 @@ export function Academia() {
       ? ownCourses
       : data.courses.filter((c) => canEdit(c.id));
   const managedCourse = editingCourses.find((c) => c.id === selectedCourse);
-  useEffect(() => () => { if (bannerPreview?.url) URL.revokeObjectURL(bannerPreview.url); }, [bannerPreview]);
   const previewBanner = (file: File | null) => {
     setBannerPreview((current) => {
       if (current?.url) URL.revokeObjectURL(current.url);
