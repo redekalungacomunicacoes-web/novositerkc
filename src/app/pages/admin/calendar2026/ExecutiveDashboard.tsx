@@ -1,5 +1,4 @@
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, CalendarCheck2, CheckCircle2, Clock3, ListChecks, TrendingUp } from "lucide-react";
+import { BarChart3, AlertTriangle, CalendarCheck2, CheckCircle2, Clock3, ListChecks, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import { useCalendarStore } from "./store";
 
@@ -35,35 +34,10 @@ export function ExecutiveDashboard() {
     { label: "Produtividade", value: `${productivityRate}%`, tone: "text-emerald-800 dark:text-emerald-200" },
   ];
 
-  const byCollaborator = useMemo(() => teamMembers.slice(0, 8).map((member) => ({
-    nome: member.name.split(" ")[0],
-    total: tasks.filter((task) => task.assigneeId === member.id).length,
-    concluidas: tasks.filter((task) => task.assigneeId === member.id && task.status === "concluida").length,
-    atrasadas: tasks.filter((task) => task.assigneeId === member.id && task.status !== "concluida" && task.endDate < today).length,
-  })).filter((item) => item.total || item.concluidas || item.atrasadas), [tasks, teamMembers, today]);
-
-  const monthly = useMemo(() => {
-    const grouped = new Map<string, { mes: string; concluidas: number; total: number }>();
-    tasks.forEach((task) => {
-      const key = task.endDate.slice(0, 7);
-      const current = grouped.get(key) ?? { mes: key.split("-").reverse().join("/"), concluidas: 0, total: 0 };
-      current.total += 1;
-      if (task.status === "concluida") current.concluidas += 1;
-      grouped.set(key, current);
-    });
-    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value).slice(-6);
-  }, [tasks]);
-
-  const byDate = useMemo(() => {
-    const grouped = new Map<string, { data: string; concluidas: number; atrasadas: number }>();
-    tasks.forEach((task) => {
-      const current = grouped.get(task.endDate) ?? { data: shortDate(task.endDate), concluidas: 0, atrasadas: 0 };
-      if (task.status === "concluida") current.concluidas += 1;
-      if (task.status !== "concluida" && task.endDate < today) current.atrasadas += 1;
-      grouped.set(task.endDate, current);
-    });
-    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value).slice(-10);
-  }, [tasks, today]);
+  const workload = useMemo(() => teamMembers.map((member) => ({
+    name: member.name,
+    open: tasks.filter((task) => task.assigneeId === member.id && task.status !== "concluida" && task.status !== "cancelada").length,
+  })).filter((item) => item.open > 0).sort((a, b) => b.open - a.open).slice(0, 5), [tasks, teamMembers]);
 
   return (
     <section className="mb-5 space-y-4">
@@ -82,26 +56,20 @@ export function ExecutiveDashboard() {
         })}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
-        <article className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70">
-          <h3 className="font-semibold text-slate-900 dark:text-white">Tarefas por colaborador</h3>
-          <div className="mt-4 h-56">
-            <ResponsiveContainer width="100%" height="100%"><BarChart data={byCollaborator}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#d1fae5" /><XAxis dataKey="nome" tick={{ fill: "#64748b", fontSize: 11 }} /><YAxis tick={{ fill: "#64748b", fontSize: 11 }} allowDecimals={false} /><Tooltip /><Bar dataKey="total" name="Total" fill="#047857" radius={[8, 8, 0, 0]} /><Bar dataKey="concluidas" name="Concluídas" fill="#34d399" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <article className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70">
+          <div className="flex items-center gap-2"><BarChart3 size={18} className="text-emerald-700"/><h3 className="font-semibold text-slate-900 dark:text-white">Carga atual da equipe</h3></div>
+          <div className="mt-4 space-y-3">
+            {workload.length ? workload.map((item) => {
+              const max = Math.max(...workload.map((entry) => entry.open), 1);
+              return <div key={item.name}><div className="mb-1 flex justify-between text-sm"><span className="truncate text-slate-600 dark:text-emerald-100/70">{item.name}</span><strong>{item.open}</strong></div><div className="h-2 overflow-hidden rounded-full bg-emerald-50 dark:bg-emerald-900"><div className="h-full rounded-full bg-emerald-600" style={{ width: `${Math.max(8, Math.round((item.open / max) * 100))}%` }}/></div></div>;
+            }) : <p className="text-sm text-slate-500">Nenhuma tarefa aberta no período.</p>}
           </div>
         </article>
-        <article className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70">
-          <h3 className="font-semibold text-slate-900 dark:text-white">Concluídas x atrasadas</h3>
-          <div className="mt-4 h-56">
-            <ResponsiveContainer width="100%" height="100%"><BarChart data={byDate}><XAxis dataKey="data" tick={{ fill: "#64748b", fontSize: 10 }} /><YAxis tick={{ fill: "#64748b", fontSize: 11 }} allowDecimals={false} /><Tooltip /><Bar dataKey="concluidas" name="Concluídas" fill="#10b981" radius={[8, 8, 0, 0]} /><Bar dataKey="atrasadas" name="Atrasadas" fill="#ef4444" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer>
-          </div>
+        <article className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70">
+          <h3 className="font-semibold text-slate-900 dark:text-white">Leitura rápida</h3>
+          <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-emerald-100/70">O painel usa somente os dados já carregados do calendário. Gráficos pesados foram removidos desta tela para reduzir custo de renderização e tornar a entrada em Tarefas mais imediata.</p>
         </article>
-        <article className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/70">
-          <h3 className="font-semibold text-slate-900 dark:text-white">Produtividade mensal</h3>
-          <div className="mt-4 h-56">
-            <ResponsiveContainer width="100%" height="100%"><LineChart data={monthly}><XAxis dataKey="mes" tick={{ fill: "#64748b", fontSize: 11 }} /><YAxis tick={{ fill: "#64748b", fontSize: 11 }} allowDecimals={false} /><Tooltip /><Line type="monotone" dataKey="concluidas" name="Concluídas" stroke="#059669" strokeWidth={3} dot={{ r: 4, fill: "#059669" }} /></LineChart></ResponsiveContainer>
-          </div>
-        </article>
-      </div>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   GraduationCap,
   FolderOpen,
@@ -198,9 +198,10 @@ export function AdminSidebar() {
             (link.href !== "/admin" && pathname.startsWith(link.href));
 
           return (
-            <Link
+            <NavLink
               key={`${link.href}-${link.label}`}
               to={link.href}
+              end={link.href === "/admin"}
               className={`group flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium border-l-4 transition-colors ${
                 isActive
                   ? "bg-green-50 border-green-600 text-green-700"
@@ -209,7 +210,7 @@ export function AdminSidebar() {
             >
               <Icon className="h-4 w-4 text-current" />
               {link.label}
-            </Link>
+            </NavLink>
           );
         })}
       </nav>
