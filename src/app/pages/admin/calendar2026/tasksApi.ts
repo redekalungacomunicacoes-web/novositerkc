@@ -258,12 +258,14 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 }
 
 export async function fetchTaskDetails(taskId: string): Promise<{ attachments: TaskAttachment[]; comments: TaskComment[] }> {
-  const [commentsResult, driveFiles] = await Promise.all([
+  const [commentsResult, legacyAttachmentsResult, driveFiles] = await Promise.all([
     supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").eq("task_id", taskId).order("created_at"),
+    supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").eq("task_id", taskId).order("created_at", { ascending: false }),
     listTaskDriveFiles(taskId),
   ]);
   if (commentsResult.error) throw new Error(commentsResult.error.message);
-  const attachments = driveFiles
+  if (legacyAttachmentsResult.error) throw new Error(legacyAttachmentsResult.error.message);
+  const driveAttachments = driveFiles
     .filter((file) => file.task_id === taskId && file.status === "active")
     .map((file) => ({
       id: file.id,
@@ -272,6 +274,10 @@ export async function fetchTaskDetails(taskId: string): Promise<{ attachments: T
       file_name: file.name,
       created_at: file.created_at,
     } as TaskAttachment));
+  const legacyAttachments = (legacyAttachmentsResult.data ?? []) as TaskAttachment[];
+  const seen = new Set(driveAttachments.map((attachment) => attachment.id));
+  const attachments = [...driveAttachments, ...legacyAttachments.filter((attachment) => !seen.has(attachment.id))]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
   return { attachments, comments: (commentsResult.data ?? []) as TaskComment[] };
 }
 
@@ -318,13 +324,6 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     created_by: currentMember.id,
   };
 
-  console.log("[TASK CREATE][IDS]", {
-    authUserId: user.id,
-    equipeId: currentMember.id,
-    equipeUserId: currentMember.user_id,
-    assignedTo,
-  });
-  console.log("[TASK CREATE][PAYLOAD]", payload);
   const { data, error } = await supabase
     .from("tasks")
     .insert(payload)
@@ -365,8 +364,6 @@ export async function updateTaskStatus(
     .from("tasks")
     .update(payload)
     .eq("id", taskId);
-
-  console.log("KANBAN RESULT", result);
 
   if (result.error) {
     throw new Error(result.error.message);
