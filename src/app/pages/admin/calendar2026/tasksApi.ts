@@ -403,36 +403,30 @@ export async function deleteTask(taskId: string) {
 }
 
 export async function fetchNotifications(): Promise<TeamNotification[]> {
+  const currentMember = await getCurrentEquipeMember();
+  const permission = await getPermissionLevel();
   const currentDate = new Date();
-  const start = new Date(currentDate);
-  const end = new Date(currentDate);
-  start.setDate(start.getDate() - 60);
-  end.setDate(end.getDate() + 60);
+  const start = new Date(currentDate); start.setDate(start.getDate() - 60);
+  const end = new Date(currentDate); end.setDate(end.getDate() + 60);
   const today = localDateKey(currentDate);
-  const startDate = localDateKey(start);
-  const endDate = localDateKey(end);
-  const tasks = await fetchTasks(startDate, endDate);
+  let query = supabase
+    .from("tasks")
+    .select("id,titulo,data_inicio,data_fim,status,assigned_to,created_by,created_at,updated_at")
+    .lte("data_inicio", localDateKey(end))
+    .gte("data_fim", localDateKey(start))
+    .order("updated_at", { ascending: false })
+    .limit(30);
+  if (permission === "colaborador" && currentMember?.id) query = query.eq("assigned_to", currentMember.id);
+  if (permission === "gestor" && currentMember?.id) query = query.or(`assigned_to.eq.${currentMember.id},created_by.eq.${currentMember.id}`);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
   const notifications: TeamNotification[] = [];
-
-  tasks
-    .filter((task) => task.status !== "concluida" && task.status !== "cancelada" && task.endDate < today)
-    .slice(0, 5)
-    .forEach((task) => notifications.push({ id: `overdue-${task.id}`, type: "overdue", message: `Tarefa atrasada: ${task.title}`, status: "novo", date: task.endDate }));
-
-  tasks
-    .filter((task) => task.status === "concluida")
-    .slice(0, 5)
-    .forEach((task) => notifications.push({ id: `done-${task.id}`, type: "done", message: `Tarefa concluída: ${task.title}`, status: "lido", date: task.completedAt ?? task.updatedAt }));
-
-  tasks
-    .flatMap((task) => task.comments.map((comment) => ({ task, comment })))
-    .slice(0, 5)
-    .forEach(({ task, comment }) => notifications.push({ id: `comment-${comment.id}`, type: "comment", message: `Novo comentário em ${task.title}`, status: "novo", date: comment.created_at }));
-
-  tasks
-    .slice(0, 5)
-    .forEach((task) => notifications.push({ id: `task-${task.id}`, type: "task", message: `Tarefa atribuída: ${task.title}`, status: "novo", date: task.createdAt }));
-
+  rows.filter((task) => normalizeStatus(task.status) !== "concluida" && normalizeStatus(task.status) !== "cancelada" && String(task.data_fim ?? "") < today)
+    .slice(0, 5).forEach((task) => notifications.push({ id: `overdue-${task.id}`, type: "overdue", message: `Tarefa atrasada: ${task.titulo ?? "Sem título"}`, status: "novo", date: String(task.data_fim) }));
+  rows.filter((task) => normalizeStatus(task.status) === "concluida")
+    .slice(0, 5).forEach((task) => notifications.push({ id: `done-${task.id}`, type: "done", message: `Tarefa concluída: ${task.titulo ?? "Sem título"}`, status: "lido", date: task.updated_at }));
+  rows.slice(0, 5).forEach((task) => notifications.push({ id: `task-${task.id}`, type: "task", message: `Tarefa atualizada: ${task.titulo ?? "Sem título"}`, status: "novo", date: task.updated_at ?? task.created_at }));
   return notifications.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
 }
 
