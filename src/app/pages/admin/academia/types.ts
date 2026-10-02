@@ -8,6 +8,7 @@ export type Course = {
   description: string;
   cover_path: string | null;
   cover_drive_file_id: string | null;
+  banner_drive_file_id: string | null;
   created_by: string | null;
   category_id: string | null;
   level: string;
