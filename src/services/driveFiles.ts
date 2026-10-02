@@ -237,6 +237,24 @@ export async function uploadAcademyFile(input: {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) throw new Error("Sua sessão expirou. Entre novamente.");
 
+  // Course artwork is small enough to travel through our authenticated backend.
+  // This avoids browser -> Google resumable-session CORS/network inconsistencies.
+  if (["cover", "banner"].includes(input.kind)) {
+    const form = new FormData();
+    form.append("module", "academy");
+    form.append("file", input.file);
+    form.append("course_id", input.courseId);
+    form.append("kind", input.kind);
+    form.append("upload_id", input.uploadId);
+    if (input.replaceMaterialId) form.append("replace_material_id", input.replaceMaterialId);
+    input.onProgress(10);
+    const { data: uploaded, error: uploadError } = await supabase.functions.invoke("drive-files", { body: form });
+    if (uploadError) throw await driveError(uploadError);
+    if (!uploaded?.ok || !uploaded?.file) throw new Error(uploaded?.error || "O Drive não confirmou a imagem.");
+    input.onProgress(100);
+    return uploaded.file as DriveFileRecord;
+  }
+
   const start = await invoke({
     action: "academy-upload-start",
     course_id: input.courseId,
