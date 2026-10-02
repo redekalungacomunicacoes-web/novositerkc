@@ -38,6 +38,19 @@ function safeName(value: string) {
   return value.replace(/[\\/\r\n"]/g, "_").slice(0, 180) || "arquivo";
 }
 
+function contentDisposition(disposition: "inline" | "attachment", name: string) {
+  // Response headers are ByteString values in the browser. Keep the legacy
+  // filename ASCII-only and preserve the real UTF-8 name with RFC 5987.
+  const original = safeName(name);
+  const ascii = original
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/[\\"]/g, "_")
+    .slice(0, 180) || "arquivo";
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(original)}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: corsHeaders });
@@ -400,7 +413,7 @@ Deno.serve(async (req) => {
         const headers: Record<string, string> = {
           ...corsHeaders,
           "Content-Type": file.mime_type || response.headers.get("Content-Type") || "application/octet-stream",
-          "Content-Disposition": `${action === "stream" ? "inline" : "attachment"}; filename="${safeName(file.name)}"`,
+          "Content-Disposition": contentDisposition(action === "stream" ? "inline" : "attachment", file.name),
           "Cache-Control": "private, no-store",
           "X-Content-Type-Options": "nosniff",
           "Accept-Ranges": "bytes",
@@ -450,7 +463,7 @@ Deno.serve(async (req) => {
         headers: {
           ...corsHeaders,
           "Content-Type": file.mime_type ?? "application/octet-stream",
-          "Content-Disposition": `attachment; filename="${safeName(file.name)}"`,
+          "Content-Disposition": contentDisposition("attachment", file.name),
           "X-Content-Type-Options": "nosniff",
           "Cache-Control": "private, no-store",
         },
