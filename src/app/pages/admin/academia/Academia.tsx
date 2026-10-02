@@ -267,12 +267,15 @@ export function Academia() {
     return (
       <Card key={c.id}>
         {c.cover_path || c.cover_drive_file_id ? (
-          <Asset
-            path={c.cover_path}
-            driveFileId={c.cover_drive_file_id}
-            title={c.title}
-            type="image"
-          />
+          <Link to={`/admin/academia/cursos/${c.id}`} aria-label={`Abrir curso ${c.title}`} className="block overflow-hidden rounded-lg aspect-video bg-muted">
+            <Asset
+              path={c.cover_path}
+              driveFileId={c.cover_drive_file_id}
+              title={c.title}
+              type="image"
+              showOpenLink={false}
+            />
+          </Link>
         ) : (
           <div className="rounded-md bg-primary/10 p-8">
             <GraduationCap
@@ -289,7 +292,11 @@ export function Academia() {
           {c.required && <Badge>Obrigatório</Badge>}
           {r?.completed_at && <Badge>Concluído</Badge>}
         </div>
-        <h3 className="text-xl font-semibold break-words">{c.title}</h3>
+        <h3 className="text-xl font-semibold break-words">
+          <Link className="hover:text-primary hover:underline underline-offset-4" to={`/admin/academia/cursos/${c.id}`}>
+            {c.title}
+          </Link>
+        </h3>
         <p className="text-muted-foreground">{c.summary}</p>
         <p className="text-sm">
           Por {memberName(c.created_by || "")} ·{" "}
