@@ -25,6 +25,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
   const { selectedDate, tasks, teamMembers } = useCalendarStore();
   const dayTasks = tasks.filter((t) => t.date <= selectedDate && t.endDate >= selectedDate);
   const [editing, setEditing] = useState<CalendarTask | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<TaskInput>(emptyForm(selectedDate));
   const [comment, setComment] = useState("");
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
@@ -48,13 +49,16 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
 
   function editTask(task: CalendarTask) {
     setEditing(task);
+    setIsEditing(true);
     setForm({ titulo: task.title, descricao: task.description, assigned_to: task.assigneeId || null, direcionamento: task.direcionamento, prioridade: task.priority, status: task.status, data_inicio: task.date, data_fim: task.endDate, data_conclusao: task.completedAt });
   }
 
   useEffect(() => {
     if (!open) return;
     if (initialTask) {
-      editTask(initialTask);
+      setEditing(initialTask);
+      setIsEditing(false);
+      setForm({ titulo: initialTask.title, descricao: initialTask.description, assigned_to: initialTask.assigneeId || null, direcionamento: initialTask.direcionamento, prioridade: initialTask.priority, status: initialTask.status, data_inicio: initialTask.date, data_fim: initialTask.endDate, data_conclusao: initialTask.completedAt });
       setComment("");
       setAttachmentFiles([]);
       setExternalLinks("");
@@ -64,6 +68,7 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       return;
     }
     setEditing(null);
+    setIsEditing(false);
     setForm(emptyForm(selectedDate));
     setComment("");
     setAttachmentFiles([]);
@@ -151,14 +156,14 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
       return;
     }
 
-    setEditing(null);
+    setIsEditing(false);
     setSavedTaskId(null);
     setForm(emptyForm(selectedDate));
     setComment("");
     setAttachmentFiles([]);
     setExternalLinks("");
     setSubmitNotice(editing ? "Tarefa atualizada com sucesso." : "Tarefa criada com sucesso.");
-    if (initialTask || !editing) onClose();
+    if (!initialTask && !editing) onClose();
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -200,9 +205,9 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
         </section>
       ) : null}
 
-      <form onSubmit={(event) => void handleSubmit(event)} className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/60 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/30">
+      {(!selectedTask || isEditing) ? <form onSubmit={(event) => void handleSubmit(event)} className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/60 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/30">
         <div className="border-b border-slate-200 bg-white px-5 py-4 dark:border-emerald-800/60 dark:bg-emerald-950">
-          <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100"><CheckCircle2 size={20}/></div><div><h4 className="font-semibold">{editing ? "Editar tarefa" : "Criar nova tarefa"}</h4><p className="text-xs text-slate-500 dark:text-emerald-100/60">O criador é identificado automaticamente pela conta conectada.</p></div></div>
+          <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100"><CheckCircle2 size={20}/></div><div><h4 className="font-semibold">{isEditing ? "Editar tarefa" : "Criar nova tarefa"}</h4><p className="text-xs text-slate-500 dark:text-emerald-100/60">O criador é identificado automaticamente pela conta conectada.</p></div></div>
         </div>
         <div className="grid gap-5 p-5">
           <section className="grid gap-4">
@@ -231,11 +236,13 @@ export function TaskModal({ open, onClose, initialTask }: { open: boolean; onClo
           {submitNotice ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100">{submitNotice}</p>:null}
           {submitError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">{submitError}</p>:null}
         </div>
-        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-emerald-800/60 dark:bg-emerald-950/95"><p className="text-xs text-slate-500">{attachmentFiles.length ? `${attachmentFiles.length} arquivo(s) preparado(s)` : "Arquivos são opcionais"}</p><div className="flex gap-2"><button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-medium dark:border-emerald-800">Cancelar</button><button type="submit" disabled={isSaving} className="min-h-11 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60">{isSaving ? "Salvando..." : savedTaskId ? "Tentar arquivos novamente" : editing ? "Salvar alterações" : "Criar tarefa"}</button></div></div>
-      </form>
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-emerald-800/60 dark:bg-emerald-950/95"><p className="text-xs text-slate-500">{attachmentFiles.length ? `${attachmentFiles.length} arquivo(s) preparado(s)` : "Arquivos são opcionais"}</p><div className="flex gap-2"><button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-medium dark:border-emerald-800">Cancelar</button><button type="submit" disabled={isSaving} className="min-h-11 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60">{isSaving ? "Salvando..." : savedTaskId ? "Tentar arquivos novamente" : isEditing ? "Salvar alterações" : "Criar tarefa"}</button></div></div>
+      </form> : null}
 
       {selectedTask ? (
         <section className="grid gap-3 lg:grid-cols-3">
+          {details.isLoading ? <div className="lg:col-span-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100">Carregando comentários e anexos…</div> : null}
+          {details.error ? <div role="alert" className="lg:col-span-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><span>Não foi possível carregar os detalhes: {details.error instanceof Error ? details.error.message : "erro inesperado"}</span><button type="button" onClick={() => void details.refetch()} className="min-h-10 rounded-xl border border-rose-300 px-3 font-semibold hover:bg-rose-100">Tentar novamente</button></div> : null}
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60 lg:col-span-2"><h4 className="flex items-center gap-2 font-semibold"><FileText size={16} /> Descrição</h4><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-emerald-100/70">{selectedTask.description || "Sem descrição."}</p></div>
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60"><h4 className="flex items-center gap-2 font-semibold"><CalendarDays size={16} /> Histórico</h4><p className="mt-2 text-sm text-slate-600 dark:text-emerald-100/70">Criada em {formatDate(selectedTask.createdAt?.slice(0,10))}</p><p className="text-sm text-slate-600 dark:text-emerald-100/70">Atualizada em {formatDate(selectedTask.updatedAt?.slice(0,10))}</p></div>
           <div className="rounded-2xl border border-emerald-100 p-4 dark:border-emerald-800/60 lg:col-span-2"><h4 className="flex items-center gap-2 font-semibold"><MessageSquare size={16} /> Comentários</h4><div className="mt-2 space-y-2">{selectedTask.comments.length ? selectedTask.comments.map((item) => <p key={item.id} className="rounded-xl bg-emerald-50 p-2 text-sm dark:bg-emerald-900/40">{item.comentario}</p>) : <p className="text-sm text-slate-500 dark:text-emerald-100/60">Nenhum comentário.</p>}</div></div>
