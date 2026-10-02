@@ -122,27 +122,51 @@ export function DriveUploads({
         ? (activeFiles.length ? "Substituir conteúdo da aula" : "Adicionar vídeo ou arquivo da aula")
         : (activeFiles.length ? "Adicionar outro material" : "Adicionar arquivo");
   if (inputOnly) {
+    const selected = items.find((item) => ["pending", "sending", "confirming", "error"].includes(item.state));
     return (
-      <input
-        id={inputId}
-        className="sr-only"
-        aria-label={chooseLabel}
-        type="file"
-        accept={["cover", "banner"].includes(kind) ? "image/jpeg,image/png,image/webp,image/gif" : undefined}
-        disabled={busy}
-        onChange={(event) => {
-          const next = Array.from(event.target.files || []).map((file): Item => ({
-            id: crypto.randomUUID(),
-            file,
-            state: "pending",
-            progress: 0,
-          }));
-          setItems((rows) => [...rows, ...next]);
-          onSelectedFile?.(next[0]?.file || null);
-          event.target.value = "";
-          if (next.length) void send(next);
-        }}
-      />
+      <>
+        <input
+          id={inputId}
+          className="sr-only"
+          aria-label={chooseLabel}
+          type="file"
+          accept={["cover", "banner"].includes(kind) ? "image/jpeg,image/png,image/webp,image/gif" : undefined}
+          disabled={busy}
+          onChange={(event) => {
+            const next = Array.from(event.target.files || []).slice(0, 1).map((file): Item => ({
+              id: crypto.randomUUID(),
+              file,
+              state: "pending",
+              progress: 0,
+            }));
+            setItems(() => next);
+            onSelectedFile?.(next[0]?.file || null);
+            event.target.value = "";
+          }}
+        />
+        {selected && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => void send([selected])}
+            >
+              {selected.state === "error" ? "Tentar salvar banner" : "Salvar banner"}
+            </Button>
+            {["sending", "confirming"].includes(selected.state) && (
+              <span className="text-xs text-white/90" role="status">
+                Salvando… {selected.progress}%
+              </span>
+            )}
+            {selected.error && (
+              <span className="max-w-72 text-xs text-red-200" role="alert">
+                {selected.error}
+              </span>
+            )}
+          </div>
+        )}
+        {error && <span className="text-xs text-red-200" role="alert">{error}</span>}
+      </>
     );
   }
   return (
