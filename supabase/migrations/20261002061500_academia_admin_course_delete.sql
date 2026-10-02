@@ -57,10 +57,27 @@ begin
   delete from public.academy_enrollments
    where course_id = p_course;
 
-  -- Arquivos permanecem fisicamente no Drive, mas deixam de prender o curso.
-  -- A limpeza física pode ser feita pelo fluxo de arquivos/Drive separadamente.
+  -- Solta referências diretas antes de aposentar os metadados do Drive.
+  update public.academy_courses
+     set cover_drive_file_id = null,
+         banner_drive_file_id = null,
+         updated_at = now()
+   where id = p_course;
+
+  update public.academy_lessons
+     set media_drive_file_id = null
+   where course_id = p_course;
+
+  update public.academy_materials
+     set drive_file_id = null
+   where course_id = p_course;
+
+  -- drive_academy_private não permite arquivo ativo sem academy_course_id.
+  -- Portanto o registro precisa ser aposentado antes de ser desvinculado.
   update public.drive_files
-     set academy_course_id = null,
+     set status = 'trashed',
+         deleted_at = coalesce(deleted_at, now()),
+         academy_course_id = null,
          academy_lesson_id = null,
          updated_at = now()
    where module = 'academy'
