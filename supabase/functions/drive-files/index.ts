@@ -88,22 +88,44 @@ Deno.serve(async (req) => {
     const contentType = req.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
-      if (form.get("module") === "academy") {
+      if (form.get("module") === "academy" || form.get("module") === "academy-banner") {
         if (!rootFolderId)
           return json(
             { ok: false, error: "Pasta raiz do Drive não configurada." },
             503,
           );
-        return json({
-          ok: true,
-          file: await uploadAcademyDrive(
-            form,
-            requireAcademyRoot(rootFolderId),
-            userClient,
-            admin,
-            auth.user.id,
-          ),
-        });
+        const dedicatedBanner = form.get("module") === "academy-banner";
+        if (dedicatedBanner) {
+          form.set("kind", "banner");
+          const file = form.get("file");
+          if (!(file instanceof File))
+            return json({ ok: false, error: "Selecione uma imagem para o banner." }, 400);
+          if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type))
+            return json({ ok: false, error: "O banner precisa ser JPEG, PNG, WebP ou GIF." }, 400);
+          if (file.size > 25 * 1024 * 1024)
+            return json({ ok: false, error: "O banner deve ter no máximo 25 MB." }, 413);
+        }
+        try {
+          return json({
+            ok: true,
+            file: await uploadAcademyDrive(
+              form,
+              requireAcademyRoot(rootFolderId),
+              userClient,
+              admin,
+              auth.user.id,
+            ),
+          });
+        } catch (error) {
+          if (!dedicatedBanner) throw error;
+          const detail = error instanceof Error ? error.message : String(error || "");
+          console.error("[drive-files][academy-banner]", error);
+          return json({
+            ok: false,
+            error: detail || "Falha ao enviar o banner ao Drive RKC.",
+            stage: "academy-banner-upload",
+          }, 500);
+        }
       }
       if (form.get("module") === "file-center") {
         if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
