@@ -317,13 +317,20 @@ export async function uploadAcademyFile(input: {
       }
       throw new Error(`O Google Drive recusou o bloco de upload (${response.status}).`);
     } catch (error) {
-      if (++retries > 4) {
-        throw new Error(
-          `${error instanceof Error ? error.message : "Falha no upload"} O arquivo continua selecionado para nova tentativa.`,
-        );
+      // A direct browser PUT may have succeeded while CORS hides the response.
+      // Check the resumable session immediately before treating it as a network failure.
+      let status: { status: number; range: string | null; body: string };
+      try {
+        status = await querySession();
+      } catch (statusError) {
+        if (++retries > 4) {
+          throw new Error(
+            `${error instanceof Error ? error.message : "Falha no upload"} ${statusError instanceof Error ? statusError.message : ""} O arquivo continua selecionado para nova tentativa.`.trim(),
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, Math.min(8000, 500 * 2 ** retries)));
+        continue;
       }
-      await new Promise((resolve) => setTimeout(resolve, Math.min(8000, 500 * 2 ** retries)));
-      const status = await querySession();
       if (status.status >= 200 && status.status < 300) {
         try {
           uploaded = JSON.parse(status.body) as Record<string, unknown>;
@@ -336,8 +343,15 @@ export async function uploadAcademyFile(input: {
       if (status.status === 308) {
         offset = parseConfirmedByte(status.range) + 1;
         if (offset < 0) offset = 0;
+        retries = 0;
         continue;
       }
+      if (++retries > 4) {
+        throw new Error(
+          `${error instanceof Error ? error.message : "Falha no upload"} O arquivo continua selecionado para nova tentativa.`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(8000, 500 * 2 ** retries)));
       throw new Error(`A sessão resumível expirou ou foi recusada (${status.status}).`);
     }
   }
