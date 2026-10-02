@@ -4,7 +4,10 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { PGlite } from '@electric-sql/pglite';
 const url = (source) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText).toString('base64');
-const driveStub = url(`export async function ensureDrivePath(root, path) { return globalThis.folderFixture(root,path); } export async function trashDriveFile(id) { return globalThis.trashFixture(id); }`);
+const driveStub = url(`export async function ensureDrivePath(root, path) { return globalThis.folderFixture(root,path); } export async function createDriveFolder(name,parent) { return globalThis.createFolderFixture(name,parent); }
+export async function getDriveFileMetadata(id) { return globalThis.metadataFixture(id); }
+export async function renameDriveFile(id,name) { return globalThis.renameFixture(id,name); }
+export async function trashDriveFile(id) { return globalThis.trashFixture(id); }`);
 const taskDrive = url((await readFile('supabase/functions/_shared/task-drive.ts','utf8')).replace('"./google-drive.ts"', JSON.stringify(driveStub)));
 const { prepareTaskFolder } = await import(taskDrive);
 const { deleteTaskAndQueueCleanup, retryTaskCleanup } = await import(url((await readFile('supabase/functions/_shared/task-delete.ts','utf8')).replace('"./google-drive.ts"', JSON.stringify(driveStub)).replace('"./task-drive.ts"', JSON.stringify(taskDrive))));
@@ -12,6 +15,9 @@ function fixture({ forbidden = false, deleteZero = false, driveFail = false } = 
  const task = { id:'task-12345678', titulo:'Teste', created_by:'creator', assigned_to:'someone-else', drive_folder_id:null };
  const state = { task, job:null, lock:null, files:[{ id:'file-row', drive_file_id:'physical-file', uploaded_by:'other-user' }], legacy:[{file_url:'https://example.org'},{file_url:'task/old.pdf'}], trashed:[], paths:[] };
  globalThis.folderFixture = async (root,path) => { state.path=path; return {folderId:'folder'}; };
+ globalThis.createFolderFixture=async(name,parent)=>{state.folderName=name;state.parent=parent;return {id:'folder'};};
+ globalThis.metadataFixture=async id=>({id,name:state.folderName || 'Pasta antiga',mimeType:'application/vnd.google-apps.folder'});
+ globalThis.renameFixture=async(id,name)=>{state.renamed={id,name};state.folderName=name;};
  globalThis.trashFixture = async (id) => { if(driveFail) throw new Error('Drive offline'); state.trashed.push(id); };
  const client = (user=false) => ({
    rpc: async () => ({data:false,error:null}),
@@ -44,7 +50,8 @@ function fixture({ forbidden = false, deleteZero = false, driveFail = false } = 
 }
 test('folder belongs to creator even when assigned to someone else; reuse persisted ID',async()=>{
  const f=fixture();assert.equal(await prepareTaskFolder(f.state.task.id,'root',f.admin),'folder');
- assert.deepEqual(f.state.path,['04_EQUIPE','Criador logado','TAREFAS','Teste - task-123']);
+ assert.deepEqual(f.state.path,['04_EQUIPE','Criador logado','TAREFAS']);
+ assert.equal(f.state.folderName,'Teste');
  globalThis.folderFixture=()=>{throw new Error('must not recreate');};
  assert.equal(await prepareTaskFolder(f.state.task.id,'root',f.admin),'folder');assert.equal(f.state.lock,null);
 });
@@ -97,4 +104,11 @@ test('migration enforces creator, visibility, deletion and comments under authen
  assert.equal((await db.query('select * from task_comments')).rows.length,0);
  await assert.rejects(db.query('select * from task_cleanup_jobs'),/permission denied/);
  await db.close();
+});
+
+test('reused task folder is renamed to the current title without recreating or moving files',async()=>{
+ const f=fixture();f.state.task.drive_folder_id='existing';f.state.task.titulo='Cobertura da Romaria';
+ globalThis.folderFixture=()=>{throw new Error('must not recreate');};
+ assert.equal(await prepareTaskFolder(f.state.task.id,'root',f.admin),'existing');
+ assert.deepEqual(f.state.renamed,{id:'existing',name:'Cobertura da Romaria'});
 });

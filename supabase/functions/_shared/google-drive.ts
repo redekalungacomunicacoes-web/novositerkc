@@ -461,3 +461,14 @@ export async function assertPrivateDriveFile(id: string) {
       "O arquivo herdou acesso aberto no Drive. Envio não confirmado.",
     );
 }
+
+export async function listDriveChildren(folderId: string) {
+  const params = new URLSearchParams({
+    q: "'" + escapeDriveQuery(folderId) + "' in parents and trashed = false",
+    fields: "files(id),nextPageToken", pageSize: "1",
+    supportsAllDrives: "true", includeItemsFromAllDrives: "true",
+  });
+  const response = await driveFetch(`${DRIVE_API}/files?${params}`);
+  if (!response.ok) throw new Error("Não foi possível conferir o conteúdo da pasta.");
+  return response.json();
+}

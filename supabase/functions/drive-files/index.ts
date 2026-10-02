@@ -14,6 +14,7 @@ import {
 } from "../_shared/google-drive.ts";
 
 import { deleteTaskAndQueueCleanup, retryTaskCleanup } from "../_shared/task-delete.ts";
+import { createCenterFolder, manageCenterFolder, moveCenterFile, uploadCenterFile, withCenterLease } from "../_shared/file-center.ts";
 import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
 
@@ -102,6 +103,11 @@ Deno.serve(async (req) => {
           ),
         });
       }
+      if (form.get("module") === "file-center") {
+        if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
+        const file=await withCenterLease(rootFolderId,admin,()=>uploadCenterFile(form,userClient,admin,auth.user!.id));
+        return json({ok:true,file});
+      }
       const file = form.get("file");
       const taskId = String(form.get("task_id") ?? "");
       if (!(file instanceof File) || !taskId)
@@ -167,6 +173,15 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action ?? "");
+    if (["center-folder-create","center-folder-rename","center-folder-delete","center-file-move"].includes(action)) {
+      if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
+      const result=await withCenterLease(rootFolderId,admin,async()=>{
+        if(action==="center-folder-create")return {folder:await createCenterFolder(body,rootFolderId,userClient,admin,auth.user!.id)};
+        if(action==="center-file-move")return {file:await moveCenterFile(body,rootFolderId,userClient,admin,auth.user!.id)};
+        return {folder:await manageCenterFolder(body,userClient,admin,auth.user!.id)};
+      });
+      return json({ok:true,...result});
+    }
     if (action === "task-ensure-folder") {
       const taskId = String(body.task_id || "");
       if (!taskId) return json({ ok: false, error: "Tarefa obrigatória." }, 400);
@@ -382,7 +397,10 @@ Deno.serve(async (req) => {
       if (unlinkError) throw unlinkError;
       return json({ ok: true });
     }
-    if (!file.task_id)
+    if (file.module === "file-center") {
+      const permitted=await userClient.from("drive_files").select("id").eq("id",id).maybeSingle();
+      if(permitted.error || !permitted.data)return json({ok:false,error:"Sem acesso ao arquivo."},403);
+    } else if (!file.task_id)
       return json(
         {
           ok: false,
@@ -390,7 +408,7 @@ Deno.serve(async (req) => {
         },
         403,
       );
-    await requireTaskAccess(file.task_id);
+    if (file.task_id) await requireTaskAccess(file.task_id);
 
     if (action === "download") {
       const response = await downloadDriveFile(file.drive_file_id);
@@ -405,11 +423,11 @@ Deno.serve(async (req) => {
         },
       });
     }
-    if (file.uploaded_by !== auth.user.id)
-      return json(
-        { ok: false, error: "Somente quem enviou o arquivo pode alterá-lo." },
-        403,
-      );
+    if (file.uploaded_by !== auth.user.id) {
+      const role=await userClient.rpc("is_team_admin");
+      if(role.error || role.data!==true)
+        return json({ok:false,error:"Somente quem enviou ou um administrador pode alterar o arquivo."},403);
+    }
     if (action === "rename") {
       const name = String(body.name ?? "").trim();
       if (!name) return json({ ok: false, error: "Informe o novo nome." }, 400);

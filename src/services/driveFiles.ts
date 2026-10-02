@@ -10,6 +10,7 @@ export type DriveFileRecord = {
   module: string;
   entity_id: string | null;
   task_id?: string | null;
+  central_folder_id?: string | null;
   academy_course_id?: string | null;
   academy_lesson_id?: string | null;
   academy_kind?: "cover" | "banner" | "media" | "material" | null;
@@ -73,6 +74,11 @@ export async function uploadRkcDriveFile(input: {
   if (input.entityId) form.append("entity_id", input.entityId);
   if (input.taskId) {
     form.append("task_id", input.taskId);
+    let uploadId = taskUploadIds.get(input.file);
+    if (!uploadId) { uploadId = crypto.randomUUID(); taskUploadIds.set(input.file, uploadId); }
+    form.append("upload_id", uploadId);
+  }
+  if (input.module === "file-center") {
     let uploadId = taskUploadIds.get(input.file);
     if (!uploadId) { uploadId = crypto.randomUUID(); taskUploadIds.set(input.file, uploadId); }
     form.append("upload_id", uploadId);
@@ -360,4 +366,29 @@ export async function deleteTaskWithFiles(taskId: string) {
 
 export async function retryPendingTaskCleanup() {
   return invoke({ action: "task-cleanup-pending" });
+}
+
+export type CenterFolder = { id:string; name:string; parent_id:string|null; owner_user_id:string; drive_folder_id:string; created_at:string };
+export async function listCenterFolders():Promise<CenterFolder[]>{
+ const rows:CenterFolder[]=[];
+ for(let offset=0;;offset+=500){
+  const {data,error}=await supabase.from("file_center_folders").select("*").order("id").range(offset,offset+499);
+  if(error)throw await driveError(error);
+  rows.push(...(data || []));if((data?.length || 0)<500)return rows;
+ }
+}
+export async function listCenterFolderFiles(folderId:string):Promise<DriveFileRecord[]>{
+ const rows:DriveFileRecord[]=[];
+ for(let offset=0;;offset+=500){
+  const {data,error}=await supabase.from("drive_files").select("*").eq("module","file-center").eq("central_folder_id",folderId).eq("status","active").order("id").range(offset,offset+499);
+  if(error)throw await driveError(error);rows.push(...(data || []));if((data?.length || 0)<500)return rows;
+ }
+}
+export async function createCenterFolder(name:string,parentId?:string|null){
+ return (await invoke({action:"center-folder-create",name,parent_id:parentId || null})).folder as CenterFolder;
+}
+export async function renameCenterFolder(id:string,name:string){return invoke({action:"center-folder-rename",id,name});}
+export async function deleteCenterFolder(id:string){return invoke({action:"center-folder-delete",id});}
+export async function moveCenterFile(id:string,destination:{folderId?:string;taskId?:string}){
+ return (await invoke({action:"center-file-move",id,folder_id:destination.folderId || null,task_id:destination.taskId || null})).file as DriveFileRecord;
 }

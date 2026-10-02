@@ -14,6 +14,7 @@ let source=await readFile('supabase/functions/drive-files/index.ts','utf8');
 source=source.replace('"https://esm.sh/@supabase/supabase-js@2"',JSON.stringify(dataUrl('export const createClient=(url,key)=>globalThis.endpointClient(key);')))
  .replace('"../_shared/cors.ts"',JSON.stringify(dataUrl('export const corsHeaders={};')))
  .replace('"../_shared/google-drive.ts"',JSON.stringify(google))
+ .replace('"../_shared/file-center.ts"',JSON.stringify(dataUrl('export const createCenterFolder=()=>{},manageCenterFolder=()=>{},moveCenterFile=()=>{},uploadCenterFile=()=>{},withCenterLease=()=>{};')))
  .replace('"../_shared/task-drive.ts"',JSON.stringify(dataUrl('export async function prepareTaskFolder(){return "folder";}')))
  .replace('"../_shared/task-delete.ts"',JSON.stringify(dataUrl('export const deleteTaskAndQueueCleanup=()=>{},retryTaskCleanup=()=>{};')))
  .replace('"../_shared/academy-drive.ts"',JSON.stringify(dataUrl('export const uploadAcademyDrive=()=>{},prepareAcademyDestination=()=>{};')));

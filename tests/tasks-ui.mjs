@@ -16,7 +16,7 @@ for(const width of [390,768,1440]) {
  const jwt=[{alg:'HS256',typ:'JWT'},{sub:user,role:'authenticated',exp:Math.floor(Date.now()/1000)+36000},'fixture'].map(v=>typeof v==='string'?v:Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
  await context.addInitScript(({jwt,user})=>localStorage.setItem('sb-fixture-auth-token',JSON.stringify({access_token:jwt,refresh_token:'fixture',expires_at:Math.floor(Date.now()/1000)+36000,expires_in:36000,token_type:'bearer',user:{id:user,aud:'authenticated',role:'authenticated',email:'test@example.invalid'}})),{jwt,user});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
- let tasks=[],inserts=0,folders=0,uploads=0,failFolder=true,files=[];
+ let tasks=[],inserts=0,folders=0,uploads=0,failFolder=true,files=[],centerFolders=[];
  await page.route('https://fixture.supabase.co/**',async route=>{
   const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').at(-1);let data=[];
   if(u.pathname.includes('/auth/')) data={id:user,aud:'authenticated',role:'authenticated',email:'test@example.invalid'};
@@ -27,18 +27,28 @@ for(const width of [390,768,1440]) {
    else if(req.method()==='PATCH'){Object.assign(tasks[0],req.postDataJSON());data={id:tasks[0].id};}
    else data=tasks;
   }
-  if(table==='drive_files')data=files;
+  if(table==='file_center_folders')data=centerFolders;
+  if(table==='drive_files'){
+   data=files.filter(file=>file.status==='active');
+   if(u.searchParams.get('module'))data=data.filter(file=>file.module===u.searchParams.get('module').replace('eq.',''));
+   if(u.searchParams.get('central_folder_id'))data=data.filter(file=>file.central_folder_id===u.searchParams.get('central_folder_id').replace('eq.',''));
+  }
   if(table==='drive-files'){
    if((req.headers()['content-type']??'').includes('multipart/form-data')) {
     uploads++;
     const raw=req.postDataBuffer().toString('utf8');
-    assert.ok(raw.includes(tasks[0].id),'upload must reference saved task');
+    const standalone=raw.includes('file-center');
+    if(!standalone)assert.ok(raw.includes(tasks[0].id),'upload must reference saved task');
     const name=raw.match(/filename="([^"]+)"/)?.[1]??'arquivo.txt';
-    const file={id:`uploaded-${uploads}`,task_id:tasks[0].id,name,created_at:new Date().toISOString(),status:'active',module:'tasks'};
+    const file={id:`uploaded-${uploads}`,task_id:standalone?null:tasks[0].id,central_folder_id:standalone?'center-folder':null,name,created_at:new Date().toISOString(),status:'active',module:standalone?'file-center':'tasks'};
     files.push(file);
     return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,file})});
    }
    const b=req.postDataJSON();
+   if(b.action==='center-folder-create'){const folder={id:'center-folder',name:b.name,parent_id:b.parent_id,owner_user_id:user,drive_folder_id:'physical-center',created_at:new Date().toISOString()};centerFolders.push(folder);data={ok:true,folder};}
+   if(b.action==='center-folder-delete'){centerFolders=centerFolders.filter(folder=>folder.id!==b.id);data={ok:true};}
+   if(b.action==='center-file-move'){const file=files.find(file=>file.id===b.id);Object.assign(file,{task_id:b.task_id,central_folder_id:b.folder_id,module:b.task_id?'tasks':'file-center'});data={ok:true,file};}
+   if(b.action==='trash'){const file=files.find(file=>file.id===b.id);file.status='trashed';data={ok:true,file};}
    if(b.action==='task-ensure-folder'){folders++;if(failFolder){failFolder=false;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({ok:false,error:'Drive temporariamente indisponível'})});}data={ok:true,folder_id:'folder'};}
    if(b.action==='task-cleanup-pending')data={ok:true,pending:0};
    if(b.action==='task-delete'){tasks=[];files=[];data={ok:true,cleanup_pending:false};}
@@ -66,6 +76,33 @@ for(const width of [390,768,1440]) {
  await page.getByRole('link',{name:'Anexos',exact:true}).click();
  await page.getByRole('button',{name:/Tarefa de teste/}).click();await page.getByText('arquivo.pdf',{exact:true}).waitFor();
  await page.screenshot({path:`/tmp/rkc-tasks-qa/anexos-${width}.png`,fullPage:true});
+
+ await page.getByRole('button',{name:'Nova pasta',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Nome da pasta').fill('Cobertura da Romaria');
+ await page.getByRole('dialog').getByRole('button',{name:'Salvar pasta',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Cobertura da Romaria',exact:true}).click();
+ await page.getByRole('button',{name:'Enviar arquivos',exact:true}).click();
+ await page.getByRole('dialog').locator('input[type=file]').setInputFiles([{name:'cobertura.jpg',mimeType:'image/jpeg',buffer:Buffer.from('Foto')}]);
+ await page.getByRole('dialog').getByRole('button',{name:'Enviar arquivos',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Mover cobertura.jpg',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Destino').selectOption('task:'+tasks[0].id);
+ await page.getByRole('dialog').getByRole('button',{name:'Mover arquivo',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ assert.equal(files.find(file=>file.name==='cobertura.jpg').task_id,tasks[0].id);
+ await page.getByRole('button',{name:'Mover cobertura.jpg',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Destino').selectOption('folder:center-folder');
+ await page.getByRole('dialog').getByRole('button',{name:'Mover arquivo',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ assert.equal(files.find(file=>file.name==='cobertura.jpg').task_id,null);
+ await page.getByRole('button',{name:'Excluir cobertura.jpg',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Excluir arquivo',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Minhas pastas',exact:true}).click();
+ await page.getByRole('button',{name:'Excluir pasta Cobertura da Romaria',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Excluir pasta',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});assert.equal(centerFolders.length,0);
  await page.getByRole('link',{name:'Tarefas',exact:true}).last().click();
  await page.getByRole('button',{name:'Ações de Tarefa de teste',exact:true}).click();
  await page.getByRole('menuitem',{name:'Mover para Em andamento',exact:true}).click();

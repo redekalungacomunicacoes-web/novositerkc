@@ -11,6 +11,8 @@ on:
       - 'supabase/functions/**'
       - 'supabase/migrations/*tasks_lifecycle*'
       - 'tests/tasks*'
+      - 'tests/file-center*'
+      - 'supabase/migrations/*file_center*'
       - 'tsconfig.tasks.json'
       - 'vite.config.ts'
       - 'package*.json'
@@ -30,6 +32,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck:tasks
       - run: npm run test:tasks
+      - run: node --test tests/file-center.test.mjs
       - run: npm run build
       - uses: denoland/setup-deno@v2
         with:
