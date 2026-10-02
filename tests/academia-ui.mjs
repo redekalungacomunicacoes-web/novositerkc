@@ -231,14 +231,10 @@ try {
       await page
         .getByRole("button", { name: "Gestão de cursos", exact: true })
         .click();
-      await page
-        .getByRole("button", { name: "Novo curso", exact: true })
-        .click();
-      await page
-        .getByLabel(/^Título(?: \*)?$/)
-        .fill("Novo curso da autora");
-      await page.getByRole("button", { name: "Salvar", exact: true }).click();
-      await page.getByText("Alteração salva.", { exact: true }).waitFor();
+      assert.equal(
+        await page.getByRole("button", { name: "Novo curso", exact: true }).count(),
+        0,
+      );
     }
     assert.deepEqual(errors, []);
     await context.close();
