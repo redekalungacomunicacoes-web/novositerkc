@@ -342,12 +342,12 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   }
   if (!data) throw new Error("A tarefa não foi retornada após a criação.");
   const createdTaskId = data.id as string;
-  try {
-    await ensureTaskDriveFolder(createdTaskId);
-  } catch (folderError) {
+  // A criação da tarefa não pode ficar bloqueada pela rede/Google Drive.
+  // Preparamos a pasta em segundo plano; o upload também consegue criá-la
+  // idempotentemente caso esta tentativa ainda não tenha terminado.
+  void ensureTaskDriveFolder(createdTaskId).catch((folderError) => {
     console.error("[TASK CREATE][DRIVE FOLDER]", folderError);
-    // A tarefa permanece criada: o primeiro upload tentará preparar a pasta novamente.
-  }
+  });
   return createdTaskId;
 }
 
