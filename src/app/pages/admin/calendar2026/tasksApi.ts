@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
-import { downloadRkcDriveFile, listRkcDriveFiles, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
+import { downloadRkcDriveFile, listTaskDriveFiles, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
@@ -260,7 +260,7 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 export async function fetchTaskDetails(taskId: string): Promise<{ attachments: TaskAttachment[]; comments: TaskComment[] }> {
   const [commentsResult, driveFiles] = await Promise.all([
     supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").eq("task_id", taskId).order("created_at"),
-    listRkcDriveFiles("tasks"),
+    listTaskDriveFiles(taskId),
   ]);
   if (commentsResult.error) throw new Error(commentsResult.error.message);
   const attachments = driveFiles
