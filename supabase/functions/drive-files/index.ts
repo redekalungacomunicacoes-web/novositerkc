@@ -195,12 +195,12 @@ Deno.serve(async (req) => {
       const mimeType = String(body.mime_type || "application/octet-stream");
       const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
       if (!isUuid(course) || (lesson && !isUuid(lesson))) return json({ ok:false,error:"Curso ou aula inválidos."},400);
-      if (!["cover","media","material"].includes(kind) || (kind === "cover" && lesson) || (kind === "media" && !lesson))
+      if (!["cover","banner","media","material"].includes(kind) || (["cover","banner"].includes(kind) && lesson) || (kind === "media" && !lesson))
         return json({ ok:false,error:"Destino acadêmico inválido."},400);
-      if (kind === "cover" && !["image/jpeg","image/png","image/webp","image/gif"].includes(mimeType))
+      if (["cover","banner"].includes(kind) && !["image/jpeg","image/png","image/webp","image/gif"].includes(mimeType))
         return json({ ok:false,error:"A capa precisa ser uma imagem JPEG, PNG, WebP ou GIF."},400);
-      const limit = kind === "cover" ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
-      if (!Number.isFinite(size) || size <= 0 || size > limit) return json({ok:false,error:kind === "cover" ? "A capa deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB."},413);
+      const limit = ["cover","banner"].includes(kind) ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
+      if (!Number.isFinite(size) || size <= 0 || size > limit) return json({ok:false,error:["cover","banner"].includes(kind) ? "A imagem deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB."},413);
       const folderId = await prepareAcademyDestination({ course, lesson, kind }, requireAcademyRoot(rootFolderId), userClient, admin);
       const uploadUrl = await startDriveResumableUpload({ name, mimeType, size, folderId });
       return json({ ok:true, upload_url:uploadUrl, folder_id:folderId });
@@ -256,7 +256,7 @@ Deno.serve(async (req) => {
       const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
       if (!isUuid(course) || !isUuid(upload) || (lesson && !isUuid(lesson)) || (material && !isUuid(material)))
         return json({ok:false,error:"Identificadores acadêmicos inválidos."},400);
-      if (!["cover","media","material"].includes(kind) || (kind === "cover" && lesson) || (kind === "media" && !lesson) || (material && kind !== "material"))
+      if (!["cover","banner","media","material"].includes(kind) || (["cover","banner"].includes(kind) && lesson) || (kind === "media" && !lesson) || (material && kind !== "material"))
         return json({ok:false,error:"Destino acadêmico inválido."},400);
       if (!driveFileId || !expectedName || !Number.isFinite(expectedSize) || expectedSize <= 0)
         return json({ok:false,error:"Arquivo do Drive não confirmado."},400);
@@ -286,7 +286,7 @@ Deno.serve(async (req) => {
         return json({ok:false,error:"O tamanho confirmado pelo Drive difere do arquivo enviado."},409);
       if (expectedMime !== "application/octet-stream" && String(uploaded.mimeType || "") !== expectedMime)
         return json({ok:false,error:"O tipo do arquivo confirmado pelo Drive difere do envio iniciado."},409);
-      if (kind === "cover" && !["image/jpeg","image/png","image/webp","image/gif"].includes(String(uploaded.mimeType || "")))
+      if (["cover","banner"].includes(kind) && !["image/jpeg","image/png","image/webp","image/gif"].includes(String(uploaded.mimeType || "")))
         return json({ok:false,error:"A capa confirmada não é uma imagem permitida."},400);
       await assertPrivateDriveFile(driveFileId);
       const { data: record, error } = await admin.rpc("academy_commit_drive", {
