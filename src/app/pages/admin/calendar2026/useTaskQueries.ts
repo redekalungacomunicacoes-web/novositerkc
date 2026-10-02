@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addTaskComment, createExternalAttachment, deleteTask, deleteTaskAttachment, fetchNotifications, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, getPermissionLevel, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
+import { addTaskComment, createExternalAttachment, deleteTask, deleteTaskAttachment, fetchNotifications, fetchTaskDetails, fetchTasks, fetchTeamMembers, getCurrentEquipeMember, getPermissionLevel, saveTask, updateTaskStatus, uploadTaskAttachment } from "./tasksApi";
 import type { CalendarTask, TaskAttachment, TaskInput, TaskStatus } from "./types";
 
 export const taskKeys = {
@@ -8,6 +8,7 @@ export const taskKeys = {
   notifications: ["admin-task-notifications"] as const,
   currentMember: ["admin-task-current-member"] as const,
   permission: ["admin-task-permission"] as const,
+  detail: (taskId: string) => [...taskKeys.all, "detail", taskId] as const,
   range: (start: string, end: string, assignee: string) => [...taskKeys.all, start, end, assignee] as const,
 };
 
@@ -43,7 +44,16 @@ export function usePermissionQuery() {
 }
 
 export function useTasksQuery(startDate: string, endDate: string, assignee: string) {
-  return useQuery({ queryKey: taskKeys.range(startDate, endDate, assignee), queryFn: () => fetchTasks(startDate, endDate, { assignee }), enabled: Boolean(startDate && endDate) });
+  return useQuery({ queryKey: taskKeys.range(startDate, endDate, assignee), queryFn: () => fetchTasks(startDate, endDate, { assignee }), enabled: Boolean(startDate && endDate), staleTime: 30_000, placeholderData: (previous) => previous });
+}
+
+export function useTaskDetailsQuery(taskId?: string | null) {
+  return useQuery({
+    queryKey: taskKeys.detail(taskId || "none"),
+    queryFn: () => fetchTaskDetails(taskId!),
+    enabled: Boolean(taskId),
+    staleTime: 30_000,
+  });
 }
 
 export function useNotificationsQuery() {
