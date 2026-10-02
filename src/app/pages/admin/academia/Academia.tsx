@@ -793,7 +793,7 @@ export function Academia() {
                         {managedCourse.cover_path || managedCourse.cover_drive_file_id ? (
                           <Asset
                             path={managedCourse.cover_path}
-                            driveFileId={managedCourse.cover_drive_file_id}
+                            driveFileId={managedCourse.banner_drive_file_id || managedCourse.cover_drive_file_id}
                             title={managedCourse.title}
                             type="image"
                             variant="banner"
@@ -826,7 +826,7 @@ export function Academia() {
                         </div>
                         <div className="rounded-xl border bg-muted/30 p-4">
                           <p className="text-sm font-semibold">Imagem de apresentação</p>
-                          <p className="mt-1 text-xs text-muted-foreground">A capa atual também é usada temporariamente no banner. O próximo passo separa capa 16:9 e banner 3:1.</p>
+                          <p className="mt-1 text-xs text-muted-foreground">Capa e banner são independentes. A capa aparece nos cards e o banner apresenta a página do curso.</p>
                           <div className="mt-3">
                       {data.driveFiles.some(
                         (f) =>
@@ -851,6 +851,12 @@ export function Academia() {
                         courseId={managedCourse.id}
                         kind="cover"
                         existing={data.driveFiles.filter((f) => f.id === managedCourse.cover_drive_file_id)}
+                        onSaved={reload}
+                      />
+                      <DriveUploads
+                        courseId={managedCourse.id}
+                        kind="banner"
+                        existing={data.driveFiles.filter((f) => f.id === managedCourse.banner_drive_file_id)}
                         onSaved={reload}
                       />
                           </div>
