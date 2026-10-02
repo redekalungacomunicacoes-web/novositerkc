@@ -285,7 +285,7 @@ export function Study({
                 {course.prerequisites || "Nenhum pré-requisito informado"}
               </p>
             </Card>
-          )}
+          ) : null}
           {(lesson || courseTab === "materials") && <Card>
             <h2 className="font-semibold">Materiais complementares</h2>
             {data.materials
