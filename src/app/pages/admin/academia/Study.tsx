@@ -105,11 +105,10 @@ export function Study({
       {!lesson && (
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="relative min-h-[300px] overflow-hidden sm:min-h-[340px] lg:min-h-[380px]">
-            {(course.cover_path || course.cover_drive_file_id || course.banner_drive_file_id) ? (
+            {course.banner_drive_file_id ? (
               <div className="absolute inset-0">
                 <Asset
-                  path={course.cover_path}
-                  driveFileId={course.banner_drive_file_id || course.cover_drive_file_id}
+                  driveFileId={course.banner_drive_file_id}
                   title={`Banner de ${course.title}`}
                   type="image"
                   variant="banner"
