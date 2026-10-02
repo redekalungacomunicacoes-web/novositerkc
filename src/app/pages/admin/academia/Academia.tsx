@@ -880,12 +880,6 @@ export function Academia() {
                         onSaved={reload}
                       />
                       <DriveUploads
-                        courseId={managedCourse.id}
-                        kind="banner"
-                        existing={data.driveFiles.filter((f) => f.id === managedCourse.banner_drive_file_id)}
-                        onSaved={reload}
-                      />
-                      <DriveUploads
                         key={`hero-banner-input-${managedCourse.id}`}
                         courseId={managedCourse.id}
                         kind="banner"
