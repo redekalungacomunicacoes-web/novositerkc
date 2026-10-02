@@ -41,6 +41,7 @@ export function DriveUploads({
   existing,
   replaceMaterialId,
   cleanupOnly,
+  inputIdOverride,
   onSaved,
 }: {
   courseId: string;
@@ -49,9 +50,11 @@ export function DriveUploads({
   existing?: DriveFileRecord[];
   replaceMaterialId?: string;
   cleanupOnly?: boolean;
+  inputIdOverride?: string;
   onSaved: () => Promise<void>;
 }) {
-  const inputId = useId();
+  const generatedInputId = useId();
+  const inputId = inputIdOverride || generatedInputId;
   const queueKey = courseId + "/" + (lessonId || "course") + "/" + kind + "/" + (replaceMaterialId || "new");
   const items = useSyncExternalStore(subscribe, () => queues.get(queueKey) || emptyQueue);
   const setItems = (update: (rows: Item[]) => Item[]) => {
