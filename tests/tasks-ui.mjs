@@ -16,7 +16,7 @@ for(const width of [390,768,1440]) {
  const jwt=[{alg:'HS256',typ:'JWT'},{sub:user,role:'authenticated',exp:Math.floor(Date.now()/1000)+36000},'fixture'].map(v=>typeof v==='string'?v:Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
  await context.addInitScript(({jwt,user})=>localStorage.setItem('sb-fixture-auth-token',JSON.stringify({access_token:jwt,refresh_token:'fixture',expires_at:Math.floor(Date.now()/1000)+36000,expires_in:36000,token_type:'bearer',user:{id:user,aud:'authenticated',role:'authenticated',email:'test@example.invalid'}})),{jwt,user});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
- let tasks=[],inserts=0,folders=0,uploads=0,failFolder=true,files=[],centerFolders=[],items=[],links=[],history=[],members=[],version=0;
+ let tasks=[],inserts=0,folders=0,uploads=0,failFolder=true,files=[],centerFolders=[],items=[],links=[],history=[],members=[],comments=[],version=0;
  const requestIds=new Set();
  await page.route('https://fixture.supabase.co/**',async route=>{
   const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').at(-1);let data=[];
@@ -32,6 +32,10 @@ for(const width of [390,768,1440]) {
   if(table==='task_checklist_items')data=[...items].sort((a,b)=>a.position-b.position);
   if(table==='task_file_links')data=links;
   if(table==='task_workflow_history')data=history;
+  if(table==='task_comments'){
+   if(req.method()==='POST')comments.push({...req.postDataJSON(),id:crypto.randomUUID(),created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
+   data=comments;
+  }
   if(table==='task_assignees')data=members.map(user_id=>({user_id}));
   if(table==='mutate_task_workflow'){
    const b=req.postDataJSON(),p=b.p_payload;
@@ -103,7 +107,7 @@ for(const width of [390,768,1440]) {
  await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});
  // Central must show Drive and legacy metadata without loading comments.
  files=[{id:'file-row',task_id:tasks[0].id,name:'arquivo.pdf',created_at:new Date().toISOString(),status:'active',module:'tasks'}];
- await page.getByRole('link',{name:'Anexos',exact:true}).click();
+ await page.getByRole('link',{name:'Anexos',exact:true}).click();await page.getByRole('heading',{name:'Pastas por tarefa',exact:true}).waitFor();
  await page.getByRole('button',{name:/Tarefa de teste/}).click();await page.getByText('arquivo.pdf',{exact:true}).waitFor();
  await page.screenshot({path:`/tmp/rkc-tasks-qa/anexos-${width}.png`,fullPage:true});
 
@@ -169,8 +173,9 @@ for(const width of [390,768,1440]) {
  await stage.getByRole('button',{name:'Desvincular do item',exact:true}).waitFor();assert.equal(files.length,initialFileCount);
  await stage.getByRole('button',{name:'Desvincular do item',exact:true}).click();await stage.getByRole('button',{name:'Desvincular do item',exact:true}).waitFor({state:'hidden'});assert.equal(files.length,initialFileCount);
  await stage.getByLabel('Observação',{exact:true}).fill('Conferir referências e créditos');await stage.getByRole('button',{name:'Salvar etapa',exact:true}).click();
- await workflow.getByText('Organização e colaboração',{exact:true}).click();await workflow.getByLabel('Entrega esperada',{exact:true}).fill('Texto e arte revisados');await workflow.getByLabel('Critério de conclusão',{exact:true}).fill('Fontes verificadas e arquivos finais');
+ await workflow.getByRole('tab',{name:'Organização',exact:true}).click();await workflow.getByLabel('Entrega esperada',{exact:true}).fill('Texto e arte revisados');await workflow.getByLabel('Critério de conclusão',{exact:true}).fill('Fontes verificadas e arquivos finais');
  await workflow.getByLabel('O que está faltando',{exact:true}).fill('Falta autorização de imagem');await workflow.getByLabel('Pessoa revisora',{exact:true}).selectOption(other);await workflow.getByRole('button',{name:'Salvar organização',exact:true}).click();
+ await workflow.getByRole('tab',{name:'Executar',exact:true}).click();
  await workflow.getByText('Bloqueada: Falta autorização de imagem',{exact:true}).waitFor();
  await workflow.getByRole('checkbox',{name:'Concluir Verificar fontes',exact:true}).click();await workflow.getByText('1 de 3 etapas concluídas · 33%',{exact:true}).waitFor();
  await workflow.getByRole('checkbox',{name:'Concluir Entregar texto',exact:true}).click();await workflow.getByText('2 de 3 etapas concluídas · 67%',{exact:true}).waitFor();
@@ -178,7 +183,22 @@ for(const width of [390,768,1440]) {
  await workflow.getByRole('button',{name:'Solicitar revisão',exact:true}).click();await workflow.getByRole('button',{name:'Solicitar revisão',exact:true}).waitFor({state:'hidden'});assert.equal(tasks[0].status,'revisao');
  await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.querySelector('[role=dialog]').contains(document.activeElement)),true);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.waitForFunction(()=>document.querySelectorAll('[data-sonner-toast]').length===0,{},{timeout:15000});await page.getByRole('dialog').evaluate(dialog=>{dialog.scrollTop=0;});
  await page.getByRole('dialog').screenshot({path:`/tmp/rkc-tasks-qa/checklist-${width}.png`});
+ await workflow.getByRole('tab',{name:'Arquivos',exact:true}).click();await workflow.getByRole('region',{name:'Materiais gerais',exact:true}).waitFor();
+ await workflow.getByRole('textbox',{name:'Buscar materiais da tarefa',exact:true}).fill('inexistente');await workflow.getByText('Nenhum material encontrado.',{exact:true}).waitFor();
+ await workflow.getByRole('textbox',{name:'Buscar materiais da tarefa',exact:true}).fill('arquivo');await workflow.getByRole('button',{name:/arquivo.pdf/}).first().waitFor();
+ await workflow.getByRole('tab',{name:'Comentários e check-ins',exact:true}).click();await workflow.getByRole('textbox',{name:'Novo comentário',exact:true}).fill('Fontes conferidas, aguardando revisão.');
+ // Draft survives section switches; inactive panels contain no tabbable controls.
+ await workflow.getByRole('tab',{name:'Relatório',exact:true}).click();assert.equal(await workflow.getByRole('textbox',{name:'Novo comentário',exact:true}).count(),0);
+ await workflow.getByRole('region',{name:'Relatório da tarefa',exact:true}).waitFor();
+ await workflow.getByRole('tab',{name:'Comentários e check-ins',exact:true}).click();assert.equal(await workflow.getByRole('textbox',{name:'Novo comentário',exact:true}).inputValue(),'Fontes conferidas, aguardando revisão.');
+ await workflow.getByRole('button',{name:'Registrar check-in',exact:true}).click();await workflow.locator('ol li').getByText('Fontes conferidas, aguardando revisão.',{exact:true}).waitFor();assert.equal(comments.length,1);
+ await page.getByRole('dialog').screenshot({path:`/tmp/rkc-tasks-qa/checkins-${width}.png`});
+ await workflow.getByRole('tab',{name:'Relatório',exact:true}).click();await page.getByRole('dialog').screenshot({path:`/tmp/rkc-tasks-qa/report-${width}.png`});
+ const reportTab=workflow.getByRole('tab',{name:'Relatório',exact:true});await reportTab.focus();await page.keyboard.press('ArrowLeft');await workflow.locator('[role=tab][data-state=active]').filter({hasText:'Comentários e check-ins'}).waitFor();assert.equal(await workflow.getByRole('tab',{name:'Comentários e check-ins',exact:true}).getAttribute('aria-selected'),'true');
+ await workflow.getByRole('tab',{name:'Executar',exact:true}).click();
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
  await page.getByRole('link',{name:'Tarefas',exact:true}).last().click();await page.getByText('3 de 3 etapas concluídas · 100%',{exact:false}).waitFor();
  await page.getByText('Tarefa revisada',{exact:true}).click();await page.getByRole('dialog').waitFor();
