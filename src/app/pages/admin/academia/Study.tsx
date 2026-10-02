@@ -91,81 +91,68 @@ export function Study({
       <Link to={lesson ? `/admin/academia/cursos/${course.id}` : "/admin/academia"} className="text-primary underline">
         {lesson ? `← Voltar para ${course.title}` : "← Minha Academia"}
       </Link>
-      {!lesson && <Card>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge>Formação interna</Badge>
-          <Badge>{labels[course.level]}</Badge>
-          {course.required && <Badge>Curso obrigatório</Badge>}
-        </div>
-        <h1 className="text-3xl font-bold break-words">{course.title}</h1>
-        <p>{course.summary}</p>
-        {(course.cover_path || course.cover_drive_file_id) && (
-          <div className="overflow-hidden rounded-xl bg-muted aspect-[3/1] max-h-64">
-            <Asset
-              path={course.cover_path}
-              driveFileId={course.banner_drive_file_id || course.cover_drive_file_id}
-              title={`Capa de ${course.title}`}
-              type="image"
-              variant="banner"
-              showOpenLink={false}
-            />
+      {!lesson && (
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="relative min-h-[300px] overflow-hidden sm:min-h-[340px] lg:min-h-[380px]">
+            {(course.cover_path || course.cover_drive_file_id || course.banner_drive_file_id) ? (
+              <div className="absolute inset-0">
+                <Asset
+                  path={course.cover_path}
+                  driveFileId={course.banner_drive_file_id || course.cover_drive_file_id}
+                  title={`Banner de ${course.title}`}
+                  type="image"
+                  variant="banner"
+                  showOpenLink={false}
+                />
+              </div>
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/25 via-muted to-background" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/20" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/10" />
+            <div className="relative flex min-h-[300px] flex-col justify-end p-5 text-white sm:min-h-[340px] sm:p-8 lg:min-h-[380px] lg:p-10">
+              <div className="max-w-3xl space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>Formação interna</Badge>
+                  <Badge>{labels[course.level]}</Badge>
+                  {course.required && <Badge>Curso obrigatório</Badge>}
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold leading-tight break-words drop-shadow-sm sm:text-4xl lg:text-5xl">{course.title}</h1>
+                  {course.summary && <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/85 sm:text-base">{course.summary}</p>}
+                </div>
+                <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/85">
+                  <span>{course.hours} h de formação</span>
+                  <span>{lessons.length} aulas publicadas</span>
+                  {instructors.length > 0 && <span>Instrutores: {instructors.map((i) => i!.external_name || data.members.find((m) => m.id === i!.member_id)?.nome || "Integrante").join(", ")}</span>}
+                </div>
+                {enrollment && (
+                  <div className="max-w-2xl rounded-xl bg-black/25 p-3 backdrop-blur-sm">
+                    <div className="mb-2 flex items-center justify-between text-sm font-medium">
+                      <span>Seu progresso</span><span>{Math.round(report?.progress || 0)}%</span>
+                    </div>
+                    <Meter value={report?.progress || 0} />
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-3">
+                  {enrollment ? (
+                    resume && <Button onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${resume.id}`)}>Continuar estudando</Button>
+                  ) : course.status === "published" && ["self", "automatic"].includes(course.enrollment_mode) ? (
+                    <Button disabled={busy} onClick={() => run(() => rpc("academy_enroll", { p_course: course.id }))}>{busy ? "Matriculando…" : "Iniciar curso"}</Button>
+                  ) : (
+                    <p className="text-sm text-white/85">Solicite sua matrícula ao administrador para registrar progresso.</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-        <p className="text-sm text-muted-foreground">
-          Carga horária: {course.hours} h · {lessons.length} aulas publicadas
-        </p>
-        {instructors.length > 0 && (
-          <p>
-            Instrutores:{" "}
-            {instructors
-              .map(
-                (i) =>
-                  i!.external_name ||
-                  data.members.find((m) => m.id === i!.member_id)?.nome ||
-                  "Integrante",
-              )
-              .join(", ")}
-          </p>
-        )}
-        {enrollment ? (
-          <>
-            <Meter value={report?.progress || 0} />
-            {report?.completed_at && (
-              <p className="text-primary font-medium">
-                Curso concluído em{" "}
-                {new Date(report.completed_at).toLocaleDateString("pt-BR")}.
-                Competências:{" "}
-                {course.competencies.join(", ") || "Não informadas"}
-              </p>
-            )}
-            {resume && !lesson && (
-              <Button
-                onClick={() =>
-                  navigate(
-                    `/admin/academia/cursos/${course.id}/aulas/${resume.id}`,
-                  )
-                }
-              >
-                Continuar estudando
-              </Button>
-            )}
-          </>
-        ) : course.status === "published" &&
-          ["self", "automatic"].includes(course.enrollment_mode) ? (
-          <Button
-            disabled={busy}
-            onClick={() =>
-              run(() => rpc("academy_enroll", { p_course: course.id }))
-            }
-          >
-            {busy ? "Matriculando…" : "Iniciar curso"}
-          </Button>
-        ) : (
-          <p>
-            Solicite sua matrícula ao administrador para registrar progresso.
-          </p>
-        )}
-      </Card>}
+          {report?.completed_at && (
+            <div className="border-t bg-primary/5 px-5 py-3 text-sm font-medium text-primary sm:px-8">
+              Curso concluído em {new Date(report.completed_at).toLocaleDateString("pt-BR")}. Competências: {course.competencies.join(", ") || "Não informadas"}
+            </div>
+          )}
+        </div>
+      )}
       {error && (
         <p role="alert" className="text-destructive">
           {error}
