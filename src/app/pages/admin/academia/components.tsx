@@ -11,7 +11,7 @@ import {
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { signedAsset, safeLink, message } from "./service";
-import { downloadRkcDriveFile } from "@/services/driveFiles";
+import { downloadRkcDriveFile, rkcDriveMediaResponse } from "@/services/driveFiles";
 import { videoEmbed } from "./media";
 export { Button };
 export const labels: Record<string, string> = {
@@ -368,8 +368,15 @@ export function Asset({
     setSrc(null);
     setMime("");
     let objectUrl: string | null = null;
-    if (driveFileId)
-      downloadRkcDriveFile(driveFileId)
+    if (driveFileId) {
+      const wantsStream = ["video", "audio"].includes(type || "");
+      const loader = wantsStream
+        ? rkcDriveMediaResponse(driveFileId).then(async (response) => {
+            const blob = await response.blob();
+            return blob;
+          })
+        : downloadRkcDriveFile(driveFileId);
+      loader
         .then((blob) => {
           if (!active) return;
           objectUrl = URL.createObjectURL(blob);
@@ -379,6 +386,7 @@ export function Asset({
         .catch((e) => {
           if (active) setError(message(e));
         });
+    }
     else if (path)
       signedAsset(path)
         .then((s) => {
@@ -441,6 +449,7 @@ export function Asset({
         <video
           aria-label={title}
           controls
+          playsInline
           preload="metadata"
           className="w-full max-h-96 rounded-lg"
           src={src}
@@ -451,6 +460,8 @@ export function Asset({
         <img
           alt={title}
           src={src}
+          loading="lazy"
+          decoding="async"
           className={variant === "banner"
             ? "h-full min-h-32 w-full object-cover"
             : "w-full max-h-96 object-contain rounded-lg"}
