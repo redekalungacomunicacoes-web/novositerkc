@@ -44,29 +44,33 @@ const AdminUsuarios = lazy(() => import("@/app/pages/admin/AdminUsuarios").then(
 
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor" | "financeiro";
 
-async function getMyRoles(): Promise<RoleName[]> {
+let roleCache: { userId: string; roles: RoleName[]; expiresAt: number } | null = null;
+
+async function getMyRoles(userId?: string): Promise<RoleName[]> {
+  const now = Date.now();
+  if (userId && roleCache?.userId === userId && roleCache.expiresAt > now) return roleCache.roles;
   const { roles } = await getCurrentUserRoles();
-  return roles as RoleName[];
+  const normalized = roles as RoleName[];
+  if (userId) roleCache = { userId, roles: normalized, expiresAt: now + 60_000 };
+  return normalized;
+}
+
+async function authenticatedRoles() {
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) throw redirect("/admin/login");
+  return { roles: await getMyRoles(data.session.user.id), userId: data.session.user.id };
 }
 
 async function adminRootLoader() {
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) throw redirect("/admin/login");
-
-  const roles = await getMyRoles();
+  const { roles } = await authenticatedRoles();
   if (!hasAdminPanelRole(roles)) throw redirect("/admin/login");
-
   return { roles };
 }
 
 function requireRoles(required: RoleName[]) {
   return async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect("/admin/login");
-
-    const roles = await getMyRoles();
+    const { roles } = await authenticatedRoles();
     if (!hasAnyRole(roles, required)) throw redirect("/admin");
-
     return { roles };
   };
 }
