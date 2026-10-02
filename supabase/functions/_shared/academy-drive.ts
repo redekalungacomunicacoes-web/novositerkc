@@ -112,15 +112,6 @@ export async function uploadAcademyDrive(
       throw new Error("Envio anterior incompatível ou removido.");
     return already;
   }
-  // Single canonical destination resolver for both resumable and multipart uploads.
-  // This guarantees banner => 09_ACADEMIA/CURSOS/<curso>/BANNER and avoids
-  // the old parallel path that created folders by UUID.
-  const destinationFolderId = await prepareAcademyDestination(
-    { course, lesson, kind },
-    rootId,
-    user,
-    admin,
-  );
   const token = crypto.randomUUID();
   const { data: locked, error: lockError } = await user.rpc(
     "academy_drive_lock",
@@ -159,7 +150,14 @@ export async function uploadAcademyDrive(
     previous = (data as Record<string, string | null> | null)?.[column] || null;
   }
   try {
-    const folderId = destinationFolderId;
+    // Resolve/create folders only after acquiring the course upload lease.
+    // A concurrent upload must never create a parallel folder tree.
+    const folderId = await prepareAcademyDestination(
+      { course, lesson, kind },
+      rootId,
+      user,
+      admin,
+    );
     let uploaded: Record<string, unknown>;
     try {
       uploaded = await uploadDriveFile(file, folderId);
