@@ -112,23 +112,15 @@ export async function uploadAcademyDrive(
       throw new Error("Envio anterior incompatível ou removido.");
     return already;
   }
-  // Fail before creating even a child folder when the existing destination cannot be confirmed.
-  const rootToken = crypto.randomUUID();
-  const { data: rootLocked, error: rootError } = await user.rpc(
-    "academy_drive_root_lock",
-    { p_token: rootToken },
+  // Single canonical destination resolver for both resumable and multipart uploads.
+  // This guarantees banner => 09_ACADEMIA/CURSOS/<curso>/BANNER and avoids
+  // the old parallel path that created folders by UUID.
+  const destinationFolderId = await prepareAcademyDestination(
+    { course, lesson, kind },
+    rootId,
+    user,
+    admin,
   );
-  if (rootError) throw rootError;
-  if (!rootLocked)
-    throw new Error(
-      "Outro envio está verificando a pasta raiz. Tente novamente.",
-    );
-  let academy;
-  try {
-    academy = await resolveAcademyFolder(rootId);
-  } finally {
-    await user.rpc("academy_drive_root_unlock", { p_token: rootToken });
-  }
   const token = crypto.randomUUID();
   const { data: locked, error: lockError } = await user.rpc(
     "academy_drive_lock",
@@ -167,27 +159,10 @@ export async function uploadAcademyDrive(
     previous = (data as Record<string, string | null> | null)?.[column] || null;
   }
   try {
-    const segments = [
-      "Cursos",
-      course,
-      ...(kind === "cover"
-        ? ["Capa"]
-        : kind === "banner"
-          ? ["Banner"]
-          : lesson
-          ? [
-              "Módulos",
-              module!,
-              "Aulas",
-              lesson,
-              kind === "media" ? "Conteúdo" : "Materiais",
-            ]
-          : ["Materiais"]),
-    ];
-    const path = await ensureDrivePath(academy.id, segments);
+    const folderId = destinationFolderId;
     let uploaded: Record<string, unknown>;
     try {
-      uploaded = await uploadDriveFile(file, path.folderId);
+      uploaded = await uploadDriveFile(file, folderId);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       if (/storageQuotaExceeded|Service Accounts do not have storage quota/i.test(detail)) {
@@ -213,7 +188,7 @@ export async function uploadAcademyDrive(
         name: uploaded.name || file.name,
         mimeType: uploaded.mimeType || file.type,
         size: uploaded.size || file.size,
-        folder_id: path.folderId,
+        folder_id: folderId,
       },
     });
     if (error)
