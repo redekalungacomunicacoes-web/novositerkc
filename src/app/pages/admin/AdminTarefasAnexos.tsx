@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Download, ExternalLink, File, FileImage, FileStack, FileText, FolderOpen, Link as LinkIcon, Paperclip, Plus, Search, Trash2, Upload } from "lucide-react";
 
 import { CalendarProvider, useCalendarStore } from "./calendar2026/store";
 import { TasksPageShell } from "./calendar2026/TasksShell";
-import { useExternalAttachmentMutation, useTaskAttachmentMutation, useTasksQuery } from "./calendar2026/useTaskQueries";
-import { getTaskAttachmentSignedUrl, priorityLabels, statusLabels } from "./calendar2026/tasksApi";
+import { useExternalAttachmentMutation, useTaskAttachmentMutation, useAttachmentCenterQuery } from "./calendar2026/useTaskQueries";
+import { openTaskAttachment, priorityLabels, statusLabels } from "./calendar2026/tasksApi";
 import type { CalendarTask, TaskAttachment } from "./calendar2026/types";
 
 function getFileKind(attachment: TaskAttachment) {
@@ -30,20 +30,10 @@ function AttachmentOpenButton({ attachment }: { attachment: TaskAttachment }) {
 
   async function openAttachment() {
     setError("");
-    const tab = window.open("about:blank", "_blank");
-    if (!tab) {
-      setError("Permita pop-ups para abrir este arquivo.");
-      return;
-    }
-    tab.opener = null;
     setLoading(true);
     try {
-      const url = /^https?:\/\//i.test(attachment.file_url)
-        ? attachment.file_url
-        : await getTaskAttachmentSignedUrl(attachment.file_url);
-      tab.location.href = url;
+      await openTaskAttachment(attachment);
     } catch (reason) {
-      tab.close();
       setError(reason instanceof Error ? reason.message : "Não foi possível abrir o arquivo.");
     } finally {
       setLoading(false);
@@ -60,7 +50,7 @@ function AttachmentOpenButton({ attachment }: { attachment: TaskAttachment }) {
 
 function AttachmentsCenter() {
   const { teamMembers } = useCalendarStore();
-  const { data: tasks = [], isLoading, error, refetch } = useTasksQuery("1900-01-01", "9999-12-31", "all");
+  const { data: tasks = [], isLoading, error, refetch } = useAttachmentCenterQuery();
   const uploadAttachment = useTaskAttachmentMutation();
   const linkAttachment = useExternalAttachmentMutation();
   const [open, setOpen] = useState(false);
@@ -69,6 +59,8 @@ function AttachmentsCenter() {
   const [files, setFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+  const submitting = useRef(false);
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
 
@@ -84,17 +76,24 @@ function AttachmentsCenter() {
 
   async function saveAttachment(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
+    setSaving(true);
+    try {
     setSubmitError("");
     setSubmitNotice("");
     if (!taskId) return;
 
-    const results = await Promise.allSettled(files.map((file) => uploadAttachment.mutateAsync({ taskId, file })));
+    const results: PromiseSettledResult<unknown>[] = [];
+    for (let offset = 0; offset < files.length; offset += 2) {
+      results.push(...await Promise.allSettled(files.slice(offset, offset + 2).map((file) => uploadAttachment.mutateAsync({ taskId, file }))));
+    }
     const failedFiles = files.filter((_file, index) => results[index].status === "rejected");
     const failures = results.flatMap((result, index) => result.status === "rejected"
       ? [`${files[index].name}: ${result.reason instanceof Error ? result.reason.message : "falha no envio"}`]
       : []);
 
-    const links = link.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+    const links = link.split(/\n/).map((item) => item.trim()).filter(Boolean);
     const failedLinks: string[] = [];
     for (const url of links) {
       try {
@@ -117,6 +116,7 @@ function AttachmentsCenter() {
     setTaskId("");
     setLink("");
     setFiles([]);
+    } finally { submitting.current = false; setSaving(false); }
   }
 
   function handleFiles(selected: FileList | null) {
@@ -126,7 +126,7 @@ function AttachmentsCenter() {
     )]);
   }
 
-  const pending = uploadAttachment.isPending || linkAttachment.isPending;
+  const pending = saving;
 
   return (
     <TasksPageShell>

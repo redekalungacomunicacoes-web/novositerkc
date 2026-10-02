@@ -428,7 +428,9 @@ test("HTTP endpoint denies anonymous access, reader writes and out-of-scope down
           ),
         )
         .replace('"../_shared/google-drive.ts"', JSON.stringify(driveUrl))
-        .replace('"../_shared/academy-drive.ts"', JSON.stringify(academyUrl)),
+        .replace('"../_shared/academy-drive.ts"', JSON.stringify(academyUrl))
+        .replace('"../_shared/task-drive.ts"', JSON.stringify(dataModule('export async function prepareTaskFolder(){ throw new Error("unused"); }')) )
+        .replace('"../_shared/task-delete.ts"', JSON.stringify(dataModule('export async function deleteTaskAndQueueCleanup(){ throw new Error("unused"); } export async function retryTaskCleanup(){ throw new Error("unused"); }'))),
     )
   );
   const send = (action) =>

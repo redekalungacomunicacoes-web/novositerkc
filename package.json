@@ -9,7 +9,10 @@
     "typecheck:academia": "tsc -p tsconfig.academia.json",
     "lint:academia": "eslint --config eslint.academia.config.mjs src/app/pages/admin/academia",
     "test:academia": "node --test tests/academia.test.mjs tests/academia-autoria.test.mjs tests/academy-drive.test.mjs",
-    "test:academia:ui": "node tests/academia-ui.mjs"
+    "test:academia:ui": "node tests/academia-ui.mjs",
+    "test:tasks": "node --test tests/tasks.test.mjs tests/tasks-endpoint.test.mjs",
+    "typecheck:tasks": "tsc -p tsconfig.tasks.json",
+    "test:tasks:ui": "node tests/tasks-ui.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -49,6 +52,7 @@
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
     "@supabase/supabase-js": "^2.94.1",
+    "@tanstack/react-query": "5.90.21",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",

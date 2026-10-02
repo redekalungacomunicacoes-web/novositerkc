@@ -22,8 +22,8 @@ export function TaskDeleteDialog({ taskId, open, onOpenChange, onDeleted }: {
   async function confirmDeletion(event: React.MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     try {
-      await deletion.mutateAsync(taskId);
-      toast.success("Tarefa excluída com sucesso.");
+      const result = await deletion.mutateAsync(taskId);
+      toast.success(result.cleanup_pending ? "Tarefa excluída. A limpeza dos arquivos no Drive ficou pendente." : "Tarefa excluída com sucesso.");
       onOpenChange(false);
       onDeleted?.();
     } catch (error) {

@@ -1,0 +1,50 @@
+name: Validate Tasks
+on:
+  pull_request:
+    paths:
+      - 'src/app/pages/admin/calendar2026/**'
+      - 'src/app/pages/admin/AdminTarefas*.tsx'
+      - 'src/app/pages/admin/tasksService.ts'
+      - 'src/app/App.tsx'
+      - 'src/app/layouts/AdminLayout.tsx'
+      - 'src/services/driveFiles.ts'
+      - 'supabase/functions/**'
+      - 'supabase/migrations/*tasks_lifecycle*'
+      - 'tests/tasks*'
+      - 'tsconfig.tasks.json'
+      - 'vite.config.ts'
+      - 'package*.json'
+      - '.github/workflows/validate-tasks.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck:tasks
+      - run: npm run test:tasks
+      - run: npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --node-modules-dir=manual --config supabase/functions/drive-files/deno.json supabase/functions/drive-files/index.ts
+      - run: npm install --no-save --package-lock=false playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Responsive task flows
+        run: |
+          VITE_SUPABASE_URL=https://fixture.supabase.co VITE_SUPABASE_ANON_KEY=fixture-public-key npm run dev -- --host 127.0.0.1 --port 5173 > /tmp/tasks-vite.log 2>&1 &
+          npm run test:tasks:ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tasks-ui-evidence
+          path: |
+            /tmp/rkc-tasks-qa
+            /tmp/tasks-vite.log
+          if-no-files-found: ignore

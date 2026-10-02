@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
-import { downloadRkcDriveFile, ensureTaskDriveFolder, listTaskDriveFiles, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
+import { downloadRkcDriveFile, deleteTaskWithFiles, listTaskDriveFiles, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
@@ -166,7 +166,7 @@ async function requireCurrentEquipeMember() {
 
   const { data: currentMember, error: memberError } = await supabase
     .from("equipe")
-    .select("id,user_id,nome,cargo")
+    .select("id,user_id,nome,cargo,ativo")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -179,6 +179,7 @@ async function requireCurrentEquipeMember() {
     throw new Error("Seu usuário não possui um cadastro correspondente na equipe.");
   }
 
+  if (currentMember.ativo === false) throw new Error("Seu cadastro na equipe está inativo.");
   return { user, currentMember };
 }
 
@@ -188,6 +189,7 @@ async function ensureEquipeMemberExists(memberId: string | null | undefined, lab
   const { data, error } = await supabase
     .from("equipe")
     .select("id")
+    .or("ativo.eq.true,ativo.is.null")
     .eq("id", memberId)
     .maybeSingle();
 
@@ -226,8 +228,6 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
 }
 
 export async function fetchTasks(startDate: string, endDate: string, filters?: { assignee?: string | "all" }): Promise<CalendarTask[]> {
-  const currentMember = await getCurrentEquipeMember();
-  const permission = await getPermissionLevel();
   const pageSize = 500;
   const dbTasks: DbTask[] = [];
 
@@ -239,11 +239,10 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
       .gte("data_fim", startDate)
       .order("data_tarefa", { ascending: true })
       .order("hora_inicio", { ascending: true, nullsFirst: false })
+      .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (filters?.assignee && filters.assignee !== "all") query = query.eq("assigned_to", filters.assignee);
-    if (permission === "colaborador" && currentMember?.id) query = query.eq("assigned_to", currentMember.id);
-    if (permission === "gestor" && currentMember?.id) query = query.or(`assigned_to.eq.${currentMember.id},created_by.eq.${currentMember.id}`);
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -258,11 +257,13 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 }
 
 export async function fetchTaskDetails(taskId: string): Promise<{ attachments: TaskAttachment[]; comments: TaskComment[] }> {
-  const [commentsResult, driveFiles] = await Promise.all([
+  const [commentsResult, legacyResult, driveFiles] = await Promise.all([
     supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").eq("task_id", taskId).order("created_at"),
+    supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").eq("task_id", taskId).order("created_at"),
     listTaskDriveFiles(taskId),
   ]);
   if (commentsResult.error) throw new Error(commentsResult.error.message);
+  if (legacyResult.error) throw new Error(legacyResult.error.message);
   const attachments = driveFiles
     .filter((file) => file.task_id === taskId && file.status === "active")
     .map((file) => ({
@@ -272,11 +273,41 @@ export async function fetchTaskDetails(taskId: string): Promise<{ attachments: T
       file_name: file.name,
       created_at: file.created_at,
     } as TaskAttachment));
-  return { attachments, comments: (commentsResult.data ?? []) as TaskComment[] };
+  return { attachments: [...attachments, ...(legacyResult.data ?? []) as TaskAttachment[]], comments: (commentsResult.data ?? []) as TaskComment[] };
+}
+
+export async function fetchAttachmentCenter(): Promise<CalendarTask[]> {
+  const tasks = await fetchTasks("1900-01-01", "9999-12-31");
+  // Batch metadata queries; no downloads or comment requests in this view.
+  for (let offset = 0; offset < tasks.length; offset += 100) {
+    const batch = tasks.slice(offset, offset + 100);
+    const ids = batch.map((task) => task.id);
+    const readPages = async (table: string, columns: string, drive = false) => {
+      const rows: any[] = [];
+      for (let page = 0; ; page += 500) {
+        let query = supabase.from(table).select(columns).in("task_id", ids).order("id").range(page, page + 499);
+        if (drive) query = query.eq("module", "tasks").eq("status", "active");
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
+        rows.push(...(data ?? []));
+        if ((data?.length ?? 0) < 500) return rows;
+      }
+    };
+    const [legacy, drive] = await Promise.all([
+      readPages("task_attachments", "id,task_id,file_url,file_name,created_at"),
+      readPages("drive_files", "id,task_id,name,created_at", true),
+    ]);
+    const attachments: TaskAttachment[] = [...legacy, ...drive.map((file) => ({ id: file.id, task_id: file.task_id, file_url: `drive:${file.id}`, file_name: file.name, created_at: file.created_at }))];
+    const grouped = new Map<string, TaskAttachment[]>();
+    attachments.forEach((item) => grouped.set(item.task_id, [...(grouped.get(item.task_id) ?? []), item]));
+    batch.forEach((task) => { task.attachments = grouped.get(task.id) ?? []; });
+  }
+  return tasks;
 }
 
 export async function saveTask(input: TaskInput, taskId?: string) {
-  const { user, currentMember } = await requireCurrentEquipeMember();
+  const { currentMember } = await requireCurrentEquipeMember();
+  if (!input.titulo.trim()) throw new Error("Informe o título da tarefa.");
   const description = input.descricao?.trim() || null;
   if (!input.assigned_to) {
     throw new Error("Selecione o responsável pela tarefa.");
@@ -308,8 +339,9 @@ export async function saveTask(input: TaskInput, taskId?: string) {
   };
 
   if (taskId) {
-    const { error } = await supabase.from("tasks").update(taskValues).eq("id", taskId);
+    const { data, error } = await supabase.from("tasks").update(taskValues).eq("id", taskId).select("id").maybeSingle();
     if (error) throw new Error(error.message);
+    if (!data) throw new Error("A tarefa não foi atualizada. Confira sua permissão ou recarregue a lista.");
     return taskId;
   }
 
@@ -318,36 +350,14 @@ export async function saveTask(input: TaskInput, taskId?: string) {
     created_by: currentMember.id,
   };
 
-  console.log("[TASK CREATE][IDS]", {
-    authUserId: user.id,
-    equipeId: currentMember.id,
-    equipeUserId: currentMember.user_id,
-    assignedTo,
-  });
-  console.log("[TASK CREATE][PAYLOAD]", payload);
   const { data, error } = await supabase
     .from("tasks")
     .insert(payload)
     .select()
     .single();
-  if (error) {
-    console.error("[TASK CREATE][DATABASE]", {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      payload,
-    });
-    throw error;
-  }
+  if (error) throw new Error(error.message);
   if (!data) throw new Error("A tarefa não foi retornada após a criação.");
   const createdTaskId = data.id as string;
-  // A criação da tarefa não pode ficar bloqueada pela rede/Google Drive.
-  // Preparamos a pasta em segundo plano; o upload também consegue criá-la
-  // idempotentemente caso esta tentativa ainda não tenha terminado.
-  void ensureTaskDriveFolder(createdTaskId).catch((folderError) => {
-    console.error("[TASK CREATE][DRIVE FOLDER]", folderError);
-  });
   return createdTaskId;
 }
 
@@ -364,14 +374,13 @@ export async function updateTaskStatus(
   const result = await supabase
     .from("tasks")
     .update(payload)
-    .eq("id", taskId);
-
-  console.log("KANBAN RESULT", result);
+    .eq("id", taskId).select("id").maybeSingle();
 
   if (result.error) {
     throw new Error(result.error.message);
   }
 
+  if (!result.data) throw new Error("A tarefa não foi atualizada. Confira sua permissão.");
   return {
     id: taskId,
     status,
@@ -380,36 +389,10 @@ export async function updateTaskStatus(
 }
 
 export async function deleteTask(taskId: string) {
-  // Drive RKC: arquiva primeiro os metadados/arquivos vinculados à tarefa.
-  // O arquivo físico é enviado à lixeira pelo backend do Drive.
-  const driveFiles = await listTaskDriveFiles(taskId);
-  if (driveFiles.length) {
-    const results = await Promise.allSettled(driveFiles.map((file) => trashRkcDriveFile(file.id)));
-    const failed = results.filter((result) => result.status === "rejected");
-    if (failed.length) throw new Error("Não foi possível remover todos os anexos do Drive RKC. A tarefa foi preservada.");
-  }
-
-  // Compatibilidade com anexos legados armazenados no bucket task-files.
-  const attachmentsResult = await supabase
-    .from("task_attachments")
-    .select("id,file_url")
-    .eq("task_id", taskId);
-  if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
-  const storagePaths = (attachmentsResult.data ?? [])
-    .map((attachment) => attachment.file_url as string | null)
-    .filter((path): path is string => Boolean(path) && !/^https?:\/\//i.test(path));
-  if (storagePaths.length > 0) {
-    const storageResult = await supabase.storage.from(BUCKET).remove(storagePaths);
-    if (storageResult.error) throw new Error("Não foi possível remover todos os anexos legados. A tarefa foi preservada.");
-  }
-
-  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
-  if (error) throw new Error(error.message);
+  return deleteTaskWithFiles(taskId);
 }
 
 export async function fetchNotifications(): Promise<TeamNotification[]> {
-  const currentMember = await getCurrentEquipeMember();
-  const permission = await getPermissionLevel();
   const currentDate = new Date();
   const start = new Date(currentDate); start.setDate(start.getDate() - 60);
   const end = new Date(currentDate); end.setDate(end.getDate() + 60);
@@ -421,8 +404,6 @@ export async function fetchNotifications(): Promise<TeamNotification[]> {
     .gte("data_fim", localDateKey(start))
     .order("updated_at", { ascending: false })
     .limit(30);
-  if (permission === "colaborador" && currentMember?.id) query = query.eq("assigned_to", currentMember.id);
-  if (permission === "gestor" && currentMember?.id) query = query.or(`assigned_to.eq.${currentMember.id},created_by.eq.${currentMember.id}`);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   const rows = data ?? [];
@@ -466,7 +447,20 @@ export async function uploadTaskAttachment(taskId: string, file: File) {
 }
 
 export async function openTaskAttachment(attachment: Pick<TaskAttachment, "file_url" | "file_name">) {
-  if (!attachment.file_url?.startsWith("drive:")) return getTaskAttachmentSignedUrl(attachment.file_url);
+  if (/^https?:\/\//i.test(attachment.file_url)) {
+    window.open(attachment.file_url, "_blank", "noopener,noreferrer");
+    return attachment.file_url;
+  }
+  if (!attachment.file_url?.startsWith("drive:")) {
+    const tab = window.open("about:blank", "_blank");
+    if (!tab) throw new Error("Permita pop-ups para abrir este arquivo.");
+    tab.opener = null;
+    try {
+      const url = await getTaskAttachmentSignedUrl(attachment.file_url);
+      tab.location.href = url;
+      return url;
+    } catch (error) { tab.close(); throw error; }
+  }
   const id = attachment.file_url.slice("drive:".length);
   const blob = await downloadRkcDriveFile(id);
   const url = URL.createObjectURL(blob);
@@ -487,18 +481,15 @@ export async function getTaskAttachmentSignedUrl(filePath: string) {
 }
 
 export async function createExternalAttachment(taskId: string, url: string) {
+  const parsed = new URL(url);
+  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Use um link http ou https.");
   const payload = {
     task_id: taskId,
     file_url: url,
     file_name: url,
   };
 
-  console.log("[tarefas:anexos] task_id", taskId);
-  console.log("[tarefas:anexos] arquivo", { external_url: url });
-  console.log("[tarefas:anexos] upload", "link externo sem storage");
-
   const insertResult = await supabase.from("task_attachments").insert(payload).select("*").single();
-  console.log("[tarefas:anexos] insert", insertResult);
   if (insertResult.error) throw new Error(insertResult.error.message);
 
   return insertResult.data as TaskAttachment;

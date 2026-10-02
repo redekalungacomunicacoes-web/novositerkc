@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.academia.json",
+  "include": ["src/app/pages/admin/calendar2026/**/*.ts", "src/app/pages/admin/calendar2026/**/*.tsx", "src/app/pages/admin/AdminTarefas*.tsx"],
+  "exclude": ["src/app/pages/admin/calendar2026/mockData.ts"]
+}

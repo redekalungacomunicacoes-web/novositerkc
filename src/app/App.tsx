@@ -1,4 +1,5 @@
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
@@ -17,6 +18,14 @@ function RouteLoadingFallback() {
 }
 
 export default function App() {
+  useEffect(() => {
+    let userId: string | undefined;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const nextId = session?.user.id;
+      if (nextId !== userId) { queryClient.clear(); userId = nextId; }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <Suspense fallback={<RouteLoadingFallback />}>

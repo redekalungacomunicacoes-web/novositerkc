@@ -139,7 +139,7 @@ function KanbanBoard() {
         <div onDragStart={(event) => setDraggingId(event.dataTransfer.getData("text/task-id"))}>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {columns.map((status) => (
-              <Column key={status} status={status} draggingId={draggingId} highlighted={targetStatus === status} onDragOver={setTargetStatus} onDrop={(dropStatus) => void handleDrop(dropStatus)} onOpen={(task) => setSelectedTaskId(task.id)} tasks={tasks.filter((task) => task.status === status)} />
+              <Column teamMembers={teamMembers} key={status} status={status} draggingId={draggingId} highlighted={targetStatus === status} onDragOver={setTargetStatus} onDrop={(dropStatus) => void handleDrop(dropStatus)} onOpen={(task) => setSelectedTaskId(task.id)} tasks={tasks.filter((task) => task.status === status)} />
             ))}
           </div>
         </div>

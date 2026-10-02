@@ -12,7 +12,7 @@ RKC - SISTEMA DO SITE/
 - 01_SITE/
   - MATERIAS/<nome da matéria>/{CAPA,BANNER,IMAGENS,GALERIA,AUDIO,DOCUMENTOS}
   - PROJETOS/<nome do projeto>/{CAPA,DOCUMENTOS,IMAGENS,OUTROS}
-- 04_EQUIPE/<nome do integrante>/{PERFIL,PORTFOLIO,DOCUMENTOS}
+- 04_EQUIPE/<nome do integrante>/{PERFIL,PORTFOLIO,DOCUMENTOS,TAREFAS}
 - 09_ACADEMIA/
   - CURSOS/<nome do curso>/
     - CAPA/
@@ -47,3 +47,7 @@ Em falha, manter o arquivo selecionado para nova tentativa. Não criar outra pas
 ## Regra para outros módulos
 
 Matéria, Projeto e Integrante seguem o mesmo contrato: a entidade deve possuir drive_folder_id persistido e todos os subdiretórios devem nascer dentro dessa pasta. Implementações novas não devem usar UUID como nome visível de pasta.
+
+## Tarefas
+
+Novas tarefas usam `04_EQUIPE/<nome do criador>/TAREFAS/<título - código>`. O criador corresponde ao integrante da sessão autenticada na criação. `tasks.drive_folder_id` identifica o destino e é reutilizado pelo upload. Pastas antigas já vinculadas são preservadas. Consulte `tasks-auditoria.md`.

@@ -1,3 +1,4 @@
+import { deleteTaskWithFiles } from "@/services/driveFiles";
 import { supabase } from "@/lib/supabase";
 import type { AttachmentType, Notification, Task, TaskAttachment, TeamProfile } from "./tasksTypes";
 
@@ -181,8 +182,7 @@ export async function updateTask(
 }
 
 export async function deleteTask(taskId: string) {
-  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
-  if (error) throw new Error(`Erro ao excluir tarefa: ${error.message}`);
+  await deleteTaskWithFiles(taskId);
 }
 
 export async function isDuplicateTask(payload: Pick<Task, "id" | "titulo" | "data_tarefa" | "hora_inicio" | "hora_fim" | "assigned_to">) {
