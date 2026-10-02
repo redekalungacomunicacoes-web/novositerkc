@@ -379,11 +379,11 @@ Deno.serve(async (req) => {
     if (file.module === "academy") {
       // Academy media stays private, but course editors must be able to preview it
       // even when drive_files RLS is learner/enrollment oriented.
-      const { data: editable, error: editAccessError } = await userClient.rpc(
+      const { data: canEditCourse, error: editAccessError } = await userClient.rpc(
         "academy_can_edit",
         { p_course: file.academy_course_id },
       );
-      let canRead = Boolean(editable) && !editAccessError;
+      let canRead = Boolean(canEditCourse) && !editAccessError;
       if (!canRead) {
         const { data: permitted, error: accessError } = await userClient
           .from("drive_files")
