@@ -242,6 +242,13 @@ export function Academia() {
       ? ownCourses
       : data.courses.filter((c) => canEdit(c.id));
   const managedCourse = editingCourses.find((c) => c.id === selectedCourse);
+  useEffect(() => () => { if (bannerPreview?.url) URL.revokeObjectURL(bannerPreview.url); }, [bannerPreview]);
+  const previewBanner = (file: File | null) => {
+    setBannerPreview((current) => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return file && managedCourse ? { courseId: managedCourse.id, url: URL.createObjectURL(file) } : null;
+    });
+  };
   const managedCourseMatches = editingCourses.filter((c) => {
     const categoryName = data.categories.find((item) => item.id === c.category_id)?.name || "";
     const searchable = [c.title, c.summary, c.description, categoryName, labels[c.status], labels[c.level]].join(" ").toLowerCase();
