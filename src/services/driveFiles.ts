@@ -166,8 +166,9 @@ export async function uploadAcademyFile(input: {
   replaceMaterialId?: string;
   onProgress: (percent: number) => void;
 }): Promise<DriveFileRecord> {
-  if (input.file.size > 50 * 1024 * 1024)
-    throw new Error("O limite por arquivo é 50 MB.");
+  const limit = input.kind === "cover" ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
+  if (input.file.size > limit)
+    throw new Error(input.kind === "cover" ? "A capa deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB.");
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session)
     throw new Error("Sua sessão expirou. Entre novamente.");
