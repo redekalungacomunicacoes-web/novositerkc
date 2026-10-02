@@ -167,14 +167,26 @@ export function Academia() {
     setNotice("Alteração salva.");
   }
   async function remove(entity: Entity, id: string) {
-    if (
-      window.confirm(
-        "Excluir este registro? Registros com histórico acadêmico podem impedir a exclusão.",
-      )
-    ) {
-      await run(() => deleteEntity(entity, id));
-      if (entity === "courses" && selectedCourse === id) setSelectedCourse("");
-    }
+    if (!window.confirm(
+      entity === "courses"
+        ? "Excluir este curso? Arquivos vinculados devem ser removidos do Drive pela própria Academia. Histórico acadêmico pode impedir a exclusão."
+        : "Excluir este registro? Registros com histórico acadêmico podem impedir a exclusão.",
+    )) return;
+    await run(async () => {
+      try {
+        await deleteEntity(entity, id);
+      } catch (e) {
+        const detail = message(e);
+        if (entity === "courses" && /slug_key|duplicate key/i.test(detail)) {
+          throw new Error("Não foi possível excluir o curso porque o banco tentou recriar um slug já existente. Não é necessário apagar pastas manualmente no Drive; este conflito é de dados da Academia.");
+        }
+        if (entity === "courses" && /foreign key|violates.*constraint|still referenced/i.test(detail)) {
+          throw new Error("Este curso ainda possui histórico ou registros vinculados na Academia. A exclusão direta foi bloqueada para preservar os dados acadêmicos.");
+        }
+        throw e;
+      }
+    });
+    if (entity === "courses" && selectedCourse === id) setSelectedCourse("");
   }
   if (loading && !data) return <p role="status">Carregando Academia RKC…</p>;
   if (error || !data)
@@ -790,7 +802,7 @@ export function Academia() {
                   <>
                     <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
                       <div className="relative aspect-[3/1] min-h-44 overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
-                        {managedCourse.cover_path || managedCourse.cover_drive_file_id ? (
+                        {managedCourse.cover_path || managedCourse.cover_drive_file_id || managedCourse.banner_drive_file_id ? (
                           <Asset
                             path={managedCourse.cover_path}
                             driveFileId={managedCourse.banner_drive_file_id || managedCourse.cover_drive_file_id}
@@ -808,9 +820,14 @@ export function Academia() {
                               <p className="mb-1 text-xs font-medium uppercase tracking-[0.16em] text-white/75">Editor visual do curso</p>
                               <h2 className="truncate text-2xl font-bold sm:text-3xl">{managedCourse.title}</h2>
                             </div>
-                            <Button size="sm" variant="outline" className="shrink-0 bg-background/90 backdrop-blur" onClick={() => open("courses", "Editar curso", managedCourse)}>
-                              <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Editar informações
-                            </Button>
+                            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                              <label htmlFor={`academy-hero-banner-${managedCourse.id}`} className="inline-flex min-h-9 cursor-pointer items-center rounded-md border bg-background/90 px-3 text-sm font-medium text-foreground shadow-sm backdrop-blur hover:bg-background">
+                                <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> {managedCourse.banner_drive_file_id ? "Trocar banner" : "Adicionar banner"}
+                              </label>
+                              <Button size="sm" variant="outline" className="bg-background/90 backdrop-blur" onClick={() => open("courses", "Editar curso", managedCourse)}>
+                                <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Editar informações
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>

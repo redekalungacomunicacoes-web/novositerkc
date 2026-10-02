@@ -87,6 +87,16 @@ export function Study({
   const lessonIndex = lesson ? lessons.indexOf(lesson) : -1;
   const previousLesson = lessonIndex > 0 ? lessons[lessonIndex - 1] : null;
   const nextLesson = lessonIndex >= 0 ? lessons[lessonIndex + 1] : null;
+  const completedLessonIds = new Set(
+    data.progress
+      .filter((p) => p.enrollment_id === enrollment?.id && p.completed_at)
+      .map((p) => p.lesson_id),
+  );
+  const completedLessons = lessons.filter((l) => completedLessonIds.has(l.id)).length;
+  const remainingMinutes = lessons
+    .filter((l) => !completedLessonIds.has(l.id))
+    .reduce((total, l) => total + (l.duration_minutes || 0), 0);
+  const courseMaterials = data.materials.filter((m) => m.course_id === course.id && !m.lesson_id);
   return (
     <div className="space-y-6">
       <Link to={lesson ? `/admin/academia/cursos/${course.id}` : "/admin/academia"} className="text-primary underline">
@@ -209,7 +219,7 @@ export function Study({
             <Empty>Nenhuma aula publicada neste curso.</Empty>
           )}
         </aside>}
-        <div className="space-y-6">
+        <div className={`space-y-6 ${!lesson ? "lg:col-span-2" : ""}`}>
           {lessonId && !lesson ? (
             <Empty>Aula indisponível.</Empty>
           ) : lesson ? (
@@ -270,21 +280,56 @@ export function Study({
               )}
             </Card>
           ) : courseTab === "overview" ? (
-            <Card>
-              <h2 className="text-xl font-semibold">Sobre o curso</h2>
-              <p className="whitespace-pre-wrap">
-                {course.description || "Descrição ainda não informada."}
-              </p>
-              <h3 className="font-semibold">Objetivos</h3>
-              <p className="whitespace-pre-wrap">
-                {course.objectives || "Não informados."}
-              </p>
-              <h3 className="font-semibold">Público-alvo e pré-requisitos</h3>
-              <p>
-                {course.audience || "Equipe RKC"} ·{" "}
-                {course.prerequisites || "Nenhum pré-requisito informado"}
-              </p>
-            </Card>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <Card>
+                <div className="space-y-5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">Visão geral</p>
+                    <h2 className="mt-1 text-2xl font-semibold">Sobre o curso</h2>
+                    <p className="mt-3 whitespace-pre-wrap leading-relaxed text-muted-foreground">
+                      {course.description || "Descrição ainda não informada."}
+                    </p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-xl border bg-muted/30 p-4">
+                      <h3 className="font-semibold">Objetivos</h3>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{course.objectives || "Não informados."}</p>
+                    </div>
+                    <div className="rounded-xl border bg-muted/30 p-4">
+                      <h3 className="font-semibold">Para quem é</h3>
+                      <p className="mt-2 text-sm text-muted-foreground">{course.audience || "Equipe RKC"}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">Pré-requisitos: {course.prerequisites || "nenhum informado"}</p>
+                    </div>
+                  </div>
+                  {course.competencies.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold">Competências desenvolvidas</h3>
+                      <div className="mt-3 flex flex-wrap gap-2">{course.competencies.map((item) => <Badge key={item}>{item}</Badge>)}</div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+              <div className="space-y-4">
+                <Card>
+                  <p className="text-sm font-semibold">Seu percurso</p>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-muted/50 p-3"><strong className="block text-2xl">{completedLessons}/{lessons.length}</strong><span className="text-xs text-muted-foreground">aulas concluídas</span></div>
+                    <div className="rounded-xl bg-muted/50 p-3"><strong className="block text-2xl">{remainingMinutes}</strong><span className="text-xs text-muted-foreground">min restantes</span></div>
+                    <div className="rounded-xl bg-muted/50 p-3"><strong className="block text-2xl">{modules.length}</strong><span className="text-xs text-muted-foreground">módulos</span></div>
+                    <div className="rounded-xl bg-muted/50 p-3"><strong className="block text-2xl">{courseMaterials.length}</strong><span className="text-xs text-muted-foreground">materiais</span></div>
+                  </div>
+                  {enrollment && <div className="mt-4"><Meter value={report?.progress || 0} /></div>}
+                </Card>
+                {resume && enrollment && (
+                  <Card>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">Próximo passo</p>
+                    <h3 className="mt-2 font-semibold">{resume.title}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{resume.duration_minutes} min · {completedLessonIds.has(resume.id) ? "revisar conteúdo" : "continuar formação"}</p>
+                    <Button className="mt-4 w-full" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${resume.id}`)}>Continuar estudando</Button>
+                  </Card>
+                )}
+              </div>
+            </div>
           ) : null}
           {(lesson || courseTab === "materials") && <Card>
             <h2 className="font-semibold">Materiais complementares</h2>
