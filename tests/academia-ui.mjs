@@ -278,6 +278,7 @@ try {
     fullPage: true,
   });
   await page.getByRole("link", { name: "Conhecer curso", exact: true }).click();
+  await page.getByRole("button", { name: /Módulos e aulas/ }).click();
   await page
     .getByRole("link", { name: "Aula de leitura (opcional)", exact: true })
     .click();
