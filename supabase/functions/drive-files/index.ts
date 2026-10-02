@@ -462,13 +462,12 @@ Deno.serve(async (req) => {
   } catch (error) {
     if (error instanceof Response) return error;
     console.error("[drive-files]", error);
-    return json(
-      {
-        ok: false,
-        error:
-          error instanceof Error ? error.message : "Erro interno no Drive.",
-      },
-      500,
-    );
+    const detail =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as { message?: unknown }).message || "Falha não identificada no Drive.")
+          : String(error || "Falha não identificada no Drive.");
+    return json({ ok: false, error: detail }, 500);
   }
 });
