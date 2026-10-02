@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
+import { downloadRkcDriveFile, listRkcDriveFiles, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
@@ -251,41 +252,27 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
     if (page.length < pageSize) break;
   }
 
-  const taskIds = dbTasks.map((task) => task.id);
-  if (taskIds.length === 0) return [];
+  // Calendário/Kanban carregam somente os dados essenciais.
+  // Comentários e anexos são buscados sob demanda ao abrir uma tarefa.
+  return dbTasks.map((task) => mapTask(task));
+}
 
-  // Consulta os relacionamentos em lotes para suportar a biblioteca completa,
-  // mesmo quando o histórico passa do limite padrão de linhas do PostgREST.
-  const attachmentsByTask = new Map<string, TaskAttachment[]>();
-  const commentsByTask = new Map<string, TaskComment[]>();
-  const relationshipBatchSize = 300;
-  const relationPageSize = 1000;
-  for (let offset = 0; offset < taskIds.length; offset += relationshipBatchSize) {
-    const batch = taskIds.slice(offset, offset + relationshipBatchSize);
-    for (let relationOffset = 0; ; relationOffset += relationPageSize) {
-      const [attachmentsResult, commentsResult] = await Promise.all([
-        supabase.from("task_attachments").select("id,task_id,file_url,file_name,created_at").in("task_id", batch).range(relationOffset, relationOffset + relationPageSize - 1),
-        supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").in("task_id", batch).range(relationOffset, relationOffset + relationPageSize - 1),
-      ]);
-      if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
-      if (commentsResult.error) throw new Error(commentsResult.error.message);
-
-      for (const attachment of (attachmentsResult.data ?? []) as TaskAttachment[]) {
-        attachmentsByTask.set(attachment.task_id, [...(attachmentsByTask.get(attachment.task_id) ?? []), attachment]);
-      }
-      for (const comment of (commentsResult.data ?? []) as TaskComment[]) {
-        commentsByTask.set(comment.task_id, [...(commentsByTask.get(comment.task_id) ?? []), comment]);
-      }
-
-      if ((attachmentsResult.data?.length ?? 0) < relationPageSize && (commentsResult.data?.length ?? 0) < relationPageSize) break;
-    }
-  }
-
-  return dbTasks.map((task) => mapTask({
-    ...task,
-    task_attachments: attachmentsByTask.get(task.id) ?? [],
-    task_comments: commentsByTask.get(task.id) ?? [],
-  }));
+export async function fetchTaskDetails(taskId: string): Promise<{ attachments: TaskAttachment[]; comments: TaskComment[] }> {
+  const [commentsResult, driveFiles] = await Promise.all([
+    supabase.from("task_comments").select("id,task_id,author_id,comentario,created_at,updated_at").eq("task_id", taskId).order("created_at"),
+    listRkcDriveFiles("tasks"),
+  ]);
+  if (commentsResult.error) throw new Error(commentsResult.error.message);
+  const attachments = driveFiles
+    .filter((file) => file.task_id === taskId && file.status === "active")
+    .map((file) => ({
+      id: file.id,
+      task_id: taskId,
+      file_url: `drive:${file.id}`,
+      file_name: file.name,
+      created_at: file.created_at,
+    } as TaskAttachment));
+  return { attachments, comments: (commentsResult.data ?? []) as TaskComment[] };
 }
 
 export async function saveTask(input: TaskInput, taskId?: string) {
@@ -457,33 +444,37 @@ export async function addTaskComment(taskId: string, comentario: string) {
 }
 
 export async function uploadTaskAttachment(taskId: string, file: File) {
-  const safeFileName = file.name.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase();
-  const filePath = `${taskId}/${crypto.randomUUID()}-${safeFileName}`;
-
-  console.log("[tarefas:anexos] task_id", taskId);
-  console.log("[tarefas:anexos] arquivo", { name: file.name, type: file.type, size: file.size });
-
-  const uploadResult = await supabase.storage.from(BUCKET).upload(filePath, file, { contentType: file.type || "application/octet-stream", upsert: false });
-  console.log("[tarefas:anexos] upload", uploadResult);
-  if (uploadResult.error) throw new Error(uploadResult.error.message);
-
-  const metadata = {
+  const uploaded = await uploadRkcDriveFile({
+    file,
+    module: "tasks",
+    category: "anexo",
+    taskId,
+    entityId: taskId,
+    accessScope: "assignees",
+    visibility: "private",
+  });
+  return {
+    id: uploaded.id,
     task_id: taskId,
-    file_url: filePath,
-    file_name: file.name,
-  };
+    file_url: `drive:${uploaded.id}`,
+    file_name: uploaded.name,
+    created_at: uploaded.created_at,
+  } as TaskAttachment;
+}
 
-  const insertResult = await supabase.from("task_attachments").insert(metadata).select("*").single();
-  console.log("[tarefas:anexos] insert", insertResult);
-  if (insertResult.error) {
-    const cleanupResult = await supabase.storage.from(BUCKET).remove([filePath]);
-    if (cleanupResult.error) {
-      console.error("[tarefas:anexos] falha ao remover upload após erro de insert", cleanupResult.error);
-    }
-    throw new Error(insertResult.error.message);
-  }
-
-  return insertResult.data as TaskAttachment;
+export async function openTaskAttachment(attachment: Pick<TaskAttachment, "file_url" | "file_name">) {
+  if (!attachment.file_url?.startsWith("drive:")) return getTaskAttachmentSignedUrl(attachment.file_url);
+  const id = attachment.file_url.slice("drive:".length);
+  const blob = await downloadRkcDriveFile(id);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.target = "_blank";
+  anchor.rel = "noopener";
+  anchor.download = attachment.file_name || "anexo";
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  return url;
 }
 
 export async function getTaskAttachmentSignedUrl(filePath: string) {
@@ -511,14 +502,14 @@ export async function createExternalAttachment(taskId: string, url: string) {
 }
 
 export async function deleteTaskAttachment(attachment: Pick<TaskAttachment, "id" | "file_url">) {
+  if (attachment.file_url?.startsWith("drive:")) {
+    await trashRkcDriveFile(attachment.file_url.slice("drive:".length));
+    return;
+  }
   if (attachment.file_url && !/^https?:\/\//i.test(attachment.file_url)) {
     const storageResult = await supabase.storage.from(BUCKET).remove([attachment.file_url]);
-    if (storageResult.error) {
-      console.error("[tarefas:anexos] falha ao remover arquivo do Storage", storageResult.error);
-      throw new Error("Não foi possível remover o anexo da tarefa.");
-    }
+    if (storageResult.error) throw new Error("Não foi possível remover o anexo legado da tarefa.");
   }
-
   const { error } = await supabase.from("task_attachments").delete().eq("id", attachment.id);
   if (error) throw new Error(error.message);
 }
