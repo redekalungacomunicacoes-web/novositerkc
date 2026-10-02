@@ -178,6 +178,15 @@ export async function listRkcDriveFiles(module: string, entityId?: string) {
   return (data || []) as DriveFileRecord[];
 }
 
+export async function ensureTaskDriveFolder(taskId: string) {
+  const { data, error } = await supabase.functions.invoke("drive-files", {
+    body: { action: "task-ensure-folder", task_id: taskId },
+  });
+  if (error) throw await driveError(error);
+  if (!data?.ok || !data?.folder_id) throw new Error(data?.error || "Não foi possível preparar a pasta da tarefa no Drive RKC.");
+  return data.folder_id as string;
+}
+
 export async function listTaskDriveFiles(taskId: string) {
   const { data, error } = await supabase
     .from("drive_files")
