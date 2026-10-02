@@ -21,5 +21,22 @@ begin
     end if;
   end loop;
 end $$;
+-- Adapta as RPCs já instaladas sem duplicar sua lógica de autorização/metadados.
+do $
+declare src text;
+begin
+  select pg_get_functiondef('public.academy_commit_drive(uuid,uuid,uuid,text,uuid,jsonb,uuid)'::regprocedure) into src;
+  if src is null then raise exception 'academy_commit_drive não encontrada'; end if;
+  src:=replace(src,'''cover'', ''media'', ''material''','''cover'', ''banner'', ''media'', ''material''');
+  src:=replace(src,'''cover'',''media'',''material''','''cover'',''banner'',''media'',''material''');
+  src:=replace(src,'p_kind = ''cover''','p_kind in (''cover'',''banner'')');
+  src:=replace(src,'p_kind=''cover''','p_kind in (''cover'',''banner'')');
+  -- Atribuição da imagem ao curso: banner ganha coluna própria.
+  src:=replace(src,
+    'update academy_courses set cover_drive_file_id=record_id,updated_at=now() where id=p_course',
+    'if p_kind = ''banner'' then update academy_courses set banner_drive_file_id=record_id,updated_at=now() where id=p_course; else update academy_courses set cover_drive_file_id=record_id,updated_at=now() where id=p_course; end if');
+  execute src;
+end $;
+
 notify pgrst,'reload schema';
 commit;
