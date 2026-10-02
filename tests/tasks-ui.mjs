@@ -16,7 +16,8 @@ for(const width of [390,768,1440]) {
  const jwt=[{alg:'HS256',typ:'JWT'},{sub:user,role:'authenticated',exp:Math.floor(Date.now()/1000)+36000},'fixture'].map(v=>typeof v==='string'?v:Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
  await context.addInitScript(({jwt,user})=>localStorage.setItem('sb-fixture-auth-token',JSON.stringify({access_token:jwt,refresh_token:'fixture',expires_at:Math.floor(Date.now()/1000)+36000,expires_in:36000,token_type:'bearer',user:{id:user,aud:'authenticated',role:'authenticated',email:'test@example.invalid'}})),{jwt,user});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
- let tasks=[],inserts=0,folders=0,uploads=0,failFolder=true,files=[],centerFolders=[];
+ let tasks=[],inserts=0,folders=0,uploads=0,failFolder=true,files=[],centerFolders=[],items=[],links=[],history=[],members=[],version=0;
+ const requestIds=new Set();
  await page.route('https://fixture.supabase.co/**',async route=>{
   const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').at(-1);let data=[];
   if(u.pathname.includes('/auth/')) data={id:user,aud:'authenticated',role:'authenticated',email:'test@example.invalid'};
@@ -26,6 +27,34 @@ for(const width of [390,768,1440]) {
    if(req.method()==='POST'){inserts++;const v=req.postDataJSON();const row={...(Array.isArray(v)?v[0]:v),id:'20000000-0000-0000-0000-000000000001',created_at:new Date().toISOString(),updated_at:new Date().toISOString()};tasks.push(row);data=row;}
    else if(req.method()==='PATCH'){Object.assign(tasks[0],req.postDataJSON());data={id:tasks[0].id};}
    else data=tasks;
+  }
+  if(table==='task_checklist_progress')data=items.length?[{task_id:tasks[0].id,total:items.length,completed:items.filter(i=>i.completed_at).length}]:[];
+  if(table==='task_checklist_items')data=[...items].sort((a,b)=>a.position-b.position);
+  if(table==='task_file_links')data=links;
+  if(table==='task_workflow_history')data=history;
+  if(table==='task_assignees')data=members.map(user_id=>({user_id}));
+  if(table==='mutate_task_workflow'){
+   const b=req.postDataJSON(),p=b.p_payload;
+   if(!requestIds.has(b.p_request)){
+    requestIds.add(b.p_request);
+    const add=step=>items.push({id:crypto.randomUUID(),task_id:tasks[0].id,title:step.title,note:step.note??null,position:items.length,completed_at:null,completed_by:null,assignee_id:null,due_date:null});
+    if(b.p_action==='add')add(p);
+    if(b.p_action==='template'){if(p.mode==='replace')items=[];p.steps.forEach(add);}
+    if(b.p_action==='toggle'){const item=items.find(i=>i.id===p.item_id);item.completed_at=p.completed?new Date().toISOString():null;item.completed_by=p.completed?member:null;}
+    if(b.p_action==='edit')Object.assign(items.find(i=>i.id===p.item_id),p);
+    if(b.p_action==='order')p.ids.forEach((id,index)=>items.find(i=>i.id===id).position=index);
+    if(b.p_action==='delete'){items=items.filter(i=>i.id!==p.item_id);links=links.filter(l=>l.item_id!==p.item_id);}
+    if(b.p_action==='metadata')Object.assign(tasks[0],p);
+    if(b.p_action==='collaborators')members=p.members;
+    if(b.p_action==='link')links.push({...p,id:crypto.randomUUID()});
+    if(b.p_action==='unlink')links=links.filter(l=>l.id!==p.link_id);
+    if(b.p_action==='review')tasks[0].status='revisao';
+    if(b.p_action==='complete')tasks[0].status='concluida';
+    if(b.p_action==='reopen')tasks[0].status='em_andamento';
+    version++;tasks[0].workflow_version=version;
+    history.unshift({id:crypto.randomUUID(),event:b.p_action,actor_id:member,detail:p,created_at:new Date().toISOString()});
+   }
+   data={version,total:items.length,completed:items.filter(i=>i.completed_at).length,percent:items.length?Math.round(items.filter(i=>i.completed_at).length/items.length*100):null};
   }
   if(table==='file_center_folders')data=centerFolders;
   if(table==='drive_files'){
@@ -60,6 +89,7 @@ for(const width of [390,768,1440]) {
  await page.getByRole('button',{name:'Nova tarefa',exact:true}).click();
  const dialog=page.getByRole('dialog');await dialog.getByPlaceholder('Ex.: Finalizar matéria sobre o encontro comunitário').fill('Tarefa de teste');
  await dialog.getByRole('combobox').first().selectOption(other);
+ await dialog.getByText('Arquivos iniciais (opcional)',{exact:true}).click();
  await dialog.locator('input[type=file]').setInputFiles([{name:'anexo-a.txt',mimeType:'text/plain',buffer:Buffer.from('Arquivo A')},{name:'anexo-b.txt',mimeType:'text/plain',buffer:Buffer.from('Arquivo B')}]);
  await dialog.getByRole('button',{name:'Criar tarefa',exact:true}).click();
  await dialog.getByText('Drive temporariamente indisponível').waitFor();assert.equal(inserts,1);
@@ -120,6 +150,38 @@ for(const width of [390,768,1440]) {
  await page.getByRole('dialog').getByRole('button',{name:'Salvar alterações',exact:true}).click();
  await page.getByRole('dialog').getByRole('heading',{name:'Tarefa revisada',exact:true}).waitFor();
  assert.equal(inserts,1);assert.equal(await page.getByRole('dialog').getByPlaceholder('Ex.: Finalizar matéria sobre o encontro comunitário').count(),0);
+
+ const workflow=page.getByRole('region',{name:'Acompanhamento da entrega'});
+ await workflow.getByText('Etapas ainda não definidas',{exact:true}).waitFor();
+ await workflow.getByLabel('Nova etapa',{exact:true}).fill('Verificar fontes');await workflow.getByRole('button',{name:'Adicionar etapa',exact:true}).click();
+ await workflow.getByText('0 de 1 etapas concluídas · 0%',{exact:true}).waitFor();
+ await workflow.getByLabel('Nova etapa',{exact:true}).fill('Entregar texto');await workflow.getByRole('button',{name:'Adicionar etapa',exact:true}).click();
+ await workflow.getByRole('button',{name:'Subir Entregar texto',exact:true}).click();await workflow.getByText('Próxima etapa: Entregar texto',{exact:true}).waitFor();
+ await workflow.getByRole('checkbox',{name:'Concluir Entregar texto',exact:true}).click();await workflow.getByText('1 de 2 etapas concluídas · 50%',{exact:true}).waitFor();
+ await workflow.getByRole('checkbox',{name:'Concluir Entregar texto',exact:true}).click();await workflow.getByText('0 de 2 etapas concluídas · 0%',{exact:true}).waitFor();
+ await workflow.getByText('Aplicar modelo de entrega (editável)',{exact:true}).click();await workflow.getByLabel('Modelo',{exact:true}).selectOption('Design');
+ assert.equal(await workflow.getByRole('button',{name:'Aplicar cópia do modelo',exact:true}).isDisabled(),true);
+ await workflow.getByLabel('Como aplicar',{exact:true}).selectOption('append');await workflow.getByLabel('Etapas, uma por linha',{exact:true}).fill('Revisar arte');await workflow.getByRole('button',{name:'Aplicar cópia do modelo',exact:true}).click();
+ await workflow.getByText('0 de 3 etapas concluídas · 0%',{exact:true}).waitFor();assert.equal(items.length,3);
+ const initialFileCount=files.length;
+ const stage=workflow.locator('article').filter({hasText:'Verificar fontes'});
+ await stage.getByText('Observação, arquivos e opções',{exact:true}).click();await stage.getByRole('combobox',{name:'Vincular arquivo a Verificar fontes',exact:true}).selectOption('file-row');
+ await stage.getByRole('button',{name:'Desvincular do item',exact:true}).waitFor();assert.equal(files.length,initialFileCount);
+ await stage.getByRole('button',{name:'Desvincular do item',exact:true}).click();await stage.getByRole('button',{name:'Desvincular do item',exact:true}).waitFor({state:'hidden'});assert.equal(files.length,initialFileCount);
+ await stage.getByLabel('Observação',{exact:true}).fill('Conferir referências e créditos');await stage.getByRole('button',{name:'Salvar etapa',exact:true}).click();
+ await workflow.getByText('Organização e colaboração',{exact:true}).click();await workflow.getByLabel('Entrega esperada',{exact:true}).fill('Texto e arte revisados');await workflow.getByLabel('Critério de conclusão',{exact:true}).fill('Fontes verificadas e arquivos finais');
+ await workflow.getByLabel('O que está faltando',{exact:true}).fill('Falta autorização de imagem');await workflow.getByLabel('Pessoa revisora',{exact:true}).selectOption(other);await workflow.getByRole('button',{name:'Salvar organização',exact:true}).click();
+ await workflow.getByText('Bloqueada: Falta autorização de imagem',{exact:true}).waitFor();
+ await workflow.getByRole('checkbox',{name:'Concluir Verificar fontes',exact:true}).click();await workflow.getByText('1 de 3 etapas concluídas · 33%',{exact:true}).waitFor();
+ await workflow.getByRole('checkbox',{name:'Concluir Entregar texto',exact:true}).click();await workflow.getByText('2 de 3 etapas concluídas · 67%',{exact:true}).waitFor();
+ await workflow.getByRole('checkbox',{name:'Concluir Revisar arte',exact:true}).click();await workflow.getByText('3 de 3 etapas concluídas · 100%',{exact:true}).waitFor();assert.equal(tasks[0].status,'em_andamento');
+ await workflow.getByRole('button',{name:'Solicitar revisão',exact:true}).click();await workflow.getByRole('button',{name:'Solicitar revisão',exact:true}).waitFor({state:'hidden'});assert.equal(tasks[0].status,'revisao');
+ await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.querySelector('[role=dialog]').contains(document.activeElement)),true);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.getByRole('dialog').screenshot({path:`/tmp/rkc-tasks-qa/checklist-${width}.png`});
+ await page.getByRole('dialog').getByRole('button',{name:'Fechar',exact:true}).click();
+ await page.getByRole('link',{name:'Tarefas',exact:true}).last().click();await page.getByText('3 de 3 etapas concluídas · 100%',{exact:false}).waitFor();
+ await page.getByText('Tarefa revisada',{exact:true}).click();await page.getByRole('dialog').waitFor();
  await page.getByRole('button',{name:'Ações da tarefa'}).click();await page.getByRole('menuitem',{name:'Excluir',exact:true}).click();
  await page.getByRole('alertdialog').getByRole('button',{name:'Excluir tarefa',exact:true}).click();
  await page.getByRole('alertdialog').waitFor({state:'hidden'});assert.equal(tasks.length,0);assert.deepEqual(errors,[]);

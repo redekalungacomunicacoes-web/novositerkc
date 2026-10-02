@@ -50,6 +50,10 @@ export interface CalendarTask {
   direcionamento: string[];
   creatorId: string | null;
   completedAt: string | null;
+  checklistTotal?: number;
+  checklistCompleted?: number;
+  reviewerId?: string | null;
+  blockedReason?: string | null;
   meetingLink?: string | null;
   attachments: TaskAttachment[];
   comments: TaskComment[];

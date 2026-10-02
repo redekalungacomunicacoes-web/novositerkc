@@ -1,10 +1,11 @@
+import type { ChecklistItem, FileLink, WorkflowHistory } from "./taskWorkflow";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
 import { downloadRkcDriveFile, deleteTaskWithFiles, listTaskDriveFiles, trashRkcDriveFile, uploadRkcDriveFile } from "@/services/driveFiles";
 import type { CalendarTask, PermissionLevel, TaskAttachment, TaskComment, TaskInput, TaskPriority, TaskStatus, TeamMember, TeamNotification } from "./types";
 
 const BUCKET = "task-files";
-const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao";
+const TASK_SELECT = "id,titulo,descricao,data_tarefa,data_inicio,data_fim,hora_inicio,hora_fim,status,prioridade,assigned_to,created_by,created_at,updated_at,direcionamento,mentions,external_link,link_reuniao,reviewer_id,blocked_reason";
 
 function localDateKey(date: Date) {
   const year = date.getFullYear();
@@ -32,6 +33,8 @@ type DbTask = {
   mentions?: unknown;
   external_link: string | null;
   link_reuniao: string | null;
+  reviewer_id?: string | null;
+  blocked_reason?: string | null;
   task_attachments?: TaskAttachment[] | null;
   task_comments?: TaskComment[] | null;
 };
@@ -133,6 +136,8 @@ function mapTask(task: DbTask): CalendarTask {
     assigneeId: task.assigned_to ?? "",
     direcionamento: Array.isArray(task.direcionamento) ? task.direcionamento : [],
     creatorId: task.created_by,
+    reviewerId: task.reviewer_id,
+    blockedReason: task.blocked_reason,
     completedAt: normalizeStatus(task.status) === "concluida" ? task.updated_at : null,
     meetingLink: task.link_reuniao ?? task.external_link ?? null,
     attachments: task.task_attachments ?? [],
@@ -253,7 +258,15 @@ export async function fetchTasks(startDate: string, endDate: string, filters?: {
 
   // Calendário/Kanban carregam somente os dados essenciais.
   // Comentários e anexos são buscados sob demanda ao abrir uma tarefa.
-  return dbTasks.map((task) => mapTask(task));
+  const mapped = dbTasks.map((task) => mapTask(task));
+  for (let offset = 0; offset < mapped.length; offset += 100) {
+    const batch = mapped.slice(offset, offset + 100);
+    const { data, error } = await supabase.from("task_checklist_progress").select("task_id,total,completed").in("task_id", batch.map(t => t.id));
+    if (error) throw new Error(error.message);
+    const progress = new Map((data ?? []).map(row => [row.task_id, row]));
+    batch.forEach(task => { const row = progress.get(task.id); task.checklistTotal = row?.total ?? 0; task.checklistCompleted = row?.completed ?? 0; });
+  }
+  return mapped;
 }
 
 export async function fetchTaskDetails(taskId: string): Promise<{ attachments: TaskAttachment[]; comments: TaskComment[] }> {
@@ -319,7 +332,7 @@ export async function saveTask(input: TaskInput, taskId?: string) {
 
   // V3: existe um único destino da tarefa. O criador é sempre derivado
   // da sessão autenticada e não deve ser escolhido no formulário.
-  const direcionamento = [assignedTo];
+  const direcionamento = taskId ? Array.from(new Set([assignedTo, ...input.direcionamento])) : [assignedTo];
 
   const startDate = requireDatabaseDate(input.data_inicio, "Data inicial");
   const endDate = requireDatabaseDate(input.data_fim, "Data final");
@@ -508,4 +521,25 @@ export async function deleteTaskAttachment(attachment: Pick<TaskAttachment, "id"
   }
   const { error } = await supabase.from("task_attachments").delete().eq("id", attachment.id);
   if (error) throw new Error(error.message);
+}
+
+export interface TaskWorkflowDetails {
+  task: { expected_delivery: string | null; completion_criteria: string | null; project_id: string | null; reviewer_id: string | null; blocked_reason: string | null; blocked_by: string | null; workflow_version: number; status: TaskStatus };
+  items: ChecklistItem[]; links: FileLink[]; history: WorkflowHistory[]; members: string[];
+}
+export async function fetchTaskWorkflow(taskId: string): Promise<TaskWorkflowDetails> {
+  const results = await Promise.all([
+    supabase.from("tasks").select("expected_delivery,completion_criteria,project_id,reviewer_id,blocked_reason,blocked_by,workflow_version,status").eq("id", taskId).single(),
+    supabase.from("task_checklist_items").select("*").eq("task_id", taskId).order("position").order("id"),
+    supabase.from("task_file_links").select("*").eq("task_id", taskId),
+    supabase.from("task_workflow_history").select("*").eq("task_id", taskId).order("created_at", { ascending: false }).limit(100),
+    supabase.from("task_assignees").select("user_id").eq("task_id", taskId),
+  ]);
+  results.forEach(r => { if (r.error) throw new Error(r.error.message); });
+  return { task: results[0].data, items: results[1].data ?? [], links: results[2].data ?? [], history: results[3].data ?? [], members: (results[4].data ?? []).map(row => row.user_id) } as TaskWorkflowDetails;
+}
+export async function mutateTaskWorkflow(taskId: string, action: string, payload: Record<string, unknown>, version: number, requestId: string) {
+  const { data, error } = await supabase.rpc("mutate_task_workflow", { p_task: taskId, p_action: action, p_payload: payload, p_version: version, p_request: requestId });
+  if (error) throw new Error(error.message);
+  return data as { version: number; total: number; completed: number; percent: number | null; replayed?: boolean };
 }

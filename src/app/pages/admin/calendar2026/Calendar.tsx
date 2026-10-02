@@ -1,3 +1,4 @@
+import { progressLabel } from "./taskWorkflow";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo } from "react";
@@ -115,10 +116,10 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
                     <button type="button" key={task.id} onClick={(event) => { if (!onSelectTask) return; event.stopPropagation(); onSelectTask(task); }} className={`group rounded-2xl border px-2.5 py-2 text-xs shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${onSelectTask ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" : ""} ${priorityStyles[task.priority]}`}>
                       <div className="flex items-center gap-2">
                         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${priorityDot[task.priority]}`} />
-                        <span className="truncate font-semibold">{task.title}</span>
+                        <span className="truncate font-semibold" title={progressLabel(task.checklistTotal,task.checklistCompleted)}>{task.title}</span>
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] opacity-80">
-                        <span>{taskTime(task)}</span>
+                        <span title={progressLabel(task.checklistTotal,task.checklistCompleted)}>{task.checklistTotal ? `${task.checklistCompleted}/${task.checklistTotal} · ${Math.round((task.checklistCompleted ?? 0)/task.checklistTotal*100)}%` : "Sem etapas"}</span>
                         {assignee ? <img src={assignee.avatar} alt={assignee.name} title={assignee.name} className="h-5 w-5 rounded-full object-cover ring-2 ring-white dark:ring-emerald-950" /> : null}
                       </div>
                     </button>

@@ -66,10 +66,10 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  async function requireTaskAccess(taskId: string) {
+  async function requireTaskAccess(taskId: string, writing = false) {
     const { data, error } = await userClient
       .from("tasks")
-      .select("id")
+      .select("id,status")
       .eq("id", taskId)
       .maybeSingle();
     if (error || !data)
@@ -80,6 +80,8 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
+    if (writing && ["concluida", "concluido"].includes(data.status))
+      throw new Response(JSON.stringify({ ok: false, error: "Reabra a tarefa e informe o motivo antes de enviar novos arquivos." }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   try {
@@ -117,7 +119,7 @@ Deno.serve(async (req) => {
         );
       if (file.size > 50 * 1024 * 1024)
         return json({ ok: false, error: "O limite por arquivo é 50 MB." }, 413);
-      await requireTaskAccess(taskId);
+      await requireTaskAccess(taskId, true);
       if (!rootFolderId)
         return json(
           { ok: false, error: "Pasta raiz do Drive não configurada." },

@@ -10,7 +10,7 @@
     "lint:academia": "eslint --config eslint.academia.config.mjs src/app/pages/admin/academia",
     "test:academia": "node --test tests/academia.test.mjs tests/academia-autoria.test.mjs tests/academy-drive.test.mjs",
     "test:academia:ui": "node tests/academia-ui.mjs",
-    "test:tasks": "node --test tests/tasks.test.mjs tests/tasks-endpoint.test.mjs",
+    "test:tasks": "node --test tests/tasks.test.mjs tests/tasks-endpoint.test.mjs tests/tasks-workflow.test.mjs",
     "typecheck:tasks": "tsc -p tsconfig.tasks.json",
     "test:tasks:ui": "node tests/tasks-ui.mjs"
   },

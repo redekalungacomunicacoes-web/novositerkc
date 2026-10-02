@@ -128,7 +128,7 @@ export function useDeleteTaskAttachmentMutation() {
   return useMutation({
     mutationFn: (attachment: Pick<TaskAttachment, "id" | "file_url">) => deleteTaskAttachment(attachment),
     onSuccess: (_data, attachment) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.attachments });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       const entries = queryClient.getQueriesData<{ attachments?: TaskAttachment[] }>({ queryKey: taskKeys.all });
       entries.forEach(([queryKey, data]) => {
         if (!data || Array.isArray(data) || !Array.isArray(data.attachments)) return;

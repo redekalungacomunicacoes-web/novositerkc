@@ -10,6 +10,8 @@ on:
       - 'src/services/driveFiles.ts'
       - 'supabase/functions/**'
       - 'supabase/migrations/*tasks_lifecycle*'
+      - 'supabase/migrations/*tasks_collaborative*'
+      - 'supabase/migrations/*tasks_workflow*'
       - 'tests/tasks*'
       - 'tests/file-center*'
       - 'supabase/migrations/*file_center*'
