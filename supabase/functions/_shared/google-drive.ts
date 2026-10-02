@@ -140,6 +140,43 @@ export async function uploadDriveFile(file: File, folderId: string) {
   return response.json();
 }
 
+export async function startDriveResumableUpload(input: {
+  name: string;
+  mimeType: string;
+  size: number;
+  folderId: string;
+}) {
+  const token = await accessToken();
+  const response = await fetch(
+    `${DRIVE_UPLOAD_API}/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,mimeType,size,webViewLink,parents`,
+    {
+      method: "POST",
+      signal: AbortSignal.timeout(30000),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": input.mimeType || "application/octet-stream",
+        "X-Upload-Content-Length": String(input.size),
+      },
+      body: JSON.stringify({ name: input.name, parents: [input.folderId] }),
+    },
+  );
+  if (!response.ok)
+    throw new Error(`Falha ao iniciar upload resumível: ${await response.text()}`);
+  const location = response.headers.get("Location");
+  if (!location) throw new Error("Google Drive não retornou a sessão de upload.");
+  return location;
+}
+
+export async function getDriveFileMetadata(fileId: string) {
+  const response = await driveFetch(
+    `${DRIVE_API}/files/${encodeURIComponent(fileId)}?supportsAllDrives=true&fields=id,name,mimeType,size,webViewLink,parents,trashed`,
+  );
+  if (!response.ok)
+    throw new Error(`Falha ao confirmar arquivo no Drive: ${await response.text()}`);
+  return response.json();
+}
+
 export async function renameDriveFile(fileId: string, name: string) {
   const response = await driveFetch(
     `${DRIVE_API}/files/${encodeURIComponent(fileId)}?supportsAllDrives=true&fields=id,name,mimeType,size,webViewLink,parents`,
