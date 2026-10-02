@@ -190,6 +190,31 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action ?? "");
+    if (action === "task-ensure-folder") {
+      const taskId = String(body.task_id || "");
+      if (!taskId) return json({ ok: false, error: "Tarefa obrigatória." }, 400);
+      await requireTaskAccess(taskId);
+      if (!rootFolderId) return json({ ok: false, error: "Pasta raiz do Drive não configurada." }, 503);
+      const { data: task, error: taskError } = await admin.from("tasks")
+        .select("id,titulo,context_type,context_id,drive_folder_id,assigned_to").eq("id", taskId).single();
+      if (taskError || !task) return json({ ok: false, error: "Tarefa não encontrada." }, 404);
+      if (task.drive_folder_id) return json({ ok: true, folder_id: task.drive_folder_id });
+      let assigneeFolder = "SEM_RESPONSAVEL";
+      if (task.assigned_to) {
+        const { data: member } = await admin.from("equipe").select("nome").eq("id", task.assigned_to).maybeSingle();
+        assigneeFolder = safeName(member?.nome || String(task.assigned_to));
+      }
+      const label = safeName(`${task.titulo ?? "Tarefa"} - ${String(task.id).slice(0, 8)}`);
+      const segments = task.context_type === "project"
+        ? ["03_PROJETOS", String(task.context_id ?? "geral"), "TAREFAS", label]
+        : task.context_type === "materia"
+          ? ["02_MATERIAS", String(task.context_id ?? "geral"), "TAREFAS", label]
+          : ["05_INTEGRANTES", assigneeFolder, "TAREFAS", label];
+      const path = await ensureDrivePath(rootFolderId, segments);
+      const { error } = await admin.from("tasks").update({ drive_folder_id: path.folderId }).eq("id", taskId);
+      if (error) throw error;
+      return json({ ok: true, folder_id: path.folderId });
+    }
     if (action === "academy-upload-start") {
       if (!rootFolderId) return json({ ok: false, error: "Pasta raiz do Drive não configurada." }, 503);
       const course = String(body.course_id || "");
