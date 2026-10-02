@@ -103,7 +103,7 @@ export function Study({
           <div className="overflow-hidden rounded-xl bg-muted aspect-[3/1] max-h-64">
             <Asset
               path={course.cover_path}
-              driveFileId={course.cover_drive_file_id}
+              driveFileId={course.banner_drive_file_id || course.cover_drive_file_id}
               title={`Capa de ${course.title}`}
               type="image"
               variant="banner"
