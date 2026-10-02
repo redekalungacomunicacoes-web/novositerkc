@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
           ...corsHeaders,
           "Content-Type": file.mime_type || response.headers.get("Content-Type") || "application/octet-stream",
           "Content-Disposition": `${action === "stream" ? "inline" : "attachment"}; filename="${safeName(file.name)}"`,
-          "Cache-Control": "private, max-age=300",
+          "Cache-Control": "private, no-store",
           "X-Content-Type-Options": "nosniff",
           "Accept-Ranges": "bytes",
         };
