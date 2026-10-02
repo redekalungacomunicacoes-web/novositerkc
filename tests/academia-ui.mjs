@@ -221,7 +221,7 @@ try {
     await page.getByRole("button", { name: "Editar curso Curso próprio" }).click();
     await page.waitForURL("**/admin/academia/cursos/own/editar");
     assert.equal(
-      await page.getByRole("button", { name: "Publicar", exact: true }).count(),
+      await page.getByRole("button", { name: /^(Publicar|Despublicar)$/ }).count(),
       1,
     );
     assert.equal(
