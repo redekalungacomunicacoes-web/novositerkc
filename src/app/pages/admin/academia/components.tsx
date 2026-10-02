@@ -349,6 +349,7 @@ export function Asset({
   title,
   type,
   variant = "default",
+  showOpenLink = true,
 }: {
   path?: string | null;
   driveFileId?: string | null;
@@ -357,6 +358,7 @@ export function Asset({
   title: string;
   type?: string;
   variant?: "default" | "banner";
+  showOpenLink?: boolean;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   const [mime, setMime] = useState("");
@@ -467,15 +469,17 @@ export function Asset({
             : "w-full max-h-96 object-contain rounded-lg"}
         />
       ) : null}
-      <a
-        className="text-primary underline break-words"
-        href={src}
-        target="_blank"
-        rel="noopener noreferrer"
-        download={driveFileId ? title : undefined}
-      >
-        Abrir {title}
-      </a>
+      {showOpenLink && (
+        <a
+          className="text-primary underline break-words"
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={driveFileId ? title : undefined}
+        >
+          Abrir {title}
+        </a>
+      )}
     </div>
   );
 }
