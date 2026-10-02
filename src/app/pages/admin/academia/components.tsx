@@ -348,6 +348,7 @@ export function Asset({
   url,
   title,
   type,
+  variant = "default",
 }: {
   path?: string | null;
   driveFileId?: string | null;
@@ -355,6 +356,7 @@ export function Asset({
   url?: string | null;
   title: string;
   type?: string;
+  variant?: "default" | "banner";
 }) {
   const [src, setSrc] = useState<string | null>(null);
   const [mime, setMime] = useState("");
@@ -405,7 +407,16 @@ export function Asset({
       </p>
     );
   if (!src)
-    return path || driveFileId ? <p>Carregando material privado…</p> : null;
+    return path || driveFileId ? (
+      variant === "banner" ? (
+        <div className="h-full min-h-32 w-full animate-pulse bg-muted" role="status" aria-label="Carregando capa do curso" />
+      ) : (
+        <div className="space-y-2" role="status">
+          <div className="h-2 w-2/3 animate-pulse rounded bg-muted" />
+          <p className="text-sm text-muted-foreground">Carregando material privado…</p>
+        </div>
+      )
+    ) : null;
   const embed = videoEmbed(source || "", url);
   const format = mime.startsWith("video/")
     ? "video"
@@ -440,7 +451,9 @@ export function Asset({
         <img
           alt={title}
           src={src}
-          className="w-full max-h-96 object-contain rounded-lg"
+          className={variant === "banner"
+            ? "h-full min-h-32 w-full object-cover"
+            : "w-full max-h-96 object-contain rounded-lg"}
         />
       ) : null}
       <a

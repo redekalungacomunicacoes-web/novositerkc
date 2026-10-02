@@ -97,12 +97,15 @@ export function Study({
         <h1 className="text-3xl font-bold break-words">{course.title}</h1>
         <p>{course.summary}</p>
         {(course.cover_path || course.cover_drive_file_id) && (
-          <Asset
-            path={course.cover_path}
-            driveFileId={course.cover_drive_file_id}
-            title={`Capa de ${course.title}`}
-            type="image"
-          />
+          <div className="overflow-hidden rounded-xl bg-muted aspect-[3/1] max-h-64">
+            <Asset
+              path={course.cover_path}
+              driveFileId={course.cover_drive_file_id}
+              title={`Capa de ${course.title}`}
+              type="image"
+              variant="banner"
+            />
+          </div>
         )}
         <p className="text-sm text-muted-foreground">
           Carga horária: {course.hours} h · {lessons.length} aulas publicadas
