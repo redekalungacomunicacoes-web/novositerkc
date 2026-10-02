@@ -167,14 +167,26 @@ export function Academia() {
     setNotice("Alteração salva.");
   }
   async function remove(entity: Entity, id: string) {
-    if (
-      window.confirm(
-        "Excluir este registro? Registros com histórico acadêmico podem impedir a exclusão.",
-      )
-    ) {
-      await run(() => deleteEntity(entity, id));
-      if (entity === "courses" && selectedCourse === id) setSelectedCourse("");
-    }
+    if (!window.confirm(
+      entity === "courses"
+        ? "Excluir este curso? Arquivos vinculados devem ser removidos do Drive pela própria Academia. Histórico acadêmico pode impedir a exclusão."
+        : "Excluir este registro? Registros com histórico acadêmico podem impedir a exclusão.",
+    )) return;
+    await run(async () => {
+      try {
+        await deleteEntity(entity, id);
+      } catch (e) {
+        const detail = message(e);
+        if (entity === "courses" && /slug_key|duplicate key/i.test(detail)) {
+          throw new Error("Não foi possível excluir o curso porque o banco tentou recriar um slug já existente. Não é necessário apagar pastas manualmente no Drive; este conflito é de dados da Academia.");
+        }
+        if (entity === "courses" && /foreign key|violates.*constraint|still referenced/i.test(detail)) {
+          throw new Error("Este curso ainda possui histórico ou registros vinculados na Academia. A exclusão direta foi bloqueada para preservar os dados acadêmicos.");
+        }
+        throw e;
+      }
+    });
+    if (entity === "courses" && selectedCourse === id) setSelectedCourse("");
   }
   if (loading && !data) return <p role="status">Carregando Academia RKC…</p>;
   if (error || !data)
