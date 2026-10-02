@@ -48,7 +48,7 @@ As fixtures verificam comportamento controlado. As permissões nativas do Drive 
 
 ## Situação da entrega
 
-Mudanças preparadas em branch/PR. A migration de produção foi bloqueada pela revisão automática por falta de autorização explícita para alterar banco e permissões. Não foi aplicada, a Edge Function não foi publicada e main não foi alterada. Publicação exige aprovação do usuário e deve seguir migration -> deploy drive-files com todos os arquivos shared -> merge/deploy do frontend.
+A PR #177 foi integrada em `main`. A migration de produção foi aplicada, a Edge Function `drive-files` foi publicada e os checks Validate Tasks/Validate Academia passaram. O frontend foi publicado no GitHub Pages. A pendência operacional restante é a validação autenticada com uma conta real no Google Drive e a conferência das permissões herdadas de `04_EQUIPE` e das pastas de tarefas; os testes automatizados usam fixtures e não substituem essa verificação.
 
 ## Capturas com dados de teste
 
