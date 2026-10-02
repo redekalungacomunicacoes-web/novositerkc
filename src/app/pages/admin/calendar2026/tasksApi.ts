@@ -375,25 +375,29 @@ export async function updateTaskStatus(
 }
 
 export async function deleteTask(taskId: string) {
+  // Drive RKC: arquiva primeiro os metadados/arquivos vinculados à tarefa.
+  // O arquivo físico é enviado à lixeira pelo backend do Drive.
+  const driveFiles = await listTaskDriveFiles(taskId);
+  if (driveFiles.length) {
+    const results = await Promise.allSettled(driveFiles.map((file) => trashRkcDriveFile(file.id)));
+    const failed = results.filter((result) => result.status === "rejected");
+    if (failed.length) throw new Error("Não foi possível remover todos os anexos do Drive RKC. A tarefa foi preservada.");
+  }
+
+  // Compatibilidade com anexos legados armazenados no bucket task-files.
   const attachmentsResult = await supabase
     .from("task_attachments")
     .select("id,file_url")
     .eq("task_id", taskId);
   if (attachmentsResult.error) throw new Error(attachmentsResult.error.message);
-
   const storagePaths = (attachmentsResult.data ?? [])
     .map((attachment) => attachment.file_url as string | null)
     .filter((path): path is string => Boolean(path) && !/^https?:\/\//i.test(path));
-
   if (storagePaths.length > 0) {
     const storageResult = await supabase.storage.from(BUCKET).remove(storagePaths);
-    if (storageResult.error) {
-      console.error("[tarefas:excluir] falha ao remover anexos do Storage", storageResult.error);
-      throw new Error("Não foi possível remover todos os anexos da tarefa.");
-    }
+    if (storageResult.error) throw new Error("Não foi possível remover todos os anexos legados. A tarefa foi preservada.");
   }
 
-  // task_comments e task_attachments possuem ON DELETE CASCADE nas migrations.
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
   if (error) throw new Error(error.message);
 }
