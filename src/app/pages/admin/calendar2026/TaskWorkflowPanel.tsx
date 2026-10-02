@@ -1,3 +1,14 @@
+import * as WorkspaceTabs from "@radix-ui/react-tabs";
+import {
+  BarChart3,
+  ListChecks,
+  MessageSquare,
+  Paperclip,
+  Settings2,
+  Clock3,
+} from "lucide-react";
+import type { ReactNode } from "react";
+import { statusLabels, priorityLabels } from "./tasksApi";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -30,11 +41,16 @@ export function TaskWorkflowPanel({
   task,
   attachments,
   team,
+  materials,
+  discussion,
 }: {
   task: CalendarTask;
   attachments: TaskAttachment[];
   team: TeamMember[];
+  materials?: ReactNode;
+  discussion?: ReactNode;
 }) {
+  const [view, setView] = useState("execute");
   const client = useQueryClient();
   const query = useQuery({
     queryKey: [...taskKeys.detail(task.id), "workflow"],
@@ -305,502 +321,691 @@ export function TaskWorkflowPanel({
     );
   return (
     <section
-      className="mb-4 space-y-4"
+      className="mb-4 min-w-0 space-y-5"
       aria-label="Acompanhamento da entrega"
       aria-busy={busy || upload.isPending}
     >
-      <div className="rounded-2xl border border-emerald-200 p-4">
-        <h3 className="font-semibold">Entrega esperada</h3>
-        <p className="whitespace-pre-wrap break-words">
-          {data.task.expected_delivery ||
-            task.description ||
-            "Defina a entrega e o critério de conclusão."}
-        </p>
-        <p className="mt-2 text-sm">
-          Critério: {data.task.completion_criteria || "Ainda não definido"}
-        </p>
-        <p className="mt-2 text-sm">
-          Prazo: {task.endDate.split("-").reverse().join("/")} · Responsável:{" "}
-          {team.find((m) => m.id === task.assigneeId)?.name ?? "Não definido"}
-        </p>
-        <p role="status" className="mt-3 font-semibold">
-          {progressLabel(total, completed)}
-        </p>
-        {total ? (
-          <progress
-            aria-label="Progresso das etapas"
-            className="mt-2 w-full"
-            value={completed}
-            max={total}
-          />
-        ) : null}
-        <p className="text-sm">
-          {next
-            ? `Próxima etapa: ${next.title}`
-            : total
-              ? "Etapas concluídas. A entrega ainda precisa ser concluída ou aprovada."
-              : "Crie etapas ou aplique um modelo."}
-        </p>
-      </div>
-      <div className="rounded-2xl border border-emerald-200 p-4">
-        <h3 className="mb-3 font-semibold">Checklist</h3>
-        <div className="space-y-3">
-          {data.items.map((item, index) => (
-            <ChecklistRow
-              key={item.id}
-              item={item}
-              team={team}
-              canOrganize={manager && !closed}
-              canComplete={participant && !closed}
-              busy={busy}
-              first={index === 0}
-              last={index === total - 1}
-              onSave={(payload) =>
-                run("edit", { item_id: item.id, ...payload })
-              }
-              onToggle={() =>
-                void run("toggle", {
-                  item_id: item.id,
-                  completed: !item.completed_at,
-                })
-              }
-              onDelete={() => {
-                if (
-                  window.confirm(
-                    "Remover esta etapa? Os arquivos permanecerão nos materiais gerais da tarefa.",
-                  )
-                )
-                  void run("delete", { item_id: item.id });
-              }}
-              onMove={(delta) => {
-                const ids = data.items.map((i) => i.id);
-                [ids[index], ids[index + delta]] = [
-                  ids[index + delta],
-                  ids[index],
-                ];
-                void run("order", { ids });
-              }}
-              files={filesFor(item)}
-            />
-          ))}
-        </div>
-        {manager && !closed ? (
-          <>
-            <form
-              className="mt-3 flex flex-wrap gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void run("add", { title }).then((ok) => {
-                  if (ok) setTitle("");
-                });
-              }}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-950">
+        <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_300px]">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap gap-2">
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100">
+                {statusLabels[data.task.status]}
+              </span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600 dark:bg-emerald-900 dark:text-emerald-100">
+                Prioridade {priorityLabels[task.priority].toLowerCase()}
+              </span>
+              {data.task.blocked_reason ? (
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  Bloqueada
+                </span>
+              ) : null}
+            </div>
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Entrega esperada
+            </h3>
+            <p className="mt-2 whitespace-pre-wrap break-words text-lg font-semibold leading-relaxed">
+              {data.task.expected_delivery ||
+                task.description ||
+                "Defina a entrega e o critério de conclusão."}
+            </p>
+            <p className="mt-2 text-sm text-slate-500 dark:text-emerald-100/70">
+              Critério: {data.task.completion_criteria || "Ainda não definido"}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-emerald-900/40">
+                {team.find((m) => m.id === task.assigneeId)?.name ??
+                  "Responsável não definido"}
+              </span>
+              <span className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 dark:bg-emerald-900/40">
+                <Clock3 size={15} /> Prazo{" "}
+                {task.endDate.split("-").reverse().join("/")}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col justify-center rounded-2xl bg-emerald-50/70 p-4 dark:bg-emerald-900/30">
+            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+              Acompanhamento
+            </p>
+            <p
+              role="status"
+              className="mt-3 text-lg font-semibold text-emerald-950 dark:text-emerald-50"
             >
-              <label className="min-w-0 flex-1">
-                Nova etapa
-                <input
-                  className={control}
-                  required
-                  maxLength={300}
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ação e resultado verificável"
+              {progressLabel(total, completed)}
+            </p>
+            {total ? (
+              <progress
+                aria-label="Progresso das etapas"
+                className="mt-3 h-2 w-full overflow-hidden rounded-full accent-emerald-600"
+                value={completed}
+                max={total}
+              />
+            ) : null}
+            <p className="mt-3 text-sm text-emerald-800 dark:text-emerald-100">
+              {next
+                ? `Próxima etapa: ${next.title}`
+                : closed
+                  ? "Entrega concluída."
+                  : total
+                    ? "Etapas concluídas. A entrega ainda precisa ser concluída ou aprovada."
+                    : "Crie etapas ou aplique um modelo."}
+            </p>
+          </div>
+        </div>
+      </div>
+      <WorkspaceTabs.Root
+        value={view}
+        onValueChange={setView}
+        className="min-w-0 space-y-5"
+      >
+        <WorkspaceTabs.List
+          aria-label="Seções da tarefa"
+          className="flex w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 dark:border-emerald-800 dark:bg-emerald-950"
+        >
+          {[
+            { id: "execute", label: "Executar", icon: ListChecks },
+            { id: "files", label: "Arquivos", icon: Paperclip },
+            {
+              id: "discussion",
+              label: "Comentários e check-ins",
+              icon: MessageSquare,
+            },
+            { id: "report", label: "Relatório", icon: BarChart3 },
+            { id: "settings", label: "Organização", icon: Settings2 },
+          ].map((tab) => (
+            <WorkspaceTabs.Trigger
+              key={tab.id}
+              value={tab.id}
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-medium text-slate-500 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 data-[state=active]:bg-emerald-700 data-[state=active]:text-white sm:flex-1 sm:justify-center"
+            >
+              <tab.icon size={16} />
+              {tab.label}
+            </WorkspaceTabs.Trigger>
+          ))}
+        </WorkspaceTabs.List>
+        <WorkspaceTabs.Content
+          forceMount
+          value="execute"
+          className="grid min-w-0 items-start gap-5 outline-none data-[state=inactive]:hidden lg:grid-cols-[minmax(0,1fr)_320px]"
+        >
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 dark:border-emerald-800 dark:bg-emerald-950">
+            <h3 className="mb-3 font-semibold">Checklist</h3>
+            <div className="space-y-3">
+              {data.items.map((item, index) => (
+                <ChecklistRow
+                  key={item.id}
+                  item={item}
+                  team={team}
+                  canOrganize={manager && !closed}
+                  canComplete={participant && !closed}
+                  busy={busy}
+                  first={index === 0}
+                  last={index === total - 1}
+                  onSave={(payload) =>
+                    run("edit", { item_id: item.id, ...payload })
+                  }
+                  onToggle={() =>
+                    void run("toggle", {
+                      item_id: item.id,
+                      completed: !item.completed_at,
+                    })
+                  }
+                  onDelete={() => {
+                    if (
+                      window.confirm(
+                        "Remover esta etapa? Os arquivos permanecerão nos materiais gerais da tarefa.",
+                      )
+                    )
+                      void run("delete", { item_id: item.id });
+                  }}
+                  onMove={(delta) => {
+                    const ids = data.items.map((i) => i.id);
+                    [ids[index], ids[index + delta]] = [
+                      ids[index + delta],
+                      ids[index],
+                    ];
+                    void run("order", { ids });
+                  }}
+                  files={filesFor(item)}
                 />
-              </label>
-              <button className={button} disabled={busy || !title.trim()}>
-                Adicionar etapa
-              </button>
-            </form>
-            <details className="mt-4">
-              <summary className="min-h-11 cursor-pointer py-2">
-                Aplicar modelo de entrega (editável)
-              </summary>
-              <label>
-                Modelo
-                <select
-                  aria-label="Modelo"
-                  className={control}
-                  value={template}
-                  onChange={(e) => {
-                    setTemplate(e.target.value);
-                    setTemplateText(
-                      deliveryTemplates[e.target.value].join("\n"),
-                    );
-                    setMode("");
+              ))}
+            </div>
+            {manager && !closed ? (
+              <>
+                <form
+                  className="mt-3 flex flex-wrap gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void run("add", { title }).then((ok) => {
+                      if (ok) setTitle("");
+                    });
                   }}
                 >
-                  {Object.keys(deliveryTemplates).map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Etapas, uma por linha
-                <textarea
-                  aria-label="Etapas, uma por linha"
-                  className={control + " min-h-32"}
-                  value={templateText}
-                  onChange={(e) => setTemplateText(e.target.value)}
-                />
-              </label>
-              {total ? (
-                <label>
-                  Como aplicar
-                  <select
-                    aria-label="Como aplicar"
-                    className={control}
-                    value={mode}
-                    onChange={(e) => setMode(e.target.value)}
+                  <label className="min-w-0 flex-1">
+                    Nova etapa
+                    <input
+                      className={control}
+                      required
+                      maxLength={300}
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Ação e resultado verificável"
+                    />
+                  </label>
+                  <button className={button} disabled={busy || !title.trim()}>
+                    Adicionar etapa
+                  </button>
+                </form>
+                <details className="mt-4">
+                  <summary className="min-h-11 cursor-pointer py-2">
+                    Aplicar modelo de entrega (editável)
+                  </summary>
+                  <label>
+                    Modelo
+                    <select
+                      aria-label="Modelo"
+                      className={control}
+                      value={template}
+                      onChange={(e) => {
+                        setTemplate(e.target.value);
+                        setTemplateText(
+                          deliveryTemplates[e.target.value].join("\n"),
+                        );
+                        setMode("");
+                      }}
+                    >
+                      {Object.keys(deliveryTemplates).map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Etapas, uma por linha
+                    <textarea
+                      aria-label="Etapas, uma por linha"
+                      className={control + " min-h-32"}
+                      value={templateText}
+                      onChange={(e) => setTemplateText(e.target.value)}
+                    />
+                  </label>
+                  {total ? (
+                    <label>
+                      Como aplicar
+                      <select
+                        aria-label="Como aplicar"
+                        className={control}
+                        value={mode}
+                        onChange={(e) => setMode(e.target.value)}
+                      >
+                        <option value="">Escolha explicitamente</option>
+                        <option value="append">
+                          Acrescentar às etapas atuais
+                        </option>
+                        <option value="replace">
+                          Substituir checklist (preserva arquivos gerais)
+                        </option>
+                      </select>
+                    </label>
+                  ) : null}
+                  <button
+                    className={button + " mt-2"}
+                    type="button"
+                    disabled={
+                      busy || !templateText.trim() || (total > 0 && !mode)
+                    }
+                    onClick={() => {
+                      if (
+                        mode === "replace" &&
+                        !window.confirm(
+                          "Substituir o checklist atual? Os arquivos gerais serão preservados.",
+                        )
+                      )
+                        return;
+                      void run("template", {
+                        name: template,
+                        mode: total ? mode : "append",
+                        steps: templateText
+                          .split("\n")
+                          .map((title) => ({ title: title.trim() }))
+                          .filter((s) => s.title),
+                      }).then((ok) => {
+                        if (ok) setMode("");
+                      });
+                    }}
                   >
-                    <option value="">Escolha explicitamente</option>
-                    <option value="append">Acrescentar às etapas atuais</option>
-                    <option value="replace">
-                      Substituir checklist (preserva arquivos gerais)
-                    </option>
-                  </select>
-                </label>
-              ) : null}
-              <button
-                className={button + " mt-2"}
-                type="button"
-                disabled={busy || !templateText.trim() || (total > 0 && !mode)}
-                onClick={() => {
-                  if (
-                    mode === "replace" &&
-                    !window.confirm(
-                      "Substituir o checklist atual? Os arquivos gerais serão preservados.",
-                    )
-                  )
-                    return;
-                  void run("template", {
-                    name: template,
-                    mode: total ? mode : "append",
-                    steps: templateText
-                      .split("\n")
-                      .map((title) => ({ title: title.trim() }))
-                      .filter((s) => s.title),
-                  }).then((ok) => {
-                    if (ok) setMode("");
-                  });
-                }}
-              >
-                Aplicar cópia do modelo
-              </button>
-            </details>
-          </>
-        ) : null}
-      </div>
-      <div className="rounded-2xl border border-emerald-200 p-4">
-        <h3 className="font-semibold">Bloqueios e revisão</h3>
-        <p className="mt-2 whitespace-pre-wrap break-words">
-          {data.task.blocked_reason
-            ? `Bloqueada: ${data.task.blocked_reason}${data.task.blocked_by ? ` · Depende de ${team.find((m) => m.id === data.task.blocked_by)?.name ?? "integrante"}` : ""}`
-            : "Nenhum bloqueio informado."}
-        </p>
-        <p className="text-sm">
-          Revisão:{" "}
-          {team.find((m) => m.id === data.task.reviewer_id)?.name ??
-            "Sem revisor definido"}
-        </p>
-        {closed ? (
-          manager ? (
-            <form
-              className="mt-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void run("reopen", { reason }).then((ok) => {
-                  if (ok) setReason("");
-                });
-              }}
-            >
-              <label>
-                Motivo da reabertura
-                <input
-                  className={control}
-                  required
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
-              </label>
-              <button
-                className={button + " mt-2"}
-                disabled={busy || !reason.trim()}
-              >
-                Reabrir tarefa
-              </button>
-            </form>
-          ) : null
-        ) : (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {manager &&
-            data.task.reviewer_id &&
-            data.task.status !== "revisao" ? (
-              <button
-                className={button}
-                disabled={busy || !!next}
-                onClick={() => void run("review", {})}
-              >
-                Solicitar revisão
-              </button>
-            ) : null}
-            {(
-              data.task.reviewer_id
-                ? actor === data.task.reviewer_id &&
-                  data.task.status === "revisao"
-                : actor === task.assigneeId
-            ) ? (
-              <button
-                className={button}
-                disabled={busy || !!next}
-                onClick={() => void run("complete", {})}
-              >
-                {data.task.reviewer_id
-                  ? "Aprovar e concluir"
-                  : "Concluir entrega"}
-              </button>
-            ) : null}
-            {next ? (
-              <p className="text-sm">
-                Conclua as etapas pendentes antes de finalizar ou solicitar
-                revisão.
-              </p>
+                    Aplicar cópia do modelo
+                  </button>
+                </details>
+              </>
             ) : null}
           </div>
-        )}
-      </div>
-      {manager && !closed ? (
-        <details className="rounded-2xl border border-emerald-200 p-4">
-          <summary className="min-h-11 cursor-pointer">
-            Organização e colaboração
-          </summary>
-          <form
-            className="mt-3 grid gap-3 md:grid-cols-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run("metadata", metadata);
-            }}
-          >
-            <label className="md:col-span-2">
-              Entrega esperada
-              <textarea
-                aria-label="Entrega esperada"
-                className={control}
-                value={metadata.expected_delivery}
-                onChange={(e) =>
-                  setMetadata({
-                    ...metadata,
-                    expected_delivery: e.target.value,
-                  })
-                }
-              />
-            </label>
-            <label className="md:col-span-2">
-              Critério de conclusão
-              <textarea
-                aria-label="Critério de conclusão"
-                className={control}
-                value={metadata.completion_criteria}
-                onChange={(e) =>
-                  setMetadata({
-                    ...metadata,
-                    completion_criteria: e.target.value,
-                  })
-                }
-              />
-            </label>
-            <label>
-              Projeto ou ação
-              <select
-                aria-label="Projeto ou ação"
-                className={control}
-                value={metadata.project_id}
-                onChange={(e) =>
-                  setMetadata({ ...metadata, project_id: e.target.value })
-                }
-              >
-                <option value="">Sem vínculo</option>
-                {projects.data?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.titulo}
-                  </option>
-                ))}
-              </select>
-              {projects.error ? (
-                <span role="alert">Não foi possível carregar projetos.</span>
-              ) : null}
-            </label>
-            <label>
-              Pessoa revisora
-              <select
-                aria-label="Pessoa revisora"
-                className={control}
-                value={metadata.reviewer_id}
-                onChange={(e) =>
-                  setMetadata({ ...metadata, reviewer_id: e.target.value })
-                }
-              >
-                <option value="">Sem revisão</option>
-                {team.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              O que está faltando
-              <textarea
-                aria-label="O que está faltando"
-                className={control}
-                value={metadata.blocked_reason}
-                onChange={(e) =>
-                  setMetadata({ ...metadata, blocked_reason: e.target.value })
-                }
-              />
-            </label>
-            <label>
-              De quem depende
-              <select
-                aria-label="De quem depende"
-                className={control}
-                value={metadata.blocked_by}
-                onChange={(e) =>
-                  setMetadata({ ...metadata, blocked_by: e.target.value })
-                }
-              >
-                <option value="">Não definido</option>
-                {team.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className={button} disabled={busy}>
-              Salvar organização
-            </button>
-          </form>
-          <fieldset className="mt-4" disabled={busy}>
-            <legend>Colaboradores</legend>
-            <div className="grid gap-2 md:grid-cols-2">
-              {team
-                .filter((m) => m.id !== task.assigneeId)
-                .map((m) => (
-                  <label
-                    className="flex min-h-11 items-center gap-2"
-                    key={m.id}
-                  >
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 dark:border-emerald-800 dark:bg-emerald-950">
+            <h3 className="font-semibold">Bloqueios e revisão</h3>
+            <p className="mt-2 whitespace-pre-wrap break-words">
+              {data.task.blocked_reason
+                ? `Bloqueada: ${data.task.blocked_reason}${data.task.blocked_by ? ` · Depende de ${team.find((m) => m.id === data.task.blocked_by)?.name ?? "integrante"}` : ""}`
+                : "Nenhum bloqueio informado."}
+            </p>
+            <p className="text-sm">
+              Revisão:{" "}
+              {team.find((m) => m.id === data.task.reviewer_id)?.name ??
+                "Sem revisor definido"}
+            </p>
+            {closed ? (
+              manager ? (
+                <form
+                  className="mt-3"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void run("reopen", { reason }).then((ok) => {
+                      if (ok) setReason("");
+                    });
+                  }}
+                >
+                  <label>
+                    Motivo da reabertura
                     <input
-                      type="checkbox"
-                      checked={members.includes(m.id)}
-                      onChange={(e) =>
-                        setMembers(
-                          e.target.checked
-                            ? [...members, m.id]
-                            : members.filter((id) => id !== m.id),
-                        )
-                      }
+                      className={control}
+                      required
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
                     />
-                    {m.name}
                   </label>
-                ))}
-            </div>
-            <button
-              className={button}
-              onClick={() => void run("collaborators", { members })}
+                  <button
+                    className={button + " mt-2"}
+                    disabled={busy || !reason.trim()}
+                  >
+                    Reabrir tarefa
+                  </button>
+                </form>
+              ) : null
+            ) : (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {manager &&
+                data.task.reviewer_id &&
+                data.task.status !== "revisao" ? (
+                  <button
+                    className={button}
+                    disabled={busy || !!next}
+                    onClick={() => void run("review", {})}
+                  >
+                    Solicitar revisão
+                  </button>
+                ) : null}
+                {(
+                  data.task.reviewer_id
+                    ? actor === data.task.reviewer_id &&
+                      data.task.status === "revisao"
+                    : actor === task.assigneeId
+                ) ? (
+                  <button
+                    className={button}
+                    disabled={busy || !!next}
+                    onClick={() => void run("complete", {})}
+                  >
+                    {data.task.reviewer_id
+                      ? "Aprovar e concluir"
+                      : "Concluir entrega"}
+                  </button>
+                ) : null}
+                {next ? (
+                  <p className="text-sm">
+                    Conclua as etapas pendentes antes de finalizar ou solicitar
+                    revisão.
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </WorkspaceTabs.Content>
+        <WorkspaceTabs.Content
+          forceMount
+          value="settings"
+          className="min-w-0 outline-none data-[state=inactive]:hidden"
+        >
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold">Organização da entrega</h3>
+            <p className="text-sm text-slate-500">
+              Ajuste critérios, colaboração e revisão sem interromper o
+              acompanhamento das etapas.
+            </p>
+          </div>
+          {manager && !closed ? (
+            <details
+              open
+              className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-emerald-800 dark:bg-emerald-950"
             >
-              Salvar colaboradores
-            </button>
-          </fieldset>
-        </details>
-      ) : null}
-      {fileParticipant && !closed ? (
-        <details className="rounded-2xl border border-emerald-200 p-4">
-          <summary className="min-h-11 cursor-pointer">
-            Adicionar referências e materiais gerais
-          </summary>
-          <label>
-            Enviar material
-            <input
-              className={control}
-              type="file"
-              disabled={busy || upload.isPending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file)
-                  void upload
-                    .mutateAsync({ taskId: task.id, file })
+              <summary className="min-h-11 cursor-pointer">
+                Organização e colaboração
+              </summary>
+              <form
+                className="mt-3 grid gap-3 md:grid-cols-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run("metadata", metadata);
+                }}
+              >
+                <label className="md:col-span-2">
+                  Entrega esperada
+                  <textarea
+                    aria-label="Entrega esperada"
+                    className={control}
+                    value={metadata.expected_delivery}
+                    onChange={(e) =>
+                      setMetadata({
+                        ...metadata,
+                        expected_delivery: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label className="md:col-span-2">
+                  Critério de conclusão
+                  <textarea
+                    aria-label="Critério de conclusão"
+                    className={control}
+                    value={metadata.completion_criteria}
+                    onChange={(e) =>
+                      setMetadata({
+                        ...metadata,
+                        completion_criteria: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Projeto ou ação
+                  <select
+                    aria-label="Projeto ou ação"
+                    className={control}
+                    value={metadata.project_id}
+                    onChange={(e) =>
+                      setMetadata({ ...metadata, project_id: e.target.value })
+                    }
+                  >
+                    <option value="">Sem vínculo</option>
+                    {projects.data?.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.titulo}
+                      </option>
+                    ))}
+                  </select>
+                  {projects.error ? (
+                    <span role="alert">
+                      Não foi possível carregar projetos.
+                    </span>
+                  ) : null}
+                </label>
+                <label>
+                  Pessoa revisora
+                  <select
+                    aria-label="Pessoa revisora"
+                    className={control}
+                    value={metadata.reviewer_id}
+                    onChange={(e) =>
+                      setMetadata({ ...metadata, reviewer_id: e.target.value })
+                    }
+                  >
+                    <option value="">Sem revisão</option>
+                    {team.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  O que está faltando
+                  <textarea
+                    aria-label="O que está faltando"
+                    className={control}
+                    value={metadata.blocked_reason}
+                    onChange={(e) =>
+                      setMetadata({
+                        ...metadata,
+                        blocked_reason: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  De quem depende
+                  <select
+                    aria-label="De quem depende"
+                    className={control}
+                    value={metadata.blocked_by}
+                    onChange={(e) =>
+                      setMetadata({ ...metadata, blocked_by: e.target.value })
+                    }
+                  >
+                    <option value="">Não definido</option>
+                    {team.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className={button} disabled={busy}>
+                  Salvar organização
+                </button>
+              </form>
+              <fieldset className="mt-4" disabled={busy}>
+                <legend>Colaboradores</legend>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {team
+                    .filter((m) => m.id !== task.assigneeId)
+                    .map((m) => (
+                      <label
+                        className="flex min-h-11 items-center gap-2"
+                        key={m.id}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={members.includes(m.id)}
+                          onChange={(e) =>
+                            setMembers(
+                              e.target.checked
+                                ? [...members, m.id]
+                                : members.filter((id) => id !== m.id),
+                            )
+                          }
+                        />
+                        {m.name}
+                      </label>
+                    ))}
+                </div>
+                <button
+                  className={button}
+                  onClick={() => void run("collaborators", { members })}
+                >
+                  Salvar colaboradores
+                </button>
+              </fieldset>
+            </details>
+          ) : null}
+          {!manager || closed ? (
+            <p className="rounded-2xl border border-slate-200 bg-white p-5 text-sm dark:bg-emerald-950">
+              {closed
+                ? "Reabra a tarefa para alterar sua organização."
+                : "A organização é gerenciada pelo responsável, criador ou administrador."}
+            </p>
+          ) : null}
+        </WorkspaceTabs.Content>
+        <WorkspaceTabs.Content
+          forceMount
+          value="files"
+          className="min-w-0 space-y-5 outline-none data-[state=inactive]:hidden"
+        >
+          {materials}
+          {fileParticipant && !closed ? (
+            <details className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-emerald-800 dark:bg-emerald-950">
+              <summary className="min-h-11 cursor-pointer">
+                Adicionar referências e materiais gerais
+              </summary>
+              <label>
+                Enviar material
+                <input
+                  className={control}
+                  type="file"
+                  disabled={busy || upload.isPending}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file)
+                      void upload
+                        .mutateAsync({ taskId: task.id, file })
+                        .catch((e) => setError(e.message));
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <p className="text-sm">
+                O material fica disponível nos anexos gerais e na central de
+                arquivos.
+              </p>
+            </details>
+          ) : null}
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 dark:border-emerald-800 dark:bg-emerald-950">
+            <h3 className="mb-2 font-semibold">Entrega final</h3>
+            {filesFor()}
+            {fileParticipant && !closed ? (
+              <form
+                className="mt-3 flex flex-wrap gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void external
+                    .mutateAsync({ taskId: task.id, url: linkUrl })
+                    .then((file) => attach(file))
+                    .then(() => setLinkUrl(""))
                     .catch((e) => setError(e.message));
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <p className="text-sm">
-            O material fica disponível nos anexos gerais e na central de
-            arquivos.
-          </p>
-        </details>
-      ) : null}
-      <div className="rounded-2xl border border-emerald-200 p-4">
-        <h3 className="mb-2 font-semibold">Entrega final</h3>
-        {filesFor()}
-        {fileParticipant && !closed ? (
-          <form
-            className="mt-3 flex flex-wrap gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void external
-                .mutateAsync({ taskId: task.id, url: linkUrl })
-                .then((file) => attach(file))
-                .then(() => setLinkUrl(""))
-                .catch((e) => setError(e.message));
-            }}
+                }}
+              >
+                <label className="min-w-0 flex-1">
+                  Link da entrega final
+                  <input
+                    className={control}
+                    type="url"
+                    required
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                  />
+                </label>
+                <button
+                  className={button}
+                  disabled={busy || external.isPending}
+                >
+                  Adicionar link final
+                </button>
+              </form>
+            ) : null}
+            <p className="mt-2 text-xs">
+              Vincular reutiliza o arquivo da tarefa. Desvincular preserva o
+              arquivo nos materiais gerais.
+            </p>
+          </div>
+        </WorkspaceTabs.Content>
+        <WorkspaceTabs.Content
+          forceMount
+          value="discussion"
+          className="outline-none data-[state=inactive]:hidden"
+        >
+          {discussion}
+        </WorkspaceTabs.Content>
+        <WorkspaceTabs.Content
+          forceMount
+          value="report"
+          className="space-y-5 outline-none data-[state=inactive]:hidden"
+        >
+          <section
+            aria-label="Relatório da tarefa"
+            className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-emerald-800 dark:bg-emerald-950"
           >
-            <label className="min-w-0 flex-1">
-              Link da entrega final
-              <input
-                className={control}
-                type="url"
-                required
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-              />
-            </label>
-            <button className={button} disabled={busy || external.isPending}>
-              Adicionar link final
-            </button>
-          </form>
-        ) : null}
-        <p className="mt-2 text-xs">
-          Vincular reutiliza o arquivo da tarefa. Desvincular preserva o arquivo
-          nos materiais gerais.
-        </p>
-      </div>
-      <details className="rounded-2xl border border-emerald-200 p-4">
-        <summary className="min-h-11 cursor-pointer">
-          Histórico da entrega
-        </summary>
-        <ol className="space-y-2">
-          {data.history.map((h) => (
-            <li key={h.id} className="break-words border-b py-2 text-sm">
-              {historyLabels[h.event] ?? h.event} ·{" "}
-              {team.find((m) => m.id === h.actor_id)?.name ?? "Sistema"} ·{" "}
-              {new Date(h.created_at).toLocaleString("pt-BR")}
-              {h.detail.reason ? (
-                <p>Motivo: {String(h.detail.reason)}</p>
-              ) : null}
-              {h.detail.title ? <p>{String(h.detail.title)}</p> : null}
-              {h.event === "toggle" ? (
-                <p>
-                  {h.detail.completed ? "Etapa concluída" : "Etapa reaberta"}
+            <h3 className="text-lg font-semibold">Relatório da execução</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Situação atual desta entrega, baseada nas etapas e nos registros
+              da equipe.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                {
+                  label: "Etapas concluídas",
+                  value: `${completed} de ${total}`,
+                },
+                { label: "Etapas pendentes", value: total - completed },
+                { label: "Arquivos da tarefa", value: attachments.length },
+                {
+                  label: "Check-ins e comentários",
+                  value: task.comments.length,
+                },
+              ].map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-xl bg-slate-50 p-4 dark:bg-emerald-900/30"
+                >
+                  <p className="text-xs text-slate-500 dark:text-emerald-100/60">
+                    {metric.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">{metric.value}</p>
+                </div>
+              ))}
+            </div>
+            {task.description ? (
+              <div className="mt-4 rounded-xl border border-slate-100 p-4 dark:border-emerald-800">
+                <h4 className="text-sm font-semibold">Objetivo e contexto</h4>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 dark:text-emerald-100/70">
+                  {task.description}
                 </p>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-        {data.history.length === 100 ? (
-          <p className="text-xs">Exibindo as 100 alterações mais recentes.</p>
-        ) : null}
-      </details>
+              </div>
+            ) : null}
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-slate-500">Criada em</dt>
+                <dd>{new Date(task.createdAt).toLocaleString("pt-BR")}</dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Revisão</dt>
+                <dd>
+                  {team.find((m) => m.id === data.task.reviewer_id)?.name ??
+                    "Sem revisor definido"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <details
+            open
+            className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-emerald-800 dark:bg-emerald-950"
+          >
+            <summary className="min-h-11 cursor-pointer font-semibold">
+              Histórico da entrega
+            </summary>
+            <ol className="space-y-2">
+              {data.history.map((h) => (
+                <li key={h.id} className="break-words border-b py-2 text-sm">
+                  {historyLabels[h.event] ?? h.event} ·{" "}
+                  {team.find((m) => m.id === h.actor_id)?.name ?? "Sistema"} ·{" "}
+                  {new Date(h.created_at).toLocaleString("pt-BR")}
+                  {h.detail.reason ? (
+                    <p>Motivo: {String(h.detail.reason)}</p>
+                  ) : null}
+                  {h.detail.title ? <p>{String(h.detail.title)}</p> : null}
+                  {h.event === "toggle" ? (
+                    <p>
+                      {h.detail.completed
+                        ? "Etapa concluída"
+                        : "Etapa reaberta"}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+            {data.history.length === 100 ? (
+              <p className="text-xs">
+                Exibindo as 100 alterações mais recentes.
+              </p>
+            ) : null}
+          </details>
+        </WorkspaceTabs.Content>
+      </WorkspaceTabs.Root>
       {busy || upload.isPending || external.isPending ? (
         <p role="status">Salvando alteração…</p>
       ) : null}
@@ -850,7 +1055,9 @@ function ChecklistRow({
     setDue(item.due_date ?? "");
   }, [item]);
   return (
-    <article className="min-w-0 rounded-xl border border-emerald-100 p-3">
+    <article
+      className={`min-w-0 rounded-xl border p-3 transition-colors ${item.completed_at ? "border-slate-100 bg-slate-50/70 dark:border-emerald-900 dark:bg-emerald-900/20" : "border-slate-200 bg-white dark:border-emerald-800 dark:bg-emerald-950"}`}
+    >
       <div className="flex items-start gap-2">
         <label className="flex min-h-11 min-w-0 flex-1 items-center gap-3">
           <input
