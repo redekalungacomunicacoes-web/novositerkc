@@ -216,8 +216,10 @@ export async function uploadAcademyDrive(
         folder_id: path.folderId,
       },
     });
-    if (error || !record)
-      throw error || new Error("O banco não confirmou os metadados.");
+    if (error)
+      throw new Error(`O banco não confirmou o banner/material: ${error.message}`);
+    if (!record)
+      throw new Error("O banco não confirmou os metadados do arquivo.");
     uploadedId = null; // Commit confirmed. Retried HTTP requests reuse academy_upload_id.
     if (previous && previous !== record.id) {
       const { data: oldFile } = await admin
