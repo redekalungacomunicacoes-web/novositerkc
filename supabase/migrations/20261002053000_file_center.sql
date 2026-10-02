@@ -19,6 +19,7 @@ create unique index idx_file_center_upload on public.drive_files(uploaded_by,cen
 create index idx_file_center_files on public.drive_files(central_folder_id) where status='active';
 create policy file_center_read_guard on public.drive_files as restrictive for select to anon,authenticated
  using(module<>'file-center' or (auth.uid() is not null and (uploaded_by=auth.uid() or public.is_team_admin())));
+create policy file_center_anon_guard on public.drive_files as restrictive for select to anon using(module<>'file-center');
 create policy file_center_insert_guard on public.drive_files as restrictive for insert to anon,authenticated with check(module<>'file-center');
 create policy file_center_update_guard on public.drive_files as restrictive for update to anon,authenticated using(module<>'file-center') with check(module<>'file-center');
 create policy file_center_delete_guard on public.drive_files as restrictive for delete to anon,authenticated using(module<>'file-center');

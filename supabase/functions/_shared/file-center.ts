@@ -120,7 +120,7 @@ export async function manageCenterFolder(body:any,user:Client,admin:Client,actor
  // Refuse recursive removal: unrelated files placed directly in Drive are protected too.
  const children=await listDriveChildren(folder.drive_folder_id);
  if(children.files?.length || children.nextPageToken)throw new Error("A pasta contém arquivos ou subpastas. Mova ou exclua o conteúdo primeiro.");
- const active=await admin.from("drive_files").select("id").eq("central_folder_id",folder.id).eq("status","active").limit(1);
+ const active=await admin.from("drive_files").select("id").eq("central_folder_id",folder.id).neq("status","trashed").limit(1);
  if(active.error)throw active.error;if(active.data?.length)throw new Error("A pasta ainda possui arquivos cadastrados.");
  const nested=await admin.from("file_center_folders").select("id").eq("parent_id",folder.id).limit(1);
  if(nested.error)throw nested.error;if(nested.data?.length)throw new Error("A pasta ainda possui subpastas.");
