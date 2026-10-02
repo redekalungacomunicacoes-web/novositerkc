@@ -207,7 +207,7 @@ try {
     );
     assert.equal(
       await page.getByRole("heading", { name: "Curso da equipe", exact: true }).count(),
-      0,
+      1,
     );
     await page.getByRole("searchbox", { name: /Buscar por curso/ }).fill("Curso próprio");
     assert.equal(
