@@ -90,6 +90,10 @@ export async function saveEntity(
   );
 }
 export async function deleteEntity(entity: Entity, id: string) {
+  if (entity === "courses") {
+    unwrap(await supabase.rpc("academy_delete_course", { p_course: id }));
+    return;
+  }
   unwrap(await supabase.from(tables[entity]).delete().eq("id", id));
 }
 export async function rpc(name: string, args: Record<string, unknown>) {
