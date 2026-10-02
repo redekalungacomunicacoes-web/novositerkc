@@ -802,11 +802,10 @@ export function Academia() {
                   <>
                     <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
                       <div className="relative aspect-[3/1] min-h-44 overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
-                        {managedCourse.cover_path || managedCourse.cover_drive_file_id || managedCourse.banner_drive_file_id ? (
+                        {managedCourse.banner_drive_file_id ? (
                           <Asset
-                            path={managedCourse.cover_path}
-                            driveFileId={managedCourse.banner_drive_file_id || managedCourse.cover_drive_file_id}
-                            title={managedCourse.title}
+                            driveFileId={managedCourse.banner_drive_file_id}
+                            title={`Banner de ${managedCourse.title}`}
                             type="image"
                             variant="banner"
                             showOpenLink={false}
