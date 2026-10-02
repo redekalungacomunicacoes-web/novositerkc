@@ -70,6 +70,7 @@ export function Academia() {
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [bannerPreview, setBannerPreview] = useState<{ courseId: string; url: string } | null>(null);
   useEffect(() => {
     setNotice("");
     setActionError("");
@@ -79,6 +80,7 @@ export function Academia() {
     const timer = window.setTimeout(() => setNotice(""), 4000);
     return () => window.clearTimeout(timer);
   }, [notice]);
+  useEffect(() => () => { if (bannerPreview?.url) URL.revokeObjectURL(bannerPreview.url); }, [bannerPreview]);
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setActionError("");
@@ -241,6 +243,12 @@ export function Academia() {
       ? ownCourses
       : data.courses.filter((c) => canEdit(c.id));
   const managedCourse = editingCourses.find((c) => c.id === selectedCourse);
+  const previewBanner = (file: File | null) => {
+    setBannerPreview((current) => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return file && managedCourse ? { courseId: managedCourse.id, url: URL.createObjectURL(file) } : null;
+    });
+  };
   const managedCourseMatches = editingCourses.filter((c) => {
     const categoryName = data.categories.find((item) => item.id === c.category_id)?.name || "";
     const searchable = [c.title, c.summary, c.description, categoryName, labels[c.status], labels[c.level]].join(" ").toLowerCase();
@@ -802,7 +810,9 @@ export function Academia() {
                   <>
                     <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
                       <div className="relative aspect-[3/1] min-h-44 overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
-                        {managedCourse.banner_drive_file_id ? (
+                        {bannerPreview?.courseId === managedCourse.id ? (
+                          <img src={bannerPreview.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                        ) : managedCourse.banner_drive_file_id ? (
                           <Asset
                             driveFileId={managedCourse.banner_drive_file_id}
                             title={`Banner de ${managedCourse.title}`}
@@ -870,18 +880,13 @@ export function Academia() {
                         onSaved={reload}
                       />
                       <DriveUploads
-                        courseId={managedCourse.id}
-                        kind="banner"
-                        existing={data.driveFiles.filter((f) => f.id === managedCourse.banner_drive_file_id)}
-                        onSaved={reload}
-                      />
-                      <DriveUploads
                         key={`hero-banner-input-${managedCourse.id}`}
                         courseId={managedCourse.id}
                         kind="banner"
                         inputOnly
                         inputIdOverride={`academy-hero-banner-${managedCourse.id}`}
-                        onSaved={reload}
+                        onSelectedFile={previewBanner}
+                        onSaved={async () => { await reload(); setBannerPreview(null); }}
                       />
                           </div>
                         </div>

@@ -43,6 +43,7 @@ export function DriveUploads({
   cleanupOnly,
   inputIdOverride,
   inputOnly = false,
+  onSelectedFile,
   onSaved,
 }: {
   courseId: string;
@@ -53,6 +54,7 @@ export function DriveUploads({
   cleanupOnly?: boolean;
   inputIdOverride?: string;
   inputOnly?: boolean;
+  onSelectedFile?: (file: File | null) => void;
   onSaved: () => Promise<void>;
 }) {
   const generatedInputId = useId();
@@ -136,6 +138,7 @@ export function DriveUploads({
             progress: 0,
           }));
           setItems((rows) => [...rows, ...next]);
+          onSelectedFile?.(next[0]?.file || null);
           event.target.value = "";
           if (next.length) void send(next);
         }}
