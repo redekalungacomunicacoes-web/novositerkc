@@ -166,61 +166,56 @@ export async function uploadAcademyFile(input: {
   replaceMaterialId?: string;
   onProgress: (percent: number) => void;
 }): Promise<DriveFileRecord> {
-  if (input.file.size > 50 * 1024 * 1024)
-    throw new Error("O limite por arquivo é 50 MB.");
+  const limit = input.kind === "cover" ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
+  if (input.file.size > limit)
+    throw new Error(input.kind === "cover" ? "A capa deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB.");
   const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session)
-    throw new Error("Sua sessão expirou. Entre novamente.");
-  const form = new FormData();
-  form.append("file", input.file);
-  form.append("module", "academy");
-  form.append("course_id", input.courseId);
-  form.append("kind", input.kind);
-  form.append("upload_id", input.uploadId);
-  if (input.lessonId) form.append("lesson_id", input.lessonId);
-  if (input.replaceMaterialId)
-    form.append("replace_material_id", input.replaceMaterialId);
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open(
-      "POST",
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/drive-files`,
-    );
-    xhr.setRequestHeader(
-      "Authorization",
-      `Bearer ${data.session!.access_token}`,
-    );
-    xhr.setRequestHeader("apikey", import.meta.env.VITE_SUPABASE_ANON_KEY);
-    xhr.timeout = 240000;
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable)
-        input.onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    xhr.onerror = () =>
-      reject(
-        new Error("Falha de conexão com o Drive. O arquivo continua pendente."),
-      );
-    xhr.ontimeout = () =>
-      reject(
-        new Error(
-          "O envio excedeu o tempo de espera. Tente novamente para conferir se foi concluído.",
-        ),
-      );
-    xhr.onload = () => {
-      try {
-        const result = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300 && result.ok && result.file)
-          resolve(result.file);
-        else
-          reject(
-            new Error(
-              result.error || "O envio não foi confirmado pelo Drive RKC.",
-            ),
-          );
-      } catch {
-        reject(new Error("O backend não retornou confirmação do envio."));
-      }
-    };
-    xhr.send(form);
+  if (error || !data.session) throw new Error("Sua sessão expirou. Entre novamente.");
+
+  const start = await invoke({
+    action: "academy-upload-start",
+    course_id: input.courseId,
+    lesson_id: input.lessonId || null,
+    kind: input.kind,
+    name: input.file.name,
+    mime_type: input.file.type || "application/octet-stream",
+    size: input.file.size,
   });
+
+  const uploadUrl = String(start.upload_url || "");
+  const folderId = String(start.folder_id || "");
+  if (!uploadUrl || !folderId) throw new Error("O Drive não iniciou a sessão de upload.");
+
+  const uploaded = await new Promise<Record<string, unknown>>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", input.file.type || "application/octet-stream");
+    xhr.setRequestHeader("Content-Length", String(input.file.size));
+    xhr.timeout = 0;
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) input.onProgress(Math.min(99, Math.round((event.loaded / event.total) * 99)));
+    };
+    xhr.onerror = () => reject(new Error("Falha durante o envio resumível. O arquivo continua selecionado para nova tentativa."));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { reject(new Error("O Google Drive não retornou os metadados do arquivo.")); }
+      } else reject(new Error("O Google Drive recusou o upload (" + xhr.status + ")."));
+    };
+    xhr.send(input.file);
+  });
+  const driveFileId = String(uploaded.id || "");
+  if (!driveFileId) throw new Error("O Drive não retornou o identificador do arquivo.");
+  input.onProgress(100);
+  const committed = await invoke({
+    action: "academy-upload-commit",
+    course_id: input.courseId,
+    lesson_id: input.lessonId || null,
+    kind: input.kind,
+    upload_id: input.uploadId,
+    replace_material_id: input.replaceMaterialId || null,
+    drive_file_id: driveFileId,
+    folder_id: folderId,
+  });
+  return committed.file as DriveFileRecord;
 }

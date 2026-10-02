@@ -8,9 +8,11 @@ import {
   trashDriveFile,
   uploadDriveFile,
   resolveAcademyFolder,
+  startDriveResumableUpload,
+  getDriveFileMetadata,
 } from "../_shared/google-drive.ts";
 
-import { uploadAcademyDrive } from "../_shared/academy-drive.ts";
+import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
 
 // Root ID provided and named by RKC in this task; the academy child ID is discovered at runtime.
 const academyRootId = "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD";
@@ -182,6 +184,40 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action ?? "");
+    if (action === "academy-upload-start") {
+      if (!rootFolderId) return json({ ok: false, error: "Pasta raiz do Drive não configurada." }, 503);
+      const course = String(body.course_id || "");
+      const lesson = String(body.lesson_id || "") || null;
+      const kind = String(body.kind || "");
+      const size = Number(body.size || 0);
+      const name = safeName(String(body.name || "arquivo"));
+      const mimeType = String(body.mime_type || "application/octet-stream");
+      if (!["cover","media","material"].includes(kind)) return json({ ok:false,error:"Destino acadêmico inválido."},400);
+      const limit = kind === "cover" ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
+      if (!Number.isFinite(size) || size <= 0 || size > limit) return json({ok:false,error:kind === "cover" ? "A capa deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB."},413);
+      const folderId = await prepareAcademyDestination({ course, lesson, kind }, requireAcademyRoot(rootFolderId), userClient, admin);
+      const uploadUrl = await startDriveResumableUpload({ name, mimeType, size, folderId });
+      return json({ ok:true, upload_url:uploadUrl, folder_id:folderId });
+    }
+    if (action === "academy-upload-commit") {
+      const course = String(body.course_id || "");
+      const lesson = String(body.lesson_id || "") || null;
+      const kind = String(body.kind || "");
+      const upload = String(body.upload_id || "");
+      const material = String(body.replace_material_id || "") || null;
+      const driveFileId = String(body.drive_file_id || "");
+      const folderId = String(body.folder_id || "");
+      if (!driveFileId || !folderId) return json({ok:false,error:"Arquivo do Drive não confirmado."},400);
+      const uploaded = await getDriveFileMetadata(driveFileId);
+      await (await import("../_shared/google-drive.ts")).assertPrivateDriveFile(driveFileId);
+      const { data: record, error } = await admin.rpc("academy_commit_drive", {
+        p_actor: auth.user.id, p_course: course, p_lesson: lesson, p_kind: kind,
+        p_upload: upload, p_material: material,
+        p_file: { ...uploaded, folder_id: folderId },
+      });
+      if (error || !record) throw error || new Error("O banco não confirmou os metadados.");
+      return json({ ok:true, file:record });
+    }
     if (action === "academy-health") {
       const { data: member, error } = await userClient.rpc("academy_member");
       if (error || !member)

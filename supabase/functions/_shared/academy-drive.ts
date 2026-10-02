@@ -8,6 +8,40 @@ import {
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 const uuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+export async function prepareAcademyDestination(
+  input: { course: string; lesson: string | null; kind: string },
+  rootId: string,
+  user: SupabaseClient,
+  admin: SupabaseClient,
+) {
+  const { course, lesson, kind } = input;
+  const { data: editable, error: permissionError } = await user.rpc("academy_can_edit", { p_course: course });
+  if (permissionError || !editable) throw new Error("Sem permissão para editar este curso.");
+  const { data: courseRow, error: courseError } = await admin.from("academy_courses").select("id,title,drive_folder_id").eq("id", course).single();
+  if (courseError || !courseRow) throw new Error("Curso não encontrado.");
+  const academy = await resolveAcademyFolder(rootId);
+  let courseFolder = courseRow.drive_folder_id as string | null;
+  if (!courseFolder) {
+    const path = await ensureDrivePath(academy.id, ["CURSOS", String(courseRow.title || "Curso")]);
+    courseFolder = path.folderId;
+    const { error } = await admin.from("academy_courses").update({ drive_folder_id: courseFolder }).eq("id", course);
+    if (error) throw error;
+  }
+  if (kind === "cover") return (await ensureDrivePath(courseFolder, ["CAPA"])).folderId;
+  if (!lesson) return (await ensureDrivePath(courseFolder, ["MATERIAIS"])).folderId;
+  const { data: lessonRow, error: lessonError } = await admin.from("academy_lessons").select("id,title,position,drive_folder_id").eq("id", lesson).eq("course_id", course).single();
+  if (lessonError || !lessonRow) throw new Error("Aula não encontrada neste curso.");
+  let lessonFolder = lessonRow.drive_folder_id as string | null;
+  if (!lessonFolder) {
+    const order = String(Number(lessonRow.position ?? 0)).padStart(2, "0");
+    const path = await ensureDrivePath(courseFolder, ["AULAS", `${order} - ${String(lessonRow.title || "Aula")}`]);
+    lessonFolder = path.folderId;
+    const { error } = await admin.from("academy_lessons").update({ drive_folder_id: lessonFolder }).eq("id", lesson);
+    if (error) throw error;
+  }
+  return (await ensureDrivePath(lessonFolder, [kind === "media" ? "VIDEO" : "MATERIAIS"])).folderId;
+}
+
 export async function uploadAcademyDrive(
   form: FormData,
   rootId: string,
