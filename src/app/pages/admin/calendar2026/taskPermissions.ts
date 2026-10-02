@@ -29,3 +29,4 @@ export function allowedTaskStatuses(
   return (["pendente", "em_andamento", "revisao", "concluida", "cancelada"] as TaskStatus[])
     .filter((status) => canMoveTask(task, status, currentMemberId, isAdmin));
 }
+
