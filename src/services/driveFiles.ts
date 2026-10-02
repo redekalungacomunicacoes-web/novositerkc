@@ -186,25 +186,96 @@ export async function uploadAcademyFile(input: {
   const folderId = String(start.folder_id || "");
   if (!uploadUrl || !folderId) throw new Error("O Drive não iniciou a sessão de upload.");
 
-  const uploaded = await new Promise<Record<string, unknown>>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", uploadUrl);
-    xhr.setRequestHeader("Content-Type", input.file.type || "application/octet-stream");
-    xhr.setRequestHeader("Content-Length", String(input.file.size));
-    xhr.timeout = 0;
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) input.onProgress(Math.min(99, Math.round((event.loaded / event.total) * 99)));
-    };
-    xhr.onerror = () => reject(new Error("Falha durante o envio resumível. O arquivo continua selecionado para nova tentativa."));
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try { resolve(JSON.parse(xhr.responseText)); }
-        catch { reject(new Error("O Google Drive não retornou os metadados do arquivo.")); }
-      } else reject(new Error("O Google Drive recusou o upload (" + xhr.status + ")."));
-    };
-    xhr.send(input.file);
-  });
-  const driveFileId = String(uploaded.id || "");
+  const mimeType = input.file.type || "application/octet-stream";
+  const chunkSize = 8 * 1024 * 1024; // Google requires chunk sizes to be multiples of 256 KiB.
+  const parseConfirmedByte = (range: string | null) => {
+    const match = range?.match(/bytes=0-(\\d+)/i);
+    return match ? Number(match[1]) : -1;
+  };
+  const sendChunk = (startByte: number, endByte: number) =>
+    new Promise<{ status: number; range: string | null; body: string }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader("Content-Type", mimeType);
+      xhr.setRequestHeader("Content-Range", `bytes ${startByte}-${endByte}/${input.file.size}`);
+      xhr.timeout = 0;
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const sent = Math.min(input.file.size, startByte + event.loaded);
+        input.onProgress(Math.min(99, Math.floor((sent / input.file.size) * 99)));
+      };
+      xhr.onerror = () => reject(new Error("Falha de rede durante o envio."));
+      xhr.onload = () => resolve({
+        status: xhr.status,
+        range: xhr.getResponseHeader("Range"),
+        body: xhr.responseText || "",
+      });
+      xhr.send(input.file.slice(startByte, endByte + 1));
+    });
+  const querySession = () =>
+    new Promise<{ status: number; range: string | null; body: string }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader("Content-Range", `bytes */${input.file.size}`);
+      xhr.timeout = 30000;
+      xhr.onerror = () => reject(new Error("Não foi possível consultar a sessão de upload."));
+      xhr.onload = () => resolve({
+        status: xhr.status,
+        range: xhr.getResponseHeader("Range"),
+        body: xhr.responseText || "",
+      });
+      xhr.send();
+    });
+
+  let offset = 0;
+  let uploaded: Record<string, unknown> | null = null;
+  let retries = 0;
+  while (offset < input.file.size) {
+    const end = Math.min(input.file.size - 1, offset + chunkSize - 1);
+    try {
+      const response = await sendChunk(offset, end);
+      if (response.status >= 200 && response.status < 300) {
+        try {
+          uploaded = JSON.parse(response.body) as Record<string, unknown>;
+        } catch {
+          throw new Error("O Google Drive finalizou o envio sem retornar metadados válidos.");
+        }
+        offset = input.file.size;
+        break;
+      }
+      if (response.status === 308) {
+        const confirmed = parseConfirmedByte(response.range);
+        offset = confirmed >= offset ? confirmed + 1 : end + 1;
+        retries = 0;
+        continue;
+      }
+      throw new Error(`O Google Drive recusou o bloco de upload (${response.status}).`);
+    } catch (error) {
+      if (++retries > 4) {
+        throw new Error(
+          `${error instanceof Error ? error.message : "Falha no upload"} O arquivo continua selecionado para nova tentativa.`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(8000, 500 * 2 ** retries)));
+      const status = await querySession();
+      if (status.status >= 200 && status.status < 300) {
+        try {
+          uploaded = JSON.parse(status.body) as Record<string, unknown>;
+        } catch {
+          throw new Error("O Drive concluiu o upload, mas os metadados não puderam ser lidos.");
+        }
+        offset = input.file.size;
+        break;
+      }
+      if (status.status === 308) {
+        offset = parseConfirmedByte(status.range) + 1;
+        if (offset < 0) offset = 0;
+        continue;
+      }
+      throw new Error(`A sessão resumível expirou ou foi recusada (${status.status}).`);
+    }
+  }
+  const driveFileId = String(uploaded?.id || "");
   if (!driveFileId) throw new Error("O Drive não retornou o identificador do arquivo.");
   input.onProgress(100);
   const committed = await invoke({
@@ -216,6 +287,9 @@ export async function uploadAcademyFile(input: {
     replace_material_id: input.replaceMaterialId || null,
     drive_file_id: driveFileId,
     folder_id: folderId,
+    expected_name: input.file.name,
+    expected_mime_type: mimeType,
+    expected_size: input.file.size,
   });
   return committed.file as DriveFileRecord;
 }

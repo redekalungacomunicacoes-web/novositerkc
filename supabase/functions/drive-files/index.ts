@@ -10,6 +10,7 @@ import {
   resolveAcademyFolder,
   startDriveResumableUpload,
   getDriveFileMetadata,
+  assertPrivateDriveFile,
 } from "../_shared/google-drive.ts";
 
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
@@ -192,7 +193,12 @@ Deno.serve(async (req) => {
       const size = Number(body.size || 0);
       const name = safeName(String(body.name || "arquivo"));
       const mimeType = String(body.mime_type || "application/octet-stream");
-      if (!["cover","media","material"].includes(kind)) return json({ ok:false,error:"Destino acadêmico inválido."},400);
+      const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+      if (!isUuid(course) || (lesson && !isUuid(lesson))) return json({ ok:false,error:"Curso ou aula inválidos."},400);
+      if (!["cover","media","material"].includes(kind) || (kind === "cover" && lesson) || (kind === "media" && !lesson))
+        return json({ ok:false,error:"Destino acadêmico inválido."},400);
+      if (kind === "cover" && !["image/jpeg","image/png","image/webp","image/gif"].includes(mimeType))
+        return json({ ok:false,error:"A capa precisa ser uma imagem JPEG, PNG, WebP ou GIF."},400);
       const limit = kind === "cover" ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
       if (!Number.isFinite(size) || size <= 0 || size > limit) return json({ok:false,error:kind === "cover" ? "A capa deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB."},413);
       const folderId = await prepareAcademyDestination({ course, lesson, kind }, requireAcademyRoot(rootFolderId), userClient, admin);
@@ -200,20 +206,56 @@ Deno.serve(async (req) => {
       return json({ ok:true, upload_url:uploadUrl, folder_id:folderId });
     }
     if (action === "academy-upload-commit") {
+      if (!rootFolderId) return json({ ok:false,error:"Pasta raiz do Drive não configurada."},503);
       const course = String(body.course_id || "");
       const lesson = String(body.lesson_id || "") || null;
       const kind = String(body.kind || "");
       const upload = String(body.upload_id || "");
       const material = String(body.replace_material_id || "") || null;
       const driveFileId = String(body.drive_file_id || "");
-      const folderId = String(body.folder_id || "");
-      if (!driveFileId || !folderId) return json({ok:false,error:"Arquivo do Drive não confirmado."},400);
+      const expectedName = safeName(String(body.expected_name || ""));
+      const expectedMime = String(body.expected_mime_type || "application/octet-stream");
+      const expectedSize = Number(body.expected_size || 0);
+      const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+      if (!isUuid(course) || !isUuid(upload) || (lesson && !isUuid(lesson)) || (material && !isUuid(material)))
+        return json({ok:false,error:"Identificadores acadêmicos inválidos."},400);
+      if (!["cover","media","material"].includes(kind) || (kind === "cover" && lesson) || (kind === "media" && !lesson) || (material && kind !== "material"))
+        return json({ok:false,error:"Destino acadêmico inválido."},400);
+      if (!driveFileId || !expectedName || !Number.isFinite(expectedSize) || expectedSize <= 0)
+        return json({ok:false,error:"Arquivo do Drive não confirmado."},400);
+
+      const { data: already, error: alreadyError } = await admin
+        .from("drive_files").select("*").eq("academy_upload_id", upload).maybeSingle();
+      if (alreadyError) throw alreadyError;
+      if (already) {
+        if (already.uploaded_by !== auth.user.id || already.academy_course_id !== course ||
+            already.academy_lesson_id !== lesson || already.academy_kind !== kind || already.status !== "active")
+          return json({ok:false,error:"Envio anterior incompatível ou removido."},409);
+        return json({ok:true,file:already,reused:true});
+      }
+
+      const { data: editable, error: permissionError } = await userClient.rpc("academy_can_edit", { p_course: course });
+      if (permissionError || !editable) return json({ok:false,error:"Sem permissão para editar este curso."},403);
+      const expectedFolderId = await prepareAcademyDestination(
+        { course, lesson, kind }, requireAcademyRoot(rootFolderId), userClient, admin,
+      );
       const uploaded = await getDriveFileMetadata(driveFileId);
-      await (await import("../_shared/google-drive.ts")).assertPrivateDriveFile(driveFileId);
+      if (uploaded.trashed === true) return json({ok:false,error:"O arquivo enviado está na lixeira do Drive."},409);
+      if (!Array.isArray(uploaded.parents) || !uploaded.parents.includes(expectedFolderId))
+        return json({ok:false,error:"O arquivo não está na pasta acadêmica esperada."},409);
+      if (String(uploaded.name || "") !== expectedName)
+        return json({ok:false,error:"O nome confirmado pelo Drive difere do envio iniciado."},409);
+      if (Number(uploaded.size || 0) !== expectedSize)
+        return json({ok:false,error:"O tamanho confirmado pelo Drive difere do arquivo enviado."},409);
+      if (expectedMime !== "application/octet-stream" && String(uploaded.mimeType || "") !== expectedMime)
+        return json({ok:false,error:"O tipo do arquivo confirmado pelo Drive difere do envio iniciado."},409);
+      if (kind === "cover" && !["image/jpeg","image/png","image/webp","image/gif"].includes(String(uploaded.mimeType || "")))
+        return json({ok:false,error:"A capa confirmada não é uma imagem permitida."},400);
+      await assertPrivateDriveFile(driveFileId);
       const { data: record, error } = await admin.rpc("academy_commit_drive", {
         p_actor: auth.user.id, p_course: course, p_lesson: lesson, p_kind: kind,
         p_upload: upload, p_material: material,
-        p_file: { ...uploaded, folder_id: folderId },
+        p_file: { ...uploaded, folder_id: expectedFolderId },
       });
       if (error || !record) throw error || new Error("O banco não confirmou os metadados.");
       return json({ ok:true, file:record });
