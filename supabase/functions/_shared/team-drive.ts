@@ -24,9 +24,28 @@ async function teamFolder(memberId: string, rootId: string, admin: SupabaseClien
   return { member, memberFolder, profileFolder: (await ensureDrivePath(memberFolder, ["PERFIL"])).folderId };
 }
 
+function avatarExtension(file: File, kind: "avatar" | "thumb") {
+  const mime = (file.type || "").toLowerCase();
+  const byMime: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/avif": "avif",
+  };
+  if (byMime[mime]) return byMime[mime];
+  if (kind === "thumb") return "webp";
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+  return /^[a-z0-9]{2,5}$/.test(ext) ? ext : "bin";
+}
+
+function avatarTargetName(file: File, kind: "avatar" | "thumb") {
+  return kind === "thumb" ? "avatar-thumb.webp" : `avatar-original.${avatarExtension(file, kind)}`;
+}
+
 async function commitAvatar(file: File, memberId: string, kind: "avatar" | "thumb", rootId: string, admin: SupabaseClient, actor: string) {
   const { memberFolder, profileFolder } = await teamFolder(memberId, rootId, admin);
-  const targetName = kind === "thumb" ? "avatar-thumb.webp" : `avatar-original.${(file.name.split(".").pop() || "bin").toLowerCase()}`;
+  const targetName = avatarTargetName(file, kind);
   const normalized = new File([await file.arrayBuffer()], targetName, { type: file.type || "application/octet-stream" });
   const uploaded = await uploadDriveFile(normalized, profileFolder);
   let row: any = null;
@@ -58,7 +77,7 @@ async function commitAvatar(file: File, memberId: string, kind: "avatar" | "thum
 type StagedAvatar = { row: any; driveFileId: string };
 
 async function stageAvatar(file: File, memberId: string, kind: "avatar" | "thumb", profileFolder: string, admin: SupabaseClient, actor: string): Promise<StagedAvatar> {
-  const targetName = kind === "thumb" ? "avatar-thumb.webp" : `avatar-original.${(file.name.split(".").pop() || "bin").toLowerCase()}`;
+  const targetName = avatarTargetName(file, kind);
   const normalized = new File([await file.arrayBuffer()], targetName, { type: file.type || "application/octet-stream" });
   const uploaded = await uploadDriveFile(normalized, profileFolder);
   try {
