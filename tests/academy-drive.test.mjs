@@ -444,7 +444,7 @@ test("HTTP endpoint denies anonymous access, reader writes and out-of-scope down
         )
         .replace('"../_shared/google-drive.ts"', JSON.stringify(driveUrl))
         .replace('"../_shared/academy-drive.ts"', JSON.stringify(academyUrl))
-        .replace('"../_shared/team-drive.ts"', JSON.stringify(dataModule('export async function uploadTeamAvatar(){ throw new Error("unused"); } export async function importLegacyTeamAvatar(){ throw new Error("unused"); }')))
+        .replace('"../_shared/team-drive.ts"', JSON.stringify(dataModule('export async function uploadTeamAvatar(){ throw new Error("unused"); } export async function uploadTeamAvatarPair(){ throw new Error("unused"); } export async function importLegacyTeamAvatar(){ throw new Error("unused"); }')))
         .replace('"../_shared/file-center.ts"', JSON.stringify(dataModule('export const createCenterFolder=()=>{},manageCenterFolder=()=>{},moveCenterFile=()=>{},uploadCenterFile=()=>{},withCenterLease=()=>{};')))
         .replace('"../_shared/task-drive.ts"', JSON.stringify(dataModule('export async function prepareTaskFolder(){ throw new Error("unused"); }')) )
         .replace('"../_shared/task-delete.ts"', JSON.stringify(dataModule('export async function deleteTaskAndQueueCleanup(){ throw new Error("unused"); } export async function retryTaskCleanup(){ throw new Error("unused"); }'))),
