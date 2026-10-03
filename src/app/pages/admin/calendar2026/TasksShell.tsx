@@ -204,7 +204,7 @@ export function TasksTopBar() {
             <UserMenu />
           </div>
         </div>
-        <nav className="flex gap-2 overflow-x-auto rounded-3xl border border-emerald-100 bg-emerald-50/60 p-1 dark:border-emerald-800/60 dark:bg-emerald-900/40">
+        <nav className="flex min-w-0 max-w-full gap-2 overflow-x-auto rounded-3xl border border-emerald-100 bg-emerald-50/60 p-1 dark:border-emerald-800/60 dark:bg-emerald-900/40">
           {tabs.map(({ label, icon: Icon, to, end }) => (
             <NavLink key={to} to={to} end={end} className="relative shrink-0 rounded-2xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:text-emerald-800 dark:text-emerald-100/70 dark:hover:text-white">
               {({ isActive }) => (
