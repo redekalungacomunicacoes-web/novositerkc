@@ -273,6 +273,17 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         }
 
         if (!driveSaved) {
+          // A falha pode acontecer depois de o original já ter sido vinculado no Drive.
+          // O fallback precisa deixar o integrante em um único estado coerente.
+          const { error: clearPartialDriveError } = await supabase
+            .from("equipe")
+            .update({
+              avatar_drive_file_id: null,
+              avatar_thumb_drive_file_id: null,
+            })
+            .eq("id", equipeId);
+          if (clearPartialDriveError) throw clearPartialDriveError;
+
           const isThumbWebp = thumbContentType.includes("webp");
           const thumbExt = isThumbWebp ? "webp" : "jpg";
           const originalIsWebp = pendingAvatarFile.type.includes("webp");
