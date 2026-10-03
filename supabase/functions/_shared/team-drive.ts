@@ -55,6 +55,48 @@ async function commitAvatar(file: File, memberId: string, kind: "avatar" | "thum
   }
 }
 
+export async function uploadTeamAvatarPair(form: FormData, rootId: string, user: SupabaseClient, admin: SupabaseClient, actor: string) {
+  const memberId = String(form.get("member_id") || "");
+  const avatar = form.get("avatar");
+  const thumb = form.get("thumb");
+  if (!uuid(memberId) || !(avatar instanceof File) || !(thumb instanceof File)) throw new Error("Integrante, avatar e thumbnail são obrigatórios.");
+  for (const file of [avatar, thumb]) {
+    if (!file.type.startsWith("image/")) throw new Error("Avatar e thumbnail precisam ser imagens.");
+    if (file.size > 25 * 1024 * 1024) throw new Error("Cada imagem deve ter no máximo 25 MB.");
+  }
+  await requireTeamEditor(memberId, user);
+
+  const previous = await admin.from("equipe")
+    .select("avatar_drive_file_id,avatar_thumb_drive_file_id")
+    .eq("id", memberId).single();
+  if (previous.error) throw previous.error;
+
+  let avatarRow: any = null;
+  let thumbRow: any = null;
+  try {
+    avatarRow = await commitAvatar(avatar, memberId, "avatar", rootId, admin, actor);
+    thumbRow = await commitAvatar(thumb, memberId, "thumb", rootId, admin, actor);
+    return { avatar: avatarRow, thumb: thumbRow };
+  } catch (error) {
+    const oldAvatar = previous.data?.avatar_drive_file_id || null;
+    const oldThumb = previous.data?.avatar_thumb_drive_file_id || null;
+    await admin.from("equipe").update({
+      avatar_drive_file_id: oldAvatar,
+      avatar_thumb_drive_file_id: oldThumb,
+    }).eq("id", memberId);
+
+    for (const row of [avatarRow, thumbRow]) {
+      if (!row?.id) continue;
+      await admin.from("drive_files").update({
+        status: "archived",
+        updated_at: new Date().toISOString(),
+      }).eq("id", row.id);
+      if (row.drive_file_id) await trashDriveFile(row.drive_file_id).catch(() => {});
+    }
+    throw error;
+  }
+}
+
 export async function uploadTeamAvatar(form: FormData, rootId: string, user: SupabaseClient, admin: SupabaseClient, actor: string) {
   const memberId = String(form.get("member_id") || "");
   const kind = String(form.get("kind") || "") as "avatar" | "thumb";
