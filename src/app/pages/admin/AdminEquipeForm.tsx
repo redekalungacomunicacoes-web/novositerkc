@@ -5,6 +5,7 @@ import { ArrowLeft, Save, Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown }
 import { supabase } from "@/lib/supabase";
 import { slugify } from "@/lib/cms";
 import { createThumbnail } from "@/lib/imageThumbnail";
+import { driveMediaUrl, driveSlug } from "@/lib/teamAvatar";
 
 const TEAM_AVATARS_BUCKET = "team-avatars";
 
@@ -94,6 +95,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [savedFotoUrl, setSavedFotoUrl] = useState<string>("");
+  const [savedAvatarPreviewUrl, setSavedAvatarPreviewUrl] = useState<string>("");
   const [currentOrderIndex, setCurrentOrderIndex] = useState<number>(1);
 
   const fotoUrl = watch("foto_url");
@@ -141,7 +143,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
       setLoading(true);
       const { data, error } = await supabase
         .from("equipe")
-        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, order_index, foto_url, avatar_path, avatar_thumb_path, email_login")
+        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, order_index, foto_url, avatar_path, avatar_thumb_path, email_login, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)")
         .eq("id", resolvedId)
         .single();
       setLoading(false);
@@ -161,6 +163,13 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         permissoes: { admin: false, editor: true, autor: true },
       });
       setSavedFotoUrl(data.foto_url || "");
+      const drivePreview = driveMediaUrl(driveSlug((data as any).avatar_thumb_drive) || driveSlug((data as any).avatar_drive));
+      const legacyPreview = data.avatar_thumb_path
+        ? supabase.storage.from(TEAM_AVATARS_BUCKET).getPublicUrl(data.avatar_thumb_path).data.publicUrl
+        : data.avatar_path
+          ? supabase.storage.from(TEAM_AVATARS_BUCKET).getPublicUrl(data.avatar_path).data.publicUrl
+          : data.foto_url || "";
+      setSavedAvatarPreviewUrl(drivePreview || legacyPreview);
       setCurrentOrderIndex(data.order_index ?? 1);
       setSlugTouched(true);
 
@@ -505,8 +514,8 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
               <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
               <p className="text-sm">{uploading ? "Enviando..." : "Clique para upload"}</p>
             </label>
-            {fotoUrl && <img src={fotoUrl} alt="Prévia" className="w-full h-48 object-cover rounded-md border" />}
-            {fotoUrl && <button type="button" className="text-xs text-red-600" onClick={() => { setPendingAvatarFile(null); if (avatarPreviewUrl) { URL.revokeObjectURL(avatarPreviewUrl); setAvatarPreviewUrl(null); } setValue("foto_url", "", { shouldDirty: true }); }}>Remover avatar</button>}
+            {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <img src={avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl} alt="Prévia" className="w-full h-48 object-cover rounded-md border" />}
+            {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <button type="button" className="text-xs text-red-600" onClick={() => { setPendingAvatarFile(null); if (avatarPreviewUrl) { URL.revokeObjectURL(avatarPreviewUrl); setAvatarPreviewUrl(null); } setSavedAvatarPreviewUrl(""); setValue("foto_url", "", { shouldDirty: true }); }}>Remover avatar</button>}
             <input {...register("foto_url")} className="w-full h-10 px-3 rounded-md border" placeholder="Ou URL do avatar" />
           </div>
         </div>
