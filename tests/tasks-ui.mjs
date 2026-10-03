@@ -103,7 +103,20 @@ for(const width of [390,768,1440]) {
  await page.keyboard.press('Tab');
  assert.equal(await page.evaluate(()=>document.querySelector('[role=dialog]').contains(document.activeElement)),true,'focus must stay in dialog');
  await page.getByRole('dialog').screenshot({path:`/tmp/rkc-tasks-qa/modal-${width}.png`});
- assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`overflow ${width}`);
+ const overflow = await page.evaluate(() => {
+  const viewport = document.documentElement.clientWidth;
+  const offenders = [...document.querySelectorAll('body *')]
+    .filter(el => {
+      const style = getComputedStyle(el);
+      if (style.position === 'fixed' || style.position === 'absolute') return false;
+      const rect = el.getBoundingClientRect();
+      return rect.right > viewport + 1 || rect.left < -1;
+    })
+    .map(el => ({ tag: el.tagName, className: String(el.className || ''), left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right }))
+    .slice(0, 10);
+  return { ok: document.documentElement.scrollWidth <= innerWidth, scrollWidth: document.documentElement.scrollWidth, innerWidth, offenders };
+});
+assert.equal(overflow.ok,true,`overflow ${width}: ${JSON.stringify(overflow)}`);
  await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});
  // Central must show Drive and legacy metadata without loading comments.
  files=[{id:'file-row',task_id:tasks[0].id,name:'arquivo.pdf',created_at:new Date().toISOString(),status:'active',module:'tasks'}];
