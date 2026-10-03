@@ -251,22 +251,15 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         let driveSaved = false;
 
         try {
-          const originalForm = new FormData();
-          originalForm.set("module", "team");
-          originalForm.set("member_id", equipeId);
-          originalForm.set("kind", "avatar");
-          originalForm.set("file", pendingAvatarFile);
+          const avatarPairForm = new FormData();
+          avatarPairForm.set("module", "team");
+          avatarPairForm.set("operation", "avatar-pair");
+          avatarPairForm.set("member_id", equipeId);
+          avatarPairForm.set("avatar", pendingAvatarFile);
+          avatarPairForm.set("thumb", thumbFile);
 
-          const thumbForm = new FormData();
-          thumbForm.set("module", "team");
-          thumbForm.set("member_id", equipeId);
-          thumbForm.set("kind", "thumb");
-          thumbForm.set("file", thumbFile);
-
-          const originalDrive = await supabase.functions.invoke("drive-files", { body: originalForm });
-          if (originalDrive.error || originalDrive.data?.ok === false) throw new Error(getInvokeErrorMessage(originalDrive.error, originalDrive.data, "Falha ao enviar avatar ao Drive."));
-          const thumbDrive = await supabase.functions.invoke("drive-files", { body: thumbForm });
-          if (thumbDrive.error || thumbDrive.data?.ok === false) throw new Error(getInvokeErrorMessage(thumbDrive.error, thumbDrive.data, "Falha ao enviar thumbnail ao Drive."));
+          const pairDrive = await supabase.functions.invoke("drive-files", { body: avatarPairForm });
+          if (pairDrive.error || pairDrive.data?.ok === false) throw new Error(getInvokeErrorMessage(pairDrive.error, pairDrive.data, "Falha ao enviar avatar e thumbnail ao Drive."));
           driveSaved = true;
         } catch (driveError) {
           console.warn("Drive indisponível para avatar; mantendo fallback no Storage.", driveError);
