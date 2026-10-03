@@ -55,6 +55,48 @@ async function commitAvatar(file: File, memberId: string, kind: "avatar" | "thum
   }
 }
 
+type StagedAvatar = { row: any; driveFileId: string };
+
+async function stageAvatar(file: File, memberId: string, kind: "avatar" | "thumb", profileFolder: string, admin: SupabaseClient, actor: string): Promise<StagedAvatar> {
+  const targetName = kind === "thumb" ? "avatar-thumb.webp" : `avatar-original.${(file.name.split(".").pop() || "bin").toLowerCase()}`;
+  const normalized = new File([await file.arrayBuffer()], targetName, { type: file.type || "application/octet-stream" });
+  const uploaded = await uploadDriveFile(normalized, profileFolder);
+  try {
+    const inserted = await admin.from("drive_files").insert({
+      drive_file_id: uploaded.id,
+      drive_folder_id: profileFolder,
+      name: uploaded.name || targetName,
+      mime_type: uploaded.mimeType || normalized.type || null,
+      size_bytes: Number(uploaded.size || normalized.size),
+      module: "team",
+      entity_id: memberId,
+      category: kind,
+      uploaded_by: actor,
+      web_view_link: uploaded.webViewLink || null,
+      visibility: "public",
+      public_slug: `team-${memberId}-${kind}-${crypto.randomUUID()}`,
+      status: "active",
+    }).select("*").single();
+    if (inserted.error || !inserted.data) throw inserted.error || new Error("Metadados do avatar não confirmados.");
+    return { row: inserted.data, driveFileId: uploaded.id };
+  } catch (error) {
+    await trashDriveFile(uploaded.id).catch(() => {});
+    throw error;
+  }
+}
+
+async function cleanupStagedAvatar(staged: StagedAvatar | null, admin: SupabaseClient) {
+  if (!staged) return;
+  const deleted = await admin.from("drive_files").delete().eq("id", staged.row.id);
+  if (deleted.error) {
+    await admin.from("drive_files").update({
+      status: "archived",
+      updated_at: new Date().toISOString(),
+    }).eq("id", staged.row.id);
+  }
+  await trashDriveFile(staged.driveFileId).catch(() => {});
+}
+
 export async function uploadTeamAvatarPair(form: FormData, rootId: string, user: SupabaseClient, admin: SupabaseClient, actor: string) {
   const memberId = String(form.get("member_id") || "");
   const avatar = form.get("avatar");
@@ -66,35 +108,44 @@ export async function uploadTeamAvatarPair(form: FormData, rootId: string, user:
   }
   await requireTeamEditor(memberId, user);
 
+  const { memberFolder, profileFolder } = await teamFolder(memberId, rootId, admin);
   const previous = await admin.from("equipe")
     .select("avatar_drive_file_id,avatar_thumb_drive_file_id")
     .eq("id", memberId).single();
   if (previous.error) throw previous.error;
 
-  let avatarRow: any = null;
-  let thumbRow: any = null;
+  let stagedAvatar: StagedAvatar | null = null;
+  let stagedThumb: StagedAvatar | null = null;
   try {
-    avatarRow = await commitAvatar(avatar, memberId, "avatar", rootId, admin, actor);
-    thumbRow = await commitAvatar(thumb, memberId, "thumb", rootId, admin, actor);
-    return { avatar: avatarRow, thumb: thumbRow };
-  } catch (error) {
-    const oldAvatar = previous.data?.avatar_drive_file_id || null;
-    const oldThumb = previous.data?.avatar_thumb_drive_file_id || null;
-    await admin.from("equipe").update({
-      avatar_drive_file_id: oldAvatar,
-      avatar_thumb_drive_file_id: oldThumb,
-    }).eq("id", memberId);
+    stagedAvatar = await stageAvatar(avatar, memberId, "avatar", profileFolder, admin, actor);
+    stagedThumb = await stageAvatar(thumb, memberId, "thumb", profileFolder, admin, actor);
 
-    for (const row of [avatarRow, thumbRow]) {
-      if (!row?.id) continue;
-      await admin.from("drive_files").update({
-        status: "archived",
-        updated_at: new Date().toISOString(),
-      }).eq("id", row.id);
-      if (row.drive_file_id) await trashDriveFile(row.drive_file_id).catch(() => {});
-    }
+    const linked = await admin.from("equipe").update({
+      drive_folder_id: memberFolder,
+      avatar_drive_file_id: stagedAvatar.row.id,
+      avatar_thumb_drive_file_id: stagedThumb.row.id,
+    }).eq("id", memberId).select("id").single();
+    if (linked.error) throw linked.error;
+  } catch (error) {
+    await cleanupStagedAvatar(stagedThumb, admin);
+    await cleanupStagedAvatar(stagedAvatar, admin);
     throw error;
   }
+
+  const oldIds = [
+    previous.data?.avatar_drive_file_id,
+    previous.data?.avatar_thumb_drive_file_id,
+  ].filter((id): id is string => Boolean(id) && id !== stagedAvatar!.row.id && id !== stagedThumb!.row.id);
+
+  if (oldIds.length) {
+    const archived = await admin.from("drive_files").update({
+      status: "archived",
+      updated_at: new Date().toISOString(),
+    }).in("id", oldIds);
+    if (archived.error) console.error("[team-avatar-pair] previous metadata archive failed", archived.error);
+  }
+
+  return { avatar: stagedAvatar.row, thumb: stagedThumb.row };
 }
 
 export async function uploadTeamAvatar(form: FormData, rootId: string, user: SupabaseClient, admin: SupabaseClient, actor: string) {
