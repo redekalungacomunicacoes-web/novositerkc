@@ -36,7 +36,7 @@ export function AdminLayout() {
         </div>
       )}
 
-      <main className="md:pl-64 min-h-screen transition-all duration-300 ease-in-out">
+      <main className="min-h-screen min-w-0 overflow-x-hidden transition-all duration-300 ease-in-out md:pl-64">
         <div className={isTaskArea ? "mx-auto max-w-[1920px] p-2 md:p-4" : "container mx-auto p-6 md:p-8 max-w-7xl"}>
           <Outlet />
         </div>
