@@ -192,7 +192,15 @@ export function AdminEquipe() {
     setMigratingId(null);
 
     if (error) {
-      alert(`Falha na migração: ${error.message}. Consulte o detalhe retornado pela Edge Function.`);
+      let detail = error.message;
+      try {
+        const response = (error as { context?: Response }).context;
+        if (response) {
+          const payload = await response.clone().json();
+          if (payload?.error) detail = String(payload.error);
+        }
+      } catch {}
+      alert(`Falha na migração: ${detail}`);
       return;
     }
     if (data?.error) {
