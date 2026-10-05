@@ -17,7 +17,7 @@ import { deleteTaskAndQueueCleanup, retryTaskCleanup } from "../_shared/task-del
 import { createCenterFolder, manageCenterFolder, moveCenterFile, uploadCenterFile, withCenterLease } from "../_shared/file-center.ts";
 import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
-import { importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair } from "../_shared/team-drive.ts";
+import { ensureTeamMemberFolder, importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair } from "../_shared/team-drive.ts";
 
 // Root ID provided and named by RKC in this task; the academy child ID is discovered at runtime.
 const academyRootId = "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD";
@@ -226,6 +226,11 @@ Deno.serve(async (req) => {
         return {folder:await manageCenterFolder(body,userClient,admin,auth.user!.id)};
       });
       return json({ok:true,...result});
+    }
+    if (action === "team-ensure-folder") {
+      if (!rootFolderId) return json({ ok:false,error:"Pasta raiz do Drive não configurada."},503);
+      const memberId=String(body.member_id || "");
+      return json({ok:true,...await ensureTeamMemberFolder(memberId,rootFolderId,userClient,admin)});
     }
     if (action === "team-import-legacy") {
       if (!rootFolderId) return json({ ok:false,error:"Pasta raiz do Drive não configurada."},503);
