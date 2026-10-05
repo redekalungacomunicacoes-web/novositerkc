@@ -17,14 +17,15 @@ test('uploads optimized cover and WebP thumbnail together',async()=>{const f=fix
 test('trashes physical upload if metadata linking fails',async()=>{const f=fixture(true,true);await assert.rejects(()=>helper.uploadMateriaDrive(form(),'1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD',f.user,f.admin,'actor'),/db failed/);assert.deepEqual(f.events.map(e=>e[0]),['folder','upload','trash']);});
 test('archives and trashes only unreferenced article files',async()=>{
   const f=fixture();const updates=[];
-  const article={id:member,capa_drive_file_id:'live-meta',capa_thumb_drive_file_id:null,banner_drive_file_id:null,audio_drive_file_id:null,content_blocks:[{drive_file_id:'live-meta'}]};
-  const rows=[{id:'live-meta',drive_file_id:'physical-live',status:'active'},{id:'old-meta',drive_file_id:'physical-old',status:'active'}];
-  const query=()=>{const q={eq:()=>q,not:()=>q,in:()=>q,is:async()=>({data:rows,error:null}),maybeSingle:async()=>({data:article,error:null})};return q;};
+  const liveMeta='00000000-0000-4000-8000-000000000011',oldMeta='00000000-0000-4000-8000-000000000012';
+  const article={id:member,capa_drive_file_id:liveMeta,capa_thumb_drive_file_id:null,banner_drive_file_id:null,audio_drive_file_id:null,content_blocks:[{drive_file_id:liveMeta}]};
+  const rows=[{id:liveMeta,drive_file_id:'physical-live',status:'active'},{id:oldMeta,drive_file_id:'physical-old',status:'active'}];
+  const query=()=>{let ids=null;const q={eq:()=>q,not:()=>q,in:(column,values)=>{if(column==='id')ids=new Set(values);return q;},is:async()=>({data:ids?rows.filter(row=>ids.has(row.id)):rows,error:null}),maybeSingle:async()=>({data:article,error:null})};return q;};
   const admin={from:()=>({select:query,update:values=>({eq:async(_,id)=>{updates.push({id,...values});return {error:null};}})})};
   const user={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:member},error:null})})})})};
-  const result=await helper.cleanupUnreferencedMateriaFiles(member,user,admin);
-  assert.deepEqual(result,{retained:1,archived:1,trashed:1,pending:0});
-  assert.deepEqual(updates.map(x=>[x.id,x.status]),[['old-meta','archived'],['old-meta','trashed']]);
+  const result=await helper.cleanupUnreferencedMateriaFiles(member,[oldMeta],user,admin);
+  assert.deepEqual(result,{retained:0,archived:1,trashed:1,pending:0});
+  assert.deepEqual(updates.map(x=>[x.id,x.status]),[[oldMeta,'archived'],[oldMeta,'trashed']]);
   assert.ok(f.events.some(e=>e[0]==='trash'&&e[1]==='physical-old'));
   assert.ok(!f.events.some(e=>e[0]==='trash'&&e[1]==='physical-live'));
 });
