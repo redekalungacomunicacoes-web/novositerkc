@@ -1,0 +1,1 @@
+{"extends": "./tsconfig.academia.json", "include": ["src/app/pages/admin/AdminMateriaForm.tsx", "src/app/components/SiteSeo.tsx", "src/app/pages/MateriaDetalhes.tsx", "src/app/pages/Materias.tsx", "src/app/pages/Home.tsx"]}

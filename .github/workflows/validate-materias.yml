@@ -1,0 +1,27 @@
+name: Validate Materias
+on:
+  pull_request:
+    paths:
+      - 'src/app/pages/*Materia*.tsx'
+      - 'src/app/pages/admin/AdminMateriaForm.tsx'
+      - 'src/app/components/SiteSeo.tsx'
+      - 'supabase/functions/_shared/materia-drive.ts'
+      - 'tests/materia*.test.mjs'
+      - 'scripts/generate-pilot-seo.mjs'
+      - 'tsconfig.materias.json'
+      - '.github/workflows/validate-materias.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsc -p tsconfig.materias.json
+      - run: node --test tests/materia*.test.mjs tests/team-drive.test.mjs
+      - run: npm run build

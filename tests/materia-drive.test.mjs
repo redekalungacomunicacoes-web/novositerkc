@@ -8,7 +8,7 @@ globalThis.Deno={env:{get:()=> 'https://supabase-fixture'}};
 const source=(await readFile('supabase/functions/_shared/materia-drive.ts','utf8')).replace('"./google-drive.ts"',JSON.stringify(google));
 const helper=await import(dataUrl(source));
 const member='7a8539bf-f5f3-412f-bf30-17cf669e9129';
-function fixture(canRead=true,failInsert=false){globalThis.materiaDrive={events:[],uploads:0};const admin={from:()=>({insert:rows=>({select:async()=>failInsert?{data:null,error:new Error('db failed')}:{data:(Array.isArray(rows)?rows:[rows]).map((row,index)=>({...row,id:'metadata-id-'+index})),error:null}})})};const user={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>canRead?{data:{id:member,slug:'materia-piloto',status:'published'}}:{data:null,error:null}})})})};return {admin,user,events:globalThis.materiaDrive.events};}
+function fixture(canRead=true,failInsert=false){globalThis.materiaDrive={events:[],uploads:0};const admin={from:()=>({insert:rows=>({select:async()=>failInsert?{data:null,error:new Error('db failed')}:{data:(Array.isArray(rows)?rows:[rows]).map((row,index)=>({...row,id:'metadata-id-'+index})),error:null}})})};const user={rpc:async()=>({data:true,error:null}),from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>canRead?{data:{id:member,slug:'materia-piloto',status:'published'}}:{data:null,error:null}})})})};return {admin,user,events:globalThis.materiaDrive.events};}
 function form(type='image/jpeg',bytes=[0xff,0xd8,0xff,0,0]){const f=new FormData();f.set('materia_id',member);f.set('category','content');f.set('file',new File([new Uint8Array(bytes)],'imagem.jpg',{type}));return f;}
 test('requires permission to read article before touching Drive',async()=>{const f=fixture(false);await assert.rejects(()=>helper.uploadMateriaDrive(form(), '1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD',f.user,f.admin,'actor'),/Sem permissão/);assert.deepEqual(f.events,[]);});
 test('rejects unsupported or mislabeled images before upload',async()=>{const f=fixture();await assert.rejects(()=>helper.uploadMateriaDrive(form('image/jpeg',[137,80,78,71,13,10,26,10]),'1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD',f.user,f.admin,'actor'),/conteúdo do arquivo/);assert.equal(f.events.length,0);});
@@ -22,10 +22,22 @@ test('archives and trashes only unreferenced article files',async()=>{
   const rows=[{id:liveMeta,drive_file_id:'physical-live',status:'active'},{id:oldMeta,drive_file_id:'physical-old',status:'active'}];
   const query=()=>{let ids=null;const q={eq:()=>q,not:()=>q,in:(column,values)=>{if(column==='id')ids=new Set(values);return q;},is:async()=>({data:ids?rows.filter(row=>ids.has(row.id)):rows,error:null}),maybeSingle:async()=>({data:article,error:null})};return q;};
   const admin={from:()=>({select:query,update:values=>({eq:async(_,id)=>{updates.push({id,...values});return {error:null};}})})};
-  const user={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:member},error:null})})})})};
+  const user={rpc:async()=>({data:true,error:null}),from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:member},error:null})})})})};
   const result=await helper.cleanupUnreferencedMateriaFiles(member,[oldMeta],user,admin);
   assert.deepEqual(result,{retained:0,archived:1,trashed:1,pending:0});
   assert.deepEqual(updates.map(x=>[x.id,x.status]),[[oldMeta,'archived'],[oldMeta,'trashed']]);
   assert.ok(f.events.some(e=>e[0]==='trash'&&e[1]==='physical-old'));
   assert.ok(!f.events.some(e=>e[0]==='trash'&&e[1]==='physical-live'));
 });
+
+for (const operation of ['upload', 'cleanup']) {
+  test(`${operation} rejects a public reader before touching Drive`, async () => {
+    const f = fixture();
+    f.user.rpc = async () => ({ data: false, error: null });
+    const action = operation === 'upload'
+      ? () => helper.uploadMateriaDrive(form(), '1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD', f.user, f.admin, 'actor')
+      : () => helper.cleanupUnreferencedMateriaFiles(member, [], f.user, f.admin);
+    await assert.rejects(action, /Sem permissão editorial/);
+    assert.deepEqual(f.events, []);
+  });
+}
