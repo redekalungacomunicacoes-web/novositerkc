@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Plus, Trash2, Edit, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, Plus, Trash2, Edit, ArrowUp, ArrowDown, HardDriveUpload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type EquipeRow = {
@@ -10,6 +10,8 @@ type EquipeRow = {
   avatar_url: string | null;
   avatar_path: string | null;
   avatar_thumb_path: string | null;
+  avatar_drive_file_id: string | null;
+  avatar_thumb_drive_file_id: string | null;
   instagram_url: string | null;
   is_public: boolean;
   is_active: boolean;
@@ -30,13 +32,14 @@ export function AdminEquipe() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<EquipeRow[]>([]);
   const [orderDrafts, setOrderDrafts] = useState<Record<string, string>>({});
+  const [migratingId, setMigratingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
 
     const { data, error } = await supabase
       .from("equipe")
-      .select("id, nome, cargo, instagram_url, is_public, is_active, order_index, avatar_url, avatar_path, avatar_thumb_path, created_at")
+      .select("id, nome, cargo, instagram_url, is_public, is_active, order_index, avatar_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, created_at")
       .order("order_index", { ascending: true })
       .order("nome", { ascending: true });
 
@@ -45,7 +48,7 @@ export function AdminEquipe() {
     if (error) {
       const fallback = await supabase
         .from("equipe")
-        .select("id, nome, cargo, instagram_url:instagram, is_public, is_active:ativo, order_index, avatar_url:foto_url, avatar_path, avatar_thumb_path, created_at")
+        .select("id, nome, cargo, instagram_url:instagram, is_public, is_active:ativo, order_index, avatar_url:foto_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, created_at")
         .order("order_index", { ascending: true })
         .order("nome", { ascending: true });
 
@@ -169,6 +172,36 @@ export function AdminEquipe() {
     }
 
     alert("Ordem atualizada");
+  }
+
+  async function migrateLegacyAvatar(member: EquipeRow) {
+    if (!member.avatar_path && !member.avatar_thumb_path) {
+      alert("Este integrante não possui avatar legado para migrar.");
+      return;
+    }
+    if (member.avatar_drive_file_id && member.avatar_thumb_drive_file_id) {
+      alert("Avatar e miniatura já estão no Google Drive.");
+      return;
+    }
+    if (!confirm(`Migrar avatar de ${member.nome} para o Google Drive da RKC? Os arquivos legados serão preservados como fallback.`)) return;
+
+    setMigratingId(member.id);
+    const { data, error } = await supabase.functions.invoke("drive-files", {
+      body: { action: "team-import-legacy", memberId: member.id },
+    });
+    setMigratingId(null);
+
+    if (error) {
+      alert(`Falha na migração: ${error.message}`);
+      return;
+    }
+    if (data?.error) {
+      alert(`Falha na migração: ${data.error}`);
+      return;
+    }
+
+    await load();
+    alert(`Migração de ${member.nome} concluída. Os arquivos antigos foram mantidos como fallback.`);
   }
 
   async function handleDelete(id: string) {
@@ -296,6 +329,17 @@ export function AdminEquipe() {
 
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {(!r.avatar_drive_file_id || !r.avatar_thumb_drive_file_id) && (r.avatar_path || r.avatar_thumb_path) && (
+                          <button
+                            onClick={() => migrateLegacyAvatar(r)}
+                            disabled={migratingId === r.id}
+                            className="p-2 hover:bg-muted rounded-full text-emerald-600 hover:text-emerald-700 transition-colors disabled:opacity-50"
+                            title="Migrar avatar para o Google Drive da RKC"
+                          >
+                            <HardDriveUpload className="h-4 w-4" />
+                          </button>
+                        )}
+
                         <Link
                           to={`/admin/equipe/editar/${r.id}`}
                           className="p-2 hover:bg-muted rounded-full text-blue-600 hover:text-blue-700 transition-colors"
