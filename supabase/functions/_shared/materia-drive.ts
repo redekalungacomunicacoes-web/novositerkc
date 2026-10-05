@@ -65,8 +65,10 @@ export async function uploadMateriaDrive(form: FormData, root: string, user: Sup
   }
 }
 
-export async function cleanupUnreferencedMateriaFiles(materiaId: string, user: SupabaseClient, admin: SupabaseClient) {
+export async function cleanupUnreferencedMateriaFiles(materiaId: string, driveFileIds: string[], user: SupabaseClient, admin: SupabaseClient) {
   if (!uuid(materiaId)) throw new Error("Identificador da matéria inválido.");
+  const candidates = [...new Set(driveFileIds)];
+  if (candidates.length > 100 || candidates.some((id) => !uuid(id))) throw new Error("Lista de arquivos para limpeza inválida.");
   const { data: allowed, error: accessError } = await user.from("materias").select("id").eq("id", materiaId).maybeSingle();
   if (accessError || !allowed) throw new Error("Sem permissão para limpar arquivos desta matéria.");
   const { data: materia, error: materiaError } = await admin.from("materias")
@@ -81,9 +83,10 @@ export async function cleanupUnreferencedMateriaFiles(materiaId: string, user: S
     ...(Array.isArray(materia.content_blocks) ? materia.content_blocks.map((block: any) => block?.drive_file_id) : []),
     ...(Array.isArray(gallery) ? gallery.map((item: any) => item.drive_file_id) : []),
   ].filter((value): value is string => typeof value === "string" && value.length > 0));
+  if (!candidates.length) return { retained: 0, archived: 0, trashed: 0, pending: 0 };
   const { data: files, error: filesError } = await admin.from("drive_files")
     .select("id,drive_file_id,status").eq("module", "materias").eq("entity_id", materiaId)
-    .in("status", ["active", "archived"]).is("deleted_at", null);
+    .in("id", candidates).in("status", ["active", "archived"]).is("deleted_at", null);
   if (filesError) throw filesError;
   let trashed = 0, archived = 0, retained = 0;
   for (const file of files || []) {

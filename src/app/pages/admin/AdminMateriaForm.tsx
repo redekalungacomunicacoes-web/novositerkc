@@ -338,6 +338,7 @@ export function AdminMateriaForm() {
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
   const [forceRender, setForceRender] = useState(0);
   const isMounted = useRef(true);
+  const cleanupCandidateIds = useRef(new Set<string>());
 
   const coverUrl = watch("coverImage");
   const bannerUrl = watch("bannerImage");
@@ -433,6 +434,11 @@ export function AdminMateriaForm() {
       const d: any = data;
       const parsedBlocks = normalizeBlocks(d.content_blocks || d.contentBlocks);
 
+      [d.capa_drive_file_id, d.capa_thumb_drive_file_id, d.banner_drive_file_id, d.audio_drive_file_id,
+        ...parsedBlocks.map((block: any) => block.drive_file_id)]
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+        .forEach((value) => cleanupCandidateIds.current.add(value));
+
       setBlocks(parsedBlocks);
       setCoverDriveFileId(d.capa_drive_file_id || null);
       setCoverThumbDriveFileId(d.capa_thumb_drive_file_id || null);
@@ -471,14 +477,16 @@ export function AdminMateriaForm() {
       return;
     }
 
+    (data || []).forEach((item: any) => { if (item.drive_file_id) cleanupCandidateIds.current.add(item.drive_file_id); });
     setGaleria((data || []) as MateriaGaleriaItem[]);
   }
 
-  async function cleanupUnreferencedMateriaFiles(materiaId: string) {
+  async function cleanupUnreferencedMateriaFiles(materiaId: string, driveFileIds = [...cleanupCandidateIds.current]) {
     const form = new FormData();
     form.set("module", "materias");
     form.set("action", "cleanup-unreferenced");
     form.set("materia_id", materiaId);
+    form.set("drive_file_ids", JSON.stringify(driveFileIds));
     const { data, error } = await supabase.functions.invoke("drive-files", { body: form });
     if (error || data?.ok === false) throw new Error(data?.error || error?.message || "A limpeza de arquivos substituídos ficou pendente.");
     if (data?.cleanup?.pending > 0) throw new Error(`${data.cleanup.pending} arquivo(s) ficou(ram) arquivado(s) enquanto o Drive tenta concluir a limpeza.`);
@@ -532,6 +540,7 @@ export function AdminMateriaForm() {
     if (!id || !files || files.length === 0) return;
 
     setUploadingGallery(true);
+    const uploadedIds: string[] = [];
     try {
       const baseOrder = galeria.length;
 
@@ -542,6 +551,8 @@ export function AdminMateriaForm() {
           folder: `galeria/${id}`,
           file: files[i],
         });
+        uploadedIds.push(driveFileId);
+        cleanupCandidateIds.current.add(driveFileId);
 
         const { error: insErr } = await supabase.from("materia_galeria").insert({
           materia_id: id,
@@ -556,6 +567,7 @@ export function AdminMateriaForm() {
 
       await loadGaleria(id);
     } catch (err: any) {
+      try { if (id && uploadedIds.length) await cleanupUnreferencedMateriaFiles(id, uploadedIds); } catch (cleanupError) { console.warn("[materia-drive] upload de galeria incompleto; limpeza pendente", cleanupError); }
       alert(err?.message || "Erro ao enviar imagem para a galeria.");
     } finally {
       setUploadingGallery(false);
@@ -571,7 +583,8 @@ export function AdminMateriaForm() {
     if (error) return alert(error.message);
 
     try {
-      await cleanupUnreferencedMateriaFiles(id);
+      const removed = galeria.find((item) => item.id === itemId);
+      await cleanupUnreferencedMateriaFiles(id, removed?.drive_file_id ? [removed.drive_file_id] : []);
     } catch (cleanupError: any) {
       console.warn("[materia-drive] galeria removida; limpeza Drive pendente", cleanupError);
       alert("A foto foi removida da matéria, mas a cópia substituída ainda precisa ser movida para a lixeira do Drive.");
@@ -596,6 +609,8 @@ export function AdminMateriaForm() {
       setCoverDriveFileId(uploaded.id);
       setCoverThumbDriveFileId(uploaded.thumbnail?.id || null);
       setCoverThumbUrl(uploaded.thumbnail?.publicUrl || null);
+      cleanupCandidateIds.current.add(uploaded.id);
+      if (uploaded.thumbnail?.id) cleanupCandidateIds.current.add(uploaded.thumbnail.id);
     } catch (err: any) {
       alert(err?.message || "Erro ao enviar imagem de capa.");
     } finally {
@@ -652,6 +667,7 @@ export function AdminMateriaForm() {
 
       setValue("audioUrl", uploaded.publicUrl, { shouldDirty: true, shouldValidate: true });
       setAudioDriveFileId(uploaded.id);
+      cleanupCandidateIds.current.add(uploaded.id);
     } catch (err: any) {
       console.error("[audio-upload] Erro no upload de áudio", err);
       setSelectedAudioFileName("");
@@ -676,6 +692,7 @@ export function AdminMateriaForm() {
 
       setValue("bannerImage", uploaded.publicUrl, { shouldDirty: true, shouldValidate: true });
       setBannerDriveFileId(uploaded.id);
+      cleanupCandidateIds.current.add(uploaded.id);
     } catch (err: any) {
       alert(err?.message || "Erro ao enviar imagem de banner.");
     } finally {
@@ -763,6 +780,7 @@ export function AdminMateriaForm() {
         file,
       });
       updateBlock(blockId, { url: uploaded.publicUrl, drive_file_id: uploaded.id });
+      cleanupCandidateIds.current.add(uploaded.id);
     } catch (err: any) {
       alert(err?.message || "Erro ao enviar imagem do bloco.");
     } finally {
@@ -839,7 +857,7 @@ export function AdminMateriaForm() {
       const savedId = res.data?.id || id;
       if (savedId) {
         try {
-          await cleanupUnreferencedMateriaFiles(savedId);
+          await cleanupUnreferencedMateriaFiles(savedId, [...cleanupCandidateIds.current]);
         } catch (cleanupError: any) {
           console.warn("[materia-drive] matéria salva; limpeza Drive pendente", cleanupError);
           alert("A matéria foi salva. A limpeza de arquivos substituídos ficou pendente e será retomada ao salvar novamente.");

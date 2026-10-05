@@ -106,7 +106,10 @@ Deno.serve(async (req) => {
       if (form.get("module") === "materias") {
         if (form.get("action") === "cleanup-unreferenced") {
           const materiaId = String(form.get("materia_id") || "");
-          return json({ ok: true, cleanup: await cleanupUnreferencedMateriaFiles(materiaId, userClient, admin) });
+          let driveFileIds: string[];
+          try { driveFileIds = JSON.parse(String(form.get("drive_file_ids") || "[]")); } catch { return json({ ok: false, error: "Lista de arquivos para limpeza inválida." }, 400); }
+          if (!Array.isArray(driveFileIds) || driveFileIds.some((value) => typeof value !== "string")) return json({ ok: false, error: "Lista de arquivos para limpeza inválida." }, 400);
+          return json({ ok: true, cleanup: await cleanupUnreferencedMateriaFiles(materiaId, driveFileIds, userClient, admin) });
         }
         if (!rootFolderId) return json({ ok: false, error: "Pasta raiz do Drive não configurada." }, 503);
         return json({ ok: true, file: await uploadMateriaDrive(form, requireAcademyRoot(rootFolderId), userClient, admin, auth.user.id) });
