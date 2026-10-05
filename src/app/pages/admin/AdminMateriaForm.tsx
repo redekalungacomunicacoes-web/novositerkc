@@ -731,15 +731,17 @@ export function AdminMateriaForm() {
         const url = "url" in block ? block.url || "" : "";
         const caption = "caption" in block ? block.caption || "" : "";
         const credit = "credit" in block ? block.credit || "" : "";
+        const drive_file_id = "drive_file_id" in block ? block.drive_file_id : undefined;
 
         if (nextType === "image") {
-          return { id: block.id, type: "image", url, caption, credit };
+          return { id: block.id, type: "image", url, caption, credit, drive_file_id };
         }
 
         if (nextType === "image-text") {
           return {
             id: block.id,
             type: "image-text",
+            drive_file_id,
             url,
             text,
             caption,

@@ -5,6 +5,11 @@ const ROOT = "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD";
 const MATERIAS = "1cwfy1GybdqWd7Uv6MABFFIqpN3LMlMGL";
 const uuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const categories = new Set(["cover", "banner", "content", "gallery", "audio"]);
+async function requireMateriaEditor(user: SupabaseClient) {
+  // Public articles are readable by everyone; SELECT alone does not authorize writes.
+  const { data, error } = await user.rpc("has_role", { required: ["admin_alfa", "admin", "editor", "autor"] });
+  if (error || data !== true) throw new Error("Sem permissão editorial para gerenciar mídias desta matéria.");
+}
 function safeName(value: string) { return value.replace(/[\\/\r\n"]/g, "_").slice(0, 180) || "arquivo"; }
 function validImage(bytes: Uint8Array, mime: string) {
   if (mime === "image/jpeg") return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
@@ -20,6 +25,7 @@ export async function uploadMateriaDrive(form: FormData, root: string, user: Sup
   const category = String(form.get("category") || "");
   const file = form.get("file");
   if (!uuid(materiaId) || !categories.has(category) || !(file instanceof File)) throw new Error("Dados de upload de matéria inválidos.");
+  await requireMateriaEditor(user);
   const { data: materia, error: readError } = await user.from("materias").select("id,slug,status").eq("id", materiaId).maybeSingle();
   if (readError || !materia) throw new Error("Sem permissão para anexar arquivos a esta matéria.");
   if (!file.size || file.size > 25 * 1024 * 1024) throw new Error("Imagem inválida ou maior que 25 MB.");
@@ -69,6 +75,7 @@ export async function cleanupUnreferencedMateriaFiles(materiaId: string, driveFi
   if (!uuid(materiaId)) throw new Error("Identificador da matéria inválido.");
   const candidates = [...new Set(driveFileIds)];
   if (candidates.length > 100 || candidates.some((id) => !uuid(id))) throw new Error("Lista de arquivos para limpeza inválida.");
+  await requireMateriaEditor(user);
   const { data: allowed, error: accessError } = await user.from("materias").select("id").eq("id", materiaId).maybeSingle();
   if (accessError || !allowed) throw new Error("Sem permissão para limpar arquivos desta matéria.");
   const { data: materia, error: materiaError } = await admin.from("materias")

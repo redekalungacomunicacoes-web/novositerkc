@@ -53,7 +53,7 @@ export function Materias() {
           .eq('status', 'published')
           .order('published_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false });
-        safeData = fallback.data;
+        safeData = fallback.data?.map((materia) => ({ ...materia, audio_url: null })) ?? null;
         safeError = fallback.error;
       }
 
