@@ -705,7 +705,6 @@ export function AdminMateriaForm() {
     if (!isMounted.current) return;
     setBlocks((prev) => {
       if (!isMounted.current) return prev;
-      const newIndex = prev.length;
       let newBlock: MateriaContentBlock;
 
       if (type === "image") {
@@ -716,16 +715,49 @@ export function AdminMateriaForm() {
         newBlock = { id: uid("txt"), type, text: "", size: "md", author: "" };
       }
 
-      if (isMounted.current) {
-        setActiveBlock(newIndex);
-      }
-      setTimeout(() => {
-        if (!isMounted.current) return;
-        document.getElementById(`block-${newIndex}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 100);
-
+      // Adicionar vários blocos deve ser rápido: não abre o novo bloco nem move a página.
       return [...prev, newBlock];
     });
+  };
+
+  const changeBlockType = (blockId: string, nextType: BlockType) => {
+    if (!isMounted.current) return;
+
+    setBlocks((prev) =>
+      prev.map((block) => {
+        if (block.id !== blockId || block.type === nextType) return block;
+
+        const text = "text" in block ? block.text || "" : "";
+        const url = "url" in block ? block.url || "" : "";
+        const caption = "caption" in block ? block.caption || "" : "";
+        const credit = "credit" in block ? block.credit || "" : "";
+
+        if (nextType === "image") {
+          return { id: block.id, type: "image", url, caption, credit };
+        }
+
+        if (nextType === "image-text") {
+          return {
+            id: block.id,
+            type: "image-text",
+            url,
+            text,
+            caption,
+            credit,
+            align: block.type === "image-text" ? block.align : "left",
+            width: block.type === "image-text" ? block.width : "md",
+          };
+        }
+
+        return {
+          id: block.id,
+          type: nextType,
+          text,
+          size: "size" in block ? block.size || "md" : "md",
+          author: nextType === "quote" && "author" in block ? block.author || "" : "",
+        };
+      })
+    );
   };
 
   const updateBlock = (id: string, patch: Partial<MateriaContentBlock>) => {
@@ -1002,7 +1034,19 @@ export function AdminMateriaForm() {
                           Bloco {index + 1} · {blockTypeLabels[block.type]}
                         </div>
                       </div>
-                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-wrap items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <label className="sr-only" htmlFor={`block-type-${block.id}`}>Alterar tipo do bloco {index + 1}</label>
+                        <select
+                          id={`block-type-${block.id}`}
+                          value={block.type}
+                          onChange={(e) => changeBlockType(block.id, e.target.value as BlockType)}
+                          className="h-8 max-w-[150px] rounded border bg-background px-2 text-xs"
+                          title="Alterar tipo deste bloco"
+                        >
+                          {(Object.keys(blockTypeLabels) as BlockType[]).map((type) => (
+                            <option key={type} value={type}>{blockTypeLabels[type]}</option>
+                          ))}
+                        </select>
                         <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === 0} onClick={() => moveBlock(index, -1)}><ChevronUp className="w-3 h-3" /></button>
                         <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)}><ChevronDown className="w-3 h-3" /></button>
                         <button type="button" className="p-1 rounded border hover:bg-destructive/10" onClick={() => removeBlock(block.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
