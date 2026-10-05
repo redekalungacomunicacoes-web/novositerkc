@@ -46,24 +46,6 @@ type FormData = {
   permissoes: { admin: boolean; editor: boolean; autor: boolean };
 };
 
-function safeFilename(name: string) {
-  return (name || "arquivo")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9.\-_]/g, "-")
-    .toLowerCase();
-}
-
-async function uploadToBucket(bucket: string, path: string, file: Blob, contentType: string) {
-  const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    upsert: true,
-    contentType,
-    cacheControl: "31536000",
-  });
-  if (error) throw error;
-  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-}
-
 type AdminEquipeFormMode = "admin" | "self";
 
 type AdminEquipeFormProps = {
@@ -74,17 +56,20 @@ type AdminEquipeFormProps = {
 export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormProps = {}) {
   const { id } = useParams();
   const isSelfMode = mode === "self";
-  const resolvedId = isSelfMode ? memberId : id;
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const resolvedId = isSelfMode ? memberId : (createdId || id);
   const isEditing = !!resolvedId && resolvedId !== "novo";
   const navigate = useNavigate();
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, dirtyFields } } = useForm<FormData>({
     defaultValues: {
       nome: "", slug: "", cargo: "", bio: "", curriculo_md: "", instagram: "", whatsapp: "", facebook_url: "", linkedin_url: "", website_url: "",
       ativo: true, is_public: false, order_index: 1, foto_url: "", email_login: "", senha_login: "", permissoes: { admin: false, editor: true, autor: true },
     },
   });
 
+  const [existingRoles, setExistingRoles] = useState<string[] | null>(null);
+  const [removeAvatar, setRemoveAvatar] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
@@ -143,7 +128,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
       setLoading(true);
       const { data, error } = await supabase
         .from("equipe")
-        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, order_index, foto_url, avatar_path, avatar_thumb_path, email_login, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)")
+        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, order_index, foto_url, avatar_path, avatar_thumb_path, email_login, user_id, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)")
         .eq("id", resolvedId)
         .single();
       setLoading(false);
@@ -162,6 +147,14 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         senha_login: "",
         permissoes: { admin: false, editor: true, autor: true },
       });
+      if(!isSelfMode && data.user_id) {
+        const roleRes=await supabase.from("user_roles").select("roles(name)").eq("user_id",data.user_id);
+        if(!roleRes.error) {
+          const names=(roleRes.data||[]).flatMap((row:any)=>Array.isArray(row.roles)?row.roles.map((r:any)=>r.name):[row.roles?.name]).filter(Boolean);
+          setExistingRoles(names);
+          setValue("permissoes",{admin:names.includes("admin")||names.includes("admin_alfa"),editor:names.includes("editor"),autor:names.includes("autor")});
+        }
+      } else setExistingRoles([]);
       setSavedFotoUrl(data.foto_url || "");
       const drivePreview = driveMediaUrl(driveSlug((data as any).avatar_thumb_drive) || driveSlug((data as any).avatar_drive));
       const legacyPreview = data.avatar_thumb_path
@@ -205,7 +198,10 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
 
   const onSubmit = async (v: FormData) => {
     setLoading(true);
+    let saved = false;
+    let avatarSaved = false;
     try {
+      if (!isSelfMode && v.senha_login && v.senha_login.trim().length < 6) throw new Error("A senha precisa ter no mínimo 6 caracteres.");
       const normalizedOrderIndex = Number.isInteger(v.order_index) && Number(v.order_index) >= 1
         ? Number(v.order_index)
         : (isEditing ? currentOrderIndex : 1);
@@ -240,13 +236,22 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         const res = await supabase.from("equipe").insert(payload).select("id").single();
         if (res.error) throw res.error;
         equipeId = res.data.id;
+        setCreatedId(equipeId);
       }
 
+      saved = true;
+      const folder = await supabase.functions.invoke("drive-files", {body:{action:"team-ensure-folder",member_id:equipeId}});
+      if(folder.error || !folder.data?.ok) throw new Error("Dados salvos; não foi possível preparar a pasta institucional. Edite o integrante e tente novamente.");
+      if(removeAvatar && !pendingAvatarFile) {
+        const removed=await supabase.functions.invoke("drive-files",{body:{action:"team-remove-avatar",member_id:equipeId}});
+        if(removed.error || !removed.data?.ok) throw new Error("Dados salvos; remoção do avatar pendente.");
+      }
       setCurrentOrderIndex(normalizedOrderIndex);
 
       if (pendingAvatarFile) {
         const thumbBlob = await createThumbnail(pendingAvatarFile, 320, 0.75);
-        const thumbContentType = thumbBlob.type || "image/webp";
+        if (thumbBlob.type !== "image/webp") throw new Error("Este navegador não gerou WebP. Tente outro navegador para o avatar.");
+        const thumbContentType = thumbBlob.type;
         const thumbFile = new File([thumbBlob], "avatar-thumb.webp", { type: thumbContentType });
         const avatarPairForm = new FormData();
         avatarPairForm.set("module", "team");
@@ -260,14 +265,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
           throw new Error(getInvokeErrorMessage(pairDrive.error, pairDrive.data, "Falha ao enviar avatar e thumbnail ao Google Drive."));
         }
 
-        // Drive é a fonte única dos novos avatares. Storage permanece apenas
-        // temporariamente para arquivos legados até a limpeza final.
-        const { error: clearLegacyAvatarError } = await supabase.from("equipe").update({
-          foto_url: null,
-          avatar_path: null,
-          avatar_thumb_path: null,
-        }).eq("id", equipeId);
-        if (clearLegacyAvatarError) throw clearLegacyAvatarError;
+        avatarSaved = true;
         setSavedFotoUrl("");
 
         setPendingAvatarFile(null);
@@ -290,11 +288,17 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
       const email = (v.email_login || "").trim();
       const pass = (v.senha_login || "").trim();
       if (!isSelfMode && pass && pass.length < 6) throw new Error("A senha precisa ter no mínimo 6 caracteres.");
-      if (!isSelfMode && email) {
+      if (!isSelfMode && email && (!isEditing || pass || dirtyFields.email_login || dirtyFields.permissoes)) {
         const roles: string[] = [];
         if (v.permissoes.admin) roles.push("admin");
         if (v.permissoes.editor) roles.push("editor");
         if (v.permissoes.autor) roles.push("autor");
+        if (!dirtyFields.permissoes && isEditing) {
+          if(existingRoles === null) throw new Error("Permissões atuais não puderam ser carregadas. Entre novamente antes de alterar o login.");
+          roles.splice(0,roles.length,...existingRoles);
+        } else if(existingRoles?.includes("admin_alfa") && v.permissoes.admin) {
+          roles.splice(roles.indexOf("admin"),1,"admin_alfa");
+        }
         if (!roles.length) roles.push("autor");
 
         const { data, error } = await supabase.functions.invoke("admin-upsert-user", {
@@ -314,7 +318,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
       alert("Integrante salvo com sucesso.");
       navigate(isSelfMode ? "/admin/perfil" : "/admin/equipe");
     } catch (e: any) {
-      alert(e?.message || "Erro ao salvar integrante.");
+      alert(`${saved ? (avatarSaved ? "Perfil e avatar salvos. Etapa complementar pendente: " : "Dados do integrante salvos. Etapa complementar pendente: ") : ""}${e?.message || "Erro ao salvar integrante."}`);
     } finally {
       setLoading(false);
     }
@@ -336,11 +340,13 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         fileUrl = /^https?:\/\//i.test(normalizedUrl) ? normalizedUrl : `https://${normalizedUrl}`;
       } else {
         if (!file) throw new Error("Selecione um arquivo para o item de portfólio.");
-        const ext = file.name.split(".").pop() || (kind === "image" ? "jpg" : kind === "video" ? "mp4" : "pdf");
-        const portfolioId = crypto.randomUUID();
-        const path = `${memberId}/${portfolioId}.${safeFilename(ext)}`;
-        fileUrl = await uploadToBucket("team-portfolio", path, file, file.type || (kind === "image" ? "image/jpeg" : kind === "video" ? "video/mp4" : "application/pdf"));
-        thumbUrl = kind === "image" ? fileUrl : null;
+        const form = new window.FormData();
+        form.set("module","team");form.set("operation","portfolio");form.set("member_id",memberId);
+        form.set("kind",kind);form.set("title",title);form.set("description",description);form.set("file",file);
+        const uploaded = await supabase.functions.invoke("drive-files",{body:form});
+        if(uploaded.error || !uploaded.data?.ok) throw new Error(getInvokeErrorMessage(uploaded.error,uploaded.data,"Falha no upload do portfólio ao Drive."));
+        await loadPortfolio(memberId);
+        return;
       }
 
       const { error } = await supabase.from("team_member_portfolio").insert({
@@ -452,7 +458,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
                   <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={item.is_public} onChange={async () => { await supabase.from("team_member_portfolio").update({ is_public: !item.is_public }).eq("id", item.id); if (resolvedId) loadPortfolio(resolvedId); }} />Público</label>
                   <button type="button" onClick={() => movePortfolio(idx, -1)} className="p-2 border rounded"><ArrowUp className="h-3 w-3" /></button>
                   <button type="button" onClick={() => movePortfolio(idx, 1)} className="p-2 border rounded"><ArrowDown className="h-3 w-3" /></button>
-                  <button type="button" onClick={async () => { if (!confirm("Remover item?")) return; await supabase.from("team_member_portfolio").delete().eq("id", item.id); if (resolvedId) loadPortfolio(resolvedId); }} className="p-2 border rounded text-red-600"><Trash2 className="h-3 w-3" /></button>
+                  <button type="button" onClick={async () => { if (!confirm("Remover item?")) return; const result = await supabase.functions.invoke("drive-files", {body:{action:"team-remove-portfolio",id:item.id}}); if(result.error || !result.data?.ok) return alert("Falha ao remover item."); if (resolvedId) loadPortfolio(resolvedId); }} className="p-2 border rounded text-red-600"><Trash2 className="h-3 w-3" /></button>
                 </div>
               ))}
               {portfolio.length === 0 && <p className="text-xs text-muted-foreground">Sem itens no portfólio.</p>}
@@ -490,8 +496,8 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
               <p className="text-sm">{uploading ? "Enviando..." : "Clique para upload"}</p>
             </label>
             {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <img src={avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl} alt="Prévia" className="w-full h-48 object-cover rounded-md border" />}
-            {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <button type="button" className="text-xs text-red-600" onClick={() => { setPendingAvatarFile(null); if (avatarPreviewUrl) { URL.revokeObjectURL(avatarPreviewUrl); setAvatarPreviewUrl(null); } setSavedAvatarPreviewUrl(""); setValue("foto_url", "", { shouldDirty: true }); }}>Remover avatar</button>}
-            <input {...register("foto_url")} className="w-full h-10 px-3 rounded-md border" placeholder="Ou URL do avatar" />
+            {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <button type="button" className="text-xs text-red-600" onClick={() => { setRemoveAvatar(true); setPendingAvatarFile(null); if (avatarPreviewUrl) { URL.revokeObjectURL(avatarPreviewUrl); setAvatarPreviewUrl(null); } setSavedAvatarPreviewUrl(""); setValue("foto_url", "", { shouldDirty: true }); }}>Remover avatar</button>}
+            <input {...register("foto_url")} className="w-full h-10 px-3 rounded-md border" readOnly placeholder="O avatar deve ser enviado pelo upload acima" />
           </div>
         </div>
       </div>

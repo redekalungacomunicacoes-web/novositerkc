@@ -80,7 +80,8 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
   const tasksByDate = useMemo(() => new Map(visibleDays.filter((day): day is Date => Boolean(day))
     .map((day) => { const key = dateKey(day); return [key, tasks.filter((task) => task.date <= key && task.endDate >= key)] as const; })), [visibleDays, tasks]);
   const membersById = useMemo(() => new Map(teamMembers.map((member) => [member.id, member])), [teamMembers]);
-  function getAssignee(task: CalendarTask) { return membersById.get(task.assigneeId); }\n  function getCreator(task: CalendarTask) { return task.creatorId ? membersById.get(task.creatorId) : undefined; }
+  function getAssignee(task: CalendarTask) { return membersById.get(task.assigneeId); }
+  function getCreator(task: CalendarTask) { return task.creatorId ? membersById.get(task.creatorId) : undefined; }
 
   function openDay(key: string) {
     setSelectedDate(key);

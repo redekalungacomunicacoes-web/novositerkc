@@ -60,9 +60,11 @@ export async function getMemberBySlug(slug: string) {
     .eq("is_public", true)
     .maybeSingle<TeamMemberPublic>();
 
-  if (!detailed.error || !isMissingColumnError(detailed.error?.message)) {
-    return detailed;
+  if (!detailed.error && !detailed.data) {
+    const alias = await supabase.from("team_slug_aliases").select("member_id").eq("slug",slug).maybeSingle();
+    if(alias.data) return getMemberById(alias.data.member_id);
   }
+  if (!detailed.error || !isMissingColumnError(detailed.error?.message)) return detailed;
 
   return supabase
     .from("equipe")
