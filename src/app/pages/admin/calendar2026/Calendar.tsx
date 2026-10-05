@@ -117,7 +117,7 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
               key={key}
               role="group"
               onClick={() => view === "month" && openDay(key)}
-              className={`min-h-[72px] rounded-2xl border p-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:rounded-3xl md:p-3 ${view === "month" ? "cursor-pointer md:min-h-[116px]" : "md:min-h-40"} ${isSelected ? "border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/60" : "border-emerald-100 bg-slate-50/80 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/50 dark:bg-[#07352d]/70 dark:hover:bg-emerald-900/50"} ${view === "day" ? "min-h-[520px]" : ""}`}
+              className={`min-h-[72px] rounded-2xl border p-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:rounded-3xl md:p-3 ${view === "month" ? "cursor-pointer md:min-h-[116px]" : view === "week" ? "md:min-h-[260px]" : "md:min-h-40"} ${isSelected ? "border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/60" : "border-emerald-100 bg-slate-50/80 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/50 dark:bg-[#07352d]/70 dark:hover:bg-emerald-900/50"} ${view === "day" ? "min-h-[520px]" : ""}`}
             >
               <div className="mb-1 flex items-center justify-between gap-1 md:mb-3 md:gap-2">
                 <button type="button" aria-label={`Abrir tarefas de ${day.toLocaleDateString("pt-BR")}`} onClick={() => openDay(key)} className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
@@ -141,8 +141,8 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
                   {dayTasks.slice(0, 5).map((task) => {
                     const assignee = getAssignee(task);
                     return (
-                      <button type="button" key={task.id} onClick={(event) => { event.stopPropagation(); onSelectTask?.(task); }} className="w-full rounded-2xl border border-slate-100 bg-white p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md dark:border-emerald-800 dark:bg-emerald-950/60">
-                        <div className="flex items-start gap-2"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${statusDot[task.status]}`}/><span className="line-clamp-2 text-[11px] font-semibold leading-4 text-slate-800 dark:text-white">{task.title}</span></div>
+                      <button type="button" key={task.id} onClick={(event) => { event.stopPropagation(); onSelectTask?.(task); }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-emerald-800 dark:bg-emerald-950/60">
+                        <div className="flex items-start gap-2"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${statusDot[task.status]}`}/><span className="line-clamp-2 text-xs font-bold leading-4 text-slate-800 dark:text-white">{task.title}</span></div><span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600 dark:bg-emerald-900 dark:text-emerald-100">{statusLabel[task.status]}</span>
                         <div className="mt-2 flex items-center justify-between gap-1 text-[10px] text-slate-500 dark:text-emerald-100/60"><span>{taskTime(task)}</span>{assignee?.avatar ? <img src={assignee.avatar} alt={assignee.name} title={assignee.name} className="h-5 w-5 rounded-full object-cover ring-2 ring-white dark:ring-emerald-950"/> : null}</div>
                       </button>
                     );
@@ -157,7 +157,7 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
                     const creator = getCreator(task);
                     const progress = task.checklistTotal ? Math.round(((task.checklistCompleted ?? 0) / task.checklistTotal) * 100) : 0;
                     return (
-                      <button type="button" key={task.id} onClick={(event) => { event.stopPropagation(); onSelectTask?.(task); }} className="w-full rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md dark:border-emerald-800 dark:bg-emerald-950/60">
+                      <button type="button" key={task.id} onClick={(event) => { event.stopPropagation(); onSelectTask?.(task); }} className="grid w-full grid-cols-[76px_minmax(0,1fr)] gap-4 rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-emerald-800 dark:bg-emerald-950/60">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusDot[task.status]}`}/><h3 className="truncate text-sm font-bold text-slate-900 dark:text-white">{task.title}</h3></div><div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-emerald-100/65"><span className="flex items-center gap-1"><Clock3 size={13}/>{taskTime(task)}</span><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold dark:bg-emerald-900">{statusLabel[task.status]}</span><span>{task.priority} prioridade</span></div></div>
                           <div className="flex items-center gap-1.5" aria-label={`Criada por ${creator?.name ?? "não identificado"} para ${assignee?.name ?? "não definido"}`}>
