@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, Plus, Trash2, Edit, ArrowUp, ArrowDown, HardDriveUpload } from "lucide-react";
+import { TeamAvatarImage } from "@/app/components/TeamAvatarImage";
 import { supabase } from "@/lib/supabase";
 import { driveMediaUrl, driveSlug } from "@/lib/teamAvatar";
 
@@ -319,7 +320,7 @@ export function AdminEquipe() {
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-full bg-muted overflow-hidden flex items-center justify-center">
                           {(driveMediaUrl(driveSlug(r.avatar_thumb_drive) || driveSlug(r.avatar_drive)) || r.avatar_url) ? (
-                            <img src={driveMediaUrl(driveSlug(r.avatar_thumb_drive) || driveSlug(r.avatar_drive)) || r.avatar_url || ""} alt={r.nome} className="h-full w-full object-cover" />
+                            <TeamAvatarImage src={driveMediaUrl(driveSlug(r.avatar_thumb_drive) || driveSlug(r.avatar_drive)) || r.avatar_url} originalSrc={driveMediaUrl(driveSlug(r.avatar_drive))} fileId={r.avatar_thumb_drive_file_id || r.avatar_drive_file_id} alt={r.nome} className="h-full w-full object-cover" />
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}

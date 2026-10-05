@@ -3,7 +3,7 @@ import { ensureDrivePath, trashDriveFile, uploadDriveFile, downloadDriveFile } f
 
 const uuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
-async function requireTeamEditor(memberId: string, user: SupabaseClient) {
+export async function requireTeamEditor(memberId: string, user: SupabaseClient) {
   const { data: admin } = await user.rpc("is_team_admin");
   if (admin === true) return;
   const { data: member } = await user.from("equipe").select("id,user_id").eq("id", memberId).maybeSingle();
@@ -292,4 +292,30 @@ export async function removeTeamPortfolio(id: string,user: SupabaseClient,admin:
   const deleted=await admin.from("team_member_portfolio").delete().eq("id",id);
   if(deleted.error) throw deleted.error;
   if(item.data.drive_file_id) {const result=await admin.from("drive_files").update({status:"archived"}).eq("id",item.data.drive_file_id);if(result.error) throw result.error;}
+}
+
+// Called only after the editor has decoded both newly linked images.
+export async function confirmTeamAvatar(memberId: string, avatarId: string, thumbId: string, user: SupabaseClient, admin: SupabaseClient) {
+  await requireTeamEditor(memberId,user);
+  const member=await admin.from("equipe").select("avatar_drive_file_id,avatar_thumb_drive_file_id").eq("id",memberId).single();
+  if(member.error) throw member.error;
+  if(member.data.avatar_drive_file_id!==avatarId || member.data.avatar_thumb_drive_file_id!==thumbId) return {cleanup_pending:true};
+  const current=await admin.from("drive_files").select("*").in("id",[avatarId,thumbId]).eq("status","active").eq("entity_id",memberId).eq("module","team");
+  if(current.error || current.data?.length!==2) throw new Error("Par de avatar não confirmado.");
+  for(const file of current.data) {
+    const response=await downloadDriveFile(file.drive_file_id);
+    const bytes=await response.arrayBuffer();
+    if(bytes.byteLength!==file.size_bytes) throw new Error("Cópia Drive incompleta; limpeza cancelada.");
+  }
+  const old=await admin.from("drive_files").select("id,drive_file_id").eq("module","team").eq("entity_id",memberId).eq("status","archived").in("category",["avatar","thumb"]);
+  if(old.error) throw old.error;
+  let pending=false;
+  for(const file of old.data||[]) {
+    try {
+      await trashDriveFile(file.drive_file_id);
+      const updated=await admin.from("drive_files").update({status:"trashed",deleted_at:new Date().toISOString()}).eq("id",file.id);
+      if(updated.error) throw updated.error;
+    } catch {pending=true;}
+  }
+  return {cleanup_pending:pending};
 }

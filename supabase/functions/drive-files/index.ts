@@ -17,7 +17,7 @@ import { deleteTaskAndQueueCleanup, retryTaskCleanup } from "../_shared/task-del
 import { createCenterFolder, manageCenterFolder, moveCenterFile, uploadCenterFile, withCenterLease } from "../_shared/file-center.ts";
 import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
-import { ensureTeamMemberFolder, importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair, uploadTeamPortfolio, removeTeamAvatar, removeTeamPortfolio } from "../_shared/team-drive.ts";
+import { ensureTeamMemberFolder, importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair, uploadTeamPortfolio, removeTeamAvatar, removeTeamPortfolio, requireTeamEditor, confirmTeamAvatar } from "../_shared/team-drive.ts";
 
 // Root ID provided and named by RKC in this task; the academy child ID is discovered at runtime.
 const academyRootId = "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD";
@@ -228,6 +228,7 @@ Deno.serve(async (req) => {
       });
       return json({ok:true,...result});
     }
+    if(action === "team-avatar-confirm") return json({ok:true,...await confirmTeamAvatar(String(body.member_id||""),String(body.avatar_id||""),String(body.thumb_id||""),userClient,admin)});
     if(action === "team-remove-avatar") {await removeTeamAvatar(String(body.member_id||""),userClient,admin);return json({ok:true});}
     if(action === "team-remove-portfolio") {await removeTeamPortfolio(String(body.id||""),userClient,admin);return json({ok:true});}
     if (action === "team-ensure-folder") {
@@ -410,6 +411,12 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (error || !file)
       return json({ ok: false, error: "Arquivo não encontrado." }, 404);
+    if (file.module === "team") {
+      await requireTeamEditor(file.entity_id,userClient);
+      if(!["download","stream"].includes(action) || file.status !== "active") return json({ok:false,error:"Operação não permitida."},403);
+      const response=await downloadDriveFile(file.drive_file_id,action==="stream"?req.headers.get("Range"):null);
+      return new Response(response.body,{status:response.status,headers:{...corsHeaders,"Content-Type":file.mime_type||"application/octet-stream","Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"}});
+    }
     if (file.module === "academy") {
       // Academy media stays private, but course editors must be able to preview it
       // even when drive_files RLS is learner/enrollment oriented.
