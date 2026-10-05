@@ -12,6 +12,7 @@ type EquipeRow = {
   avatar_thumb_path: string | null;
   avatar_drive_file_id: string | null;
   avatar_thumb_drive_file_id: string | null;
+  drive_folder_id: string | null;
   instagram_url: string | null;
   is_public: boolean;
   is_active: boolean;
@@ -39,7 +40,7 @@ export function AdminEquipe() {
 
     const { data, error } = await supabase
       .from("equipe")
-      .select("id, nome, cargo, instagram_url, is_public, is_active, order_index, avatar_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, created_at")
+      .select("id, nome, cargo, instagram_url, is_public, is_active, order_index, avatar_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, drive_folder_id, created_at")
       .order("order_index", { ascending: true })
       .order("nome", { ascending: true });
 
@@ -48,7 +49,7 @@ export function AdminEquipe() {
     if (error) {
       const fallback = await supabase
         .from("equipe")
-        .select("id, nome, cargo, instagram_url:instagram, is_public, is_active:ativo, order_index, avatar_url:foto_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, created_at")
+        .select("id, nome, cargo, instagram_url:instagram, is_public, is_active:ativo, order_index, avatar_url:foto_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, drive_folder_id, created_at")
         .order("order_index", { ascending: true })
         .order("nome", { ascending: true });
 
@@ -172,6 +173,36 @@ export function AdminEquipe() {
     }
 
     alert("Ordem atualizada");
+  }
+
+  async function ensureDriveFolder(member: EquipeRow) {
+    if (member.drive_folder_id) {
+      alert("A pasta deste integrante já está vinculada ao Google Drive.");
+      return;
+    }
+    if (!confirm(`Criar e vincular a pasta de ${member.nome} no Google Drive da RKC?`)) return;
+
+    setMigratingId(member.id);
+    const { data, error } = await supabase.functions.invoke("drive-files", {
+      body: { action: "team-ensure-folder", member_id: member.id },
+    });
+    setMigratingId(null);
+
+    if (error || data?.error) {
+      let detail = data?.error || error?.message || "Falha ao preparar pasta no Drive.";
+      try {
+        const response = (error as { context?: Response })?.context;
+        if (response) {
+          const payload = await response.clone().json();
+          if (payload?.error) detail = String(payload.error);
+        }
+      } catch {}
+      alert(`Falha ao preparar Drive: ${detail}`);
+      return;
+    }
+
+    await load();
+    alert(`Pasta de ${member.nome} criada e vinculada ao Google Drive da RKC.`);
   }
 
   async function migrateLegacyAvatar(member: EquipeRow) {
@@ -337,7 +368,17 @@ export function AdminEquipe() {
 
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {(!r.avatar_drive_file_id || !r.avatar_thumb_drive_file_id) && (r.avatar_path || r.avatar_thumb_path) && (
+                        {!r.drive_folder_id && (
+                          <button
+                            onClick={() => ensureDriveFolder(r)}
+                            disabled={migratingId === r.id}
+                            className="p-2 hover:bg-muted rounded-full text-emerald-600 hover:text-emerald-700 transition-colors disabled:opacity-50"
+                            title="Preparar pasta no Google Drive da RKC"
+                          >
+                            <HardDriveUpload className="h-4 w-4" />
+                          </button>
+                        )}
+                        {r.drive_folder_id && (!r.avatar_drive_file_id || !r.avatar_thumb_drive_file_id) && (r.avatar_path || r.avatar_thumb_path) && (
                           <button
                             onClick={() => migrateLegacyAvatar(r)}
                             disabled={migratingId === r.id}
