@@ -204,13 +204,13 @@ export function TasksTopBar() {
             <UserMenu />
           </div>
         </div>
-        <nav className="flex min-w-0 max-w-full gap-2 overflow-x-auto rounded-3xl border border-emerald-100 bg-emerald-50/60 p-1 dark:border-emerald-800/60 dark:bg-emerald-900/40">
+        <nav className="flex min-w-0 max-w-full gap-1 overflow-x-auto border-b border-emerald-100 dark:border-emerald-800/60">
           {tabs.map(({ label, icon: Icon, to, end }) => (
-            <NavLink key={to} to={to} end={end} className="relative shrink-0 rounded-2xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:text-emerald-800 dark:text-emerald-100/70 dark:hover:text-white">
+            <NavLink key={to} to={to} end={end} className="relative shrink-0 px-3 py-2 text-xs font-semibold text-slate-500 transition hover:text-emerald-800 dark:text-emerald-100/70 dark:hover:text-white">
               {({ isActive }) => (
                 <span className="relative z-10 flex items-center gap-2">
-                  {isActive ? <motion.span layoutId="tasks-active-tab" className="absolute inset-0 -z-10 rounded-2xl bg-white shadow-sm dark:bg-emerald-800" transition={{ type: "spring", stiffness: 420, damping: 32 }} /> : null}
-                  <Icon size={16} className={isActive ? "text-emerald-700 dark:text-emerald-100" : "text-emerald-600/70 dark:text-emerald-200/60"} />
+                  {isActive ? <motion.span layoutId="tasks-active-tab" className="absolute inset-x-1 -bottom-[1px] -z-10 h-0.5 rounded-full bg-emerald-600 dark:bg-emerald-300" transition={{ type: "spring", stiffness: 420, damping: 32 }} /> : null}
+                  <Icon size={14} className={isActive ? "text-emerald-700 dark:text-emerald-100" : "text-emerald-600/70 dark:text-emerald-200/60"} />
                   <span className={isActive ? "text-emerald-950 dark:text-white" : ""}>{label}</span>
                 </span>
               )}
