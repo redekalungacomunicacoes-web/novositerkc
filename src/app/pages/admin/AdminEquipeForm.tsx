@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { TeamAvatarImage } from "@/app/components/TeamAvatarImage";
 import { supabase } from "@/lib/supabase";
 import { slugify } from "@/lib/cms";
+import { downloadRkcDriveFile } from "@/services/driveFiles";
 import { createThumbnail } from "@/lib/imageThumbnail";
 import { driveMediaUrl, driveSlug } from "@/lib/teamAvatar";
 
@@ -68,6 +70,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
     },
   });
 
+  const [avatarFileId, setAvatarFileId] = useState<string | null>(null);
   const [existingRoles, setExistingRoles] = useState<string[] | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -128,7 +131,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
       setLoading(true);
       const { data, error } = await supabase
         .from("equipe")
-        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, order_index, foto_url, avatar_path, avatar_thumb_path, email_login, user_id, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)")
+        .select("nome, slug, cargo, bio, curriculo_md, instagram, whatsapp, facebook_url, linkedin_url, website_url, ativo, is_public, order_index, foto_url, avatar_path, avatar_thumb_path, email_login, user_id, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(id,public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(id,public_slug)")
         .eq("id", resolvedId)
         .single();
       setLoading(false);
@@ -162,6 +165,8 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         : data.avatar_path
           ? supabase.storage.from(TEAM_AVATARS_BUCKET).getPublicUrl(data.avatar_path).data.publicUrl
           : data.foto_url || "";
+      const relation:any=(data as any).avatar_thumb_drive || (data as any).avatar_drive;
+      setAvatarFileId(Array.isArray(relation)?relation[0]?.id:relation?.id);
       setSavedAvatarPreviewUrl(drivePreview || legacyPreview);
       setCurrentOrderIndex(data.order_index ?? 1);
       setSlugTouched(true);
@@ -266,6 +271,18 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         }
 
         avatarSaved = true;
+        // Validate delivery in this frontend before retiring replaced Drive files.
+        try {
+          const pair=pairDrive.data?.files;
+          for(const record of [pair?.avatar,pair?.thumb]) {
+            if(!record?.id) throw new Error("Par de avatar ausente na resposta.");
+            const blob=await downloadRkcDriveFile(record.id);
+            const objectUrl=URL.createObjectURL(blob);
+            try {const image=new Image();image.src=objectUrl;await image.decode();} finally {URL.revokeObjectURL(objectUrl);}
+          }
+          const confirm=await supabase.functions.invoke("drive-files",{body:{action:"team-avatar-confirm",member_id:equipeId,avatar_id:pair.avatar.id,thumb_id:pair.thumb.id}});
+          if(confirm.error || confirm.data?.cleanup_pending) console.warn("Avatar salvo; limpeza das versões anteriores pendente.");
+        } catch {console.warn("Avatar salvo; confirmação visual e limpeza anteriores pendentes.");}
         setSavedFotoUrl("");
 
         setPendingAvatarFile(null);
@@ -495,7 +512,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
               <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
               <p className="text-sm">{uploading ? "Enviando..." : "Clique para upload"}</p>
             </label>
-            {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <img src={avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl} alt="Prévia" className="w-full h-48 object-cover rounded-md border" />}
+            {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <TeamAvatarImage src={avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl} fileId={avatarPreviewUrl?null:avatarFileId} alt="Prévia" className="w-full h-48 object-cover rounded-md border" />}
             {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <button type="button" className="text-xs text-red-600" onClick={() => { setRemoveAvatar(true); setPendingAvatarFile(null); if (avatarPreviewUrl) { URL.revokeObjectURL(avatarPreviewUrl); setAvatarPreviewUrl(null); } setSavedAvatarPreviewUrl(""); setValue("foto_url", "", { shouldDirty: true }); }}>Remover avatar</button>}
             <input {...register("foto_url")} className="w-full h-10 px-3 rounded-md border" readOnly placeholder="O avatar deve ser enviado pelo upload acima" />
           </div>
