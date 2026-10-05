@@ -111,18 +111,13 @@ export async function getMemberPosts(memberId: string) {
     .eq("status", "published")
     .order("created_at", { ascending: false });
 
-  if (!direct.error) {
-    return {
-      data: (direct.data || []) as TeamMemberPost[],
-      error: null,
-    };
-  }
-
-  return supabase
+  const linked = await supabase
     .from("team_member_posts")
-    .select(
-      "materias!inner(id, slug, titulo, capa_url, published_at, created_at, status)"
-    )
+    .select("materias!inner(id, slug, titulo, capa_url, published_at, created_at, status)")
     .eq("member_id", memberId)
     .eq("materias.status", "published");
+  const related=(linked.data || []).flatMap((row:any)=>Array.isArray(row.materias)?row.materias:[row.materias]).filter(Boolean);
+  const combined=[...(direct.data || []),...related] as TeamMemberPost[];
+  const unique=[...new Map(combined.map(row=>[row.id,row])).values()].sort((a,b)=>b.created_at.localeCompare(a.created_at));
+  return {data:unique,error:direct.error && linked.error ? direct.error : null};
 }

@@ -1,3 +1,4 @@
+import { TeamAvatarImage } from "@/app/components/TeamAvatarImage";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ExternalLink, Instagram, Linkedin, Facebook, Globe, MessageCircle, FileText, Link as LinkIcon } from "lucide-react";
@@ -27,7 +28,7 @@ function markdownToHtml(md?: string | null) {
 }
 
 function ensureAbsoluteUrl(value: string) {
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/^(https?:\/\/)?(www\.)?linkedin\//i, "https://www.linkedin.com/");
   if (!trimmed) return "";
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
@@ -44,7 +45,8 @@ function socialLinks(member: TeamMemberPublic) {
     links.push({ href: ensureAbsoluteUrl(href), label: "Instagram", icon: Instagram });
   }
   if (member.whatsapp?.trim()) {
-    const onlyDigits = member.whatsapp.replace(/\D/g, "");
+    const digits = member.whatsapp.replace(/\D/g, "");
+    const onlyDigits = [10,11].includes(digits.length) ? `55${digits}` : digits;
     if (onlyDigits) links.push({ href: `https://wa.me/${onlyDigits}`, label: "WhatsApp", icon: MessageCircle });
   }
   if (member.facebook_url?.trim()) links.push({ href: ensureAbsoluteUrl(member.facebook_url), label: "Facebook", icon: Facebook });
@@ -73,6 +75,7 @@ export function TeamMemberPublicPage() {
 
   useEffect(() => {
     if (!slug && !id) return;
+    setPortfolio([]); setPosts([]);
     (async () => {
       setLoading(true);
       const memberRes = slug ? await getMemberBySlug(slug) : await getMemberById(id as string);
@@ -120,7 +123,7 @@ export function TeamMemberPublicPage() {
     <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
       <header className="flex flex-row items-center gap-4 md:flex-col md:items-start">
         <div className="h-24 w-24 md:w-32 md:h-32 rounded-full overflow-hidden bg-muted border border-[#0F7A3E] border-2 ring-2 ring-[#0F7A3E]/20 shrink-0">
-          {getAvatar(member) ? <img src={getAvatar(member) || ""} alt={member.nome} className="w-full h-full object-cover" /> : null}
+          <TeamAvatarImage src={getAvatar(member)} originalSrc={driveMediaUrl(driveSlug(member.avatar_drive))} alt={member.nome} className="w-full h-full object-cover" />
         </div>
         <div className="flex-1 space-y-2">
           <h1 className="text-2xl md:text-3xl font-bold">{member.nome}</h1>

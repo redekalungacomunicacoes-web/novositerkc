@@ -1,3 +1,4 @@
+import { TEAM_DRIVE_AVATAR_SELECT, teamAvatarUrl } from "@/lib/teamAvatar";
 import { deleteTaskWithFiles } from "@/services/driveFiles";
 import { supabase } from "@/lib/supabase";
 import type { AttachmentType, Notification, Task, TaskAttachment, TeamProfile } from "./tasksTypes";
@@ -17,28 +18,28 @@ export async function getCurrentEquipeMember() {
   if (userError) throw new Error(userError.message);
 
   const authUser = userData.user ?? null;
-  console.log("AUTH USER", authUser);
+
 
   const authUserId = authUser?.id;
   if (!authUserId) {
-    console.log("EQUIPE LOOKUP", { data: null, error: null, authUserId: null });
-    console.log("CURRENT MEMBER", null);
+
+
     return null;
   }
 
   const lookupResult = await supabase
     .from("equipe")
-    .select("id,user_id,nome,email_login,cargo,foto_url,ativo")
+    .select(`id,user_id,nome,email_login,cargo,foto_url,ativo,${TEAM_DRIVE_AVATAR_SELECT}`)
     .eq("user_id", authUserId);
 
-  console.log("EQUIPE LOOKUP", lookupResult);
+
 
   if (lookupResult.error) throw new Error(lookupResult.error.message);
 
   const currentMember = (lookupResult.data ?? []).find((member) => member.ativo !== false) ?? null;
-  console.log("CURRENT MEMBER", currentMember);
 
-  return currentMember;
+
+  return currentMember ? {...currentMember, foto_url:teamAvatarUrl(currentMember)} : null;
 }
 
 async function requireCurrentEquipeMember() {
@@ -46,7 +47,7 @@ async function requireCurrentEquipeMember() {
   if (!currentMember?.id) {
     throw new Error("Seu usuário autenticado não possui vínculo ativo com a equipe. Solicite ao administrador para vincular seu acesso antes de criar tarefas ou anexos.");
   }
-  return currentMember;
+  return currentMember ? {...currentMember, foto_url:teamAvatarUrl(currentMember)} : null;
 }
 
 export async function fetchTeamProfiles() {

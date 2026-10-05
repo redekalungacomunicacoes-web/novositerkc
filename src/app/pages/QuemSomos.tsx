@@ -28,6 +28,7 @@ type MembroEquipe = {
   cargo?: string | null;
   slug?: string | null;
   avatarUrl?: string | null;
+  originalAvatarUrl?: string | null;
   order_index?: number | null;
 };
 
@@ -71,7 +72,8 @@ function MemberCard({ membro }: MemberCardProps) {
             height={320}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
             onError={(e) => {
-              e.currentTarget.src = avatarPlaceholder;
+              const original=membro.originalAvatarUrl;
+              e.currentTarget.src = original && e.currentTarget.src !== original ? original : avatarPlaceholder;
             }}
           />
         ) : (
@@ -282,6 +284,7 @@ export function QuemSomos() {
                 cargo: typeof m.cargo === "string" ? m.cargo : null,
                 slug: m.slug ?? null,
                 avatarUrl: getAvatarUrl(m),
+                originalAvatarUrl: driveMediaUrl(driveSlug(m.avatar_drive)),
                 order_index: m.order_index ?? null,
               }));
               setEquipe(mapped.slice().sort((a, b) => (a.order_index ?? 999999) - (b.order_index ?? 999999) || a.name.localeCompare(b.name)));
@@ -300,6 +303,7 @@ export function QuemSomos() {
             cargo: typeof m.cargo === "string" ? m.cargo : null,
             slug: m.slug ?? null,
             avatarUrl: getAvatarUrl(m),
+                originalAvatarUrl: driveMediaUrl(driveSlug(m.avatar_drive)),
             order_index: m.order_index ?? null,
           }));
           setEquipe(mapped.slice().sort((a, b) => (a.order_index ?? 999999) - (b.order_index ?? 999999) || a.name.localeCompare(b.name)));
