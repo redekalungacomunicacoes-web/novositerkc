@@ -14,7 +14,12 @@ export type MateriaRow = {
   audio_url?: string | null;
   photo_credits?: string | null;
   capa_url: string | null;
+  capa_drive_file_id?: string | null;
+  capa_thumb_drive_file_id?: string | null;
+  capa_thumb_url?: string | null;
   banner_url?: string | null;
+  banner_drive_file_id?: string | null;
+  audio_drive_file_id?: string | null;
   autor_nome: string | null;
   tags: string[];
   status: "draft" | "published" | "archived";
@@ -36,6 +41,7 @@ export type MateriaContentBlock =
       id: string;
       type: "image";
       url: string;
+      drive_file_id?: string;
       caption?: string;
       credit?: string;
     }
@@ -43,6 +49,7 @@ export type MateriaContentBlock =
       id: string;
       type: "image-text";
       url: string;
+      drive_file_id?: string;
       text: string;
       caption?: string;
       credit?: string;

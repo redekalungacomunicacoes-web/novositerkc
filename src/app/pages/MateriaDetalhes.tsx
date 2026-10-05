@@ -432,7 +432,7 @@ export function MateriaDetalhes() {
 
       const { data: rel, error: relErr } = await supabase
         .from("materias")
-        .select("id, slug, titulo, capa_url, tags, published_at, created_at, status")
+        .select("id, slug, titulo, capa_url, capa_thumb_url, tags, published_at, created_at, status")
         .eq("status", "published")
         .neq("id", found.id)
         .order("published_at", { ascending: false, nullsFirst: false })
@@ -445,7 +445,7 @@ export function MateriaDetalhes() {
               id: m.id,
               slug: m.slug,
               titulo: m.titulo || "",
-              imagem: m.capa_url || "",
+              imagem: m.capa_thumb_url || m.capa_url || "",
               categoria: (m.tags && m.tags[0]) ? m.tags[0] : "Geral",
             }))
           : []

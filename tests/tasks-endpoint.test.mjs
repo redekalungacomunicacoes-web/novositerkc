@@ -18,7 +18,8 @@ source=source.replace('"https://esm.sh/@supabase/supabase-js@2"',JSON.stringify(
  .replace('"../_shared/task-drive.ts"',JSON.stringify(dataUrl('export async function prepareTaskFolder(){return "folder";}')))
  .replace('"../_shared/task-delete.ts"',JSON.stringify(dataUrl('export const deleteTaskAndQueueCleanup=()=>{},retryTaskCleanup=()=>{};')))
  .replace('"../_shared/academy-drive.ts"',JSON.stringify(dataUrl('export const uploadAcademyDrive=()=>{},prepareAcademyDestination=()=>{};')))
- .replace('"../_shared/team-drive.ts"',JSON.stringify(dataUrl('export const ensureTeamMemberFolder=()=>{},requireTeamEditor=()=>{},confirmTeamAvatar=()=>{},uploadTeamAvatar=()=>{},uploadTeamAvatarPair=()=>{},uploadTeamPortfolio=()=>{},removeTeamAvatar=()=>{},removeTeamPortfolio=()=>{},importLegacyTeamAvatar=()=>{};')));
+ .replace('"../_shared/team-drive.ts"',JSON.stringify(dataUrl('export const ensureTeamMemberFolder=()=>{},requireTeamEditor=()=>{},confirmTeamAvatar=()=>{},uploadTeamAvatar=()=>{},uploadTeamAvatarPair=()=>{},uploadTeamPortfolio=()=>{},removeTeamAvatar=()=>{},removeTeamPortfolio=()=>{},importLegacyTeamAvatar=()=>{};')))
+ .replace('"../_shared/materia-drive.ts"',JSON.stringify(dataUrl('export const uploadMateriaDrive=()=>{};')));
 await import(dataUrl(source));
 const task='00000000-0000-0000-0000-000000000001', uploadId='00000000-0000-0000-0000-000000000002';
 function fixture(race=false){
