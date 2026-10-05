@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     const drive = await downloadDriveFile(file.drive_file_id);
     const headers = new Headers();
     headers.set("Content-Type", file.mime_type || drive.headers.get("Content-Type") || "application/octet-stream");
-    headers.set("Cache-Control", "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400");
+    headers.set("Cache-Control", "public, max-age=300, s-maxage=300, must-revalidate");
     headers.set("X-Content-Type-Options", "nosniff");
     if (file.size_bytes) headers.set("Content-Length", String(file.size_bytes));
     if (req.method === "HEAD") return new Response(null, { status: 200, headers });
