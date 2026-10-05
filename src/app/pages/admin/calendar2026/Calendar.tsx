@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo } from "react";
 import { useCalendarStore } from "./store";
-import type { CalendarTask, TaskPriority } from "./types";
+import type { CalendarTask, TaskPriority, TaskStatus } from "./types";
 
 const priorityStyles: Record<TaskPriority, string> = {
   urgente: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/40 dark:bg-rose-950/50 dark:text-rose-100",
@@ -17,6 +17,22 @@ const priorityDot: Record<TaskPriority, string> = {
   alta: "bg-rose-500",
   media: "bg-amber-400",
   baixa: "bg-emerald-500",
+};
+
+const statusDot: Record<TaskStatus, string> = {
+  pendente: "bg-slate-400",
+  em_andamento: "bg-sky-500",
+  revisao: "bg-amber-400",
+  concluida: "bg-emerald-500",
+  cancelada: "bg-rose-400",
+};
+
+const statusLabel: Record<TaskStatus, string> = {
+  pendente: "Pendente",
+  em_andamento: "Em andamento",
+  revisao: "Em revisão",
+  concluida: "Concluída",
+  cancelada: "Cancelada",
 };
 
 const viewLabels = { month: "Mês", week: "Semana", day: "Dia" } as const;
@@ -100,16 +116,27 @@ export function Calendar({ onSelectDay, onSelectTask }: { onSelectDay: () => voi
               whileHover={{ y: -2 }}
               key={key}
               role="group"
-              className={`min-h-[72px] rounded-2xl border p-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:min-h-40 md:rounded-3xl md:p-3 ${isSelected ? "border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/60" : "border-emerald-100 bg-slate-50/80 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/50 dark:bg-[#07352d]/70 dark:hover:bg-emerald-900/50"} ${view === "day" ? "min-h-[520px]" : ""}`}
+              onClick={() => view === "month" && openDay(key)}
+              className={`min-h-[72px] rounded-2xl border p-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:rounded-3xl md:p-3 ${view === "month" ? "cursor-pointer md:min-h-[116px]" : "md:min-h-40"} ${isSelected ? "border-emerald-500 bg-emerald-50/80 shadow-lg shadow-emerald-900/10 dark:bg-emerald-900/60" : "border-emerald-100 bg-slate-50/80 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/50 dark:bg-[#07352d]/70 dark:hover:bg-emerald-900/50"} ${view === "day" ? "min-h-[520px]" : ""}`}
             >
               <div className="mb-1 flex items-center justify-between gap-1 md:mb-3 md:gap-2">
                 <button type="button" aria-label={`Abrir tarefas de ${day.toLocaleDateString("pt-BR")}`} onClick={() => openDay(key)} className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
                 <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-bold md:h-8 md:w-8 md:rounded-2xl md:text-sm ${isToday ? "bg-emerald-700 text-white" : "text-slate-700 dark:text-emerald-50"}`}>{day.getDate()}</span></button>
                 {view === "week" ? <span className="min-w-0 flex-1 text-[10px] font-semibold capitalize text-slate-500 md:hidden">{day.toLocaleDateString("pt-BR", { weekday: "short", month: "short" })}</span> : null}
-                <span className="hidden rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 shadow-sm md:inline-flex dark:bg-emerald-950 dark:text-emerald-100">{dayTasks.length}</span>
+                <span className={`inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold shadow-sm ${dayTasks.length ? "bg-emerald-700 text-white dark:bg-emerald-400 dark:text-emerald-950" : "bg-white text-slate-400 dark:bg-emerald-950 dark:text-emerald-100/50"}`} aria-label={`${dayTasks.length} tarefas`}>{dayTasks.length}</span>
               </div>
-              {view === "month" ? <div className="mt-2 flex min-h-3 items-center gap-1 md:hidden" aria-label={`${dayTasks.length} tarefas`}>{dayTasks.slice(0, 3).map((task) => <span key={task.id} title={task.title} className={`h-1.5 w-1.5 rounded-full ${priorityDot[task.priority]}`} />)}{dayTasks.length > 3 ? <span className="text-[9px] font-semibold text-slate-500">+{dayTasks.length - 3}</span> : null}</div> : null}
-              <div className={`${view === "month" ? "hidden md:block" : "space-y-2"} ${view === "day" ? "grid gap-2 md:grid-cols-2 xl:grid-cols-3" : ""}`}>
+              {view === "month" ? (
+                <div className="mt-2 flex min-h-8 flex-col justify-end gap-2" aria-label={`${dayTasks.length} tarefas em ${day.toLocaleDateString("pt-BR")}`}>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {dayTasks.slice(0, 4).map((task) => (
+                      <span key={task.id} title={`${task.title} · ${statusLabel[task.status]}`} className={`h-2 w-2 rounded-full ring-2 ring-white dark:ring-emerald-950 ${statusDot[task.status]}`} />
+                    ))}
+                    {dayTasks.length > 4 ? <span className="text-[10px] font-bold text-slate-500 dark:text-emerald-100/70">+${dayTasks.length - 4}</span> : null}
+                  </div>
+                  {dayTasks.length > 0 ? <div className="hidden items-center gap-1.5 text-[10px] font-medium text-slate-500 md:flex dark:text-emerald-100/65"><span>{dayTasks.filter((task) => task.status === "concluida").length}/{dayTasks.length} concluídas</span><span aria-hidden="true">·</span><span className="truncate">Clique para ver</span></div> : null}
+                </div>
+              ) : null}
+              <div className={`${view === "month" ? "hidden" : "space-y-2"} ${view === "day" ? "grid gap-2 md:grid-cols-2 xl:grid-cols-3" : ""}`}>
                 {dayTasks.slice(0, view === "month" ? 4 : 12).map((task) => {
                   const assignee = getAssignee(task);
                   return (
