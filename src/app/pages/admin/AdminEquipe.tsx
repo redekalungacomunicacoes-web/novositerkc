@@ -192,7 +192,7 @@ export function AdminEquipe() {
     setMigratingId(null);
 
     if (error) {
-      alert(`Falha na migração: ${error.message}`);
+      alert(`Falha na migração: ${error.message}. Consulte o detalhe retornado pela Edge Function.`);
       return;
     }
     if (data?.error) {
