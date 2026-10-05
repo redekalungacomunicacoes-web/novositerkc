@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, Plus, Trash2, Edit, ArrowUp, ArrowDown, HardDriveUpload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { driveMediaUrl, driveSlug } from "@/lib/teamAvatar";
 
 type EquipeRow = {
   id: string;
@@ -12,6 +13,8 @@ type EquipeRow = {
   avatar_thumb_path: string | null;
   avatar_drive_file_id: string | null;
   avatar_thumb_drive_file_id: string | null;
+  avatar_drive?: { public_slug?: string | null } | null;
+  avatar_thumb_drive?: { public_slug?: string | null } | null;
   drive_folder_id: string | null;
   instagram_url: string | null;
   is_public: boolean;
@@ -40,7 +43,7 @@ export function AdminEquipe() {
 
     const { data, error } = await supabase
       .from("equipe")
-      .select("id, nome, cargo, instagram_url, is_public, is_active, order_index, avatar_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, drive_folder_id, created_at")
+      .select("id, nome, cargo, instagram_url, is_public, is_active, order_index, avatar_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug), drive_folder_id, created_at")
       .order("order_index", { ascending: true })
       .order("nome", { ascending: true });
 
@@ -49,7 +52,7 @@ export function AdminEquipe() {
     if (error) {
       const fallback = await supabase
         .from("equipe")
-        .select("id, nome, cargo, instagram_url:instagram, is_public, is_active:ativo, order_index, avatar_url:foto_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, drive_folder_id, created_at")
+        .select("id, nome, cargo, instagram_url:instagram, is_public, is_active:ativo, order_index, avatar_url:foto_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug), drive_folder_id, created_at")
         .order("order_index", { ascending: true })
         .order("nome", { ascending: true });
 
@@ -315,8 +318,8 @@ export function AdminEquipe() {
                     <td className="px-6 py-4 font-medium text-foreground">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-full bg-muted overflow-hidden flex items-center justify-center">
-                          {r.avatar_url ? (
-                            <img src={r.avatar_url} alt={r.nome} className="h-full w-full object-cover" />
+                          {(driveMediaUrl(driveSlug(r.avatar_thumb_drive) || driveSlug(r.avatar_drive)) || r.avatar_url) ? (
+                            <img src={driveMediaUrl(driveSlug(r.avatar_thumb_drive) || driveSlug(r.avatar_drive)) || r.avatar_url || ""} alt={r.nome} className="h-full w-full object-cover" />
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
