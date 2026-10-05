@@ -43,6 +43,7 @@ type MateriaGaleriaItem = {
   id: string;
   materia_id: string;
   url: string;
+  drive_file_id?: string | null;
   legenda: string | null;
   ordem: number | null;
   created_at?: string;
@@ -153,6 +154,7 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
           url: String(block.url),
           caption: block.caption ? String(block.caption) : "",
           credit: block.credit ? String(block.credit) : "",
+          drive_file_id: block.drive_file_id ? String(block.drive_file_id) : undefined,
         };
       }
 
@@ -164,6 +166,7 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
           text: String(block.text || ""),
           caption: block.caption || "",
           credit: block.credit || "",
+          drive_file_id: block.drive_file_id ? String(block.drive_file_id) : undefined,
           align: block.align === "right" ? "right" : "left",
           width: ["sm", "md", "lg"].includes(block.width) ? block.width : "md",
         };
@@ -207,61 +210,56 @@ function buildLegacyHtml(blocks: MateriaContentBlock[]) {
     .join("\n");
 }
 
-async function uploadToStorage(params: {
-  bucket: string;
+async function makeCoverThumbnail(file: File) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 768 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Não foi possível preparar a miniatura da capa.");
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Não foi possível gerar a miniatura WebP.")), "image/webp", 0.78));
+  return new File([blob], "capa-thumb.webp", { type: "image/webp" });
+}
+
+async function uploadToDrive(params: {
+  materiaId?: string;
+  category: "cover" | "banner" | "content" | "gallery" | "audio";
   folder: string;
   file: File;
-  upsert?: boolean;
+  thumbnailFile?: File;
   timeoutMs?: number;
 }) {
-  const { bucket, folder, file, upsert = true, timeoutMs } = params;
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-  const base = safeFilename(file.name.replace(/\.[^/.]+$/, ""));
-  const path = `${folder}/${Date.now()}-${base}.${ext}`;
-
-  console.log("[uploadToStorage] Iniciando upload", {
-    bucket,
-    folder,
-    path,
-    fileName: file.name,
-    fileType: file.type,
-    fileSize: file.size,
-    timeoutMs: timeoutMs ?? null,
-  });
-
-  try {
-    const uploadPromise = supabase.storage
-      .from(bucket)
-      .upload(path, file, { upsert, contentType: file.type || undefined });
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      if (!timeoutMs) return;
-      setTimeout(() => {
-        reject(new Error("O envio do arquivo demorou mais que o esperado. Tente novamente."));
-      }, timeoutMs);
-    });
-
-    const { data: uploadData, error: upError } = await (timeoutMs
-      ? Promise.race([uploadPromise, timeoutPromise])
-      : uploadPromise);
-
-    console.log("[uploadToStorage] Resposta do upload", { path, uploadData, upError });
-
-    if (upError) {
-      throw new Error(
-        `Falha no upload para ${bucket}/${path}: ${upError.message || "erro desconhecido"}`
-      );
-    }
-
-    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-    console.log("[uploadToStorage] Resposta do getPublicUrl", { path, data });
-    if (!data?.publicUrl) throw new Error("Não foi possível obter a URL pública.");
-
-    return { publicUrl: data.publicUrl, path };
-  } catch (err) {
-    console.error("[uploadToStorage] Erro no fluxo de upload", { bucket, folder, path, err });
-    throw err;
+  const { materiaId, category, file, thumbnailFile, timeoutMs } = params;
+  if (!materiaId) throw new Error("Salve a matéria como rascunho antes de enviar arquivos.");
+  const form = new FormData();
+  form.set("module", "materias");
+  form.set("materia_id", materiaId);
+  form.set("category", category);
+  form.set("file", file, safeFilename(file.name));
+  if (thumbnailFile) form.set("thumbnail", thumbnailFile, "capa-thumb.webp");
+  const request = supabase.functions.invoke("drive-files", { body: form });
+  const result = await (timeoutMs ? Promise.race([
+    request,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("O envio ao Drive demorou mais que o esperado. Tente novamente.")), timeoutMs)),
+  ]) : request);
+  const payload = result.data as any;
+  if (result.error || payload?.ok === false) {
+    const response = (result.error as any)?.context;
+    let detail = payload?.error || "";
+    if (!detail && response instanceof Response) { try { detail = (await response.clone().json())?.error || ""; } catch { /* response has no JSON */ } }
+    throw new Error(detail || result.error?.message || "Falha ao enviar arquivo para o Drive.");
   }
+  const record = payload?.file;
+  if (!record?.id || !record?.url) throw new Error("O Drive não confirmou o arquivo enviado.");
+  return {
+    publicUrl: record.url as string,
+    path: record.id as string,
+    id: record.id as string,
+    thumbnail: record.thumbnail?.id && record.thumbnail?.url ? { id: record.thumbnail.id as string, publicUrl: record.thumbnail.url as string } : null,
+  };
 }
 
 async function ensureUniqueMateriaSlug(baseSlug: string, currentId?: string) {
@@ -320,6 +318,11 @@ export function AdminMateriaForm() {
   const [loadingEquipe, setLoadingEquipe] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [coverDriveFileId, setCoverDriveFileId] = useState<string | null>(null);
+  const [coverThumbDriveFileId, setCoverThumbDriveFileId] = useState<string | null>(null);
+  const [coverThumbUrl, setCoverThumbUrl] = useState<string | null>(null);
+  const [bannerDriveFileId, setBannerDriveFileId] = useState<string | null>(null);
+  const [audioDriveFileId, setAudioDriveFileId] = useState<string | null>(null);
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [selectedAudioFileName, setSelectedAudioFileName] = useState("");
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
@@ -431,6 +434,11 @@ export function AdminMateriaForm() {
       const parsedBlocks = normalizeBlocks(d.content_blocks || d.contentBlocks);
 
       setBlocks(parsedBlocks);
+      setCoverDriveFileId(d.capa_drive_file_id || null);
+      setCoverThumbDriveFileId(d.capa_thumb_drive_file_id || null);
+      setCoverThumbUrl(d.capa_thumb_url || null);
+      setBannerDriveFileId(d.banner_drive_file_id || null);
+      setAudioDriveFileId(d.audio_drive_file_id || null);
       reset({
         title: d.titulo || "",
         subtitle: d.resumo || "",
@@ -453,7 +461,7 @@ export function AdminMateriaForm() {
   async function loadGaleria(materiaId: string) {
     const { data, error } = await supabase
       .from("materia_galeria")
-      .select("id, materia_id, url, legenda, ordem, created_at")
+      .select("id, materia_id, url, drive_file_id, legenda, ordem, created_at")
       .eq("materia_id", materiaId)
       .order("ordem", { ascending: true, nullsFirst: true })
       .order("created_at", { ascending: true });
@@ -517,16 +525,17 @@ export function AdminMateriaForm() {
       const baseOrder = galeria.length;
 
       for (let i = 0; i < files.length; i++) {
-        const { publicUrl } = await uploadToStorage({
-          bucket: "materias",
+        const { publicUrl, id: driveFileId } = await uploadToDrive({
+          materiaId: id,
+          category: "gallery",
           folder: `galeria/${id}`,
           file: files[i],
-          upsert: false,
         });
 
         const { error: insErr } = await supabase.from("materia_galeria").insert({
           materia_id: id,
           url: publicUrl,
+          drive_file_id: driveFileId,
           legenda: null,
           ordem: baseOrder + i,
         });
@@ -558,14 +567,17 @@ export function AdminMateriaForm() {
 
     setUploadingCover(true);
     try {
-      const { publicUrl } = await uploadToStorage({
-        bucket: "materias",
+      const uploaded = await uploadToDrive({
+        materiaId: id,
+        category: "cover",
         folder: "capas",
         file,
-        upsert: true,
+        thumbnailFile: await makeCoverThumbnail(file),
       });
-
-      setValue("coverImage", publicUrl, { shouldDirty: true, shouldValidate: true });
+      setValue("coverImage", uploaded.publicUrl, { shouldDirty: true, shouldValidate: true });
+      setCoverDriveFileId(uploaded.id);
+      setCoverThumbDriveFileId(uploaded.thumbnail?.id || null);
+      setCoverThumbUrl(uploaded.thumbnail?.publicUrl || null);
     } catch (err: any) {
       alert(err?.message || "Erro ao enviar imagem de capa.");
     } finally {
@@ -612,16 +624,16 @@ export function AdminMateriaForm() {
 
       setSelectedAudioFileName(file.name);
 
-      const { publicUrl } = await uploadToStorage({
-        bucket: "materias",
+      const uploaded = await uploadToDrive({
+        materiaId: id,
+        category: "audio",
         folder: "audios",
         file,
-        upsert: false,
         timeoutMs: 45000,
       });
 
-      setValue("audioUrl", publicUrl, { shouldDirty: true, shouldValidate: true });
-      console.log("[audio-upload] Upload concluído com sucesso", { publicUrl });
+      setValue("audioUrl", uploaded.publicUrl, { shouldDirty: true, shouldValidate: true });
+      setAudioDriveFileId(uploaded.id);
     } catch (err: any) {
       console.error("[audio-upload] Erro no upload de áudio", err);
       setSelectedAudioFileName("");
@@ -637,14 +649,15 @@ export function AdminMateriaForm() {
 
     setUploadingBanner(true);
     try {
-      const { publicUrl } = await uploadToStorage({
-        bucket: "materias",
+      const uploaded = await uploadToDrive({
+        materiaId: id,
+        category: "banner",
         folder: "banners",
         file,
-        upsert: true,
       });
 
-      setValue("bannerImage", publicUrl, { shouldDirty: true, shouldValidate: true });
+      setValue("bannerImage", uploaded.publicUrl, { shouldDirty: true, shouldValidate: true });
+      setBannerDriveFileId(uploaded.id);
     } catch (err: any) {
       alert(err?.message || "Erro ao enviar imagem de banner.");
     } finally {
@@ -725,13 +738,13 @@ export function AdminMateriaForm() {
 
     setUploadingBlockImageId(blockId);
     try {
-      const { publicUrl } = await uploadToStorage({
-        bucket: "materias",
+      const uploaded = await uploadToDrive({
+        materiaId: id,
+        category: "content",
         folder: `blocos/${id || "draft"}`,
         file,
-        upsert: false,
       });
-      updateBlock(blockId, { url: publicUrl });
+      updateBlock(blockId, { url: uploaded.publicUrl, drive_file_id: uploaded.id });
     } catch (err: any) {
       alert(err?.message || "Erro ao enviar imagem do bloco.");
     } finally {
@@ -788,7 +801,12 @@ export function AdminMateriaForm() {
         audio_url: data.audioUrl || null,
         photo_credits: data.photoCredits || null,
         capa_url: data.coverImage || null,
+        capa_drive_file_id: coverDriveFileId,
+        capa_thumb_drive_file_id: coverThumbDriveFileId,
+        capa_thumb_url: coverThumbUrl,
         banner_url: data.bannerImage || null,
+        banner_drive_file_id: bannerDriveFileId,
+        audio_drive_file_id: audioDriveFileId,
         tags,
         status: data.status,
         published_at: data.status === "published" ? new Date(data.date).toISOString() : null,
@@ -1143,7 +1161,7 @@ export function AdminMateriaForm() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Áudio da matéria</label>
-              <input {...register("audioUrl")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
+              <input {...register("audioUrl", { onChange: () => setAudioDriveFileId(null) })} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
               <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${uploadingAudio ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-muted"}`}>
                 <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" disabled={uploadingAudio} onChange={(e) => handleAudioUpload(e.target.files?.[0])} />
                 <Plus className="w-4 h-4" />
@@ -1170,7 +1188,7 @@ export function AdminMateriaForm() {
             </p>
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
-              <input {...register("coverImage")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
+              <input {...register("coverImage", { onChange: () => { setCoverDriveFileId(null); setCoverThumbDriveFileId(null); setCoverThumbUrl(null); } })} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
             </div>
           </div>
 
@@ -1191,7 +1209,7 @@ export function AdminMateriaForm() {
             </p>
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
-              <input {...register("bannerImage")} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
+              <input {...register("bannerImage", { onChange: () => setBannerDriveFileId(null) })} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
             </div>
           </div>
         </div>

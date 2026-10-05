@@ -65,7 +65,7 @@ export function Home() {
 
       const materiasP = supabase
         .from("materias")
-        .select("id, slug, titulo, resumo, capa_url, autor_nome, tags, published_at, created_at")
+        .select("id, slug, titulo, resumo, capa_url, capa_thumb_url, autor_nome, tags, published_at, created_at")
         .eq("status", "published")
         .order("published_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
@@ -118,7 +118,7 @@ export function Home() {
               slug: m.slug,
               titulo: m.titulo || "",
               resumo: m.resumo || "",
-              imagem: m.capa_url || "",
+              imagem: m.capa_thumb_url || m.capa_url || "",
               autor: m.autor_nome || "",
               data: formatDateBR(m.published_at || m.created_at),
               categoria: m.tags && m.tags[0] ? m.tags[0] : "Geral",

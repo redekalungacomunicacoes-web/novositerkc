@@ -15,6 +15,26 @@ Deno.serve(async (req) => {
     .select("id,drive_file_id,name,mime_type,size_bytes,module,entity_id,category")
     .eq("public_slug", slug).eq("visibility", "public").eq("status", "active").is("deleted_at", null).single();
   if (error || !file) return new Response("Not found", { status: 404 });
+  if (file.module === "materias") {
+    const { data: materia } = await admin.from("materias")
+      .select("id,status,capa_drive_file_id,capa_thumb_drive_file_id,banner_drive_file_id,audio_drive_file_id,content_blocks")
+      .eq("id", file.entity_id).eq("status", "published").maybeSingle();
+    if (!materia) return new Response("Not found", { status: 404 });
+    let linked = false;
+    if (file.category === "cover") linked = materia.capa_drive_file_id === file.id;
+    else if (file.category === "cover_thumb") linked = materia.capa_thumb_drive_file_id === file.id;
+    else if (file.category === "banner") linked = materia.banner_drive_file_id === file.id;
+    else if (file.category === "audio") linked = materia.audio_drive_file_id === file.id;
+    else if (file.category === "content") {
+      const blocks = Array.isArray(materia.content_blocks) ? materia.content_blocks : [];
+      linked = blocks.some((block: any) => block?.drive_file_id === file.id);
+    } else if (file.category === "gallery") {
+      const { data: item } = await admin.from("materia_galeria").select("id")
+        .eq("materia_id", file.entity_id).eq("drive_file_id", file.id).maybeSingle();
+      linked = !!item;
+    }
+    if (!linked) return new Response("Not found", { status: 404 });
+  }
   if(file.module === "team") {
     const member=await admin.from("equipe").select("id,avatar_drive_file_id,avatar_thumb_drive_file_id").eq("id",file.entity_id).eq("ativo",true).eq("is_public",true).maybeSingle();
     if(!member.data) return new Response("Not found",{status:404});
