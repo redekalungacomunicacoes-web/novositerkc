@@ -229,7 +229,7 @@ export function QuemSomos() {
 
             supabase
               .from("equipe")
-              .select("id, nome, cargo, slug, avatar_thumb_path, avatar_path, avatar_url, foto_url, is_public, order_index, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)")
+              .select("id, nome, cargo, slug, avatar_thumb_path, avatar_path, avatar_url:foto_url, foto_url, is_public, order_index, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)")
               .eq("is_public", true)
               .order("order_index", { ascending: true })
               .order("nome", { ascending: true }),
@@ -264,7 +264,7 @@ export function QuemSomos() {
           if (maybeMissingAvatarUrlColumn) {
             const retryEquipeRes = await supabase
               .from("equipe")
-              .select("id, nome, cargo, slug, avatar_thumb_path, avatar_path, foto_url, is_public, order_index")
+              .select("id, nome, cargo, slug, avatar_thumb_path, avatar_path, foto_url, is_public, order_index, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug)")
               .eq("is_public", true)
               .order("order_index", { ascending: true })
               .order("nome", { ascending: true });

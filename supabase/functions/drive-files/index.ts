@@ -17,7 +17,7 @@ import { deleteTaskAndQueueCleanup, retryTaskCleanup } from "../_shared/task-del
 import { createCenterFolder, manageCenterFolder, moveCenterFile, uploadCenterFile, withCenterLease } from "../_shared/file-center.ts";
 import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
-import { ensureTeamMemberFolder, importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair } from "../_shared/team-drive.ts";
+import { ensureTeamMemberFolder, importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair, uploadTeamPortfolio, removeTeamAvatar, removeTeamPortfolio } from "../_shared/team-drive.ts";
 
 // Root ID provided and named by RKC in this task; the academy child ID is discovered at runtime.
 const academyRootId = "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD";
@@ -143,6 +143,7 @@ Deno.serve(async (req) => {
       }
       if (form.get("module") === "team") {
         if (!rootFolderId) return json({ ok:false,error:"Pasta raiz do Drive não configurada."},503);
+        if (form.get("operation") === "portfolio") return json({ok:true,item:await uploadTeamPortfolio(form,requireAcademyRoot(rootFolderId),userClient,admin,auth.user.id)});
         if (form.get("operation") === "avatar-pair") {
           return json({ ok:true,files:await uploadTeamAvatarPair(form,rootFolderId,userClient,admin,auth.user.id) });
         }
@@ -227,6 +228,8 @@ Deno.serve(async (req) => {
       });
       return json({ok:true,...result});
     }
+    if(action === "team-remove-avatar") {await removeTeamAvatar(String(body.member_id||""),userClient,admin);return json({ok:true});}
+    if(action === "team-remove-portfolio") {await removeTeamPortfolio(String(body.id||""),userClient,admin);return json({ok:true});}
     if (action === "team-ensure-folder") {
       if (!rootFolderId) return json({ ok:false,error:"Pasta raiz do Drive não configurada."},503);
       const memberId=String(body.member_id || "");

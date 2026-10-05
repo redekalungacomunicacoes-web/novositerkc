@@ -1,0 +1,1 @@
+{"extends":"./tsconfig.academia.json","include":["src/app/pages/admin/AdminEquipe*.tsx","src/app/pages/QuemSomos.tsx","src/app/pages/public/TeamMember/**/*","src/lib/teamAvatar.ts"]}

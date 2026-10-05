@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { ensureDrivePath, trashDriveFile, uploadDriveFile } from "./google-drive.ts";
+import { ensureDrivePath, trashDriveFile, uploadDriveFile, downloadDriveFile } from "./google-drive.ts";
 
 const uuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
@@ -12,6 +12,7 @@ async function requireTeamEditor(memberId: string, user: SupabaseClient) {
 }
 
 async function teamFolder(memberId: string, rootId: string, admin: SupabaseClient) {
+  if (rootId !== "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD") throw new Error("Drive institucional RKC obrigatório.");
   const { data: member, error } = await admin.from("equipe").select("id,nome,drive_folder_id").eq("id", memberId).single();
   if (error || !member) throw new Error("Integrante não encontrado.");
   let memberFolder = member.drive_folder_id as string | null;
@@ -21,7 +22,10 @@ async function teamFolder(memberId: string, rootId: string, admin: SupabaseClien
     const { error: updateError } = await admin.from("equipe").update({ drive_folder_id: memberFolder }).eq("id", memberId);
     if (updateError) throw updateError;
   }
-  return { member, memberFolder, profileFolder: (await ensureDrivePath(memberFolder, ["PERFIL"])).folderId };
+  if (rootId !== "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD") throw new Error("Drive institucional RKC obrigatório.");
+  const folders: Record<string, string> = {};
+  for (const name of ["PERFIL", "PORTFOLIO", "DOCUMENTOS", "TAREFAS"]) folders[name] = (await ensureDrivePath(memberFolder, [name])).folderId;
+  return { member, memberFolder, profileFolder: folders.PERFIL, portfolioFolder: folders.PORTFOLIO };
 }
 
 function avatarExtension(file: File, kind: "avatar" | "thumb") {
@@ -43,7 +47,28 @@ function avatarTargetName(file: File, kind: "avatar" | "thumb") {
   return kind === "thumb" ? "avatar-thumb.webp" : `avatar-original.${avatarExtension(file, kind)}`;
 }
 
+async function validateAvatar(file: File, thumb = false) {
+  const bytes = new Uint8Array(await file.slice(0,32).arrayBuffer());
+  const ascii = (start: number,end: number) => String.fromCharCode(...bytes.slice(start,end));
+  const detected = bytes[0]===0xff && bytes[1]===0xd8 && bytes[2]===0xff ? "image/jpeg"
+    : bytes[0]===0x89 && ascii(1,4)==="PNG" ? "image/png"
+    : ascii(0,4)==="RIFF" && ascii(8,12)==="WEBP" ? "image/webp"
+    : ["GIF87a","GIF89a"].includes(ascii(0,6)) ? "image/gif"
+    : ascii(4,8)==="ftyp" && ["avif","avis"].includes(ascii(8,12)) ? "image/avif" : null;
+  if(!detected || detected !== file.type || (thumb && detected !== "image/webp")) throw new Error("Conteúdo da imagem incompatível com o MIME informado. Thumbnail deve ser WebP real.");
+}
+async function identicalDriveFile(file: File, row: any) {
+  if (!row || row.size_bytes !== file.size || row.mime_type !== file.type || row.status !== "active") return false;
+  try {
+    const current=await downloadDriveFile(row.drive_file_id);
+    const a=new Uint8Array(await crypto.subtle.digest("SHA-256",await current.arrayBuffer()));
+    const b=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
+    return a.every((value,index)=>value===b[index]);
+  } catch {return false;}
+}
+
 async function commitAvatar(file: File, memberId: string, kind: "avatar" | "thumb", rootId: string, admin: SupabaseClient, actor: string) {
+  await validateAvatar(file,kind === "thumb");
   const { memberFolder, profileFolder } = await teamFolder(memberId, rootId, admin);
   const targetName = avatarTargetName(file, kind);
   const normalized = new File([await file.arrayBuffer()], targetName, { type: file.type || "application/octet-stream" });
@@ -132,6 +157,9 @@ export async function uploadTeamAvatarPair(form: FormData, rootId: string, user:
     if (!file.type.startsWith("image/")) throw new Error("Avatar e thumbnail precisam ser imagens.");
     if (file.size > 25 * 1024 * 1024) throw new Error("Cada imagem deve ter no máximo 25 MB.");
   }
+  await validateAvatar(avatar);
+  await validateAvatar(thumb,true);
+  if (thumb.type !== "image/webp") throw new Error("A thumbnail precisa ser WebP real.");
   await requireTeamEditor(memberId, user);
 
   const { memberFolder, profileFolder } = await teamFolder(memberId, rootId, admin);
@@ -140,6 +168,14 @@ export async function uploadTeamAvatarPair(form: FormData, rootId: string, user:
     .eq("id", memberId).single();
   if (previous.error) throw previous.error;
 
+  const existingIds=[previous.data?.avatar_drive_file_id,previous.data?.avatar_thumb_drive_file_id].filter(Boolean);
+  if(existingIds.length===2) {
+    const current=await admin.from("drive_files").select("*").in("id",existingIds);
+    if(current.error) throw current.error;
+    const oldAvatar=current.data?.find((r:any)=>r.id===previous.data.avatar_drive_file_id);
+    const oldThumb=current.data?.find((r:any)=>r.id===previous.data.avatar_thumb_drive_file_id);
+    if(await identicalDriveFile(avatar,oldAvatar) && await identicalDriveFile(thumb,oldThumb)) return {avatar:oldAvatar,thumb:oldThumb};
+  }
   let stagedAvatar: StagedAvatar | null = null;
   let stagedThumb: StagedAvatar | null = null;
   try {
@@ -150,6 +186,7 @@ export async function uploadTeamAvatarPair(form: FormData, rootId: string, user:
       drive_folder_id: memberFolder,
       avatar_drive_file_id: stagedAvatar.row.id,
       avatar_thumb_drive_file_id: stagedThumb.row.id,
+      foto_url: null, avatar_path: null, avatar_thumb_path: null,
     }).eq("id", memberId).select("id").single();
     if (linked.error) throw linked.error;
   } catch (error) {
@@ -210,4 +247,49 @@ export async function importLegacyTeamAvatar(memberId: string, rootId: string, u
     results[kind] = await commitAvatar(file, memberId, kind, rootId, admin, actor);
   }
   return results;
+}
+
+export async function uploadTeamPortfolio(form: FormData, rootId: string, user: SupabaseClient, admin: SupabaseClient, actor: string) {
+  const memberId = String(form.get("member_id") || "");
+  const kind = String(form.get("kind") || "");
+  const file = form.get("file");
+  if (!uuid(memberId) || !(file instanceof File) || !["image","video","pdf"].includes(kind)) throw new Error("Arquivo de portfólio inválido.");
+  if (file.size > 50*1024*1024) throw new Error("O limite por arquivo é 50 MB.");
+  if (!(kind === "image" ? file.type.startsWith("image/") : kind === "video" ? file.type.startsWith("video/") : file.type === "application/pdf")) throw new Error("Tipo do arquivo incompatível.");
+  await requireTeamEditor(memberId, user);
+  const {portfolioFolder} = await teamFolder(memberId, rootId, admin);
+  const uploaded = await uploadDriveFile(file, portfolioFolder);
+  let record: any = null;
+  try {
+    const inserted = await admin.from("drive_files").insert({drive_file_id:uploaded.id,drive_folder_id:portfolioFolder,name:uploaded.name||file.name,mime_type:file.type,size_bytes:file.size,module:"team",entity_id:memberId,category:"portfolio",visibility:"public",status:"active",public_slug:`team-portfolio-${crypto.randomUUID()}`,uploaded_by:actor}).select("*").single();
+    if (inserted.error) throw inserted.error;
+    record=inserted.data;
+    const count = await admin.from("team_member_portfolio").select("id",{count:"exact",head:true}).eq("member_id",memberId);
+    if(count.error) throw count.error;
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/drive-media?id=${encodeURIComponent(record.public_slug)}`;
+    const item = await admin.from("team_member_portfolio").insert({member_id:memberId,kind,title:String(form.get("title")||"")||null,description:String(form.get("description")||"")||null,file_url:url,thumb_url:kind==="image"?url:null,drive_file_id:record.id,is_public:true,order_index:count.count||0}).select("*").single();
+    if(item.error) throw item.error;
+    return item.data;
+  } catch(error) {
+    if(record) await admin.from("drive_files").update({status:"archived"}).eq("id",record.id);
+    await trashDriveFile(uploaded.id).catch(()=>{});
+    throw error;
+  }
+}
+export async function removeTeamAvatar(memberId: string, user: SupabaseClient, admin: SupabaseClient) {
+  await requireTeamEditor(memberId,user);
+  const old=await admin.from("equipe").select("avatar_drive_file_id,avatar_thumb_drive_file_id").eq("id",memberId).single();
+  if(old.error) throw old.error;
+  const result=await admin.from("equipe").update({avatar_drive_file_id:null,avatar_thumb_drive_file_id:null,avatar_path:null,avatar_thumb_path:null,foto_url:null}).eq("id",memberId);
+  if(result.error) throw result.error;
+  const ids=[old.data.avatar_drive_file_id,old.data.avatar_thumb_drive_file_id].filter(Boolean);
+  if(ids.length) {const archived=await admin.from("drive_files").update({status:"archived"}).in("id",ids);if(archived.error) throw archived.error;}
+}
+export async function removeTeamPortfolio(id: string,user: SupabaseClient,admin: SupabaseClient) {
+  const item=await admin.from("team_member_portfolio").select("member_id,drive_file_id").eq("id",id).single();
+  if(item.error) throw item.error;
+  await requireTeamEditor(item.data.member_id,user);
+  const deleted=await admin.from("team_member_portfolio").delete().eq("id",id);
+  if(deleted.error) throw deleted.error;
+  if(item.data.drive_file_id) {const result=await admin.from("drive_files").update({status:"archived"}).eq("id",item.data.drive_file_id);if(result.error) throw result.error;}
 }

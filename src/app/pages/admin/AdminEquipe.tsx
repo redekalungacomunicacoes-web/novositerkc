@@ -43,7 +43,7 @@ export function AdminEquipe() {
 
     const { data, error } = await supabase
       .from("equipe")
-      .select("id, nome, cargo, instagram_url, is_public, is_active, order_index, avatar_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug), drive_folder_id, created_at")
+      .select("id, nome, cargo, instagram_url:instagram, is_public, is_active:ativo, order_index, avatar_url:foto_url, avatar_path, avatar_thumb_path, avatar_drive_file_id, avatar_thumb_drive_file_id, avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug), avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug), drive_folder_id, created_at")
       .order("order_index", { ascending: true })
       .order("nome", { ascending: true });
 
@@ -247,8 +247,8 @@ export function AdminEquipe() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Excluir este membro da equipe?")) return;
-    const { error } = await supabase.from("equipe").delete().eq("id", id);
+    if (!confirm("Arquivar este integrante? O perfil ficará inativo e privado; histórico e arquivos serão preservados.")) return;
+    const { error } = await supabase.from("equipe").update({ativo:false,is_public:false}).eq("id", id);
     if (error) return alert(error.message);
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
@@ -403,7 +403,7 @@ export function AdminEquipe() {
                         <button
                           onClick={() => handleDelete(r.id)}
                           className="p-2 hover:bg-muted rounded-full text-red-600 hover:text-red-700 transition-colors"
-                          title="Excluir"
+                          title="Arquivar integrante"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
