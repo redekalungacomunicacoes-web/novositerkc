@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Bold, Italic } from "lucide-react";
+import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Bold, Italic, Pilcrow, Heading2, Quote, Highlighter, Rows3 } from "lucide-react";
 import {
   createMateria,
   createMateriaCategoria,
@@ -73,16 +73,16 @@ const blockStyles: Record<
     button: "bg-green-100 hover:bg-green-200",
   },
   quote: {
-    border: "border-yellow-500",
-    bg: "bg-yellow-50",
-    badge: "bg-yellow-500 text-white",
-    button: "bg-yellow-100 hover:bg-yellow-200",
+    border: "border-[#0F7A3E]",
+    bg: "bg-[#0F7A3E]/5",
+    badge: "bg-[#0F7A3E] text-white",
+    button: "border-[#0F7A3E]/30 bg-[#0F7A3E]/10 text-[#0F7A3E] hover:bg-[#0F7A3E]/15",
   },
   highlight: {
-    border: "border-lime-500",
-    bg: "bg-lime-50",
-    badge: "bg-lime-500 text-white",
-    button: "bg-lime-100 hover:bg-lime-200",
+    border: "border-[#F2B705]",
+    bg: "bg-[#FDF8E5]",
+    badge: "bg-[#F2B705] text-[#5f4b00]",
+    button: "border-[#F2B705]/50 bg-[#FDF8E5] text-[#5f4b00] hover:bg-[#F2B705]/20",
   },
   image: {
     border: "border-blue-500",
@@ -880,14 +880,31 @@ export function AdminMateriaForm() {
           {activeTab === "conteudo" && (
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
-              <h3 className="font-semibold text-lg">Conteúdo em blocos</h3>
+              <div>
+                <h3 className="font-semibold text-lg">Conteúdo em blocos</h3>
+                <p className="text-xs text-muted-foreground mt-1">As cores abaixo reproduzem a linguagem visual usada na matéria publicada.</p>
+              </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => addBlock("paragraph")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.paragraph.button}`}>+ Parágrafo</button>
-                <button type="button" onClick={() => addBlock("heading")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.heading.button}`}>+ Subtítulo</button>
-                <button type="button" onClick={() => addBlock("quote")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.quote.button}`}>+ Citação</button>
-                <button type="button" onClick={() => addBlock("highlight")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.highlight.button}`}>+ Destaque</button>
-                <button type="button" onClick={() => addBlock("image")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles.image.button}`}>+ Imagem</button>
-                <button type="button" onClick={() => addBlock("image-text")} className={`px-2 py-1 text-xs rounded-md border transition-colors ${blockStyles["image-text"].button}`}>+ Imagem + Texto</button>
+                <button type="button" title="Texto corrido da matéria" onClick={() => addBlock("paragraph")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.paragraph.button}`}><Pilcrow className="w-3.5 h-3.5" /> Parágrafo</button>
+                <button type="button" title="Título de seção em verde RKC" onClick={() => addBlock("heading")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.heading.button}`}><Heading2 className="w-3.5 h-3.5" /> Subtítulo</button>
+                <button type="button" title="Citação com barra verde e autor/fonte opcional" onClick={() => addBlock("quote")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.quote.button}`}><Quote className="w-3.5 h-3.5" /> Citação</button>
+                <button type="button" title="Caixa amarela para uma informação importante" onClick={() => addBlock("highlight")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.highlight.button}`}><Highlighter className="w-3.5 h-3.5" /> Destaque</button>
+                <button type="button" title="Imagem em largura completa" onClick={() => addBlock("image")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.image.button}`}><ImageIcon className="w-3.5 h-3.5" /> Imagem</button>
+                <button type="button" title="Composição de imagem ao lado do texto" onClick={() => addBlock("image-text")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles["image-text"].button}`}><Rows3 className="w-3.5 h-3.5" /> Imagem + Texto</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2">
+                <span className="font-semibold text-[#0F7A3E]">Subtítulo</span>
+                <span className="text-muted-foreground"> · título de seção verde</span>
+              </div>
+              <div className="rounded-md border-l-4 border-[#0F7A3E] bg-[#0F7A3E]/5 px-3 py-2">
+                <span className="font-semibold text-[#0F7A3E]">Citação</span>
+                <span className="text-muted-foreground"> · barra verde</span>
+              </div>
+              <div className="rounded-md border-l-4 border-[#F2B705] bg-[#FDF8E5] px-3 py-2">
+                <span className="font-semibold text-[#5f4b00]">Destaque</span>
+                <span className="text-[#5f4b00]/75"> · caixa amarela</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
