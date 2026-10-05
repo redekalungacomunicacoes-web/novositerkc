@@ -1,3 +1,4 @@
+import { TEAM_DRIVE_AVATAR_SELECT, teamAvatarUrl } from "@/lib/teamAvatar";
 import type { ChecklistItem, FileLink, WorkflowHistory } from "./taskWorkflow";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
@@ -153,7 +154,7 @@ export async function getCurrentEquipeMember() {
 
   const { data: currentMember, error: memberError } = await supabase
     .from("equipe")
-    .select("id,user_id,nome,email_login,cargo,foto_url,ativo")
+    .select(`id,user_id,nome,email_login,cargo,foto_url,ativo,${TEAM_DRIVE_AVATAR_SELECT}`)
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -162,7 +163,7 @@ export async function getCurrentEquipeMember() {
     throw memberError;
   }
 
-  return currentMember;
+  return currentMember ? {...currentMember, foto_url:teamAvatarUrl(currentMember)} : null;
 }
 
 async function requireCurrentEquipeMember() {
@@ -214,7 +215,7 @@ export async function getPermissionLevel(): Promise<PermissionLevel> {
 export async function fetchTeamMembers(): Promise<TeamMember[]> {
   const { data, error } = await supabase
     .from("equipe")
-    .select("id,user_id,nome,cargo,email_login,foto_url,ativo")
+    .select(`id,user_id,nome,cargo,email_login,foto_url,ativo,${TEAM_DRIVE_AVATAR_SELECT}`)
     .order("nome", { ascending: true });
 
   if (error) throw new Error(error.message);
@@ -227,7 +228,7 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
       teamId: "equipe",
       name: member.nome ?? "Sem nome",
       role: member.cargo ?? "Colaborador",
-      avatar: member.foto_url || "/avatar-placeholder.svg",
+      avatar: teamAvatarUrl(member) || "/avatar-placeholder.svg",
       email: member.email_login,
     }));
 }

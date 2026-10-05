@@ -1,3 +1,4 @@
+import { TEAM_DRIVE_AVATAR_SELECT, teamAvatarUrl } from "@/lib/teamAvatar";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
@@ -368,14 +369,14 @@ export function MateriaDetalhes() {
       if (resolvedAuthorId) {
         const detailedAuthor = await supabase
           .from("equipe")
-          .select("id, nome, slug, cargo, bio, foto_url, avatar_url, avatar_thumb_path")
+          .select(`id, nome, slug, cargo, bio, foto_url, avatar_url:foto_url, avatar_thumb_path,${TEAM_DRIVE_AVATAR_SELECT}`)
           .eq("id", resolvedAuthorId)
           .eq("is_public", true)
           .maybeSingle();
 
         const shouldFallbackAuthorLookup = !!detailedAuthor.error && /column .* does not exist/i.test(detailedAuthor.error.message || "");
         const fallbackAuthor = shouldFallbackAuthorLookup
-          ? await supabase.from("equipe").select("id, nome, slug, cargo, bio, foto_url").eq("id", resolvedAuthorId).maybeSingle()
+          ? await supabase.from("equipe").select(`id, nome, slug, cargo, bio, foto_url,${TEAM_DRIVE_AVATAR_SELECT}`).eq("is_public",true).eq("id", resolvedAuthorId).maybeSingle()
           : null;
 
         const authorData = detailedAuthor.data || fallbackAuthor?.data;
@@ -387,7 +388,7 @@ export function MateriaDetalhes() {
             nome: authorData.nome || found.autor_nome || "",
             cargo: authorData.cargo || null,
             bio: authorData.bio || null,
-            foto: getTeamAvatarThumbUrl((authorData as any).avatar_thumb_path) || (authorData as any).avatar_url || authorData.foto_url || null,
+            foto: teamAvatarUrl(authorData) || getTeamAvatarThumbUrl((authorData as any).avatar_thumb_path),
           };
         }
       }
