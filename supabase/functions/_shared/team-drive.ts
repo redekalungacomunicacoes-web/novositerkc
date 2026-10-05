@@ -188,8 +188,17 @@ export async function importLegacyTeamAvatar(memberId: string, rootId: string, u
     if (!path) continue;
     const downloaded = await admin.storage.from("team-avatars").download(path);
     if (downloaded.error || !downloaded.data) throw downloaded.error || new Error("Arquivo legado não encontrado.");
-    const mime = downloaded.data.type || (kind === "thumb" ? "image/webp" : "image/jpeg");
-    const ext = path.split(".").pop() || (kind === "thumb" ? "webp" : "jpg");
+    const pathExt = (path.split(".").pop() || "").toLowerCase();
+    const mimeByExt: Record<string, string> = {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      gif: "image/gif",
+      avif: "image/avif",
+    };
+    const mime = mimeByExt[pathExt] || downloaded.data.type || (kind === "thumb" ? "image/webp" : "image/jpeg");
+    const ext = kind === "thumb" ? "webp" : (pathExt || avatarExtension(new File([], "avatar", { type: mime }), "avatar"));
     const file = new File([await downloaded.data.arrayBuffer()], kind === "thumb" ? "avatar-thumb.webp" : `avatar-original.${ext}`, { type: mime });
     results[kind] = await commitAvatar(file, memberId, kind, rootId, admin, actor);
   }
