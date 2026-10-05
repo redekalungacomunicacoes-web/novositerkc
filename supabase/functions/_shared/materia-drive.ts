@@ -33,7 +33,7 @@ export async function uploadMateriaDrive(form: FormData, root: string, user: Sup
     throw new Error("O conteúdo do arquivo não corresponde a uma imagem JPEG, PNG, WebP, GIF ou AVIF válida.");
   }
   const slug = String(materia.slug || materiaId).toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"").slice(0,100) || materiaId;
-  const parent = category === "cover" ? "CAPA" : category === "banner" ? "BANNER" : category === "audio" ? "AUDIOS" : "IMAGENS";
+  const parent = category === "cover" ? "CAPA" : category === "banner" ? "BANNER" : category === "audio" ? "AUDIOS" : category === "gallery" ? "GALERIA" : "IMAGENS";
   const target = await ensureDrivePath(MATERIAS, [slug, parent]);
   const uploaded: Array<{id:string;name?:string;size?:number;mimeType?:string}> = [];
   try {
@@ -63,4 +63,51 @@ export async function uploadMateriaDrive(form: FormData, root: string, user: Sup
     for (const item of uploaded.reverse()) { try { await trashDriveFile(item.id); } catch (cleanup) { console.error("[materia-drive] cleanup pending", cleanup); } }
     throw error;
   }
+}
+
+export async function cleanupUnreferencedMateriaFiles(materiaId: string, user: SupabaseClient, admin: SupabaseClient) {
+  if (!uuid(materiaId)) throw new Error("Identificador da matéria inválido.");
+  const { data: allowed, error: accessError } = await user.from("materias").select("id").eq("id", materiaId).maybeSingle();
+  if (accessError || !allowed) throw new Error("Sem permissão para limpar arquivos desta matéria.");
+  const { data: materia, error: materiaError } = await admin.from("materias")
+    .select("id,capa_drive_file_id,capa_thumb_drive_file_id,banner_drive_file_id,audio_drive_file_id,content_blocks")
+    .eq("id", materiaId).maybeSingle();
+  if (materiaError || !materia) throw new Error("Matéria não encontrada para limpeza.");
+  const { data: gallery, error: galleryError } = await admin.from("materia_galeria")
+    .select("drive_file_id").eq("materia_id", materiaId).not("drive_file_id", "is", null);
+  if (galleryError) throw galleryError;
+  const referenced = new Set<string>([
+    materia.capa_drive_file_id, materia.capa_thumb_drive_file_id, materia.banner_drive_file_id, materia.audio_drive_file_id,
+    ...(Array.isArray(materia.content_blocks) ? materia.content_blocks.map((block: any) => block?.drive_file_id) : []),
+    ...(Array.isArray(gallery) ? gallery.map((item: any) => item.drive_file_id) : []),
+  ].filter((value): value is string => typeof value === "string" && value.length > 0));
+  const { data: files, error: filesError } = await admin.from("drive_files")
+    .select("id,drive_file_id,status").eq("module", "materias").eq("entity_id", materiaId)
+    .in("status", ["active", "archived"]).is("deleted_at", null);
+  if (filesError) throw filesError;
+  let trashed = 0, archived = 0, retained = 0;
+  for (const file of files || []) {
+    if (referenced.has(file.id)) {
+      if (file.status === "archived") {
+        const { error } = await admin.from("drive_files").update({ status: "active" }).eq("id", file.id);
+        if (error) throw error;
+      }
+      retained++;
+      continue;
+    }
+    if (file.status !== "archived") {
+      const { error } = await admin.from("drive_files").update({ status: "archived" }).eq("id", file.id);
+      if (error) throw error;
+    }
+    archived++;
+    try {
+      await trashDriveFile(file.drive_file_id);
+      const { error } = await admin.from("drive_files").update({ status: "trashed", deleted_at: new Date().toISOString() }).eq("id", file.id);
+      if (error) throw error;
+      trashed++;
+    } catch (error) {
+      console.error("[materia-drive] cleanup pending", file.id, error);
+    }
+  }
+  return { retained, archived, trashed, pending: archived - trashed };
 }
