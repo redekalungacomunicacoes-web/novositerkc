@@ -116,6 +116,13 @@ async function cleanupStagedAvatar(staged: StagedAvatar | null, admin: SupabaseC
   await trashDriveFile(staged.driveFileId).catch(() => {});
 }
 
+export async function ensureTeamMemberFolder(memberId: string, rootId: string, user: SupabaseClient, admin: SupabaseClient) {
+  if (!uuid(memberId)) throw new Error("Integrante inválido.");
+  await requireTeamEditor(memberId, user);
+  const { memberFolder } = await teamFolder(memberId, rootId, admin);
+  return { memberId, driveFolderId: memberFolder };
+}
+
 export async function uploadTeamAvatarPair(form: FormData, rootId: string, user: SupabaseClient, admin: SupabaseClient, actor: string) {
   const memberId = String(form.get("member_id") || "");
   const avatar = form.get("avatar");
