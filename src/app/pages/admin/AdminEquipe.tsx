@@ -187,7 +187,7 @@ export function AdminEquipe() {
 
     setMigratingId(member.id);
     const { data, error } = await supabase.functions.invoke("drive-files", {
-      body: { action: "team-import-legacy", memberId: member.id },
+      body: { action: "team-import-legacy", member_id: member.id },
     });
     setMigratingId(null);
 
