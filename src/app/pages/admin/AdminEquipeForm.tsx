@@ -248,56 +248,27 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         const thumbBlob = await createThumbnail(pendingAvatarFile, 320, 0.75);
         const thumbContentType = thumbBlob.type || "image/webp";
         const thumbFile = new File([thumbBlob], "avatar-thumb.webp", { type: thumbContentType });
-        let driveSaved = false;
+        const avatarPairForm = new FormData();
+        avatarPairForm.set("module", "team");
+        avatarPairForm.set("operation", "avatar-pair");
+        avatarPairForm.set("member_id", equipeId);
+        avatarPairForm.set("avatar", pendingAvatarFile);
+        avatarPairForm.set("thumb", thumbFile);
 
-        try {
-          const avatarPairForm = new FormData();
-          avatarPairForm.set("module", "team");
-          avatarPairForm.set("operation", "avatar-pair");
-          avatarPairForm.set("member_id", equipeId);
-          avatarPairForm.set("avatar", pendingAvatarFile);
-          avatarPairForm.set("thumb", thumbFile);
-
-          const pairDrive = await supabase.functions.invoke("drive-files", { body: avatarPairForm });
-          if (pairDrive.error || pairDrive.data?.ok === false) throw new Error(getInvokeErrorMessage(pairDrive.error, pairDrive.data, "Falha ao enviar avatar e thumbnail ao Drive."));
-          driveSaved = true;
-        } catch (driveError) {
-          console.warn("Drive indisponível para avatar; mantendo fallback no Storage.", driveError);
+        const pairDrive = await supabase.functions.invoke("drive-files", { body: avatarPairForm });
+        if (pairDrive.error || pairDrive.data?.ok === false) {
+          throw new Error(getInvokeErrorMessage(pairDrive.error, pairDrive.data, "Falha ao enviar avatar e thumbnail ao Google Drive."));
         }
 
-        if (!driveSaved) {
-          // A falha pode acontecer depois de o original já ter sido vinculado no Drive.
-          // O fallback precisa deixar o integrante em um único estado coerente.
-          const { error: clearPartialDriveError } = await supabase
-            .from("equipe")
-            .update({
-              avatar_drive_file_id: null,
-              avatar_thumb_drive_file_id: null,
-            })
-            .eq("id", equipeId);
-          if (clearPartialDriveError) throw clearPartialDriveError;
-
-          const isThumbWebp = thumbContentType.includes("webp");
-          const thumbExt = isThumbWebp ? "webp" : "jpg";
-          const originalIsWebp = pendingAvatarFile.type.includes("webp");
-          const originalExt = originalIsWebp ? "webp" : "jpg";
-          const originalType = originalIsWebp ? "image/webp" : "image/jpeg";
-          const avatarPath = `avatars/${equipeId}/avatar.${originalExt}`;
-          const avatarThumbPath = `avatars/${equipeId}/thumb.${thumbExt}`;
-          const [avatarUrl] = await Promise.all([
-            uploadToBucket(TEAM_AVATARS_BUCKET, avatarPath, pendingAvatarFile, originalType),
-            uploadToBucket(TEAM_AVATARS_BUCKET, avatarThumbPath, thumbBlob, thumbContentType),
-          ]);
-          const { error: avatarUpdateError } = await supabase.from("equipe").update({
-            foto_url: avatarUrl,
-            avatar_path: avatarPath,
-            avatar_thumb_path: avatarThumbPath,
-            avatar_drive_file_id: null,
-            avatar_thumb_drive_file_id: null,
-          }).eq("id", equipeId);
-          if (avatarUpdateError) throw avatarUpdateError;
-          setSavedFotoUrl(avatarUrl);
-        }
+        // Drive é a fonte única dos novos avatares. Storage permanece apenas
+        // temporariamente para arquivos legados até a limpeza final.
+        const { error: clearLegacyAvatarError } = await supabase.from("equipe").update({
+          foto_url: null,
+          avatar_path: null,
+          avatar_thumb_path: null,
+        }).eq("id", equipeId);
+        if (clearLegacyAvatarError) throw clearLegacyAvatarError;
+        setSavedFotoUrl("");
 
         setPendingAvatarFile(null);
         if (avatarPreviewUrl) {
