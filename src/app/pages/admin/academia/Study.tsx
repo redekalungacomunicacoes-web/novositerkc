@@ -20,7 +20,8 @@ export function Study({
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [courseTab, setCourseTab] = useState<"overview" | "curriculum" | "materials" | "activities">("overview");
+  const [courseTab, setCourseTab] = useState<"overview" | "curriculum" | "materials" | "activities">("curriculum");
+  const [openModules, setOpenModules] = useState<Set<string>>(() => new Set());
   const enrollment = data.enrollments.find(
     (e) =>
       e.course_id === course.id &&
@@ -97,6 +98,16 @@ export function Study({
     .filter((l) => !completedLessonIds.has(l.id))
     .reduce((total, l) => total + (l.duration_minutes || 0), 0);
   const courseMaterials = data.materials.filter((m) => m.course_id === course.id && !m.lesson_id);
+  const totalMinutes = lessons.reduce((total, l) => total + (l.duration_minutes || 0), 0);
+  const progressPercent = Math.round(report?.progress || 0);
+  const toggleModule = (moduleId: string) => {
+    setOpenModules((current) => {
+      const next = new Set(current);
+      if (next.has(moduleId)) next.delete(moduleId);
+      else next.add(moduleId);
+      return next;
+    });
+  };
   return (
     <div className="space-y-6">
       <Link to={lesson ? `/admin/academia/cursos/${course.id}` : "/admin/academia"} className="text-primary underline">
@@ -169,55 +180,137 @@ export function Study({
         </p>
       )}
       {!lesson && (
-        <nav className="flex gap-2 overflow-x-auto rounded-xl border bg-card p-2 shadow-sm" aria-label="Navegação do curso">
+        <nav className="flex gap-1 overflow-x-auto border-b bg-background px-1" aria-label="Navegação do curso">
           {([
-            ["overview", "Visão geral"],
-            ["curriculum", `Módulos e aulas · ${lessons.length}`],
-            ["materials", `Materiais · ${data.materials.filter((m) => m.course_id === course.id && !m.lesson_id).length}`],
-            ["activities", `Atividades · ${activities.length}`],
+            ["curriculum", "▦ Módulos"],
+            ["overview", "◉ Sobre o curso"],
+            ["materials", `▣ Materiais · ${courseMaterials.length}`],
+            ["activities", `◇ Atividades · ${activities.length}`],
           ] as const).map(([id, label]) => (
             <button key={id} type="button" onClick={() => setCourseTab(id)}
-              className={`min-h-11 shrink-0 rounded-lg px-4 text-sm font-semibold transition-colors ${courseTab === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+              className={`min-h-12 shrink-0 border-b-2 px-4 text-sm font-semibold transition-colors ${courseTab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
               {label}
             </button>
           ))}
         </nav>
       )}
-      <div className={lesson ? "space-y-6" : "grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]"}>
-        {!lesson && courseTab === "curriculum" && <aside className="space-y-4 lg:col-span-2" aria-label="Módulos e aulas">
-          {modules.map((m) => (
-            <Card key={m.id}>
-              <h2 className="font-semibold">{m.title}</h2>
-              <p className="text-sm text-muted-foreground">{m.description}</p>
-              <ol className="space-y-2">
-                {lessons
-                  .filter((l) => l.module_id === m.id)
-                  .map((l) => (
-                    <li key={l.id}>
-                      <Link
-                        className="block rounded-md p-2 text-sm hover:bg-muted"
-                        to={`/admin/academia/cursos/${course.id}/aulas/${l.id}`}
-                      >
-                        {data.progress.some(
-                          (p) =>
-                            p.enrollment_id === enrollment?.id &&
-                            p.lesson_id === l.id &&
-                            p.completed_at,
-                        )
-                          ? "✓ "
-                          : ""}
-                        {l.title}
-                        {!l.required && " (opcional)"}
-                      </Link>
-                    </li>
+      <div className={lesson ? "space-y-6" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"}>
+        {!lesson && courseTab === "curriculum" && (
+          <>
+            <main className="space-y-4" aria-label="Módulos e aulas">
+              <div className="mb-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">Grade curricular</p>
+                <h2 className="mt-1 text-2xl font-bold">Módulos e aulas</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Avance pelo curso no seu ritmo. Abra um módulo para visualizar suas aulas.</p>
+              </div>
+              {modules.map((m, moduleIndex) => {
+                const moduleLessons = lessons.filter((l) => l.module_id === m.id);
+                const moduleMinutes = moduleLessons.reduce((total, l) => total + (l.duration_minutes || 0), 0);
+                const moduleCompleted = moduleLessons.filter((l) => completedLessonIds.has(l.id)).length;
+                const isOpen = openModules.has(m.id) || moduleIndex === 0;
+                return (
+                  <section key={m.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-4 p-4 text-left sm:p-5"
+                      onClick={() => toggleModule(m.id)}
+                      aria-expanded={isOpen}
+                    >
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+                        {moduleIndex + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-base font-bold sm:text-lg">{m.title}</span>
+                        <span className="mt-1 block text-sm text-muted-foreground">{m.description}</span>
+                      </span>
+                      <span className="hidden shrink-0 text-right text-xs text-muted-foreground sm:block">
+                        {moduleLessons.length} {moduleLessons.length === 1 ? "aula" : "aulas"} · {moduleMinutes} min
+                        {enrollment && <span className="mt-1 block">{moduleCompleted}/{moduleLessons.length} concluídas</span>}
+                      </span>
+                      <span className="shrink-0 text-lg text-muted-foreground">{isOpen ? "⌃" : "⌄"}</span>
+                    </button>
+                    {isOpen && (
+                      <ol className="space-y-2 border-t bg-muted/20 p-3 sm:p-4">
+                        {moduleLessons.map((l, lessonIndexInModule) => {
+                          const done = completedLessonIds.has(l.id);
+                          return (
+                            <li key={l.id}>
+                              <Link
+                                className="group flex min-h-[76px] items-center gap-3 rounded-xl border bg-background p-3 transition hover:border-primary/40 hover:shadow-sm sm:p-4"
+                                to={`/admin/academia/cursos/${course.id}/aulas/${l.id}`}
+                              >
+                                <span className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg bg-muted text-lg text-muted-foreground group-hover:text-primary">▶</span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-sm font-semibold sm:text-base">{moduleIndex + 1}.{lessonIndexInModule + 1} {l.title}</span>
+                                  <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                    <span>{labels[l.type] || l.type || "Aula"}</span>
+                                    <span>{l.duration_minutes} min</span>
+                                    {!l.required && <span>Opcional</span>}
+                                  </span>
+                                </span>
+                                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${done ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+                                  {done ? "✓" : ""}
+                                </span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                        {!moduleLessons.length && <li><Empty>Nenhuma aula publicada neste módulo.</Empty></li>}
+                      </ol>
+                    )}
+                  </section>
+                );
+              })}
+              {!lessons.length && <Empty>Nenhuma aula publicada neste curso.</Empty>}
+            </main>
+            <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start" aria-label="Resumo do curso">
+              <Card>
+                <h2 className="text-lg font-bold">Progresso do curso</h2>
+                <div className="mt-4 flex items-center gap-4">
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-[8px] border-primary/15">
+                    <strong className="text-xl">{progressPercent}%</strong>
+                  </div>
+                  <div>
+                    <strong className="block text-lg">{completedLessons} de {lessons.length}</strong>
+                    <span className="text-sm text-muted-foreground">aulas concluídas</span>
+                  </div>
+                </div>
+                {enrollment && <div className="mt-4"><Meter value={report?.progress || 0} /></div>}
+                {resume && enrollment && (
+                  <Button className="mt-4 w-full" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${resume.id}`)}>
+                    ▶ Continuar de onde parei
+                  </Button>
+                )}
+              </Card>
+              <Card>
+                <h2 className="text-lg font-bold">Informações do curso</h2>
+                <dl className="mt-4 space-y-4 text-sm">
+                  <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Duração total</dt><dd className="font-semibold">{course.hours ? `${course.hours} h` : `${totalMinutes} min`}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Módulos</dt><dd className="font-semibold">{modules.length}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Total de aulas</dt><dd className="font-semibold">{lessons.length}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Materiais</dt><dd className="font-semibold">{courseMaterials.length}</dd></div>
+                </dl>
+              </Card>
+              <Card>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-bold">Materiais do curso</h2>
+                  <Badge>{courseMaterials.length} arquivos</Badge>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {courseMaterials.slice(0, 3).map((m) => (
+                    <div key={m.id} className="rounded-xl border bg-muted/20 p-3">
+                      <p className="truncate text-sm font-semibold">{m.title}</p>
+                    </div>
                   ))}
-              </ol>
-            </Card>
-          ))}
-          {!lessons.length && (
-            <Empty>Nenhuma aula publicada neste curso.</Empty>
-          )}
-        </aside>}
+                  {!courseMaterials.length && <p className="text-sm text-muted-foreground">Nenhum material disponível.</p>}
+                </div>
+                {courseMaterials.length > 0 && (
+                  <Button variant="outline" className="mt-4 w-full" onClick={() => setCourseTab("materials")}>Ver todos os materiais</Button>
+                )}
+              </Card>
+            </aside>
+          </>
+        )}
         <div className={`space-y-6 ${!lesson ? "lg:col-span-2" : ""}`}>
           {lessonId && !lesson ? (
             <Empty>Aula indisponível.</Empty>
