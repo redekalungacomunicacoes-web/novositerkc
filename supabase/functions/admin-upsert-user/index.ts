@@ -66,6 +66,18 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
+    const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
+    if (!token) return json({ ok: false, error: "Autenticação obrigatória." }, 401);
+    const { data: caller, error: callerError } = await admin.auth.getUser(token);
+    if (callerError || !caller.user) return json({ ok: false, error: "Sessão inválida." }, 401);
+    const { data: callerRoles, error: callerRolesError } = await admin.from("user_roles")
+      .select("roles(name)").eq("user_id", caller.user.id);
+    const callerNames = (callerRoles || []).flatMap((row: any) => {
+      const role = row.roles; return Array.isArray(role) ? role.map((r: any) => r.name) : [role?.name];
+    });
+    if (callerRolesError || !callerNames.some((role: string) => ["admin", "admin_alfa"].includes(role))) {
+      return json({ ok: false, error: "Permissão administrativa obrigatória." }, 403);
+    }
     const body: Payload = await req.json();
     const equipe_id = body?.equipe_id;
     const password = body?.password?.trim();
@@ -113,10 +125,27 @@ Deno.serve(async (req) => {
       );
     }
 
+    const { data: roleRows, error: rolesErr } = await admin.from("roles").select("id,name").in("name", normalizedRoles);
+    if (rolesErr) return json({ ok: false, error: "Falha ao validar permissões." }, 400);
+    const foundNames = new Set((roleRows || []).map((r) => r.name));
+    if (normalizedRoles.some((role) => !foundNames.has(role))) return json({ ok: false, error: "Permissão inexistente." }, 400);
+    if (normalizedRoles.includes("admin_alfa") && !callerNames.includes("admin_alfa")) {
+      return json({ ok: false, error: "Somente admin_alfa pode atribuir esta permissão." }, 403);
+    }
+    if (equipeAtual.user_id) {
+      const { data: targetRoles, error: targetError } = await admin.from("user_roles").select("roles(name)").eq("user_id", equipeAtual.user_id);
+      const isAlfa = (targetRoles || []).some((row: any) => Array.isArray(row.roles) ? row.roles.some((r: any) => r.name === "admin_alfa") : row.roles?.name === "admin_alfa");
+      if (targetError) return json({ ok: false, error: "Falha ao validar permissões atuais." }, 400);
+      if (isAlfa && !callerNames.includes("admin_alfa")) return json({ ok: false, error: "Somente admin_alfa pode alterar este acesso." }, 403);
+    }
+
     const foundUser = await findAuthUserByEmail(admin, normalizedEmail);
     if (foundUser.error) return json({ ok: false, error: foundUser.error }, 400);
 
-    let userId = foundUser.user?.id || null;
+    if (equipeAtual.user_id && foundUser.user && foundUser.user.id !== equipeAtual.user_id) {
+      return json({ ok: false, error: "Email pertence a outro usuário." }, 409);
+    }
+    let userId = equipeAtual.user_id || foundUser.user?.id || null;
 
     if (!userId) {
       if (!password) {
@@ -174,18 +203,6 @@ Deno.serve(async (req) => {
     }
 
     if (normalizedRoles.length) {
-      const { data: roleRows, error: rolesErr } = await admin.from("roles").select("id,name").in("name", normalizedRoles);
-
-      if (rolesErr) {
-        return json({ ok: false, error: `Falha ao buscar roles: ${rolesErr.message}` }, 400);
-      }
-
-      const foundNames = new Set((roleRows || []).map((r) => r.name));
-      const missingRoles = normalizedRoles.filter((r) => !foundNames.has(r));
-      if (missingRoles.length) {
-        return json({ ok: false, error: `Roles não encontradas: ${missingRoles.join(", ")}` }, 400);
-      }
-
       const inserts = (roleRows || []).map((r) => ({
         user_id: userId,
         role_id: r.id,

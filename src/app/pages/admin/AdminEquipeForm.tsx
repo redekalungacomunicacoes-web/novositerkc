@@ -111,7 +111,11 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
     setPortfolio((data || []) as PortfolioItem[]);
   }
 
-  function getInvokeErrorMessage(error: unknown, data: any, fallback: string) {
+  async function getInvokeErrorMessage(error: unknown, data: any, fallback: string) {
+    const response = (error as { context?: Response } | null)?.context;
+    if (response instanceof Response) {
+      try { const payload = await response.clone().json(); if (payload?.error) return String(payload.error); } catch { /* response may have no JSON body */ }
+    }
     const base = error instanceof Error ? error.message : "";
     if (data?.error) return String(data.error);
     if (base.includes("non-2xx") && data?.message) return String(data.message);
@@ -267,7 +271,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
 
         const pairDrive = await supabase.functions.invoke("drive-files", { body: avatarPairForm });
         if (pairDrive.error || pairDrive.data?.ok === false) {
-          throw new Error(getInvokeErrorMessage(pairDrive.error, pairDrive.data, "Falha ao enviar avatar e thumbnail ao Google Drive."));
+          throw new Error(await getInvokeErrorMessage(pairDrive.error, pairDrive.data, "Falha ao enviar avatar e thumbnail ao Google Drive."));
         }
 
         avatarSaved = true;
@@ -328,7 +332,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         });
 
         if (error || data?.ok === false) {
-          throw new Error(getInvokeErrorMessage(error, data, "Falha ao criar/atualizar usuário."));
+          throw new Error(await getInvokeErrorMessage(error, data, "Falha ao criar/atualizar usuário."));
         }
       }
 
@@ -361,7 +365,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
         form.set("module","team");form.set("operation","portfolio");form.set("member_id",memberId);
         form.set("kind",kind);form.set("title",title);form.set("description",description);form.set("file",file);
         const uploaded = await supabase.functions.invoke("drive-files",{body:form});
-        if(uploaded.error || !uploaded.data?.ok) throw new Error(getInvokeErrorMessage(uploaded.error,uploaded.data,"Falha no upload do portfólio ao Drive."));
+        if(uploaded.error || !uploaded.data?.ok) throw new Error(await getInvokeErrorMessage(uploaded.error,uploaded.data,"Falha no upload do portfólio ao Drive."));
         await loadPortfolio(memberId);
         return;
       }
