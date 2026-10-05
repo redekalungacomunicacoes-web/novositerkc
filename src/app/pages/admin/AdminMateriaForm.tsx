@@ -474,6 +474,17 @@ export function AdminMateriaForm() {
     setGaleria((data || []) as MateriaGaleriaItem[]);
   }
 
+  async function cleanupUnreferencedMateriaFiles(materiaId: string) {
+    const form = new FormData();
+    form.set("module", "materias");
+    form.set("action", "cleanup-unreferenced");
+    form.set("materia_id", materiaId);
+    const { data, error } = await supabase.functions.invoke("drive-files", { body: form });
+    if (error || data?.ok === false) throw new Error(data?.error || error?.message || "A limpeza de arquivos substituídos ficou pendente.");
+    if (data?.cleanup?.pending > 0) throw new Error(`${data.cleanup.pending} arquivo(s) ficou(ram) arquivado(s) enquanto o Drive tenta concluir a limpeza.`);
+    return data?.cleanup;
+  }
+
   const handleAddCategory = async () => {
     const name = newCategoryName.trim();
     if (!name) {
@@ -558,6 +569,13 @@ export function AdminMateriaForm() {
 
     const { error } = await supabase.from("materia_galeria").delete().eq("id", itemId);
     if (error) return alert(error.message);
+
+    try {
+      await cleanupUnreferencedMateriaFiles(id);
+    } catch (cleanupError: any) {
+      console.warn("[materia-drive] galeria removida; limpeza Drive pendente", cleanupError);
+      alert("A foto foi removida da matéria, mas a cópia substituída ainda precisa ser movida para a lixeira do Drive.");
+    }
 
     await loadGaleria(id);
   };
@@ -818,6 +836,16 @@ export function AdminMateriaForm() {
       const res = await submitWithCompat(payload);
       if (res.error) return alert(res.error.message);
 
+      const savedId = res.data?.id || id;
+      if (savedId) {
+        try {
+          await cleanupUnreferencedMateriaFiles(savedId);
+        } catch (cleanupError: any) {
+          console.warn("[materia-drive] matéria salva; limpeza Drive pendente", cleanupError);
+          alert("A matéria foi salva. A limpeza de arquivos substituídos ficou pendente e será retomada ao salvar novamente.");
+        }
+      }
+
       navigate("/admin/materias");
     } catch (err: any) {
       alert(err?.message || "Erro ao salvar matéria.");
@@ -841,7 +869,7 @@ export function AdminMateriaForm() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={() => navigate("/admin/materias")} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
+          <button type="button" onClick={async () => { if (id) { try { await cleanupUnreferencedMateriaFiles(id); } catch (cleanupError) { console.warn("[materia-drive] cancelamento com limpeza pendente", cleanupError); } } navigate("/admin/materias"); }} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
           <button onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
             <Save className="h-4 w-4" />
             {loading ? "Salvando..." : "Salvar"}
