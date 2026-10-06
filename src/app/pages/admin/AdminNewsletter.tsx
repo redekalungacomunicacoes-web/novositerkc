@@ -65,7 +65,9 @@ type MateriaLite = {
   titulo: string;
   resumo?: string | null;
   slug?: string | null;
-  cover_image?: string | null;
+  capa_url?: string | null;
+  capa_thumb_url?: string | null;
+  published_at?: string | null;
   created_at?: string | null;
 };
 
@@ -233,7 +235,9 @@ export function AdminNewsletter() {
         .limit(1500),
       supabase
         .from("materias")
-        .select("id,titulo,resumo,slug,cover_image,created_at")
+        .select("id,titulo,resumo,slug,capa_url,capa_thumb_url,published_at,created_at")
+        .eq("status", "published")
+        .order("published_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(200),
     ]);
@@ -331,9 +335,10 @@ export function AdminNewsletter() {
   function buildArticleCard(materia: MateriaLite) {
     const path = materia.slug ? `/materias/${materia.slug}` : `/materias/${materia.id}`;
     const link = `https://kalungacomunicacoes.org${path}`;
+    const coverUrl = materia.capa_thumb_url || materia.capa_url || "";
     return `
       <article style="margin:0 0 22px;border:1px solid #e9e9e4;border-radius:12px;overflow:hidden">
-        ${materia.cover_image ? `<img src="${escapeHtml(materia.cover_image)}" alt="" style="display:block;width:100%;max-height:320px;object-fit:cover"/>` : ""}
+        ${coverUrl ? `<img src="${escapeHtml(coverUrl)}" alt="" style="display:block;width:100%;max-height:320px;object-fit:cover"/>` : ""}
         <div style="padding:18px">
           <h2 style="margin:0 0 8px;font-size:20px;line-height:1.25">${escapeHtml(materia.titulo)}</h2>
           ${materia.resumo ? `<p style="margin:0 0 14px;color:#555;line-height:1.55">${escapeHtml(materia.resumo)}</p>` : ""}
