@@ -1,43 +1,35 @@
-import { handleCors, corsHeaders } from "../_shared/cors.ts";
-import { failure, getSmtpSettings, sendSmtpMail, success, validateSmtpPayload } from "../_shared/newsletter.ts";
 
-Deno.serve(async (req) => {
-  const cors = handleCors(req);
-  if (cors) return cors;
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
-    return new Response(JSON.stringify(failure("method_not_allowed", "Método não permitido.")), {
+    return new Response(JSON.stringify({ ok: false, error: { code: "method_not_allowed", message: "Método não permitido." } }), {
       status: 405,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  try {
-    const settingsRes = await getSmtpSettings();
-    if (!settingsRes.ok) {
-      return new Response(JSON.stringify(settingsRes), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+  const authorization = req.headers.get("authorization") || "";
+  const apikey = req.headers.get("apikey") || Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const target = String(Deno.env.get("SUPABASE_URL") || "") + "/functions/v1/newsletter-admin";
 
-    const valid = validateSmtpPayload(settingsRes.data!);
-    if (!valid.ok) {
-      return new Response(JSON.stringify(valid), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+  const response = await fetch(target, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authorization,
+      apikey,
+    },
+    body: JSON.stringify({ action: "validate_smtp" }),
+  });
 
-    await sendSmtpMail(settingsRes.data!, {
-      to: settingsRes.data!.from_email,
-      subject: "[Validação SMTP] Conexão validada com sucesso",
-      html: "<p>Validação SMTP concluída com sucesso.</p>",
-    });
-
-    return new Response(JSON.stringify(success({ message: "Configuração SMTP validada com sucesso." })), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    const typed = error as { code?: string; message?: string; details?: string };
-    return new Response(JSON.stringify(failure(typed.code || "smtp_validation_failed", typed.message || "Falha na validação SMTP.", typed.details)), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  return new Response(await response.text(), {
+    status: response.status,
+    headers: { ...corsHeaders, "Content-Type": response.headers.get("content-type") || "application/json" },
+  });
 });

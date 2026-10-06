@@ -1,69 +1,83 @@
-import { handleCors, corsHeaders } from "../_shared/cors.ts";
-import { supabaseAdmin } from "../_shared/supabase.ts";
-import { sendMail } from "../_shared/smtp.ts";
-import { welcomeNewsletterHtml } from "../_shared/templates.ts";
+
+import { createClient } from "npm:@supabase/supabase-js@2.94.1";
+
+const corsHeaders: HeadersInit = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const url = Deno.env.get("SUPABASE_URL")!;
+const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const db = createClient(url, serviceKey, { auth: { persistSession: false } });
+
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8" },
+  });
+}
+function isEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || "").trim());
+}
 
 Deno.serve(async (req) => {
-  const cors = handleCors(req);
-  if (cors) return cors;
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json(405, { ok: false, error: "method_not_allowed" });
 
   try {
-    if (req.method !== "POST") {
-      return new Response("Method not allowed", { status: 405, headers: corsHeaders });
-    }
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") return json(400, { ok: false, error: "invalid_body" });
 
-    const body = await req.json();
-    const email = String(body.email || "").trim().toLowerCase();
-    const name = String(body.name || "").trim();
+    const email = String((body as Record<string, unknown>).email || "").trim().toLowerCase();
+    const name = String((body as Record<string, unknown>).name || "").trim();
+    const source = String((body as Record<string, unknown>).source || "site_newsletter").trim().slice(0, 120);
+    const consent = Boolean((body as Record<string, unknown>).consent);
 
-    if (!email || !email.includes("@")) {
-      return new Response(JSON.stringify({ error: "Invalid email" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!isEmail(email)) return json(400, { ok: false, error: "invalid_email", message: "Digite um e-mail válido." });
+    if (!consent) return json(400, { ok: false, error: "consent_required", message: "É necessário concordar com o recebimento da Newsletter." });
 
-    const sb = supabaseAdmin();
+    const userAgent = (req.headers.get("user-agent") || "").slice(0, 1000) || null;
+    const forwardedFor = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "";
+    const ip = forwardedFor.split(",")[0]?.trim() || null;
+    const now = new Date().toISOString();
 
-    // Upsert por email
-    const { data, error } = await sb
+    const { data, error } = await db
       .from("newsletter_subscribers")
-      .upsert(
-        { email, name: name || null, status: "active" },
-        { onConflict: "email" }
-      )
-      .select("id,email,name,status")
+      .upsert({
+        email,
+        name: name || null,
+        status: "active",
+        subscribed_at: now,
+        unsubscribed_at: null,
+        source: source || "site_newsletter",
+        ip,
+        user_agent: userAgent,
+        metadata: {
+          consent: true,
+          consent_at: now,
+          source: source || "site_newsletter",
+        },
+        updated_at: now,
+      }, { onConflict: "email" })
+      .select("id,email,name,status,subscribed_at")
       .single();
 
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(400, { ok: false, error: "subscribe_failed", message: "Não foi possível concluir a inscrição.", details: error.message });
     }
 
-    // Boas-vindas opcional
-    const welcomeEnabled = String(Deno.env.get("WELCOME_EMAIL_ENABLED") || "").toLowerCase() === "true";
-    if (welcomeEnabled) {
-      try {
-        await sendMail({
-          to: email,
-          subject: "Bem-vindo(a) à Newsletter • Rede Kalunga Comunicações",
-          html: welcomeNewsletterHtml(name),
-        });
-      } catch {
-        // não quebra a inscrição se falhar email
-      }
-    }
-
-    return new Response(JSON.stringify({ ok: true, subscriber: data }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return json(200, {
+      ok: true,
+      subscriber: data,
+      message: "Inscrição confirmada. Você já faz parte da Newsletter RKC.",
     });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: String(e?.message || e) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+  } catch (error) {
+    return json(500, {
+      ok: false,
+      error: "internal_error",
+      message: "Erro inesperado ao realizar a inscrição.",
+      details: String((error as { message?: string })?.message || error),
     });
   }
 });
