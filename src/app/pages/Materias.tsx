@@ -144,52 +144,56 @@ export function Materias() {
             <div className="text-gray-500">Nenhuma matéria publicada ainda.</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {materiasFiltradas.map((materia, index) => (
-                <RKCCard key={materia.id} className="h-full flex flex-col">
-                  <Link to={`/materias/${materia.slug || materia.id}`} className="block hover:opacity-95 transition-opacity">
-                    <RKCCardImage
-                      src={materia.imagem}
-                      alt={materia.titulo}
-                      aspectRatio="square"
-                      loading={index === 0 ? 'eager' : 'lazy'}
-                      fetchPriority={index === 0 ? 'high' : 'low'}
-                      sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
-                    />
-                  </Link>
-                  <RKCCardContent className="flex-1 p-4 md:p-5 space-y-3">
-                    <div>
-                      <RKCTag variant="green" className="mb-3">
-                        {materia.categoria}
-                      </RKCTag>
-                    </div>
-                    <Link to={`/materias/${materia.slug || materia.id}`} className="block">
-                      <h3 className="font-bold text-lg md:text-xl text-[#2E2E2E] line-clamp-2 hover:text-[#0F7A3E] transition-colors">
-                        {materia.titulo}
-                      </h3>
+              {materiasFiltradas.map((materia, index) => {
+                const firstRow = index < 3;
+                return (
+                  <RKCCard key={materia.id} className="h-full flex flex-col">
+                    <Link to={`/materias/${materia.slug || materia.id}`} className="block hover:opacity-95 transition-opacity">
+                      <RKCCardImage
+                        src={materia.imagem}
+                        alt={materia.titulo}
+                        aspectRatio="square"
+                        loading={firstRow ? 'eager' : 'lazy'}
+                        fetchPriority={index === 0 ? 'high' : firstRow ? 'auto' : 'low'}
+                        preloadMargin="1400px 0px"
+                        sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                      />
                     </Link>
-                    <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">
-                      {materia.resumo}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span>{materia.autor}</span>
-                      <span>•</span>
-                      <span>{materia.data}</span>
-                    </div>
-                    {materia.audioUrl ? (
-                      <div className="pt-1">
-                        <p className="text-xs font-medium text-gray-500 mb-1">Ouça a matéria</p>
-                        <audio controls preload="none" className="w-full">
-                          <source src={materia.audioUrl} />
-                          Seu navegador não suporta áudio.
-                        </audio>
+                    <RKCCardContent className="flex-1 p-4 md:p-5 space-y-3">
+                      <div>
+                        <RKCTag variant="green" className="mb-3">
+                          {materia.categoria}
+                        </RKCTag>
                       </div>
-                    ) : null}
-                    <Link to={`/materias/${materia.slug || materia.id}`} className="inline-flex text-sm font-semibold text-[#0F7A3E] hover:underline">
-                      Abrir matéria
-                    </Link>
-                  </RKCCardContent>
-                </RKCCard>
-              ))}
+                      <Link to={`/materias/${materia.slug || materia.id}`} className="block">
+                        <h3 className="font-bold text-lg md:text-xl text-[#2E2E2E] line-clamp-2 hover:text-[#0F7A3E] transition-colors">
+                          {materia.titulo}
+                        </h3>
+                      </Link>
+                      <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">
+                        {materia.resumo}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>{materia.autor}</span>
+                        <span>•</span>
+                        <span>{materia.data}</span>
+                      </div>
+                      {materia.audioUrl ? (
+                        <div className="pt-1">
+                          <p className="text-xs font-medium text-gray-500 mb-1">Ouça a matéria</p>
+                          <audio controls preload="none" className="w-full">
+                            <source src={materia.audioUrl} />
+                            Seu navegador não suporta áudio.
+                          </audio>
+                        </div>
+                      ) : null}
+                      <Link to={`/materias/${materia.slug || materia.id}`} className="inline-flex text-sm font-semibold text-[#0F7A3E] hover:underline">
+                        Abrir matéria
+                      </Link>
+                    </RKCCardContent>
+                  </RKCCard>
+                );
+              })}
             </div>
           )}
         </div>
