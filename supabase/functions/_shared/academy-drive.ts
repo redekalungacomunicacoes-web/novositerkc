@@ -68,7 +68,7 @@ export async function uploadAcademyDrive(
     throw new Error("O limite por arquivo é 50 MB.");
   if (
     !["cover", "banner", "thumbnail", "media", "material"].includes(kind) ||
-    (["cover", "banner", "thumbnail"].includes(kind) && lesson) ||
+    (["cover", "banner"].includes(kind) && lesson) ||
     (kind === "thumbnail" && !lesson) ||
     (kind === "media" && !lesson) ||
     (material && kind !== "material")
