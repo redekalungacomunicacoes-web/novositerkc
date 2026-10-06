@@ -11,7 +11,7 @@ import {
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { signedAsset, safeLink, message } from "./service";
-import { downloadRkcDriveFile, rkcDriveMediaUrl } from "@/services/driveFiles";
+import { downloadRkcDriveFile, createRkcDriveMediaTicket } from "@/services/driveFiles";
 import { videoEmbed } from "./media";
 export { Button };
 export const labels: Record<string, string> = {
@@ -373,10 +373,11 @@ export function Asset({
     if (driveFileId) {
       const wantsStream = ["video", "audio"].includes(type || "");
       if (wantsStream) {
-        // Let the browser request byte ranges directly from the authenticated
-        // stream endpoint. This makes the player visible immediately instead
-        // of downloading the complete Drive file into a Blob first.
-        setSrc(rkcDriveMediaUrl(driveFileId));
+        // A short-lived opaque ticket lets the native player make byte-range
+        // requests without exposing the user's access token in the media URL.
+        createRkcDriveMediaTicket(driveFileId)
+          .then((url) => { if (active) setSrc(url); })
+          .catch((e) => { if (active) setError(message(e)); });
       } else {
         downloadRkcDriveFile(driveFileId)
           .then((blob) => {
