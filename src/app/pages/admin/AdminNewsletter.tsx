@@ -19,6 +19,7 @@ type Campaign = {
   title: string;
   subject: string;
   mode: "custom" | "materia";
+  category: "newsletter" | "novidade" | "aviso" | "campanha";
   materia_id: string | null;
   content_html: string;
   status: CampaignStatus;
@@ -47,10 +48,33 @@ function toBR(d?: string | null) {
 function normalizeStatus(s: any): CampaignStatus {
   const v = String(s || "draft");
   if (v === "draft" || v === "scheduled" || v === "sending" || v === "sent" || v === "failed") return v;
-  // se tiver coisa antiga no banco (ex: "paused"), rebaixa pra draft
   return "draft";
 }
 
+function escapeEmailHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function normalizeCustomContent(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/<\/?[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
+
+  return trimmed
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p style="margin:0 0 14px;line-height:1.6;">${escapeEmailHtml(paragraph).replaceAll("\n", "<br>")}</p>`)
+    .join("");
+}
+
+function categoryLabel(category?: Campaign["category"]) {
+  if (category === "novidade") return "Novidade";
+  if (category === "aviso") return "Aviso";
+  if (category === "campanha") return "Campanha";
+  return "Newsletter";
+}
 
 export function AdminNewsletter() {
   const [tab, setTab] = useState<"campaigns" | "subscribers" | "config">("campaigns");
@@ -76,6 +100,7 @@ export function AdminNewsletter() {
     title: "",
     subject: "",
     mode: "custom" as "custom" | "materia",
+    category: "newsletter" as Campaign["category"],
     materia_id: "" as string,
     site_url: "https://kalungacomunicacoes.org",
     content_html: "",
@@ -105,7 +130,7 @@ export function AdminNewsletter() {
     setCampLoading(true);
     const { data, error } = await supabase
       .from("newsletter_campaigns")
-      .select("id,title,subject,mode,materia_id,content_html,status,sent_count,fail_count,created_at")
+      .select("id,title,subject,mode,category,materia_id,content_html,status,sent_count,fail_count,created_at")
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -158,6 +183,7 @@ export function AdminNewsletter() {
       title: "",
       subject: "",
       mode: "custom",
+      category: "newsletter",
       materia_id: "",
       site_url: "https://kalungacomunicacoes.org",
       content_html: "",
@@ -172,6 +198,7 @@ export function AdminNewsletter() {
       title: c.title || "",
       subject: c.subject || "",
       mode: c.mode || "custom",
+      category: c.category || "newsletter",
       materia_id: c.materia_id || "",
       site_url: "https://kalungacomunicacoes.org",
       content_html: c.content_html || "",
@@ -221,9 +248,10 @@ export function AdminNewsletter() {
         </div>
       `;
     } else {
-      if (!finalHtml.trim()) {
+      finalHtml = normalizeCustomContent(finalHtml);
+      if (!finalHtml) {
         setSaving(false);
-        alert("No modo personalizado, preencha o HTML do email.");
+        alert("Escreva o conteúdo do e-mail.");
         return;
       }
     }
@@ -236,11 +264,9 @@ export function AdminNewsletter() {
       title: form.title.trim(),
       subject: form.subject.trim(),
 
-      // sua tabela tem `mode` (text)
       mode: form.mode,
-
-      // sua tabela tem `type` NOT NULL (print anterior)
       type: form.mode,
+      category: form.category,
 
       materia_id: form.mode === "materia" ? form.materia_id : null,
       content_html: finalHtml,
@@ -438,6 +464,7 @@ export function AdminNewsletter() {
                   <th className="px-6 py-3 font-medium">Título</th>
                   <th className="px-6 py-3 font-medium">Assunto</th>
                   <th className="px-6 py-3 font-medium">Tipo</th>
+                  <th className="px-6 py-3 font-medium">Finalidade</th>
                   <th className="px-6 py-3 font-medium">Status</th>
                   <th className="px-6 py-3 font-medium">Enviados</th>
                   <th className="px-6 py-3 font-medium">Falhas</th>
@@ -448,13 +475,13 @@ export function AdminNewsletter() {
               <tbody className="divide-y divide-border">
                 {campLoading ? (
                   <tr>
-                    <td className="px-6 py-4 text-muted-foreground" colSpan={8}>
+                    <td className="px-6 py-4 text-muted-foreground" colSpan={9}>
                       Carregando...
                     </td>
                   </tr>
                 ) : campaigns.length === 0 ? (
                   <tr>
-                    <td className="px-6 py-4 text-muted-foreground" colSpan={8}>
+                    <td className="px-6 py-4 text-muted-foreground" colSpan={9}>
                       Nenhuma campanha criada ainda.
                     </td>
                   </tr>
@@ -466,6 +493,7 @@ export function AdminNewsletter() {
                       <td className="px-6 py-4">
                         {c.mode === "materia" ? "Matéria" : "Personalizado"}
                       </td>
+                      <td className="px-6 py-4">{categoryLabel(c.category)}</td>
                       <td className="px-6 py-4">{c.status}</td>
                       <td className="px-6 py-4">{c.sent_count ?? 0}</td>
                       <td className="px-6 py-4">{c.fail_count ?? 0}</td>
@@ -569,7 +597,7 @@ export function AdminNewsletter() {
                   {selectedCampaign ? "Editar Campanha" : "Nova Campanha"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  Crie uma campanha por matéria ou com HTML personalizado.
+                  Envie matérias, novidades, avisos ou mensagens personalizadas para os inscritos.
                 </p>
               </div>
 
@@ -604,16 +632,30 @@ export function AdminNewsletter() {
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-sm font-medium">Tipo</label>
+                  <label className="text-sm font-medium">Conteúdo</label>
                   <select
                     value={form.mode}
                     onChange={(e) => setForm({ ...form, mode: e.target.value as any })}
                     className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
                   >
-                    <option value="custom">Personalizado (HTML)</option>
-                    <option value="materia">Disparo por Matéria</option>
+                    <option value="custom">Mensagem personalizada</option>
+                    <option value="materia">Matéria do site</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Finalidade</label>
+                  <select
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value as Campaign["category"] })}
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="newsletter">Newsletter</option>
+                    <option value="novidade">Novidade</option>
+                    <option value="aviso">Aviso</option>
+                    <option value="campanha">Campanha</option>
                   </select>
                 </div>
 
@@ -651,12 +693,12 @@ export function AdminNewsletter() {
                 </div>
               ) : (
                 <div>
-                  <label className="text-sm font-medium">HTML do email</label>
+                  <label className="text-sm font-medium">Conteúdo do e-mail</label>
                   <textarea
                     value={form.content_html}
                     onChange={(e) => setForm({ ...form, content_html: e.target.value })}
                     className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[180px]"
-                    placeholder="<h3>Olá...</h3><p>Conteúdo...</p>"
+                    placeholder="Escreva a mensagem normalmente. Se quiser, também pode usar HTML."
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Dica: use HTML simples.
