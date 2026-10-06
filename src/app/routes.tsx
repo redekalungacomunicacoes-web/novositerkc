@@ -2,7 +2,6 @@ import { lazy } from "react";
 import { createBrowserRouter, redirect } from "react-router-dom";
 
 import { financeiroRoutes } from "@/app/pages/admin/Financeiro/routes";
-import { TeamMemberPublicPage } from "@/app/pages/public/TeamMember/TeamMemberPublicPage";
 import {
   FINANCE_MODULE_ROLES,
   getCurrentUserRoles,
@@ -23,6 +22,7 @@ const NotFound = lazy(() => import("@/app/pages/NotFound").then(m => ({ default:
 const ProjetoDetalhes = lazy(() => import("@/app/pages/ProjetoDetalhes").then(m => ({ default: m.ProjetoDetalhes })));
 const Projetos = lazy(() => import("@/app/pages/Projetos").then(m => ({ default: m.Projetos })));
 const QuemSomos = lazy(() => import("@/app/pages/QuemSomos").then(m => ({ default: m.QuemSomos })));
+const TeamMemberPublicPage = lazy(() => import("@/app/pages/public/TeamMember/TeamMemberPublicPage").then(m => ({ default: m.TeamMemberPublicPage })));
 const AdminConfiguracoes = lazy(() => import("@/app/pages/admin/AdminConfiguracoes").then(m => ({ default: m.AdminConfiguracoes })));
 const AdminEquipe = lazy(() => import("@/app/pages/admin/AdminEquipe").then(m => ({ default: m.AdminEquipe })));
 const AdminEquipeForm = lazy(() => import("@/app/pages/admin/AdminEquipeForm").then(m => ({ default: m.AdminEquipeForm })));
