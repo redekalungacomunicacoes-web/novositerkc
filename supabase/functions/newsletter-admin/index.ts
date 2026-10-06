@@ -78,6 +78,36 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
+function htmlToText(value: string) {
+  return (value || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#039;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function smtpRecipients(info: any) {
+  const accepted = Array.isArray(info?.accepted) ? info.accepted.map((value: unknown) => String(value).toLowerCase()) : [];
+  const rejected = Array.isArray(info?.rejected) ? info.rejected.map((value: unknown) => String(value).toLowerCase()) : [];
+  return { accepted, rejected };
+}
+
+function smtpAccepted(info: any, email: string) {
+  const { accepted } = smtpRecipients(info);
+  return accepted.includes(email.trim().toLowerCase());
+}
+
 const supabaseUrl = required("SUPABASE_URL");
 const serviceKey = required("SUPABASE_SERVICE_ROLE_KEY");
 const publicKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
@@ -387,14 +417,49 @@ async function actionSendTest(body: Record<string, unknown>) {
       previewText: campaign.preview_text,
       email: testEmail,
     });
+    const unsubscribeUrl = "https://kalungacomunicacoes.org/newsletter";
     const info = await transport.sendMail({
       from: `${settings.from_name} <${settings.from_email}>`,
       to: testEmail,
       subject: campaign.subject,
       html,
+      text: htmlToText(bodyHtml),
       replyTo: settings.reply_to || undefined,
+      headers: {
+        "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        "X-RKC-Newsletter-Test": "true",
+      },
     });
-    return ok({ message: "E-mail de teste enviado.", message_id: info.messageId || null, sent: 1, failed: 0 });
+
+    const recipients = smtpRecipients(info);
+    const accepted = smtpAccepted(info, testEmail);
+    const smtpResponse = String(info.response || "");
+
+    console.info("[newsletter] test_send_result", {
+      recipient_domain: testEmail.split("@")[1] || "",
+      accepted_count: recipients.accepted.length,
+      rejected_count: recipients.rejected.length,
+      message_id: info.messageId || null,
+      response: smtpResponse,
+    });
+
+    if (!accepted) {
+      return fail(
+        "smtp_recipient_rejected",
+        "O servidor SMTP não aceitou o destinatário do teste.",
+        smtpResponse || recipients.rejected.join(", ") || "Destinatário rejeitado pelo SMTP.",
+      );
+    }
+
+    return ok({
+      message: "SMTP aceitou o e-mail de teste para entrega.",
+      message_id: info.messageId || null,
+      smtp_response: smtpResponse || null,
+      accepted: recipients.accepted,
+      rejected: recipients.rejected,
+      sent: 1,
+      failed: 0,
+    });
   } finally {
     transport.close();
   }
@@ -487,12 +552,21 @@ async function actionSendCampaign(body: Record<string, unknown>) {
           to: item.email,
           subject: campaign.subject,
           html,
+          text: htmlToText(bodyHtml),
           replyTo: settings.reply_to || undefined,
           headers: {
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
           },
         });
+
+        if (!smtpAccepted(info, item.email)) {
+          const recipients = smtpRecipients(info);
+          throw new Error(
+            String(info.response || "") ||
+              `SMTP não aceitou o destinatário. Rejeitados: ${recipients.rejected.join(", ") || "não informado"}`,
+          );
+        }
 
         const now = new Date().toISOString();
         await adminDb.from("newsletter_deliveries").update({
