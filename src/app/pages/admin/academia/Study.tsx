@@ -239,7 +239,13 @@ export function Study({
                                 className="group flex min-h-[76px] items-center gap-3 rounded-xl border bg-background p-3 transition hover:border-primary/40 hover:shadow-sm sm:p-4"
                                 to={`/admin/academia/cursos/${course.id}/aulas/${l.id}`}
                               >
-                                <span className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg bg-muted text-lg text-muted-foreground group-hover:text-primary">▶</span>
+                                <span className="relative flex h-[68px] w-[120px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-lg text-muted-foreground group-hover:text-primary">
+                                  {l.thumbnail_drive_file_id ? (
+                                    <Asset driveFileId={l.thumbnail_drive_file_id} title={`Thumbnail de ${l.title}`} type="image" variant="card" showOpenLink={false} />
+                                  ) : (
+                                    <span aria-hidden="true">▶</span>
+                                  )}
+                                </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block text-sm font-semibold sm:text-base">{moduleIndex + 1}.{lessonIndexInModule + 1} {l.title}</span>
                                   <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -321,6 +327,11 @@ export function Study({
               <p className="text-muted-foreground">
                 {lesson.description} · {lesson.duration_minutes} min
               </p>
+              {lesson.thumbnail_drive_file_id && (
+                <div className="overflow-hidden rounded-xl border bg-muted">
+                  <Asset driveFileId={lesson.thumbnail_drive_file_id} title={`Thumbnail de ${lesson.title}`} type="image" variant="banner" showOpenLink={false} />
+                </div>
+              )}
               <div className="overflow-hidden rounded-xl bg-black shadow-sm">
                 <Asset
                   path={lesson.media_path}
