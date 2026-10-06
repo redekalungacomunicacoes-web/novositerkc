@@ -40,7 +40,7 @@ export async function prepareAcademyDestination(
     const { error } = await admin.from("academy_lessons").update({ drive_folder_id: lessonFolder }).eq("id", lesson);
     if (error) throw error;
   }
-  return (await ensureDrivePath(lessonFolder, [kind === "media" ? "VIDEO" : "MATERIAIS"])).folderId;
+  return (await ensureDrivePath(lessonFolder, [kind === "media" ? "VIDEO" : kind === "thumbnail" ? "THUMBNAIL" : "MATERIAIS"])).folderId;
 }
 
 export async function uploadAcademyDrive(
@@ -67,8 +67,9 @@ export async function uploadAcademyDrive(
   if (file.size > 50 * 1024 * 1024)
     throw new Error("O limite por arquivo é 50 MB.");
   if (
-    !["cover", "banner", "media", "material"].includes(kind) ||
-    (["cover", "banner"].includes(kind) && lesson) ||
+    !["cover", "banner", "thumbnail", "media", "material"].includes(kind) ||
+    (["cover", "banner", "thumbnail"].includes(kind) && lesson) ||
+    (kind === "thumbnail" && !lesson) ||
     (kind === "media" && !lesson) ||
     (material && kind !== "material")
   )
@@ -135,7 +136,7 @@ export async function uploadAcademyDrive(
           committedBeforeLease.status !== "active") throw new Error("Envio anterior incompatível ou removido.");
       return committedBeforeLease;
     }
-  if (kind === "cover" || kind === "banner" || kind === "media" || material) {
+  if (kind === "cover" || kind === "banner" || kind === "thumbnail" || kind === "media" || material) {
     const table =
       kind === "cover" || kind === "banner"
         ? "academy_courses"
@@ -155,7 +156,7 @@ export async function uploadAcademyDrive(
       .select(column)
       .eq(
         "id",
-        kind === "cover" || kind === "banner" ? course : kind === "media" ? lesson : material,
+        kind === "cover" || kind === "banner" ? course : kind === "thumbnail" || kind === "media" ? lesson : material,
       )
       .single();
     previous = (data as Record<string, string | null> | null)?.[column] || null;
