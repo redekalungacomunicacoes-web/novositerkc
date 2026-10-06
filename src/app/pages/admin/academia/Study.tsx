@@ -8,7 +8,7 @@ import { videoEmbed } from "./media";
 
 declare global {
   interface Window {
-    YT?: { Player: new (element: HTMLElement, options: Record<string, unknown>) => { getDuration: () => number; getCurrentTime: () => number; destroy: () => void } };
+    YT?: { Player: new (element: HTMLElement, options: Record<string, unknown>) => { getDuration: () => number; getCurrentTime: () => number; seekTo: (seconds: number, allowSeekAhead: boolean) => void; destroy: () => void } };
     onYouTubeIframeAPIReady?: () => void;
   }
 }
@@ -32,7 +32,7 @@ function YouTubeLessonPlayer({ url, title, initialPercent, onProgress }: { url: 
   useEffect(() => {
     const videoId = youtubeVideoId(url);
     if (!videoId || !hostRef.current) return;
-    let player: { getDuration: () => number; getCurrentTime: () => number; destroy: () => void } | null = null;
+    let player: { getDuration: () => number; getCurrentTime: () => number; seekTo: (seconds: number, allowSeekAhead: boolean) => void; destroy: () => void } | null = null;
     let timer: number | undefined;
     const start = () => {
       if (!window.YT || !hostRef.current || player) return;
@@ -40,6 +40,10 @@ function YouTubeLessonPlayer({ url, title, initialPercent, onProgress }: { url: 
         videoId,
         playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
         events: {
+          onReady: (event: { target: { getDuration: () => number; seekTo: (seconds: number, allowSeekAhead: boolean) => void } }) => {
+            const duration = event.target.getDuration();
+            if (initialPercent > 0 && initialPercent < 95 && duration > 0) event.target.seekTo(duration * (initialPercent / 100), true);
+          },
           onStateChange: (event: { data: number }) => {
             if (event.data === 1 && !timer) timer = window.setInterval(() => {
               if (!player) return;
@@ -66,7 +70,7 @@ function YouTubeLessonPlayer({ url, title, initialPercent, onProgress }: { url: 
     }
     return () => { if (timer) window.clearInterval(timer); player?.destroy(); };
   }, [url]);
-  return <div className="space-y-3"><div className="aspect-video w-full" ref={hostRef} aria-label={title} /><div><Meter value={Math.round(initialPercent)} /></div></div>;
+  return <div className="aspect-video w-full" ref={hostRef} aria-label={title} />;
 }
 export function Study({
   data,
@@ -176,7 +180,14 @@ export function Study({
     .reduce((total, l) => total + (l.duration_minutes || 0), 0);
   const courseMaterials = data.materials.filter((m) => m.course_id === course.id && !m.lesson_id);
   const totalMinutes = lessons.reduce((total, l) => total + (l.duration_minutes || 0), 0);
-  const progressPercent = Math.round(report?.progress || 0);
+  const lessonPercent = (lessonId: string) => {
+    const progress = data.progress.find((p) => p.enrollment_id === enrollment?.id && p.lesson_id === lessonId);
+    return progress?.completed_at ? 100 : Math.round(Number(progress?.watched_percent || 0));
+  };
+  const watchedCoursePercent = lessons.length
+    ? Math.round(lessons.reduce((sum, item) => sum + lessonPercent(item.id), 0) / lessons.length)
+    : 0;
+  const progressPercent = enrollment ? watchedCoursePercent : Math.round(report?.progress || 0);
   const toggleModule = (moduleId: string) => {
     setOpenModules((current) => {
       const next = new Set(current);
@@ -229,7 +240,7 @@ export function Study({
                     <div className="mb-2 flex items-center justify-between text-sm font-medium">
                       <span>Seu progresso</span><span>{Math.round(report?.progress || 0)}%</span>
                     </div>
-                    <Meter value={report?.progress || 0} />
+                    <Meter value={progressPercent} />
                   </div>
                 )}
                 <div className="flex flex-wrap gap-3">
@@ -310,6 +321,7 @@ export function Study({
                       <ol className="space-y-2 border-t bg-muted/20 p-3 sm:p-4">
                         {moduleLessons.map((l, lessonIndexInModule) => {
                           const done = completedLessonIds.has(l.id);
+                          const watched = lessonPercent(l.id);
                           return (
                             <li key={l.id}>
                               <Link
@@ -330,9 +342,17 @@ export function Study({
                                     <span>{l.duration_minutes} min</span>
                                     {!l.required && <span>Opcional</span>}
                                   </span>
+                                  {enrollment && (
+                                    <span className="mt-2 flex items-center gap-2">
+                                      <span className="h-1.5 min-w-[90px] max-w-[180px] flex-1 overflow-hidden rounded-full bg-muted">
+                                        <span className="block h-full rounded-full bg-primary transition-all" style={{ width: `${watched}%` }} />
+                                      </span>
+                                      <span className="text-xs font-semibold text-muted-foreground">{watched}%</span>
+                                    </span>
+                                  )}
                                 </span>
-                                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${done ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
-                                  {done ? "✓" : ""}
+                                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${done ? "border-primary bg-primary text-primary-foreground" : watched > 0 ? "border-primary/40 text-primary" : "text-muted-foreground"}`}>
+                                  {done ? "✓" : watched > 0 ? watched : ""}
                                 </span>
                               </Link>
                             </li>
@@ -358,7 +378,7 @@ export function Study({
                     <span className="text-sm text-muted-foreground">aulas concluídas</span>
                   </div>
                 </div>
-                {enrollment && <div className="mt-4"><Meter value={report?.progress || 0} /></div>}
+                {enrollment && <div className="mt-4"><Meter value={progressPercent} /></div>}
                 {resume && enrollment && (
                   <Button className="mt-4 w-full" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${resume.id}`)}>
                     ▶ Continuar de onde parei
