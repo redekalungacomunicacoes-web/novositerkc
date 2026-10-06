@@ -70,6 +70,37 @@ Deno.serve(async (req) => {
       500,
     );
 
+  const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
+
+  // Native <video> needs GET + Range. It receives only a short-lived opaque
+  // ticket, never the user's Supabase access token.
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    const ticket = url.searchParams.get("ticket") || "";
+    if (!/^[0-9a-f-]{36}$/i.test(ticket)) return json({ ok:false,error:"Ticket de mídia inválido." },401);
+    const { data: row, error } = await admin.from("academy_stream_tickets")
+      .select("id,drive_file_id,expires_at").eq("id",ticket).gt("expires_at",new Date().toISOString()).maybeSingle();
+    if (error || !row) return json({ ok:false,error:"Ticket de mídia expirado." },401);
+    const { data: file, error: fileError } = await admin.from("drive_files").select("*")
+      .eq("id",row.drive_file_id).eq("module","academy").eq("status","active").maybeSingle();
+    if (fileError || !file || !["video","audio"].some((kind) => String(file.mime_type || "").startsWith(kind + "/")))
+      return json({ ok:false,error:"Mídia indisponível." },404);
+    const response = await downloadDriveFile(file.drive_file_id, req.headers.get("Range"));
+    const headers: Record<string,string> = {
+      ...corsHeaders,
+      "Content-Type": file.mime_type || response.headers.get("Content-Type") || "application/octet-stream",
+      "Content-Disposition": contentDisposition("inline",file.name),
+      "Cache-Control": "private, max-age=300",
+      "Accept-Ranges": "bytes",
+      "X-Content-Type-Options": "nosniff",
+    };
+    for (const name of ["Content-Length","Content-Range","ETag","Last-Modified"]) {
+      const value=response.headers.get(name); if(value) headers[name]=value;
+    }
+    return new Response(response.body,{status:response.status===206?206:200,headers});
+  }
+  if (req.method !== "POST") return json({ ok:false,error:"Método não permitido." },405);
+
   const authorization = req.headers.get("Authorization") ?? "";
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authorization } },
@@ -78,10 +109,6 @@ Deno.serve(async (req) => {
   const { data: auth, error: authError } = await userClient.auth.getUser();
   if (authError || !auth.user)
     return json({ ok: false, error: "Não autenticado." }, 401);
-  const admin = createClient(supabaseUrl, serviceRole, {
-    auth: { persistSession: false },
-  });
-
   async function requireTaskAccess(taskId: string, writing = false) {
     const { data, error } = await userClient
       .from("tasks")
@@ -299,12 +326,12 @@ Deno.serve(async (req) => {
       const mimeType = String(body.mime_type || "application/octet-stream");
       const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
       if (!isUuid(course) || (lesson && !isUuid(lesson))) return json({ ok:false,error:"Curso ou aula inválidos."},400);
-      if (!["cover","banner","media","material"].includes(kind) || (["cover","banner"].includes(kind) && lesson) || (kind === "media" && !lesson))
+      if (!["cover","banner","thumbnail","media","material"].includes(kind) || (["cover","banner"].includes(kind) && lesson) || (["thumbnail","media"].includes(kind) && !lesson))
         return json({ ok:false,error:"Destino acadêmico inválido."},400);
-      if (["cover","banner"].includes(kind) && !["image/jpeg","image/png","image/webp","image/gif"].includes(mimeType))
-        return json({ ok:false,error:"A capa precisa ser uma imagem JPEG, PNG, WebP ou GIF."},400);
-      const limit = ["cover","banner"].includes(kind) ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
-      if (!Number.isFinite(size) || size <= 0 || size > limit) return json({ok:false,error:["cover","banner"].includes(kind) ? "A imagem deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB."},413);
+      if (["cover","banner","thumbnail"].includes(kind) && !["image/jpeg","image/png","image/webp","image/gif"].includes(mimeType))
+        return json({ ok:false,error:"A imagem precisa ser JPEG, PNG, WebP ou GIF."},400);
+      const limit = ["cover","banner","thumbnail"].includes(kind) ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
+      if (!Number.isFinite(size) || size <= 0 || size > limit) return json({ok:false,error:["cover","banner","thumbnail"].includes(kind) ? "A imagem deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB."},413);
       const folderId = await prepareAcademyDestination({ course, lesson, kind }, requireAcademyRoot(rootFolderId), userClient, admin);
       const uploadUrl = await startDriveResumableUpload({ name, mimeType, size, folderId });
       return json({ ok:true, upload_url:uploadUrl, folder_id:folderId });
@@ -360,7 +387,7 @@ Deno.serve(async (req) => {
       const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
       if (!isUuid(course) || !isUuid(upload) || (lesson && !isUuid(lesson)) || (material && !isUuid(material)))
         return json({ok:false,error:"Identificadores acadêmicos inválidos."},400);
-      if (!["cover","banner","media","material"].includes(kind) || (["cover","banner"].includes(kind) && lesson) || (kind === "media" && !lesson) || (material && kind !== "material"))
+      if (!["cover","banner","thumbnail","media","material"].includes(kind) || (["cover","banner"].includes(kind) && lesson) || (["thumbnail","media"].includes(kind) && !lesson) || (material && kind !== "material"))
         return json({ok:false,error:"Destino acadêmico inválido."},400);
       if (!driveFileId || !expectedName || !Number.isFinite(expectedSize) || expectedSize <= 0)
         return json({ok:false,error:"Arquivo do Drive não confirmado."},400);
@@ -390,8 +417,8 @@ Deno.serve(async (req) => {
         return json({ok:false,error:"O tamanho confirmado pelo Drive difere do arquivo enviado."},409);
       if (expectedMime !== "application/octet-stream" && String(uploaded.mimeType || "") !== expectedMime)
         return json({ok:false,error:"O tipo do arquivo confirmado pelo Drive difere do envio iniciado."},409);
-      if (["cover","banner"].includes(kind) && !["image/jpeg","image/png","image/webp","image/gif"].includes(String(uploaded.mimeType || "")))
-        return json({ok:false,error:"A capa confirmada não é uma imagem permitida."},400);
+      if (["cover","banner","thumbnail"].includes(kind) && !["image/jpeg","image/png","image/webp","image/gif"].includes(String(uploaded.mimeType || "")))
+        return json({ok:false,error:"A imagem confirmada não é permitida."},400);
       await assertPrivateDriveFile(driveFileId);
       const { data: record, error } = await admin.rpc("academy_commit_drive", {
         p_actor: auth.user.id, p_course: course, p_lesson: lesson, p_kind: kind,
@@ -423,6 +450,23 @@ Deno.serve(async (req) => {
         );
       return json({ ok: true, drive: await driveHealth(rootFolderId) });
     }
+    if (action === "academy-stream-ticket") {
+      const requestedId=String(body.id || "");
+      const { data: permitted, error: accessError } = await userClient.from("drive_files").select("id")
+        .eq("id",requestedId).eq("module","academy").eq("status","active").maybeSingle();
+      if (accessError || !permitted) return json({ok:false,error:"Sem acesso a esta mídia."},403);
+      const { data: file, error: fileError } = await admin.from("drive_files").select("id,mime_type")
+        .eq("id",requestedId).maybeSingle();
+      if (fileError || !file || !["video","audio"].some((kind) => String(file.mime_type || "").startsWith(kind + "/")))
+        return json({ok:false,error:"Arquivo não é uma mídia reproduzível."},400);
+      await admin.from("academy_stream_tickets").delete().lt("expires_at",new Date().toISOString());
+      const { data: ticket, error: ticketError } = await admin.from("academy_stream_tickets")
+        .insert({drive_file_id:requestedId,user_id:auth.user.id}).select("id").single();
+      if (ticketError || !ticket) throw ticketError || new Error("Não foi possível preparar a mídia.");
+      const base=new URL(req.url); base.search=""; base.searchParams.set("ticket",ticket.id);
+      return json({ok:true,url:base.toString(),expires_in:600});
+    }
+
     const id = String(body.id ?? "");
     if (!id)
       return json({ ok: false, error: "ID do arquivo obrigatório." }, 400);
