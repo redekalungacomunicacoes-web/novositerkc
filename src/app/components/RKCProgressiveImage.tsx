@@ -82,6 +82,7 @@ export function RKCProgressiveImage({
       {shouldLoad && src ? (
         <img
           {...imgProps}
+          data-rkc-progressive="true"
           src={src}
           alt={alt}
           loading={loading === 'eager' ? 'eager' : 'lazy'}
