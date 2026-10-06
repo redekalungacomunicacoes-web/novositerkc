@@ -13,7 +13,7 @@ export type DriveFileRecord = {
   central_folder_id?: string | null;
   academy_course_id?: string | null;
   academy_lesson_id?: string | null;
-  academy_kind?: "cover" | "banner" | "media" | "material" | null;
+  academy_kind?: "cover" | "banner" | "thumbnail" | "media" | "material" | null;
   access_scope?: "assignees" | "team";
   category: string | null;
   web_view_link: string | null;
@@ -101,6 +101,12 @@ export async function uploadRkcDriveFile(input: {
 export function rkcDriveMediaUrl(id: string): string {
   const base = import.meta.env.VITE_SUPABASE_URL as string;
   return `${base}/functions/v1/drive-files?action=stream&id=${encodeURIComponent(id)}`;
+}
+
+export async function createRkcDriveMediaTicket(id: string): Promise<string> {
+  const data = await invoke({ action: "academy-stream-ticket", id });
+  if (!data?.url) throw new Error("Não foi possível preparar o streaming da aula.");
+  return String(data.url);
 }
 
 export async function rkcDriveMediaResponse(id: string, range?: string): Promise<Response> {
@@ -231,20 +237,20 @@ export async function uploadAcademyFile(input: {
   file: File;
   courseId: string;
   lessonId?: string;
-  kind: "cover" | "banner" | "media" | "material";
+  kind: "cover" | "banner" | "thumbnail" | "media" | "material";
   uploadId: string;
   replaceMaterialId?: string;
   onProgress: (percent: number) => void;
 }): Promise<DriveFileRecord> {
-  const limit = ["cover", "banner"].includes(input.kind) ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
+  const limit = ["cover", "banner", "thumbnail"].includes(input.kind) ? 25 * 1024 * 1024 : 15 * 1024 * 1024 * 1024;
   if (input.file.size > limit)
-    throw new Error(["cover", "banner"].includes(input.kind) ? "A imagem deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB.");
+    throw new Error(["cover", "banner", "thumbnail"].includes(input.kind) ? "A imagem deve ter no máximo 25 MB." : "O limite por arquivo é 15 GB.");
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) throw new Error("Sua sessão expirou. Entre novamente.");
 
   // Course artwork is small enough to travel through our authenticated backend.
   // This avoids browser -> Google resumable-session CORS/network inconsistencies.
-  if (["cover", "banner"].includes(input.kind)) {
+  if (["cover", "banner", "thumbnail"].includes(input.kind)) {
     const form = new FormData();
     form.append("module", input.kind === "banner" ? "academy-banner" : "academy");
     form.append("file", input.file);
