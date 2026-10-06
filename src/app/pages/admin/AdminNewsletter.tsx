@@ -56,6 +56,7 @@ type Campaign = {
   total_recipients: number | null;
   sent_count: number | null;
   fail_count: number | null;
+  open_count: number | null;
   created_at: string;
   sent_at: string | null;
 };
@@ -86,10 +87,13 @@ type Template = {
 type Delivery = {
   id: string;
   campaign_id: string;
+  subscriber_id: string | null;
   email: string;
   status: string;
   error_message: string | null;
   sent_at: string | null;
+  opened_at: string | null;
+  open_count: number;
   created_at: string;
 };
 
@@ -213,7 +217,7 @@ export function AdminNewsletter() {
       supabase
         .from("newsletter_campaigns")
         .select(
-          "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,created_at,sent_at",
+          "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,open_count,created_at,sent_at",
         )
         .order("created_at", { ascending: false })
         .limit(300),
@@ -230,9 +234,9 @@ export function AdminNewsletter() {
         .order("name", { ascending: true }),
       supabase
         .from("newsletter_deliveries")
-        .select("id,campaign_id,email,status,error_message,sent_at,created_at")
+        .select("id,campaign_id,subscriber_id,email,status,error_message,sent_at,opened_at,open_count,created_at")
         .order("created_at", { ascending: false })
-        .limit(1500),
+        .limit(5000),
       supabase
         .from("materias")
         .select("id,titulo,resumo,slug,capa_url,capa_thumb_url,published_at,created_at")
@@ -281,16 +285,73 @@ export function AdminNewsletter() {
     const sentCampaigns = campaigns.filter((campaign) => campaign.status === "sent").length;
     const totalSent = campaigns.reduce((sum, campaign) => sum + Number(campaign.sent_count || 0), 0);
     const totalFailed = campaigns.reduce((sum, campaign) => sum + Number(campaign.fail_count || 0), 0);
+    const openedRecipients = deliveries.filter((delivery) => Number(delivery.open_count || 0) > 0).length;
+    const totalOpenEvents = deliveries.reduce((sum, delivery) => sum + Number(delivery.open_count || 0), 0);
     const deliverability = totalSent + totalFailed > 0 ? (totalSent / (totalSent + totalFailed)) * 100 : 100;
+    const openRate = totalSent > 0 ? (openedRecipients / totalSent) * 100 : 0;
 
     return {
       sentCampaigns,
       totalSent,
       totalFailed,
+      openedRecipients,
+      totalOpenEvents,
+      openRate,
       deliverability,
       unsubscribed: subscribers.filter((subscriber) => subscriber.status === "unsubscribed").length,
     };
-  }, [campaigns, subscribers]);
+  }, [campaigns, deliveries, subscribers]);
+
+  const topReaders = useMemo(() => {
+    const subscriberMap = new Map(subscribers.map((subscriber) => [subscriber.id, subscriber]));
+    const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+    const readers = new Map<
+      string,
+      {
+        email: string;
+        name: string;
+        opens: number;
+        subjects: Set<string>;
+        lastOpenedAt: string | null;
+      }
+    >();
+
+    for (const delivery of deliveries) {
+      const opens = Number(delivery.open_count || 0);
+      if (opens <= 0) continue;
+
+      const subscriber = delivery.subscriber_id ? subscriberMap.get(delivery.subscriber_id) : undefined;
+      const key = delivery.subscriber_id || delivery.email.toLowerCase();
+      const current = readers.get(key) || {
+        email: delivery.email,
+        name: subscriber?.name || "Sem nome",
+        opens: 0,
+        subjects: new Set<string>(),
+        lastOpenedAt: null,
+      };
+
+      current.opens += opens;
+      const subject = campaignMap.get(delivery.campaign_id)?.subject;
+      if (subject) current.subjects.add(subject);
+
+      if (
+        delivery.opened_at &&
+        (!current.lastOpenedAt || new Date(delivery.opened_at) > new Date(current.lastOpenedAt))
+      ) {
+        current.lastOpenedAt = delivery.opened_at;
+      }
+
+      readers.set(key, current);
+    }
+
+    return [...readers.values()]
+      .sort((a, b) => b.opens - a.opens)
+      .slice(0, 10)
+      .map((reader) => ({
+        ...reader,
+        subjects: [...reader.subjects].slice(0, 3),
+      }));
+  }, [campaigns, deliveries, subscribers]);
 
   function newCampaign() {
     const defaultTemplate = templates.find((template) => template.is_system) || templates[0];
@@ -496,7 +557,7 @@ export function AdminNewsletter() {
         .update(payload)
         .eq("id", selectedCampaign.id)
         .select(
-          "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,created_at,sent_at",
+          "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,open_count,created_at,sent_at",
         )
         .single();
       data = response.data as Campaign | null;
@@ -506,7 +567,7 @@ export function AdminNewsletter() {
         .from("newsletter_campaigns")
         .insert(payload)
         .select(
-          "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,created_at,sent_at",
+          "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,open_count,created_at,sent_at",
         )
         .single();
       data = response.data as Campaign | null;
@@ -550,7 +611,7 @@ export function AdminNewsletter() {
         total_recipients: 0,
       })
       .select(
-        "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,created_at,sent_at",
+        "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,open_count,created_at,sent_at",
       )
       .single();
 
@@ -659,7 +720,7 @@ export function AdminNewsletter() {
     const refreshed = await supabase
       .from("newsletter_campaigns")
       .select(
-        "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,created_at,sent_at",
+        "id,title,subject,preview_text,category,mode,materia_id,content_html,content_json,audience_mode,audience_filter,template_id,status,total_recipients,sent_count,fail_count,open_count,created_at,sent_at",
       )
       .eq("id", campaign.id)
       .single();
@@ -753,10 +814,16 @@ export function AdminNewsletter() {
         <>
           {tab === "overview" && (
             <section className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <MetricCard label="Inscritos ativos" value={activeSubscribers.length} detail={`${dashboard.unsubscribed} descadastrados`} icon={Users} />
                 <MetricCard label="Campanhas enviadas" value={dashboard.sentCampaigns} detail={`${campaigns.length} campanhas no histórico`} icon={Send} />
                 <MetricCard label="E-mails enviados" value={dashboard.totalSent} detail={`${dashboard.totalFailed} falhas registradas`} icon={Mail} />
+                <MetricCard
+                  label="Aberturas"
+                  value={dashboard.openedRecipients}
+                  detail={`${dashboard.openRate.toFixed(1)}% de abertura • ${dashboard.totalOpenEvents} aberturas totais`}
+                  icon={Eye}
+                />
                 <MetricCard label="Taxa técnica" value={`${dashboard.deliverability.toFixed(1)}%`} detail="Enviados ÷ tentativas registradas" icon={CheckCircle2} />
               </div>
 
@@ -808,6 +875,51 @@ export function AdminNewsletter() {
                   </ol>
                 </div>
               </div>
+
+              <div className="rounded-2xl border bg-card">
+                <div className="border-b p-5">
+                  <h2 className="font-semibold">Top 10 leitores</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Pessoas que mais abriram newsletters, considerando os disparos rastreados.
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left text-sm">
+                    <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="px-5 py-3">Leitor</th>
+                        <th className="px-5 py-3">Aberturas</th>
+                        <th className="px-5 py-3">Assuntos abertos</th>
+                        <th className="px-5 py-3">Última abertura</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {topReaders.map((reader, index) => (
+                        <tr key={reader.email}>
+                          <td className="px-5 py-4">
+                            <div className="font-semibold">#{index + 1} {reader.name}</div>
+                            <div className="text-xs text-muted-foreground">{reader.email}</div>
+                          </td>
+                          <td className="px-5 py-4 text-lg font-bold text-[#0F7A3E]">{reader.opens}</td>
+                          <td className="px-5 py-4">
+                            <div className="max-w-[480px] text-xs text-muted-foreground">
+                              {reader.subjects.length ? reader.subjects.join(" • ") : "—"}
+                            </div>
+                          </td>
+                          <td className="px-5 py-4 text-muted-foreground">{toBR(reader.lastOpenedAt)}</td>
+                        </tr>
+                      ))}
+                      {topReaders.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-5 py-8 text-center text-muted-foreground">
+                            As aberturas aparecerão aqui após os próximos disparos.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </section>
           )}
 
@@ -831,6 +943,7 @@ export function AdminNewsletter() {
                       <th className="px-5 py-3">Status</th>
                       <th className="px-5 py-3">Audiência</th>
                       <th className="px-5 py-3">Enviados</th>
+                      <th className="px-5 py-3">Abertos</th>
                       <th className="px-5 py-3">Falhas</th>
                       <th className="px-5 py-3">Data</th>
                       <th className="px-5 py-3 text-right">Ações</th>
@@ -854,6 +967,14 @@ export function AdminNewsletter() {
                           <td className="px-5 py-4"><StatusBadge status={campaign.status} /></td>
                           <td className="px-5 py-4">{campaign.total_recipients || 0}</td>
                           <td className="px-5 py-4 font-medium">{campaign.sent_count || 0}</td>
+                          <td className="px-5 py-4">
+                            <div className="font-semibold text-[#0F7A3E]">{campaign.open_count || 0}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {campaign.sent_count
+                                ? `${((Number(campaign.open_count || 0) / Number(campaign.sent_count)) * 100).toFixed(1)}%`
+                                : "0.0%"}
+                            </div>
+                          </td>
                           <td className="px-5 py-4">{campaign.fail_count || 0}</td>
                           <td className="px-5 py-4 text-muted-foreground">{toBR(campaign.sent_at || campaign.created_at)}</td>
                           <td className="px-5 py-4">
@@ -868,7 +989,7 @@ export function AdminNewsletter() {
                         </tr>
                       );
                     })}
-                    {campaigns.length === 0 && <tr><td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">Nenhuma campanha.</td></tr>}
+                    {campaigns.length === 0 && <tr><td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">Nenhuma campanha.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -1167,9 +1288,10 @@ export function AdminNewsletter() {
                   </button>
 
                   {selectedCampaign && (
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
                       <div className="rounded-lg bg-background p-2"><div className="font-bold">{selectedCampaign.total_recipients || 0}</div><div className="text-muted-foreground">Audiência</div></div>
                       <div className="rounded-lg bg-background p-2"><div className="font-bold text-emerald-700">{selectedCampaign.sent_count || 0}</div><div className="text-muted-foreground">Enviados</div></div>
+                      <div className="rounded-lg bg-background p-2"><div className="font-bold text-[#0F7A3E]">{selectedCampaign.open_count || 0}</div><div className="text-muted-foreground">Abertos</div></div>
                       <div className="rounded-lg bg-background p-2"><div className="font-bold text-red-700">{selectedCampaign.fail_count || 0}</div><div className="text-muted-foreground">Falhas</div></div>
                     </div>
                   )}
