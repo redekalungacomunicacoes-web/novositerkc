@@ -7,6 +7,7 @@ import { ArrowRight, Calendar, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getSiteSettings, SiteSettings } from "@/lib/siteSettings";
 import { resolveProjectMediaUrl } from "@/app/repositories/projectRepository";
+import { SitePopup } from "@/app/components/SitePopup";
 
 type ProjetoHome = {
   id: string;
@@ -140,6 +141,7 @@ export function Home() {
 
   return (
     <div>
+      <SitePopup />
       {/* Hero Section */}
       <section className="relative min-h-[70vh] md:min-h-[80vh] flex items-center overflow-hidden">
         {/* Imagem de fundo (SEM FALLBACK: só renderiza se vier do banco) */}
