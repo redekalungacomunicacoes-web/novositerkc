@@ -45,6 +45,7 @@ type Campaign = {
   provider: string | null;
   sent_count: number | null;
   fail_count: number | null;
+  started_at: string | null;
 };
 
 function json(status: number, body: unknown) {
@@ -185,7 +186,7 @@ function transportFor(s: Settings) {
 async function loadCampaign(id: string): Promise<Campaign> {
   const { data, error } = await adminDb
     .from("newsletter_campaigns")
-    .select("id,title,subject,preview_text,content_html,status,audience_mode,audience_filter,template_id,provider,sent_count,fail_count")
+    .select("id,title,subject,preview_text,content_html,status,audience_mode,audience_filter,template_id,provider,sent_count,fail_count,started_at")
     .eq("id", id)
     .single();
 
@@ -481,31 +482,54 @@ async function actionSendCampaign(body: Record<string, unknown>) {
   const bodyHtml = String(campaign.content_html || "").trim();
   if (!campaign.subject?.trim() || !bodyHtml) return fail("invalid_campaign", "A campanha precisa de assunto e conteúdo.");
 
-  const subscribers = await listAudience(campaign);
-  if (subscribers.length === 0) {
-    await adminDb.from("newsletter_campaigns").update({
-      status: "failed",
-      last_error: "Nenhum inscrito ativo corresponde à audiência selecionada.",
-      total_recipients: 0,
-    }).eq("id", campaign.id);
-    return fail("empty_audience", "Nenhum inscrito ativo corresponde à audiência selecionada.");
+  const existingDeliveriesOnly = Boolean(body.existing_deliveries_only);
+  let subscribers: Subscriber[] = [];
+
+  if (!existingDeliveriesOnly) {
+    subscribers = await listAudience(campaign);
+    if (subscribers.length === 0) {
+      await adminDb.from("newsletter_campaigns").update({
+        status: "failed",
+        last_error: "Nenhum inscrito ativo corresponde à audiência selecionada.",
+        total_recipients: 0,
+      }).eq("id", campaign.id);
+      return fail("empty_audience", "Nenhum inscrito ativo corresponde à audiência selecionada.");
+    }
+
+    await prepareDeliveries(campaign, subscribers);
   }
 
-  await prepareDeliveries(campaign, subscribers);
+  const staleSendingBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { error: recoveryError } = await adminDb
+    .from("newsletter_deliveries")
+    .update({
+      status: "queued",
+      error_message: "Envio recuperado após interrupção da função.",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("campaign_id", campaign.id)
+    .eq("status", "sending")
+    .lt("updated_at", staleSendingBefore);
+
+  if (recoveryError) {
+    return fail("delivery_recovery_failed", "Não foi possível recuperar envios interrompidos.", recoveryError.message);
+  }
 
   if (campaign.status !== "sending") {
-    const { error } = await adminDb.from("newsletter_campaigns").update({
+    const patch: Record<string, unknown> = {
       status: "sending",
-      started_at: new Date().toISOString(),
-      total_recipients: subscribers.length,
+      started_at: campaign.started_at || new Date().toISOString(),
       last_error: null,
-    }).eq("id", campaign.id);
+    };
+    if (!existingDeliveriesOnly) patch.total_recipients = subscribers.length;
+
+    const { error } = await adminDb.from("newsletter_campaigns").update(patch).eq("id", campaign.id);
     if (error) return fail("campaign_start_failed", "Não foi possível iniciar a campanha.", error.message);
   }
 
   const { data: batch, error: batchError } = await adminDb
     .from("newsletter_deliveries")
-    .select("id,subscriber_id,email,status,tracking_token")
+    .select("id,subscriber_id,email,status,tracking_token,attempt_count")
     .eq("campaign_id", campaign.id)
     .eq("status", "queued")
     .order("queued_at", { ascending: true })
@@ -518,7 +542,27 @@ async function actionSendCampaign(body: Record<string, unknown>) {
     return ok({ done: true, ...stats, sent_total: stats.sent, fail_total: stats.failed, processed: 0 });
   }
 
-  const subscriberMap = new Map(subscribers.map((s) => [s.id, s]));
+  const subscriberIds = [...new Set(
+    (batch || [])
+      .map((item) => item.subscriber_id)
+      .filter((value): value is string => Boolean(value)),
+  )];
+
+  let batchSubscribers: Subscriber[] = [];
+  if (subscriberIds.length > 0) {
+    const { data: subscriberRows, error: subscriberError } = await adminDb
+      .from("newsletter_subscribers")
+      .select("id,email,name,status,source,tags,unsubscribe_token")
+      .in("id", subscriberIds);
+
+    if (subscriberError) {
+      return fail("subscriber_load_failed", "Não foi possível carregar os dados dos destinatários.", subscriberError.message);
+    }
+
+    batchSubscribers = (subscriberRows || []) as Subscriber[];
+  }
+
+  const subscriberMap = new Map(batchSubscribers.map((s) => [s.id, s]));
   const transport = transportFor(settings);
   let processed = 0;
 
@@ -532,7 +576,12 @@ async function actionSendCampaign(body: Record<string, unknown>) {
         ? `${supabaseUrl}/functions/v1/newsletter-unsubscribe?token=${encodeURIComponent(token)}`
         : "https://kalungacomunicacoes.org/newsletter";
 
-      await adminDb.from("newsletter_deliveries").update({ status: "sending", error_message: null }).eq("id", item.id);
+      await adminDb.from("newsletter_deliveries").update({
+        status: "sending",
+        error_message: null,
+        attempt_count: Number(item.attempt_count || 0) + 1,
+        updated_at: new Date().toISOString(),
+      }).eq("id", item.id);
 
       try {
         const html = renderHtml({
@@ -602,16 +651,66 @@ async function actionRetryFailed(body: Record<string, unknown>) {
   const campaignId = String(body.campaign_id || "").trim();
   if (!campaignId) return fail("missing_campaign_id", "campaign_id é obrigatório.");
 
-  const { error } = await adminDb
+  const { data: failedRows, error: failedError } = await adminDb
     .from("newsletter_deliveries")
-    .update({ status: "queued", error_message: null })
+    .select("id,subscriber_id,email")
     .eq("campaign_id", campaignId)
     .eq("status", "failed");
+
+  if (failedError) {
+    return fail("retry_load_failed", "Não foi possível carregar as entregas com falha.", failedError.message);
+  }
+
+  if (!failedRows || failedRows.length === 0) {
+    return fail("nothing_to_retry", "Não existem entregas com falha para reenviar.");
+  }
+
+  const subscriberIds = [...new Set(
+    failedRows
+      .map((row) => row.subscriber_id)
+      .filter((value): value is string => Boolean(value)),
+  )];
+
+  const activeSubscriberIds = new Set<string>();
+  if (subscriberIds.length > 0) {
+    const { data: activeRows, error: activeError } = await adminDb
+      .from("newsletter_subscribers")
+      .select("id")
+      .in("id", subscriberIds)
+      .eq("status", "active");
+
+    if (activeError) {
+      return fail("retry_subscriber_check_failed", "Não foi possível validar os inscritos antes do reenvio.", activeError.message);
+    }
+
+    for (const row of activeRows || []) activeSubscriberIds.add(String(row.id));
+  }
+
+  const retryIds = failedRows
+    .filter((row) => !row.subscriber_id || activeSubscriberIds.has(String(row.subscriber_id)))
+    .map((row) => row.id);
+
+  if (retryIds.length === 0) {
+    return fail(
+      "nothing_retryable",
+      "As entregas com falha pertencem a inscritos que não estão mais ativos.",
+    );
+  }
+
+  const { error } = await adminDb
+    .from("newsletter_deliveries")
+    .update({ status: "queued", error_message: null, updated_at: new Date().toISOString() })
+    .in("id", retryIds);
 
   if (error) return fail("retry_prepare_failed", "Não foi possível preparar as falhas para nova tentativa.", error.message);
 
   await adminDb.from("newsletter_campaigns").update({ status: "sending", last_error: null }).eq("id", campaignId);
-  return actionSendCampaign({ ...body, campaign_id: campaignId });
+
+  return actionSendCampaign({
+    ...body,
+    campaign_id: campaignId,
+    existing_deliveries_only: true,
+  });
 }
 
 Deno.serve(async (req) => {
