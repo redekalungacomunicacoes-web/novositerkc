@@ -299,7 +299,7 @@ async function refreshCampaignStats(campaignId: string) {
 async function actionGetConfig() {
   const s = await getSettings();
   const { smtp_pass: _secret, ...safe } = s;
-  return ok({ ...safe, has_password: Boolean(s.smtp_pass) });
+  return ok({ ...safe, secure: s.smtp_secure, has_password: Boolean(s.smtp_pass) });
 }
 
 async function actionSaveConfig(body: Record<string, unknown>) {
@@ -351,7 +351,11 @@ async function actionValidateSmtp() {
   const transport = transportFor(s);
   try {
     await transport.verify();
+    console.info("[newsletter] smtp_validate_ok", { from_email: s.from_email });
     return ok({ message: "Conexão SMTP validada com sucesso.", from_email: s.from_email });
+  } catch (error) {
+    console.error("[newsletter] smtp_validate_failed", String((error as { message?: string })?.message || error));
+    throw error;
   } finally {
     transport.close();
   }
@@ -385,7 +389,7 @@ async function actionSendTest(body: Record<string, unknown>) {
       html,
       replyTo: settings.reply_to || undefined,
     });
-    return ok({ message: "E-mail de teste enviado.", message_id: info.messageId || null });
+    return ok({ message: "E-mail de teste enviado.", message_id: info.messageId || null, sent: 1, failed: 0 });
   } finally {
     transport.close();
   }
@@ -441,7 +445,7 @@ async function actionSendCampaign(body: Record<string, unknown>) {
 
   if (!batch || batch.length === 0) {
     const stats = await refreshCampaignStats(campaign.id);
-    return ok({ done: true, ...stats, processed: 0 });
+    return ok({ done: true, ...stats, sent_total: stats.sent, fail_total: stats.failed, processed: 0 });
   }
 
   const subscriberMap = new Map(subscribers.map((s) => [s.id, s]));
@@ -509,7 +513,7 @@ async function actionSendCampaign(body: Record<string, unknown>) {
   }
 
   const stats = await refreshCampaignStats(campaign.id);
-  return ok({ done: stats.queued === 0, ...stats, processed });
+  return ok({ done: stats.queued === 0, ...stats, sent_total: stats.sent, fail_total: stats.failed, processed });
 }
 
 async function actionRetryFailed(body: Record<string, unknown>) {
@@ -543,8 +547,19 @@ Deno.serve(async (req) => {
 
   try {
     switch (action) {
-      case "get_config": return await actionGetConfig();
-      case "save_config": return await actionSaveConfig(payload);
+      case "get_config":
+      case "get_settings":
+        return await actionGetConfig();
+      case "save_config":
+      case "save_settings": {
+        const settings = payload.settings && typeof payload.settings === "object"
+          ? payload.settings as Record<string, unknown>
+          : payload;
+        return await actionSaveConfig({
+          ...settings,
+          smtp_secure: settings.smtp_secure ?? settings.secure,
+        });
+      }
       case "validate_smtp": return await actionValidateSmtp();
       case "send_test": return await actionSendTest(payload);
       case "send_campaign": return await actionSendCampaign(payload);

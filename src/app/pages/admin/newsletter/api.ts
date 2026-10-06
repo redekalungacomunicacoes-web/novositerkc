@@ -62,9 +62,22 @@ async function callAdmin<T>(action: string, payload: Record<string, unknown> = {
 export async function invokeNewsletter<T>(fn: LegacyNewsletterFunction, body?: any): Promise<ApiResponse<T>> {
   if (fn === "newsletter-config") {
     if (body) {
-      return callAdmin<T>("save_settings", { settings: body });
+      return callAdmin<T>("save_config", {
+        ...body,
+        smtp_secure: Boolean(body?.smtp_secure ?? body?.secure),
+      });
     }
-    return callAdmin<T>("get_settings");
+
+    const result = await callAdmin<any>("get_config");
+    if (!result.ok || !result.data) return result as ApiResponse<T>;
+
+    return {
+      ok: true,
+      data: {
+        ...result.data,
+        secure: Boolean(result.data.smtp_secure ?? result.data.secure),
+      } as T,
+    };
   }
 
   if (fn === "newsletter-validate-smtp") {
@@ -92,8 +105,8 @@ export async function invokeNewsletter<T>(fn: LegacyNewsletterFunction, body?: a
       if (!result.ok) return result as ApiResponse<T>;
 
       const data = result.data || {};
-      sent = Number(data.sent_total ?? sent + Number(data.sent || 0));
-      failed = Number(data.fail_total ?? failed + Number(data.failed || 0));
+      sent = Number(data.sent_total ?? data.sent ?? sent);
+      failed = Number(data.fail_total ?? data.failed ?? failed);
       status = String(data.status || status);
 
       if (Array.isArray(data.errors)) {
