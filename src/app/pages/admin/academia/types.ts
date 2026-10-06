@@ -48,6 +48,7 @@ export type Lesson = {
   media_path: string | null;
   media_source: "none" | "drive" | "youtube" | "vimeo";
   media_drive_file_id: string | null;
+  thumbnail_drive_file_id: string | null;
   duration_minutes: number;
   position: number;
   required: boolean;
