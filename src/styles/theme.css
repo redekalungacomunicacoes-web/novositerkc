@@ -226,10 +226,13 @@
 }
 
 .login-logo img {
-  height: 55px;
+  display: block;
   width: auto;
+  height: auto;
+  max-width: min(220px, 72%);
+  max-height: 64px;
   object-fit: contain;
-  margin-bottom: 10px;
+  margin: 0 auto 10px;
 }
 
 @media (max-width: 640px) {
