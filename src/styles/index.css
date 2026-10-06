@@ -1,3 +1,44 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+@keyframes rkc-image-placeholder {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.rkc-native-image {
+  background-color: #f1eee8;
+  transition: opacity 280ms ease, filter 320ms ease, transform 320ms ease;
+}
+
+.rkc-native-image--loading {
+  opacity: 0.38;
+  filter: blur(5px) saturate(0.8);
+  transform: scale(1.008);
+  background-image: linear-gradient(110deg, #e8e2d7 20%, #f6f2eb 40%, #e4ddd0 60%);
+  background-size: 220% 100%;
+  animation: rkc-image-placeholder 1.35s ease-in-out infinite;
+}
+
+.rkc-native-image--loaded {
+  opacity: 1;
+  filter: none;
+  transform: none;
+  background-image: none;
+}
+
+.rkc-native-image--failed {
+  opacity: 0.35;
+  filter: grayscale(1);
+  background-image: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rkc-native-image,
+  .rkc-native-image--loading {
+    transition: none;
+    animation: none;
+  }
+}
