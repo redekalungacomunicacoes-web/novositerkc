@@ -140,7 +140,7 @@ export async function uploadAcademyDrive(
     const table =
       kind === "cover" || kind === "banner"
         ? "academy_courses"
-        : kind === "media"
+        : kind === "thumbnail" || kind === "media"
           ? "academy_lessons"
           : "academy_materials";
     const column =
@@ -148,6 +148,8 @@ export async function uploadAcademyDrive(
         ? "cover_drive_file_id"
         : kind === "banner"
           ? "banner_drive_file_id"
+          : kind === "thumbnail"
+          ? "thumbnail_drive_file_id"
           : kind === "media"
             ? "media_drive_file_id"
             : "drive_file_id";
