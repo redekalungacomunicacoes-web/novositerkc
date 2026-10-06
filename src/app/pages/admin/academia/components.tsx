@@ -11,7 +11,7 @@ import {
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { signedAsset, safeLink, message } from "./service";
-import { downloadRkcDriveFile, rkcDriveMediaResponse } from "@/services/driveFiles";
+import { downloadRkcDriveFile, rkcDriveMediaUrl } from "@/services/driveFiles";
 import { videoEmbed } from "./media";
 export { Button };
 export const labels: Record<string, string> = {
@@ -372,23 +372,24 @@ export function Asset({
     let objectUrl: string | null = null;
     if (driveFileId) {
       const wantsStream = ["video", "audio"].includes(type || "");
-      const loader = wantsStream
-        ? rkcDriveMediaResponse(driveFileId).then(async (response) => {
-            const blob = await response.blob();
-            return blob;
+      if (wantsStream) {
+        // Let the browser request byte ranges directly from the authenticated
+        // stream endpoint. This makes the player visible immediately instead
+        // of downloading the complete Drive file into a Blob first.
+        setSrc(rkcDriveMediaUrl(driveFileId));
+      } else {
+        downloadRkcDriveFile(driveFileId)
+          .then((blob) => {
+            if (!active) return;
+            if (!(blob instanceof Blob)) throw new Error("O servidor não retornou um arquivo válido.");
+            objectUrl = URL.createObjectURL(blob);
+            setMime(blob.type);
+            setSrc(objectUrl);
           })
-        : downloadRkcDriveFile(driveFileId);
-      loader
-        .then((blob) => {
-          if (!active) return;
-          if (!(blob instanceof Blob)) throw new Error("O servidor não retornou um arquivo válido.");
-          objectUrl = URL.createObjectURL(blob);
-          setMime(blob.type);
-          setSrc(objectUrl);
-        })
-        .catch((e) => {
-          if (active) setError(message(e));
-        });
+          .catch((e) => {
+            if (active) setError(message(e));
+          });
+      }
     }
     else if (path)
       signedAsset(path)
