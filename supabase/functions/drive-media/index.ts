@@ -47,10 +47,16 @@ Deno.serve(async (req) => {
     const drive = await downloadDriveFile(file.drive_file_id,req.headers.get("Range"));
     const headers = new Headers();
     headers.set("Content-Type", file.mime_type || drive.headers.get("Content-Type") || "application/octet-stream");
-    headers.set("Cache-Control", "public, max-age=300, s-maxage=300, must-revalidate");
+    headers.set(
+      "Cache-Control",
+      file.module === "materias"
+        ? "public, max-age=31536000, s-maxage=31536000, immutable"
+        : "public, max-age=86400, s-maxage=86400",
+    );
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set("Accept-Ranges","bytes");
-    for(const name of ["Content-Length","Content-Range"]) {const value=drive.headers.get(name);if(value) headers.set(name,value);}
+    headers.set("Timing-Allow-Origin", "*");
+    for(const name of ["Content-Length","Content-Range","ETag","Last-Modified"]) {const value=drive.headers.get(name);if(value) headers.set(name,value);}
     if (req.method === "HEAD") return new Response(null, { status: drive.status, headers });
     return new Response(drive.body, { status: drive.status, headers });
   } catch {
