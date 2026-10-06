@@ -345,6 +345,11 @@ export function AdminNewsletter() {
       return;
     }
 
+    const activeCount = subs.filter((subscriber) => subscriber.status === "active").length;
+    if (!confirm(`Enviar “${selectedCampaign.title}” agora para ${activeCount} inscrito(s) ativo(s)?`)) {
+      return;
+    }
+
     setSendingAll(true);
     setSendLog("Iniciando envio para todos inscritos...");
 
