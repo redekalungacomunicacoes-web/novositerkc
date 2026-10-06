@@ -535,8 +535,12 @@ export function AdminNewsletter() {
   }
 
   async function sendTest() {
-    let campaign = selectedCampaign;
-    if (!campaign) campaign = await saveCampaign();
+    if (selectedCampaign?.status === "sent") {
+      setOperationMessage("Campanhas já enviadas são imutáveis. Duplique a campanha para testar alterações.");
+      return;
+    }
+
+    const campaign = await saveCampaign();
     if (!campaign) return;
 
     if (!testEmail.trim() || !testEmail.includes("@")) {
@@ -557,14 +561,13 @@ export function AdminNewsletter() {
   }
 
   async function sendNow() {
-    let campaign = selectedCampaign;
-    if (!campaign) campaign = await saveCampaign();
-    if (!campaign) return;
-
-    if (campaign.status === "sent") {
+    if (selectedCampaign?.status === "sent") {
       setOperationMessage("Esta campanha já foi concluída. Duplique-a para enviar novamente.");
       return;
     }
+
+    const campaign = await saveCampaign();
+    if (!campaign) return;
 
     const verb = campaign.status === "failed" ? "reenviar apenas as falhas" : "enviar esta campanha";
     if (!window.confirm(`Confirmar: ${verb} para a audiência selecionada?`)) return;
@@ -908,6 +911,7 @@ export function AdminNewsletter() {
                     </div>
                   </div>
                   <iframe
+                    sandbox=""
                     title={template.name}
                     srcDoc={template.content_html.replaceAll("{{content}}", "<h2>Exemplo de conteúdo</h2><p>Este é o corpo da campanha.</p>").replaceAll("{{unsubscribe_url}}", "#")}
                     className="h-[320px] w-full bg-white"
@@ -1085,7 +1089,7 @@ export function AdminNewsletter() {
                     <div><h3 className="font-semibold">Prévia</h3><p className="text-xs text-muted-foreground">Visual aproximado do e-mail.</p></div>
                     {selectedCampaign && <StatusBadge status={selectedCampaign.status} />}
                   </div>
-                  <iframe title="Prévia da campanha" srcDoc={previewHtml || "<p style='font-family:Arial;padding:24px;color:#777'>Adicione conteúdo para visualizar.</p>"} className="h-[420px] w-full rounded-xl border bg-white" />
+                  <iframe sandbox="" title="Prévia da campanha" srcDoc={previewHtml || "<p style='font-family:Arial;padding:24px;color:#777'>Adicione conteúdo para visualizar.</p>"} className="h-[420px] w-full rounded-xl border bg-white" />
                 </div>
 
                 <div className="rounded-xl border bg-card p-4">
