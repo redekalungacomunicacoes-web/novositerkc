@@ -98,6 +98,11 @@ export async function uploadRkcDriveFile(input: {
   return data.file as DriveFileRecord;
 }
 
+export function rkcDriveMediaUrl(id: string): string {
+  const base = import.meta.env.VITE_SUPABASE_URL as string;
+  return `${base}/functions/v1/drive-files?action=stream&id=${encodeURIComponent(id)}`;
+}
+
 export async function rkcDriveMediaResponse(id: string, range?: string): Promise<Response> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) throw new Error("Sua sessão expirou. Entre novamente.");
