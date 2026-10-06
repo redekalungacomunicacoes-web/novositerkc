@@ -3,7 +3,7 @@ import { withCenterLease } from "./file-center.ts";
 
 const ROOT = "1Ua8aaikJEsyCSjhlVA-dpUHtuj_B2UcD";
 const SITE = "110lHONxgUcm7uWC8AHkCPs0fqyxP1CN2";
-const categories = ["banner", "territory", "about", "team", "logo", "favicon"];
+const categories = ["banner", "territory", "about", "team", "logo", "favicon", "popup"];
 
 export function validSiteImage(bytes: Uint8Array, mime: string, category: string) {
   if (mime === "image/jpeg") return bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
