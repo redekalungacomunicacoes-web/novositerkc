@@ -13,6 +13,7 @@ import {
   LogOut,
   Landmark,
   ListTodo,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 
@@ -95,6 +96,7 @@ export const adminLinks: SidebarLink[] = [
     icon: Users,
     allow: ["admin_alfa"],
   },
+  { href: "/admin/popups", label: "Pop-ups", icon: Megaphone, allow: ["admin_alfa"] },
   {
     href: "/admin/configuracoes",
     label: "Configurações",
