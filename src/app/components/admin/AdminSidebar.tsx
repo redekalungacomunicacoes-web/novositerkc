@@ -171,11 +171,11 @@ export function AdminSidebar() {
 
   return (
     <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border hidden md:flex flex-col h-screen fixed left-0 top-0 z-40">
-      <div className="p-6 border-b border-sidebar-border flex items-center gap-3">
+      <div className="flex min-h-20 items-center border-b border-sidebar-border px-5 py-4">
         <img
           src="/relatorios/oficina-2026/assets/Logo_Rede_Kalunga-DSCdAc4t.png"
           alt="Rede Kalunga Comunicações"
-          className="h-12 w-auto"
+          className="block h-auto max-h-10 w-auto max-w-[185px] object-contain"
         />
       </div>
 
