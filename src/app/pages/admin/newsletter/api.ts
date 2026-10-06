@@ -1,43 +1,45 @@
 import { supabase } from "@/lib/supabase";
 
-type ApiError = {
+export type NewsletterApiError = {
   code: string;
   message: string;
   details?: string;
 };
 
-type ApiResponse<T> = {
+export type NewsletterApiResponse<T> = {
   ok: boolean;
   data?: T;
-  error?: ApiError;
+  error?: NewsletterApiError;
 };
 
-export async function invokeNewsletter<T>(fn: string, body?: unknown): Promise<ApiResponse<T>> {
-  const { data, error } = await supabase.functions.invoke(fn, {
-    method: body ? "POST" : "GET",
-    ...(body ? { body } : {}),
+export async function newsletterAdmin<T>(
+  action: string,
+  payload: Record<string, unknown> = {},
+): Promise<NewsletterApiResponse<T>> {
+  const { data, error } = await supabase.functions.invoke("newsletter-admin", {
+    body: { action, ...payload },
   });
 
   if (error) {
-    console.error(`Erro ao invocar função ${fn}:`, error);
+    console.error(`Erro ao invocar newsletter-admin/${action}:`, error);
     return {
       ok: false,
       error: {
         code: "edge_invoke_failed",
-        message: "Falha ao chamar Edge Function.",
+        message: "Não foi possível falar com o serviço da Newsletter.",
         details: error.message,
       },
     };
   }
 
-  const payload = (data || {}) as ApiResponse<T>;
-  if (!payload.ok) {
-    console.error(`Erro retornado por ${fn}:`, payload.error);
+  const response = (data || {}) as NewsletterApiResponse<T>;
+  if (!response.ok) {
+    console.error(`Erro retornado por newsletter-admin/${action}:`, response.error);
   }
-  return payload;
+  return response;
 }
 
-export function errorText(error?: ApiError) {
+export function newsletterErrorText(error?: NewsletterApiError) {
   if (!error) return "Erro desconhecido.";
   return error.details ? `${error.message} (${error.details})` : error.message;
 }
