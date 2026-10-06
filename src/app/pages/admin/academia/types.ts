@@ -82,6 +82,7 @@ export type Progress = {
   lesson_id: string;
   started_at: string;
   completed_at: string | null;
+  watched_percent: number;
 };
 export type Activity = {
   id: string;
