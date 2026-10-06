@@ -1,9 +1,73 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, Button, Badge, Meter, Empty, Asset, labels } from "./components";
 import { Textarea } from "@/app/components/ui/textarea";
 import { rpc, safeContextRoute, message } from "./service";
 import type { AcademyData, Activity, Course, Question } from "./types";
+import { videoEmbed } from "./media";
+
+declare global {
+  interface Window {
+    YT?: { Player: new (element: HTMLElement, options: Record<string, unknown>) => { getDuration: () => number; getCurrentTime: () => number; destroy: () => void } };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+function youtubeVideoId(url: string | null | undefined) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.hostname === "youtu.be") return u.pathname.slice(1).split("/")[0] || null;
+    if (u.hostname.endsWith("youtube.com")) {
+      if (u.pathname === "/watch") return u.searchParams.get("v");
+      const match = u.pathname.match(/^\/(?:embed|shorts)\/([^/?]+)/);
+      return match?.[1] || null;
+    }
+  } catch {}
+  return null;
+}
+function YouTubeLessonPlayer({ url, title, initialPercent, onProgress }: { url: string; title: string; initialPercent: number; onProgress: (percent: number) => void }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef(onProgress);
+  useEffect(() => { progressRef.current = onProgress; }, [onProgress]);
+  useEffect(() => {
+    const videoId = youtubeVideoId(url);
+    if (!videoId || !hostRef.current) return;
+    let player: { getDuration: () => number; getCurrentTime: () => number; destroy: () => void } | null = null;
+    let timer: number | undefined;
+    const start = () => {
+      if (!window.YT || !hostRef.current || player) return;
+      player = new window.YT.Player(hostRef.current, {
+        videoId,
+        playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
+        events: {
+          onStateChange: (event: { data: number }) => {
+            if (event.data === 1 && !timer) timer = window.setInterval(() => {
+              if (!player) return;
+              const duration = player.getDuration();
+              if (duration > 0) progressRef.current(Math.min(100, (player.getCurrentTime() / duration) * 100));
+            }, 5000);
+            if ((event.data === 0 || event.data === 2) && timer) {
+              window.clearInterval(timer); timer = undefined;
+              if (player) {
+                const duration = player.getDuration();
+                if (duration > 0) progressRef.current(event.data === 0 ? 100 : Math.min(100, (player.getCurrentTime() / duration) * 100));
+              }
+            }
+          },
+        },
+      });
+    };
+    if (window.YT) start();
+    else {
+      const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+      const previous = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { previous?.(); start(); };
+      if (!existing) { const script = document.createElement("script"); script.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(script); }
+    }
+    return () => { if (timer) window.clearInterval(timer); player?.destroy(); };
+  }, [url]);
+  return <div className="space-y-3"><div className="aspect-video w-full" ref={hostRef} aria-label={title} /><div><Meter value={Math.round(initialPercent)} /></div></div>;
+}
 export function Study({
   data,
   course,
@@ -69,9 +133,22 @@ export function Study({
       active = false;
     };
   }, [lesson?.id, enrollment?.id]);
-  const complete = !!data.progress.find(
+  const lessonProgress = data.progress.find(
     (p) => p.enrollment_id === enrollment?.id && p.lesson_id === lesson?.id,
-  )?.completed_at;
+  );
+  const complete = !!lessonProgress?.completed_at;
+  const [liveWatchedPercent, setLiveWatchedPercent] = useState(0);
+  useEffect(() => setLiveWatchedPercent(Number(lessonProgress?.watched_percent || 0)), [lesson?.id, lessonProgress?.watched_percent]);
+  const recordVideoProgress = async (percent: number) => {
+    if (!lesson || !enrollment) return;
+    const next = Math.max(liveWatchedPercent, Math.round(percent));
+    if (next <= liveWatchedPercent) return;
+    setLiveWatchedPercent(next);
+    try {
+      await rpc("academy_record_lesson_progress", { p_enrollment: enrollment.id, p_lesson: lesson.id, p_percent: next });
+      if (next >= 95) await reload();
+    } catch (e) { setError(message(e)); }
+  };
   const resume =
     lessons.find((l) => l.id === report?.last_lesson_id) || lessons[0];
   const activities = data.activities.filter(
@@ -327,22 +404,22 @@ export function Study({
               <p className="text-muted-foreground">
                 {lesson.description} · {lesson.duration_minutes} min
               </p>
-              {lesson.thumbnail_drive_file_id && (
-                <div className="overflow-hidden rounded-xl border bg-muted">
-                  <Asset driveFileId={lesson.thumbnail_drive_file_id} title={`Thumbnail de ${lesson.title}`} type="image" variant="banner" showOpenLink={false} />
+              <div className="overflow-hidden rounded-xl bg-black shadow-sm">
+                {lesson.media_source === "youtube" && lesson.media_url && youtubeVideoId(lesson.media_url) ? (
+                  <YouTubeLessonPlayer url={lesson.media_url} title={lesson.title} initialPercent={liveWatchedPercent} onProgress={recordVideoProgress} />
+                ) : (
+                  <Asset path={lesson.media_path} driveFileId={lesson.media_drive_file_id} source={lesson.media_source} url={lesson.media_url} title={lesson.title} type={lesson.type} showOpenLink={false} />
+                )}
+              </div>
+              {lesson.media_source === "youtube" && enrollment && (
+                <div className="rounded-xl border bg-muted/20 p-4">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-semibold">{complete ? "Aula concluída" : "Progresso do vídeo"}</span>
+                    <span>{complete ? "100%" : `${Math.round(liveWatchedPercent)}%`}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{complete ? "Conclusão registrada automaticamente." : "Ao assistir pelo menos 95% do vídeo, a aula será concluída automaticamente."}</p>
                 </div>
               )}
-              <div className="overflow-hidden rounded-xl bg-black shadow-sm">
-                <Asset
-                  path={lesson.media_path}
-                  driveFileId={lesson.media_drive_file_id}
-                  source={lesson.media_source}
-                  url={lesson.media_url}
-                  title={lesson.title}
-                  type={lesson.type}
-                  showOpenLink={false}
-                />
-              </div>
               {lesson.content && (
                 <section className="space-y-3 border-t pt-5" aria-label="Conteúdo da aula">
                   <h2 className="text-xl font-semibold">Conteúdo da aula</h2>
@@ -362,7 +439,7 @@ export function Study({
               )}
               {enrollment && (
                 <div className="flex flex-wrap gap-3">
-                  <Button
+                  {lesson.media_source !== "youtube" && <Button
                     disabled={busy || complete}
                     onClick={() =>
                       run(() =>
@@ -375,7 +452,7 @@ export function Study({
                     }
                   >
                     {complete ? "Aula concluída" : "Marcar aula como concluída"}
-                  </Button>
+                  </Button>}
                   {previousLesson && (
                     <Button variant="outline" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${previousLesson.id}`)}>
                       ← Aula anterior
