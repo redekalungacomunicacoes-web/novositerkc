@@ -1,7 +1,7 @@
 import { CourseBannerUpload } from "./CourseBannerUpload";
 import { useEffect, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
-import { CopyPlus, GraduationCap, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, ChevronDown, CopyPlus, FileVideo, GraduationCap, Layers3, Pencil, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAcademy } from "./useAcademy";
 import { Study } from "./Study";
@@ -1021,125 +1021,165 @@ export function Academia() {
                       </Link>
                       </div>
                     </section>
-                    <Card>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Conteúdo do curso</p>
-                          <h2 className="text-xl font-semibold">Módulos e aulas</h2>
-                        </div>
-                        <Badge>{data.modules.filter((m) => m.course_id === managedCourse.id).length} módulos</Badge>
-                      </div>
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          open("modules", "Novo módulo", undefined, {
-                            courseId: managedCourse.id,
-                          })
-                        }
-                      >
-                        Novo módulo
-                      </Button>
-                      {data.modules
-                        .filter((m) => m.course_id === managedCourse.id)
-                        .sort((a, b) => a.position - b.position)
-                        .map((m) => (
-                          <div
-                            key={m.id}
-                            className="rounded-xl border bg-background p-4 space-y-3 shadow-sm"
-                          >
-                            <h3 className="font-semibold">
-                              {m.position}. {m.title}
-                            </h3>
-                            {actions("modules", m, "Editar módulo", {
-                              courseId: managedCourse.id,
-                            })}
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                open(
-                                  "lessons",
-                                  "Nova aula",
-                                  { ...defaults("lessons"), module_id: m.id },
-                                  { courseId: managedCourse.id },
-                                )
-                              }
-                            >
-                              Nova aula
-                            </Button>
-                            {data.lessons
-                              .filter((l) => l.module_id === m.id)
-                              .sort((a, b) => a.position - b.position)
-                              .map((l) => (
-                                <div
-                                  key={l.id}
-                                  className="rounded-lg border bg-muted/20 p-3 space-y-2"
-                                >
-                                  <p>
-                                    {l.position}. {l.title} · {labels[l.status]}{" "}
-                                    · {labels[l.type]}
-                                  </p>
-                                  {actions("lessons", l, "Editar aula", {
-                                    courseId: managedCourse.id,
-                                  })}
-                                  <DriveUploads
-                                    key={`thumbnail-${l.id}`}
-                                    courseId={managedCourse.id}
-                                    lessonId={l.id}
-                                    kind="thumbnail"
-                                    existing={data.driveFiles.filter(
-                                      (f) => f.id === l.thumbnail_drive_file_id,
-                                    )}
-                                    onSaved={reload}
-                                  />
-                                  <DriveUploads
-                                    key={`media-${l.id}`}
-                                    courseId={managedCourse.id}
-                                    lessonId={l.id}
-                                    kind="media"
-                                    existing={data.driveFiles.filter(
-                                      (f) => f.id === l.media_drive_file_id,
-                                    )}
-                                    onSaved={reload}
-                                  />
-                                  <DriveUploads
-                                    key={`materials-${l.id}`}
-                                    courseId={managedCourse.id}
-                                    lessonId={l.id}
-                                    kind="material"
-                                    onSaved={reload}
-                                  />
-                                  {data.materials
-                                    .filter(
-                                      (material) =>
-                                        material.lesson_id === l.id &&
-                                        material.drive_file_id,
-                                    )
-                                    .map((material) => (
-                                      <div
-                                        key={material.id}
-                                        className="space-y-2"
-                                      >
-                                        <p className="text-sm font-medium">
-                                          Substituir material: {material.title}
-                                        </p>
-                                        <DriveUploads
-                                          courseId={managedCourse.id}
-                                          lessonId={l.id}
-                                          kind="material"
-                                          replaceMaterialId={material.id}
-                                          existing={data.driveFiles.filter(
-                                            (f) =>
-                                              f.id === material.drive_file_id,
-                                          )}
-                                          onSaved={reload}
-                                        />
-                                      </div>
-                                    ))}
-                                </div>
-                              ))}
+                    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                      <div className="flex flex-col gap-4 border-b bg-gradient-to-r from-primary/[0.07] via-background to-background p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                            <Layers3 className="h-5 w-5" aria-hidden="true" />
+                          </span>
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Conteúdo do curso</p>
+                            <h2 className="mt-1 text-2xl font-bold tracking-tight">Módulos e aulas</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">Organize a formação em módulos claros e gerencie cada aula sem poluir a visão geral.</p>
                           </div>
-                        ))}
-                    </Card>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge>{data.modules.filter((m) => m.course_id === managedCourse.id).length} módulos</Badge>
+                          <Badge>{data.lessons.filter((l) => l.course_id === managedCourse.id).length} aulas</Badge>
+                          <Button
+                            onClick={() => open("modules", "Novo módulo", undefined, { courseId: managedCourse.id })}
+                          >
+                            <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Novo módulo
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-4 bg-muted/10 p-4 sm:p-5">
+                        {data.modules
+                          .filter((m) => m.course_id === managedCourse.id)
+                          .sort((a, b) => a.position - b.position)
+                          .map((m) => {
+                            const moduleLessons = data.lessons
+                              .filter((l) => l.module_id === m.id)
+                              .sort((a, b) => a.position - b.position);
+                            return (
+                              <div key={m.id} className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+                                <div className="flex flex-col gap-3 border-b bg-primary/[0.055] p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                                  <div className="flex min-w-0 items-start gap-3">
+                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground">
+                                      {m.position}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-primary">Módulo {m.position}</p>
+                                        <Badge>{moduleLessons.length} {moduleLessons.length === 1 ? "aula" : "aulas"}</Badge>
+                                      </div>
+                                      <h3 className="mt-1 text-lg font-bold leading-tight">{m.title}</h3>
+                                      {m.description && <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{m.description}</p>}
+                                    </div>
+                                  </div>
+                                  <div className="flex shrink-0 flex-wrap gap-2">
+                                    <Button size="sm" variant="outline" onClick={() => open("modules", "Editar módulo", m, { courseId: managedCourse.id })}>
+                                      <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Editar
+                                    </Button>
+                                    <Button size="sm" variant="outline" disabled={busy} onClick={() => remove("modules", m.id)}>
+                                      <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Excluir
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => open("lessons", "Nova aula", { ...defaults("lessons"), module_id: m.id }, { courseId: managedCourse.id })}
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Nova aula
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="space-y-3 p-3 sm:p-4">
+                                  {moduleLessons.length ? moduleLessons.map((l) => (
+                                    <div key={l.id} className="rounded-xl border bg-card p-3 transition-shadow hover:shadow-sm sm:p-4">
+                                      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                                          <span className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-lg bg-muted px-2 text-xs font-bold text-muted-foreground">
+                                            {m.position}.{l.position}
+                                          </span>
+                                          <div className="h-[68px] w-[120px] shrink-0 overflow-hidden rounded-lg border bg-muted">
+                                            {l.thumbnail_drive_file_id ? (
+                                              <Asset driveFileId={l.thumbnail_drive_file_id} title={l.title} type="image" variant="card" showOpenLink={false} />
+                                            ) : (
+                                              <span className="flex h-full w-full items-center justify-center text-muted-foreground"><FileVideo className="h-6 w-6" aria-hidden="true" /></span>
+                                            )}
+                                          </div>
+                                          <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <p className="font-semibold leading-snug">{l.title}</p>
+                                              <Badge tone={l.status === "published" ? "published" : "draft"}>{labels[l.status]}</Badge>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">{labels[l.type]}{l.duration_minutes ? ` · ${l.duration_minutes} min` : ""}</p>
+                                            {l.description && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{l.description}</p>}
+                                          </div>
+                                        </div>
+                                        <div className="flex shrink-0 flex-wrap gap-2 xl:justify-end">
+                                          <Button size="sm" variant="outline" onClick={() => open("lessons", "Editar aula", l, { courseId: managedCourse.id })}>
+                                            <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Editar
+                                          </Button>
+                                          <Button size="sm" variant="outline" disabled={busy} onClick={() => remove("lessons", l.id)}>
+                                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Excluir
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      <details className="mt-3 rounded-lg border bg-muted/20">
+                                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium hover:bg-muted/40">
+                                          <span className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-primary" aria-hidden="true" /> Arquivos e mídia da aula</span>
+                                          <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                                        </summary>
+                                        <div className="grid gap-4 border-t p-3 lg:grid-cols-2">
+                                          <DriveUploads
+                                            key={`thumbnail-${l.id}`}
+                                            courseId={managedCourse.id}
+                                            lessonId={l.id}
+                                            kind="thumbnail"
+                                            existing={data.driveFiles.filter((f) => f.id === l.thumbnail_drive_file_id)}
+                                            onSaved={reload}
+                                          />
+                                          <DriveUploads
+                                            key={`media-${l.id}`}
+                                            courseId={managedCourse.id}
+                                            lessonId={l.id}
+                                            kind="media"
+                                            existing={data.driveFiles.filter((f) => f.id === l.media_drive_file_id)}
+                                            onSaved={reload}
+                                          />
+                                          <div className="lg:col-span-2">
+                                            <DriveUploads
+                                              key={`materials-${l.id}`}
+                                              courseId={managedCourse.id}
+                                              lessonId={l.id}
+                                              kind="material"
+                                              onSaved={reload}
+                                            />
+                                            {data.materials
+                                              .filter((material) => material.lesson_id === l.id && material.drive_file_id)
+                                              .map((material) => (
+                                                <div key={material.id} className="mt-3 rounded-lg border bg-background p-3">
+                                                  <p className="mb-2 text-sm font-medium">Substituir material: {material.title}</p>
+                                                  <DriveUploads
+                                                    courseId={managedCourse.id}
+                                                    lessonId={l.id}
+                                                    kind="material"
+                                                    replaceMaterialId={material.id}
+                                                    existing={data.driveFiles.filter((f) => f.id === material.drive_file_id)}
+                                                    onSaved={reload}
+                                                  />
+                                                </div>
+                                              ))}
+                                          </div>
+                                        </div>
+                                      </details>
+                                    </div>
+                                  )) : (
+                                    <div className="rounded-xl border border-dashed bg-muted/10 px-4 py-7 text-center">
+                                      <BookOpen className="mx-auto h-7 w-7 text-muted-foreground" aria-hidden="true" />
+                                      <p className="mt-2 font-medium">Este módulo ainda não possui aulas.</p>
+                                      <p className="mt-1 text-sm text-muted-foreground">Crie a primeira aula para começar a organizar o conteúdo.</p>
+                                      <Button className="mt-3" size="sm" onClick={() => open("lessons", "Nova aula", { ...defaults("lessons"), module_id: m.id }, { courseId: managedCourse.id })}>
+                                        <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Nova aula
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </section>
                     <Card>
                       <h2 className="font-semibold">
                         Materiais complementares do curso
