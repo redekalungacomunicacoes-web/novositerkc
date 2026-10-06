@@ -4,16 +4,20 @@ verify_jwt = true
 import_map = "./functions/admin-upsert-user/deno.json"
 entrypoint = "./functions/admin-upsert-user/index.ts"
 
+# Newsletter V2
+# Public subscription/unsubscription endpoints are intentionally open and validate their own payloads.
+[functions.newsletter-subscribe]
+verify_jwt = false
+
+[functions.newsletter-unsubscribe]
+verify_jwt = false
+
+# All sensitive settings and campaign delivery operations go through one authenticated endpoint.
+[functions.newsletter-admin]
+verify_jwt = true
+
+# Compatibility endpoint for older clients. New admin code uses newsletter-admin directly.
 [functions.newsletter-send-campaign]
-verify_jwt = true
-
-[functions.newsletter-send-test]
-verify_jwt = true
-
-[functions.newsletter-validate-smtp]
-verify_jwt = true
-
-[functions.newsletter-config]
 verify_jwt = true
 
 [functions.drive-files]
