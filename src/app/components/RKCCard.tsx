@@ -33,9 +33,21 @@ interface RKCCardImageProps extends HTMLAttributes<HTMLDivElement> {
   src: string;
   alt: string;
   aspectRatio?: 'video' | 'square' | 'portrait';
+  loading?: 'eager' | 'lazy';
+  fetchPriority?: 'high' | 'low' | 'auto';
+  sizes?: string;
 }
 
-export function RKCCardImage({ src, alt, aspectRatio = 'video', className, ...props }: RKCCardImageProps) {
+export function RKCCardImage({
+  src,
+  alt,
+  aspectRatio = 'video',
+  loading = 'lazy',
+  fetchPriority = 'low',
+  sizes = '(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw',
+  className,
+  ...props
+}: RKCCardImageProps) {
   const aspectStyles = {
     video: 'aspect-video',
     square: 'aspect-square',
@@ -45,8 +57,12 @@ export function RKCCardImage({ src, alt, aspectRatio = 'video', className, ...pr
   return (
     <div className={cn('relative overflow-hidden', aspectStyles[aspectRatio], className)} {...props}>
       <img 
-        src={src} 
-        alt={alt} 
+        src={src}
+        alt={alt}
+        loading={loading}
+        decoding="async"
+        fetchPriority={fetchPriority}
+        sizes={sizes}
         className="w-full h-full object-cover"
       />
     </div>
