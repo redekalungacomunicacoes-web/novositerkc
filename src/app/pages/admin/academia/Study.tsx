@@ -222,9 +222,9 @@ export function Study({
             <div className="relative flex min-h-[300px] flex-col justify-end p-5 text-white sm:min-h-[340px] sm:p-8 lg:min-h-[380px] lg:p-10">
               <div className="max-w-3xl space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge>Formação interna</Badge>
-                  <Badge>{labels[course.level]}</Badge>
-                  {course.required && <Badge>Curso obrigatório</Badge>}
+                  <span className="rounded-full border border-emerald-300/35 bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-100 backdrop-blur-sm">Formação interna</span>
+                  <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">{labels[course.level]}</span>
+                  {course.required && <span className="rounded-full border border-amber-200/35 bg-amber-300/15 px-3 py-1 text-xs font-semibold text-amber-100 backdrop-blur-sm">Curso obrigatório</span>}
                 </div>
                 <div>
                   <h1 className="text-3xl font-bold leading-tight break-words drop-shadow-sm sm:text-4xl lg:text-5xl">{course.title}</h1>
