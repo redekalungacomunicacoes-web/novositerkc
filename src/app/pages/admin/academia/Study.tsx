@@ -418,74 +418,66 @@ export function Study({
           {lessonId && !lesson ? (
             <Empty>Aula indisponível.</Empty>
           ) : lesson ? (
-            <Card>
-              <p className="text-sm text-muted-foreground">{modules.find((m) => m.id === lesson.module_id)?.title} · {course.title}</p>
-              <h1 className="text-3xl font-bold">{lesson.title}</h1>
-              <p className="text-muted-foreground">
-                {lesson.description} · {lesson.duration_minutes} min
-              </p>
-              <div className="overflow-hidden rounded-xl bg-black shadow-sm">
+            <div className="mx-auto w-full max-w-5xl space-y-4">
+              <Card>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">{modules.find((m) => m.id === lesson.module_id)?.title}</p>
+                    <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">{lesson.title}</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">{lesson.description} · {lesson.duration_minutes} min</p>
+                  </div>
+                  {enrollment && (
+                    <div className="min-w-[150px] rounded-xl border bg-muted/20 p-3">
+                      <div className="flex items-center justify-between gap-3 text-xs font-semibold">
+                        <span>{complete ? "Concluída" : "Seu progresso"}</span><span>{complete ? 100 : Math.round(liveWatchedPercent)}%</span>
+                      </div>
+                      <div className="mt-2"><Meter value={complete ? 100 : liveWatchedPercent} /></div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              <div className="overflow-hidden rounded-2xl border bg-black shadow-sm">
                 {lesson.media_source === "youtube" && lesson.media_url && youtubeVideoId(lesson.media_url) ? (
                   <YouTubeLessonPlayer url={lesson.media_url} title={lesson.title} initialPercent={liveWatchedPercent} onProgress={recordVideoProgress} />
                 ) : (
                   <Asset path={lesson.media_path} driveFileId={lesson.media_drive_file_id} source={lesson.media_source} url={lesson.media_url} title={lesson.title} type={lesson.type} showOpenLink={false} />
                 )}
               </div>
-              {lesson.media_source === "youtube" && enrollment && (
-                <div className="rounded-xl border bg-muted/20 p-4">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-semibold">{complete ? "Aula concluída" : "Progresso do vídeo"}</span>
-                    <span>{complete ? "100%" : `${Math.round(liveWatchedPercent)}%`}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{complete ? "Conclusão registrada automaticamente." : "Ao assistir pelo menos 95% do vídeo, a aula será concluída automaticamente."}</p>
+
+              <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur">
+                <div className="flex gap-2">
+                  {previousLesson && <Button variant="outline" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${previousLesson.id}`)}>← Aula anterior</Button>}
+                  <Button variant="outline" onClick={() => navigate(`/admin/academia/cursos/${course.id}`)}>Todas as aulas</Button>
                 </div>
-              )}
+                <div className="flex gap-2">
+                  {lesson.media_source !== "youtube" && enrollment && (
+                    <Button disabled={busy || complete} onClick={() => run(() => rpc("academy_record_lesson", { p_enrollment: enrollment.id, p_lesson: lesson.id, p_complete: true }))}>
+                      {complete ? "Aula concluída" : "Marcar como concluída"}
+                    </Button>
+                  )}
+                  {nextLesson && <Button onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${nextLesson.id}`)}>Próxima aula →</Button>}
+                </div>
+              </div>
+
               {lesson.content && (
-                <section className="space-y-3 border-t pt-5" aria-label="Conteúdo da aula">
-                  <h2 className="text-xl font-semibold">Conteúdo da aula</h2>
-                  <div className="whitespace-pre-wrap break-words leading-relaxed">
-                    {lesson.content}
-                  </div>
-                </section>
+                <details className="group overflow-hidden rounded-2xl border bg-card">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-semibold sm:p-5">
+                    <span>Texto e roteiro da aula</span><span className="text-muted-foreground group-open:rotate-180">⌄</span>
+                  </summary>
+                  <section className="border-t p-4 sm:p-5" aria-label="Conteúdo da aula">
+                    <div className="whitespace-pre-wrap break-words leading-relaxed">{lesson.content}</div>
+                  </section>
+                </details>
               )}
               {route && (
-                <Link
-                  className="inline-flex border rounded-md px-4 py-2 text-primary"
-                  to={route}
-                >
-                  Praticar agora:{" "}
-                  {lesson.context_feature || "ir para esta área do sistema"}
-                </Link>
-              )}
-              {enrollment && (
-                <div className="flex flex-wrap gap-3">
-                  {lesson.media_source !== "youtube" && <Button
-                    disabled={busy || complete}
-                    onClick={() =>
-                      run(() =>
-                        rpc("academy_record_lesson", {
-                          p_enrollment: enrollment.id,
-                          p_lesson: lesson.id,
-                          p_complete: true,
-                        }),
-                      )
-                    }
-                  >
-                    {complete ? "Aula concluída" : "Marcar aula como concluída"}
-                  </Button>}
-                  {previousLesson && (
-                    <Button variant="outline" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${previousLesson.id}`)}>
-                      ← Aula anterior
-                    </Button>
-                  )}
-                  {nextLesson && (
-                    <Button variant="outline" onClick={() => navigate(`/admin/academia/cursos/${course.id}/aulas/${nextLesson.id}`)}>
-                      Próxima aula →
-                    </Button>
-                  )}
+                <div className="rounded-2xl border bg-primary/5 p-4">
+                  <Link className="inline-flex rounded-md border px-4 py-2 font-medium text-primary" to={route}>
+                    Praticar agora: {lesson.context_feature || "ir para esta área do sistema"}
+                  </Link>
                 </div>
               )}
-            </Card>
+            </div>
           ) : courseTab === "overview" ? (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
               <Card>
@@ -538,8 +530,11 @@ export function Study({
               </div>
             </div>
           ) : null}
-          {(lesson || courseTab === "materials") && <Card>
-            <h2 className="font-semibold">Materiais complementares</h2>
+          {(lesson || courseTab === "materials") && (lesson ? <details className="group overflow-hidden rounded-2xl border bg-card">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-semibold sm:p-5">
+              <span>Materiais complementares</span><span className="text-muted-foreground group-open:rotate-180">⌄</span>
+            </summary>
+            <div className="space-y-3 border-t p-4 sm:p-5">
             {data.materials
               .filter(
                 (m) =>
@@ -564,7 +559,14 @@ export function Study({
                 Nenhum material disponível.
               </p>
             )}
-          </Card>}
+            </div>
+          </details> : <Card>
+            <h2 className="font-semibold">Materiais complementares</h2>
+            {data.materials.filter((m) => m.course_id === course.id && !m.lesson_id).map((m) => (
+              <Asset key={m.id} path={m.storage_path} driveFileId={m.drive_file_id} url={m.url} title={m.title} />
+            ))}
+            {!data.materials.some((m) => m.course_id === course.id && !m.lesson_id) && <p className="text-muted-foreground">Nenhum material disponível.</p>}
+          </Card>)}
           {(lesson || courseTab === "activities") && activities.map((a) => (
             <Card key={a.id}>
               <Badge>
