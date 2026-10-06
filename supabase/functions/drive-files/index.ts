@@ -19,6 +19,7 @@ import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
 import { ensureTeamMemberFolder, importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair, uploadTeamPortfolio, removeTeamAvatar, removeTeamPortfolio, requireTeamEditor, confirmTeamAvatar } from "../_shared/team-drive.ts";
 import { uploadProjectDrive, getProjectPreview } from "../_shared/project-drive.ts";
+import { uploadSiteDrive } from "../_shared/site-drive.ts";
 import { cleanupUnreferencedMateriaFiles, uploadMateriaDrive } from "../_shared/materia-drive.ts";
 
 // Root ID provided and named by RKC in this task; the academy child ID is discovered at runtime.
@@ -104,6 +105,10 @@ Deno.serve(async (req) => {
     const contentType = req.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
+      if (form.get("module") === "site") {
+        if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
+        return json({ok:true,file:await uploadSiteDrive(form,requireAcademyRoot(rootFolderId),userClient,admin,auth.user.id)});
+      }
       if (form.get("module") === "projetos") {
         if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
         return json({ok:true,file:await uploadProjectDrive(form,requireAcademyRoot(rootFolderId),userClient,admin,auth.user.id)});

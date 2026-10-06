@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Save, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { uploadPublicImage } from "@/lib/siteUpload";
+import { uploadSiteImage } from "@/lib/siteDrive";
 
 type Valor = {
   id: string;
@@ -10,7 +10,6 @@ type Valor = {
   ordem: number | null;
 };
 
-const BUCKET = "site";
 
 // ✅ seu id é INTEGER no banco
 const QUEM_SOMOS_ID = 1;
@@ -86,11 +85,7 @@ export function AdminQuemSomos() {
     try {
       setUploading(true);
 
-      const url = await uploadPublicImage({
-        bucket: BUCKET,
-        path: "quem-somos/imagem-principal/imagem",
-        file,
-      });
+      const url = await uploadSiteImage(file, "about");
 
       setImagemUrl(withCacheBuster(url));
     } catch (e: any) {
@@ -225,7 +220,7 @@ export function AdminQuemSomos() {
           <input
             ref={imageFileRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             className="hidden"
             onChange={(e) => handleUpload(e.target.files?.[0])}
           />

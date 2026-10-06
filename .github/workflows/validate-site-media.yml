@@ -1,0 +1,31 @@
+name: Validate institutional media
+on:
+  pull_request:
+    paths:
+      - 'src/lib/siteDrive.ts'
+      - 'src/lib/footerSettings.ts'
+      - 'src/app/pages/admin/AdminConfiguracoes.tsx'
+      - 'src/app/pages/admin/AdminQuemSomos.tsx'
+      - 'supabase/functions/**'
+      - 'tests/site-drive.test.mjs'
+      - 'tsconfig.site-media.json'
+      - '.github/workflows/validate-site-media.yml'
+permissions:
+  contents: read
+jobs:
+  site-media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/site-drive.test.mjs
+      - run: npx tsc -p tsconfig.site-media.json
+      - run: npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --config supabase/functions/drive-files/deno.json supabase/functions/drive-files/index.ts

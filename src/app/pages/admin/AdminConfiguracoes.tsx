@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Save, Image as ImageIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getSiteSettings, updateSiteSettings } from "@/lib/siteSettings";
-import { uploadPublicImage } from "@/lib/siteUpload";
+import { uploadSiteImage } from "@/lib/siteDrive";
 import {
   FOOTER_DESCRIPTION_MAX_CHARS,
   buildPublicStorageUrl,
@@ -49,7 +49,6 @@ type AdminSettingsForm = {
 
 type UploadKind = "banner" | "territory" | "footer-logo" | "favicon";
 
-const BUCKET = "site";
 
 function withCacheBuster(url: string) {
   const sep = url.includes("?") ? "&" : "?";
@@ -196,8 +195,8 @@ export function AdminConfiguracoes() {
 
       const url =
         kind === "banner"
-          ? await uploadPublicImage({ bucket: BUCKET, path: "home/banner/banner", file })
-          : await uploadPublicImage({ bucket: BUCKET, path: "home/territory/territory", file });
+          ? await uploadSiteImage(file, "banner")
+          : await uploadSiteImage(file, "territory");
 
       const busted = withCacheBuster(url);
 
@@ -282,7 +281,7 @@ export function AdminConfiguracoes() {
           <input
             ref={bannerFileRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             className="hidden"
             onChange={(e) => handleUpload("banner", e.target.files?.[0])}
           />
@@ -437,7 +436,7 @@ export function AdminConfiguracoes() {
           <input
             ref={territoryFileRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             className="hidden"
             onChange={(e) => handleUpload("territory", e.target.files?.[0])}
           />
@@ -547,7 +546,7 @@ export function AdminConfiguracoes() {
             <input
               ref={faviconFileRef}
               type="file"
-              accept=".png,.ico,.svg,image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml"
+              accept=".png,.ico,image/png,image/x-icon,image/vnd.microsoft.icon"
               className="hidden"
               onChange={(e) => handleUpload("favicon", e.target.files?.[0])}
             />
@@ -589,14 +588,14 @@ export function AdminConfiguracoes() {
                 </button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">Formatos aceitos: PNG, ICO e SVG.</p>
+            <p className="text-xs text-muted-foreground">Formatos aceitos: PNG e ICO.</p>
           </section>
           <section className="space-y-3">
             <h4 className="font-medium">Logo do rodapé</h4>
             <input
               ref={footerLogoFileRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               className="hidden"
               onChange={(e) => handleUpload("footer-logo", e.target.files?.[0])}
             />
