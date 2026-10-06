@@ -41,6 +41,7 @@ const AdminTarefasConfiguracoes = lazy(() => import("@/app/pages/admin/AdminTare
 const AdminTarefasKanban = lazy(() => import("@/app/pages/admin/AdminTarefasKanban").then(m => ({ default: m.AdminTarefasKanban })));
 const AdminTarefasRelatorios = lazy(() => import("@/app/pages/admin/AdminTarefasRelatorios").then(m => ({ default: m.AdminTarefasRelatorios })));
 const AdminUsuarios = lazy(() => import("@/app/pages/admin/AdminUsuarios").then(m => ({ default: m.AdminUsuarios })));
+const AdminPopups = lazy(() => import("@/app/pages/admin/AdminPopups").then(m => ({ default: m.AdminPopups })));
 
 type RoleName = "admin_alfa" | "admin" | "editor" | "autor" | "financeiro";
 
@@ -119,6 +120,7 @@ export const router = createBrowserRouter([
           },
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), element: <AdminUsuarios /> },
           { path: "configuracoes", loader: requireRoles(["admin_alfa"]), element: <AdminConfiguracoes /> },
+          { path: "popups", loader: requireRoles(["admin_alfa"]), element: <AdminPopups /> },
         ],
       },
     ],
