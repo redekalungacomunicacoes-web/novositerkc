@@ -1,7 +1,7 @@
 import { CourseBannerUpload } from "./CourseBannerUpload";
 import { useEffect, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
-import { BookOpen, ChevronDown, CopyPlus, FileVideo, GraduationCap, Layers3, Pencil, Plus, Trash2 } from "lucide-react";
+import { BookOpen, ChevronDown, Clock3, CopyPlus, FileVideo, GraduationCap, Layers3, Pencil, PlayCircle, Plus, Trash2, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAcademy } from "./useAcademy";
 import { Study } from "./Study";
@@ -898,17 +898,52 @@ export function Academia() {
                           </div>
                         </div>
                       </div>
-                      <div className="grid min-w-0 grid-cols-1 gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-                        <div className="space-y-3">
-                          <p className="text-lg leading-relaxed text-muted-foreground">{managedCourse.summary || "Adicione um resumo para apresentar o curso ao aluno."}</p>
-                          <div className="flex flex-wrap gap-2">
-                            <Badge tone={managedCourse.status === "published" ? "published" : "draft"}>{labels[managedCourse.status]}</Badge>
-                            <Badge>{labels[managedCourse.level]}</Badge>
-                            {managedCourse.required && <Badge>Obrigatório</Badge>}
-                            <Badge>{managedCourse.hours || 0}h</Badge>
+                      <div className="grid min-w-0 grid-cols-1 gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)]">
+                        <div className="flex min-h-full flex-col gap-5 rounded-xl border bg-gradient-to-br from-primary/[0.055] via-background to-background p-5">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Visão geral</p>
+                            <p className="mt-2 max-w-3xl text-base leading-relaxed text-foreground/80">{managedCourse.summary || "Adicione um resumo para apresentar o curso ao aluno."}</p>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <Badge tone={managedCourse.status === "published" ? "published" : "draft"}>{labels[managedCourse.status]}</Badge>
+                              <Badge>{labels[managedCourse.level]}</Badge>
+                              {managedCourse.required && <Badge>Obrigatório</Badge>}
+                            </div>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-xl border bg-background p-4">
+                              <Clock3 className="h-5 w-5 text-primary" aria-hidden="true" />
+                              <p className="mt-3 text-2xl font-bold">{managedCourse.hours || 0}h</p>
+                              <p className="text-xs text-muted-foreground">Carga horária</p>
+                            </div>
+                            <div className="rounded-xl border bg-background p-4">
+                              <Layers3 className="h-5 w-5 text-primary" aria-hidden="true" />
+                              <p className="mt-3 text-2xl font-bold">{data.modules.filter((m) => m.course_id === managedCourse.id).length}</p>
+                              <p className="text-xs text-muted-foreground">Módulos</p>
+                            </div>
+                            <div className="rounded-xl border bg-background p-4">
+                              <PlayCircle className="h-5 w-5 text-primary" aria-hidden="true" />
+                              <p className="mt-3 text-2xl font-bold">{data.lessons.filter((l) => l.course_id === managedCourse.id).length}</p>
+                              <p className="text-xs text-muted-foreground">Aulas</p>
+                            </div>
+                            <div className="rounded-xl border bg-background p-4">
+                              <Users className="h-5 w-5 text-primary" aria-hidden="true" />
+                              <p className="mt-3 text-2xl font-bold">{data.enrollments.filter((e) => e.course_id === managedCourse.id).length}</p>
+                              <p className="text-xs text-muted-foreground">Matrículas</p>
+                            </div>
+                          </div>
+                          <div className="mt-auto flex flex-wrap gap-2 border-t pt-4">
+                            <Button size="sm" onClick={() => open("modules", "Novo módulo", undefined, { courseId: managedCourse.id })}>
+                              <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Novo módulo
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => open("courses", "Editar curso", managedCourse)}>
+                              <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Editar informações
+                            </Button>
+                            <Button size="sm" variant="outline" asChild>
+                              <Link to={`/admin/academia/cursos/${managedCourse.id}`}>Visualizar área de estudo</Link>
+                            </Button>
                           </div>
                         </div>
-                        <div className="rounded-xl border bg-muted/30 p-4">
+                        <div className="h-fit rounded-xl border bg-muted/30 p-4">
                           <p className="text-sm font-semibold">Imagem de apresentação</p>
                           <p className="mt-1 text-xs text-muted-foreground">Capa e banner são independentes. A capa aparece nos cards e o banner apresenta a página do curso.</p>
                           <div className="mt-3">
