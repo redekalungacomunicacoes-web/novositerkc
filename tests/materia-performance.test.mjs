@@ -11,11 +11,38 @@ test('article detail prioritizes hero and lazily loads secondary images', async 
   assert.match(source, /fetchpriority="low"/);
 });
 
-test('card images default to lazy async loading', async () => {
-  const source = await read('src/app/components/RKCCard.tsx');
-  assert.match(source, /loading = 'lazy'/);
-  assert.match(source, /fetchPriority = 'low'/);
-  assert.match(source, /decoding="async"/);
+test('card images use progressive loading before entering the viewport', async () => {
+  const card = await read('src/app/components/RKCCard.tsx');
+  const progressive = await read('src/app/components/RKCProgressiveImage.tsx');
+  assert.match(card, /RKCProgressiveImage/);
+  assert.match(card, /preloadMargin = '1200px 0px'/);
+  assert.match(progressive, /IntersectionObserver/);
+  assert.match(progressive, /decoding="async"/);
+  assert.match(progressive, /animate-pulse/);
+  assert.match(progressive, /transition-opacity/);
+});
+
+test('first article row is warmed without eagerly loading the whole archive', async () => {
+  const source = await read('src/app/pages/Materias.tsx');
+  assert.match(source, /const firstRow = index < 3/);
+  assert.match(source, /loading=\{firstRow \? 'eager' : 'lazy'\}/);
+  assert.match(source, /preloadMargin="1400px 0px"/);
+});
+
+test('native article images receive progressive enhancement and early preload', async () => {
+  const loader = await read('src/lib/imageLoading.ts');
+  const css = await read('src/styles/index.css');
+  assert.match(loader, /rootMargin: preloadMargin/);
+  assert.match(loader, /image\.loading = 'eager'/);
+  assert.match(loader, /MutationObserver/);
+  assert.match(css, /rkc-native-image--loading/);
+  assert.match(css, /rkc-image-placeholder/);
+});
+
+test('media origin is preconnected before the app starts requesting images', async () => {
+  const html = await read('index.html');
+  assert.match(html, /rel="preconnect" href="https:\/\/yycfqeymdsjyulexwrlb\.supabase\.co"/);
+  assert.match(html, /rel="dns-prefetch"/);
 });
 
 test('article uploads are optimized through the supported custom fetch hook', async () => {
