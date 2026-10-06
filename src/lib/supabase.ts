@@ -4,27 +4,26 @@ import { optimizeMateriaDriveForm } from "@/lib/materiaMediaOptimization";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-const client = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+function resolveRequestUrl(input: RequestInfo | URL) {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  if (typeof Request !== "undefined" && input instanceof Request) return input.url;
+  return "";
+}
 
-const functionsClient = client.functions as any;
-const invokeFunction = functionsClient.invoke.bind(functionsClient);
+async function optimizedSupabaseFetch(input: RequestInfo | URL, init?: RequestInit) {
+  let nextInit = init;
+  const url = resolveRequestUrl(input);
 
-functionsClient.invoke = async (functionName: string, options?: any) => {
   if (
-    functionName === "drive-files" &&
-    options?.body instanceof FormData &&
+    url.includes("/functions/v1/drive-files") &&
+    init?.body instanceof FormData &&
     typeof File !== "undefined"
   ) {
     try {
-      options = {
-        ...options,
-        body: await optimizeMateriaDriveForm(options.body),
+      nextInit = {
+        ...init,
+        body: await optimizeMateriaDriveForm(init.body),
       };
     } catch (error) {
       // Nunca impede a publicação: se a otimização local falhar, o backend
@@ -33,7 +32,16 @@ functionsClient.invoke = async (functionName: string, options?: any) => {
     }
   }
 
-  return invokeFunction(functionName, options);
-};
+  return fetch(input, nextInit);
+}
 
-export const supabase = client;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+  global: {
+    fetch: optimizedSupabaseFetch,
+  },
+});
