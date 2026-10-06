@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Facebook, Instagram, Linkedin, Mail, MapPin, MessageCircle, Youtube } from "lucide-react";
 import { buildPublicStorageUrl, getFooterSettings, normalizeWhatsappLink } from "@/lib/footerSettings";
+import { RkcLogo } from "@/app/components/RkcLogo";
 
 type FooterData = {
   logoUrl: string;
@@ -83,18 +84,7 @@ export function Footer() {
       <div className="mx-auto max-w-6xl px-6 py-10">
         <div className="grid gap-10 md:grid-cols-3 md:items-center">
           <div className="flex justify-center md:justify-start">
-            {footerData.logoUrl ? (
-              <img
-                src={footerData.logoUrl}
-                alt="Rede Kalunga Comunicações"
-                className="h-auto max-h-16 w-auto object-contain"
-              />
-            ) : (
-              <div className="text-left">
-                <p className="text-base font-semibold text-slate-800">Rede Kalunga Comunicações</p>
-                <p className="text-sm text-slate-600">Comunicação Popular e Território</p>
-              </div>
-            )}
+            <RkcLogo className="block h-16 w-auto max-w-[240px] object-contain" />
           </div>
 
           <div className="text-center">

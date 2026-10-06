@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { cn } from '@/app/components/ui/utils';
-import logoRKC from '../../assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png';
+import { RkcLogo } from "@/app/components/RkcLogo";
 // The Figma export uses the special "figma:asset" scheme, which Vite can't resolve.
 // Assets live in src/assets, so we import via a real path.
 
@@ -33,11 +33,7 @@ export function Header() {
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link to="/" className="flex items-center gap-3">
-              <img 
-                src={logoRKC} 
-                alt="Rede Kalunga Comunicações" 
-                className="block h-auto max-h-10 w-auto max-w-[230px] object-contain sm:max-h-11"
-              />
+              <RkcLogo className="block h-10 w-auto max-w-[230px] object-contain sm:h-11" />
             </Link>
           </div>
           
