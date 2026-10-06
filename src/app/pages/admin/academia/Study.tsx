@@ -321,18 +321,25 @@ export function Study({
               <p className="text-muted-foreground">
                 {lesson.description} · {lesson.duration_minutes} min
               </p>
-              <div className="whitespace-pre-wrap break-words leading-relaxed">
-                {lesson.content}
+              <div className="overflow-hidden rounded-xl bg-black shadow-sm">
+                <Asset
+                  path={lesson.media_path}
+                  driveFileId={lesson.media_drive_file_id}
+                  source={lesson.media_source}
+                  url={lesson.media_url}
+                  title={lesson.title}
+                  type={lesson.type}
+                  showOpenLink={false}
+                />
               </div>
-              <Asset
-                path={lesson.media_path}
-                driveFileId={lesson.media_drive_file_id}
-                source={lesson.media_source}
-                url={lesson.media_url}
-                title={lesson.title}
-                type={lesson.type}
-                showOpenLink={false}
-              />
+              {lesson.content && (
+                <section className="space-y-3 border-t pt-5" aria-label="Conteúdo da aula">
+                  <h2 className="text-xl font-semibold">Conteúdo da aula</h2>
+                  <div className="whitespace-pre-wrap break-words leading-relaxed">
+                    {lesson.content}
+                  </div>
+                </section>
+              )}
               {route && (
                 <Link
                   className="inline-flex border rounded-md px-4 py-2 text-primary"
