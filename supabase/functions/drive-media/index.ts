@@ -35,6 +35,19 @@ Deno.serve(async (req) => {
     }
     if (!linked) return new Response("Not found", { status: 404 });
   }
+  if (file.module === "projetos") {
+    const { data: project } = await admin.from("projetos").select("id,capa_drive_file_id,cover_card_drive_file_id")
+      .eq("id",file.entity_id).eq("publicado_transparencia",true).maybeSingle();
+    if (!project) return new Response("Not found",{status:404});
+    let linked = file.category === "cover" && project.capa_drive_file_id === file.id
+      || file.category === "cover_card" && project.cover_card_drive_file_id === file.id;
+    if (file.category === "gallery" || file.category === "gallery_thumb") {
+      const {data: gallery} = await admin.from("projeto_galeria").select("id").eq("projeto_id",project.id)
+        .eq(file.category === "gallery" ? "drive_file_id" : "thumb_drive_file_id",file.id).limit(1);
+      linked = !!gallery?.length;
+    }
+    if (!linked) return new Response("Not found",{status:404});
+  }
   if(file.module === "team") {
     const member=await admin.from("equipe").select("id,avatar_drive_file_id,avatar_thumb_drive_file_id").eq("id",file.entity_id).eq("ativo",true).eq("is_public",true).maybeSingle();
     if(!member.data) return new Response("Not found",{status:404});
@@ -49,7 +62,7 @@ Deno.serve(async (req) => {
     headers.set("Content-Type", file.mime_type || drive.headers.get("Content-Type") || "application/octet-stream");
     headers.set(
       "Cache-Control",
-      file.module === "materias"
+      ["materias", "projetos"].includes(file.module)
         ? "public, max-age=31536000, s-maxage=31536000, immutable"
         : "public, max-age=86400, s-maxage=86400",
     );

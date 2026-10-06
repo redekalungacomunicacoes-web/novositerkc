@@ -14,6 +14,8 @@ import {
   resolveProjectMediaUrl,
 } from "@/app/repositories/projectRepository";
 import { getVideoEmbedUrl, normalizeVideoUrl } from "@/lib/video";
+import { uploadProjectImage, resolveProjectDriveId } from "@/lib/projectDrive";
+import { ProjectAdminImage } from "@/app/components/ProjectAdminImage";
 
 type ProjetoFormData = {
   titulo: string;
@@ -53,11 +55,6 @@ function normalizeOptionalUrl(value?: string) {
   if (!trimmed) return null;
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
-}
-
-function fileExtension(file: File) {
-  const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return ext || "jpg";
 }
 
 function toProjectStoragePath(value?: string | null) {
@@ -171,18 +168,8 @@ export function AdminProjetoForm() {
 
     setIsUploadingBanner(true);
     try {
-      const ext = fileExtension(file);
-      const fileName = `${crypto.randomUUID()}.${ext}`;
-      const filePath = `projects/${projectDbId}/cover/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from(PROJECTS_BUCKET).upload(filePath, file, {
-        upsert: true,
-        cacheControl: "31536000",
-        contentType: file.type,
-      });
-      if (uploadError) throw uploadError;
-
-      setValue("bannerUrl", resolveProjectMediaUrl(filePath), { shouldDirty: true, shouldValidate: true });
+      const uploaded = await uploadProjectImage(projectDbId, "cover", file);
+      setValue("bannerUrl", uploaded.url, { shouldDirty: true, shouldValidate: true });
       toast.success("Banner enviado com sucesso.");
     } catch (error: any) {
       toast.error(error?.message || "Erro ao enviar banner.");
@@ -201,18 +188,8 @@ export function AdminProjetoForm() {
 
     setIsUploadingCoverCard(true);
     try {
-      const ext = fileExtension(file);
-      const fileName = `${crypto.randomUUID()}.${ext}`;
-      const filePath = `projects/${projectDbId}/cover-card/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from(PROJECTS_BUCKET).upload(filePath, file, {
-        upsert: true,
-        cacheControl: "31536000",
-        contentType: file.type,
-      });
-      if (uploadError) throw uploadError;
-
-      setValue("coverCardUrl", resolveProjectMediaUrl(filePath), { shouldDirty: true, shouldValidate: true });
+      const uploaded = await uploadProjectImage(projectDbId, "cover_card", file);
+      setValue("coverCardUrl", uploaded.url, { shouldDirty: true, shouldValidate: true });
       toast.success("Capa do card enviada com sucesso.");
     } catch (error: any) {
       toast.error(error?.message || "Erro ao enviar capa do card.");
@@ -232,21 +209,14 @@ export function AdminProjetoForm() {
         if (!file.type.startsWith("image/")) continue;
 
         const fotoId = crypto.randomUUID();
-        const ext = fileExtension(file);
-        const path = `projects/${projectDbId}/gallery/${fotoId}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage.from(PROJECTS_BUCKET).upload(path, file, {
-          upsert: true,
-          cacheControl: "31536000",
-          contentType: file.type,
-        });
-        if (uploadError) throw uploadError;
+        const uploaded = await uploadProjectImage(projectDbId, "gallery", file);
 
         const { error: insertError } = await createProjetoMidia({
           id: fotoId,
           projeto_id: projectDbId,
           tipo: "image",
-          url: path,
+          url: uploaded.url,
+          drive_file_id: uploaded.id,
         });
         if (insertError) throw insertError;
       }
@@ -264,10 +234,6 @@ export function AdminProjetoForm() {
   const removeFoto = async (foto: ProjetoFoto) => {
     if (!projectDbId) return;
 
-    const storagePath = toProjectStoragePath(foto.url);
-
-    if (storagePath) await supabase.storage.from(PROJECTS_BUCKET).remove([storagePath]);
-
     const { error } = await deleteProjetoMidia(foto.id);
     if (error) {
       toast.error(error.message || "Erro ao remover foto.");
@@ -279,7 +245,7 @@ export function AdminProjetoForm() {
   };
 
   const onSubmit = async (form: ProjetoFormData) => {
-    if (isSaving) return;
+    if (isSaving || isUploadingBanner || isUploadingCoverCard || isUploadingPhotos) return;
 
     const parsedYear = Number.parseInt((form.anoFundacao || "").trim(), 10);
     const anoFundacao = Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999 ? parsedYear : null;
@@ -295,7 +261,9 @@ export function AdminProjetoForm() {
       descricao: form.descricao.trim() || null,
       ano_lancamento: anoFundacao,
       capa_url: toProjectStoragePath(form.bannerUrl),
+      capa_drive_file_id: null as string | null,
       cover_card_path: toProjectStoragePath(form.coverCardUrl),
+      cover_card_drive_file_id: null as string | null,
       publicado_transparencia: form.status === "ativo",
       instagram_url: normalizeOptionalUrl(form.instagramUrl),
       youtube_url: normalizedVideoUrl,
@@ -304,6 +272,10 @@ export function AdminProjetoForm() {
 
     setIsSaving(true);
     try {
+      [payload.capa_drive_file_id, payload.cover_card_drive_file_id] = await Promise.all([
+        resolveProjectDriveId(form.bannerUrl, projectDbId, "cover"),
+        resolveProjectDriveId(form.coverCardUrl, projectDbId, "cover_card"),
+      ]);
       let data: { id: string } | null = null;
       let error: any = null;
 
@@ -356,7 +328,7 @@ export function AdminProjetoForm() {
 
         <button
           type="submit"
-          disabled={isSaving || isLoadingProject}
+          disabled={isSaving || isLoadingProject || isUploadingBanner || isUploadingCoverCard || isUploadingPhotos}
           className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Save className="h-4 w-4" />
@@ -405,7 +377,7 @@ export function AdminProjetoForm() {
             </div>
 
             {bannerUrl ? (
-              <img src={bannerUrl} alt="Banner do projeto" className="h-56 w-full rounded-xl border object-cover" />
+              <ProjectAdminImage src={bannerUrl} alt="Banner do projeto" className="h-56 w-full rounded-xl border object-cover" />
             ) : (
               <div className="flex h-56 w-full items-center justify-center rounded-xl border text-sm text-muted-foreground">Nenhum banner enviado.</div>
             )}
@@ -432,7 +404,7 @@ export function AdminProjetoForm() {
             </div>
 
             {coverCardUrl ? (
-              <img src={coverCardUrl} alt="Capa do projeto para cards" className="h-56 w-full rounded-xl border object-cover" />
+              <ProjectAdminImage src={coverCardUrl} alt="Capa do projeto para cards" className="h-56 w-full rounded-xl border object-cover" />
             ) : (
               <div className="flex h-56 w-full items-center justify-center rounded-xl border text-sm text-muted-foreground">Nenhuma capa enviada.</div>
             )}
@@ -535,7 +507,7 @@ export function AdminProjetoForm() {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
               {fotos.map((foto) => (
                 <div key={foto.id} className="group relative overflow-hidden rounded-xl border">
-                      <img src={foto.url} alt="Foto do projeto" className="aspect-square w-full object-cover" loading="lazy" />
+                      <ProjectAdminImage src={foto.url} alt="Foto do projeto" className="aspect-square w-full object-cover" loading="lazy" />
                   <button
                     type="button"
                     onClick={() => removeFoto(foto)}
