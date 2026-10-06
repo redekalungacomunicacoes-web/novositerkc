@@ -35,7 +35,7 @@ export function Header() {
               <img 
                 src="/relatorios/oficina-2026/assets/Logo_Rede_Kalunga-DSCdAc4t.png" 
                 alt="Rede Kalunga Comunicações" 
-                className="h-14 sm:h-16 w-auto"
+                className="block h-auto max-h-10 w-auto max-w-[230px] object-contain sm:max-h-11"
               />
             </Link>
           </div>
