@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.academia.json",
+  "include": [
+    "src/app/pages/admin/AdminConfiguracoes.tsx",
+    "src/app/pages/admin/AdminQuemSomos.tsx",
+    "src/app/components/SiteFavicon.tsx",
+    "src/lib/siteDrive.ts",
+    "src/lib/footerSettings.ts"
+  ]
+}

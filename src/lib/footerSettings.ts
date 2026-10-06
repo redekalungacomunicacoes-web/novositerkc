@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { uploadSiteImage } from "@/lib/siteDrive";
 
 export const FOOTER_DESCRIPTION_MAX_CHARS = 160;
 export const FOOTER_STORAGE_BUCKET = "site-assets";
@@ -96,6 +97,7 @@ export async function upsertFooterSettings(patch: Partial<FooterSettings>) {
 
 export function buildPublicStorageUrl(path: string | null | undefined, bucket = FOOTER_STORAGE_BUCKET) {
   if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
   return data.publicUrl;
 }
@@ -131,33 +133,11 @@ export function isLikelyUrl(value: string) {
 }
 
 export async function uploadFooterLogo(file: File) {
-  const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-  const path = `footer/logo.${ext}`;
-
-  const { error } = await supabase.storage.from(FOOTER_STORAGE_BUCKET).upload(path, file, {
-    upsert: true,
-    contentType: file.type,
-    cacheControl: "31536000",
-  });
-
-  if (error) throw error;
-
-  return path;
+  return uploadSiteImage(file, "logo");
 }
 
 export async function uploadFavicon(file: File) {
-  const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-  const path = `site/favicon.${ext}`;
-
-  const { error } = await supabase.storage.from(FOOTER_STORAGE_BUCKET).upload(path, file, {
-    upsert: true,
-    contentType: file.type,
-    cacheControl: "31536000",
-  });
-
-  if (error) throw error;
-
-  return path;
+  return uploadSiteImage(file, "favicon");
 }
 
 export function getFaviconMimeType(pathOrUrl: string | null | undefined) {

@@ -18,6 +18,7 @@ source=source.replace('"https://esm.sh/@supabase/supabase-js@2"',JSON.stringify(
  .replace('"../_shared/task-drive.ts"',JSON.stringify(dataUrl('export async function prepareTaskFolder(){return "folder";}')))
  .replace('"../_shared/task-delete.ts"',JSON.stringify(dataUrl('export const deleteTaskAndQueueCleanup=()=>{},retryTaskCleanup=()=>{};')))
  .replace('"../_shared/academy-drive.ts"',JSON.stringify(dataUrl('export const uploadAcademyDrive=()=>{},prepareAcademyDestination=()=>{};')))
+ .replace('"../_shared/site-drive.ts"',JSON.stringify(dataUrl('export const uploadSiteDrive=()=>{throw new Error("Unexpected institutional upload in task test");};')))
  .replace('"../_shared/team-drive.ts"',JSON.stringify(dataUrl('export const ensureTeamMemberFolder=()=>{},requireTeamEditor=()=>{},confirmTeamAvatar=()=>{},uploadTeamAvatar=()=>{},uploadTeamAvatarPair=()=>{},uploadTeamPortfolio=()=>{},removeTeamAvatar=()=>{},removeTeamPortfolio=()=>{},importLegacyTeamAvatar=()=>{};')))
  .replace('"../_shared/project-drive.ts"',JSON.stringify(dataUrl('export const uploadProjectDrive=()=>{throw new Error("Unexpected project upload in task test");},getProjectPreview=()=>{throw new Error("Unexpected project preview in task test");};')))
  .replace('"../_shared/materia-drive.ts"',JSON.stringify(dataUrl('export const uploadMateriaDrive=()=>{},cleanupUnreferencedMateriaFiles=()=>({retained:0,archived:0,trashed:0,pending:0});')));
