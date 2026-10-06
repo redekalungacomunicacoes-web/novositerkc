@@ -22,8 +22,10 @@ export function Newsletter() {
     const payload = {
       email: email.trim(),
       name: nome.trim(),
-      // Você pode enviar um "source" se quiser rastrear:
       source: "site_newsletter_page",
+      // O checkbox é obrigatório no formulário; enviamos o consentimento explicitamente
+      // para o backend registrar a origem e o momento da inscrição.
+      consent: true,
     };
 
     try {
