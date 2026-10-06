@@ -332,6 +332,42 @@ export function AdminNewsletter() {
     setCampaignOpen(true);
   }
 
+  function materiaPreview(materia: MateriaLite) {
+    const fallback = "Leia a nova matéria publicada pela Rede Kalunga Comunicações.";
+    const source = String(materia.resumo || fallback).replace(/\s+/g, " ").trim();
+    return source.length > 155 ? `${source.slice(0, 152).trimEnd()}…` : source;
+  }
+
+  function applyMateriaToForm(materiaId: string) {
+    const materia = materias.find((item) => item.id === materiaId);
+
+    if (!materia) {
+      setForm((current) => ({ ...current, materia_id: materiaId }));
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      category: "novidade",
+      materia_id: materia.id,
+      title: `Novidade — ${materia.titulo}`,
+      subject: materia.titulo,
+      preview_text: materiaPreview(materia),
+    }));
+  }
+
+  function selectCampaignCategory(category: CampaignCategory) {
+    if (category === "novidade") {
+      const materiaId = form.materia_id || materias[0]?.id || "";
+      if (materiaId) {
+        applyMateriaToForm(materiaId);
+        return;
+      }
+    }
+
+    setForm((current) => ({ ...current, category }));
+  }
+
   function buildArticleCard(materia: MateriaLite) {
     const path = materia.slug ? `/materias/${materia.slug}` : `/materias/${materia.id}`;
     const link = `https://kalungacomunicacoes.org${path}`;
@@ -970,7 +1006,7 @@ export function AdminNewsletter() {
                     ] as const).map(([value, Icon, label, detail]) => (
                       <button
                         key={value}
-                        onClick={() => setForm((current) => ({ ...current, category: value }))}
+                        onClick={() => selectCampaignCategory(value)}
                         className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${form.category === value ? "border-[#0F7A3E] bg-[#0F7A3E]/5 ring-1 ring-[#0F7A3E]/20" : "hover:bg-muted/40"}`}
                       >
                         <div className="rounded-lg bg-[#0F7A3E]/10 p-2 text-[#0F7A3E]"><Icon className="h-4 w-4" /></div>
@@ -1015,7 +1051,7 @@ export function AdminNewsletter() {
 
                 {form.category === "novidade" && (
                   <label className="block text-sm font-medium">Matéria em destaque
-                    <select className={fieldClass} value={form.materia_id} onChange={(event) => setForm((current) => ({ ...current, materia_id: event.target.value }))}>
+                    <select className={fieldClass} value={form.materia_id} onChange={(event) => applyMateriaToForm(event.target.value)}>
                       <option value="">Selecione uma matéria…</option>
                       {materias.map((materia) => <option key={materia.id} value={materia.id}>{materia.titulo}</option>)}
                     </select>
