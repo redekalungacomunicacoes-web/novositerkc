@@ -6,6 +6,7 @@ import { SiteFavicon } from "@/app/components/SiteFavicon";
 import { GoogleAnalytics } from "@/app/components/GoogleAnalytics";
 import { SiteViewTracker } from "@/app/components/SiteViewTracker";
 import { SiteSeo } from "@/app/components/SiteSeo";
+import { SitePopup } from "@/app/components/SitePopup";
 
 export function RootLayout() {
   return (
@@ -15,6 +16,7 @@ export function RootLayout() {
       <SiteSeo />
       <GoogleAnalytics />
       <SiteViewTracker />
+      <SitePopup />
       <Header />
       <main className="flex-1">
         <Outlet />
