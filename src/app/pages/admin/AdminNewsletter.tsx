@@ -653,12 +653,32 @@ export function AdminNewsletter() {
     setSendingTest(true);
     setOperationMessage("Enviando teste…");
 
-    const response = await newsletterAdmin<{ message: string }>("send_test", {
+    const response = await newsletterAdmin<{
+      message: string;
+      message_id: string | null;
+      smtp_response: string | null;
+      accepted: string[];
+      rejected: string[];
+      sent: number;
+      failed: number;
+    }>("send_test", {
       campaign_id: campaign.id,
       test_email: testEmail.trim().toLowerCase(),
     });
 
-    setOperationMessage(response.ok ? "✅ E-mail de teste enviado." : `❌ ${newsletterErrorText(response.error)}`);
+    if (response.ok && response.data) {
+      const details = [
+        response.data.smtp_response ? `SMTP: ${response.data.smtp_response}` : "",
+        response.data.message_id ? `ID: ${response.data.message_id}` : "",
+      ].filter(Boolean).join(" • ");
+
+      setOperationMessage(
+        `✅ ${response.data.message || "SMTP aceitou o e-mail de teste para entrega."}${details ? ` — ${details}` : ""}`,
+      );
+    } else {
+      setOperationMessage(`❌ ${newsletterErrorText(response.error)}`);
+    }
+
     setSendingTest(false);
   }
 
