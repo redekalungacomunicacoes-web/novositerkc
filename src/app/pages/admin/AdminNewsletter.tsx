@@ -355,6 +355,7 @@ export function AdminNewsletter() {
 
     const res = await invokeNewsletter<{ status: string; sent: number; failed: number; errors: string[] }>("newsletter-send-campaign", {
       campaign_id: selectedCampaign.id,
+      retry_failed: selectedCampaign.status === "failed",
     });
 
     if (!res.ok) {
