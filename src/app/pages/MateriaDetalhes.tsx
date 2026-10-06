@@ -67,7 +67,8 @@ function sanitizeHtml(input: string) {
   return input
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
     .replace(/on\w+\s*=\s*"[^"]*"/gi, "")
-    .replace(/on\w+\s*=\s*'[^']*'/gi, "");
+    .replace(/on\w+\s*=\s*'[^']*'/gi, "")
+    .replace(/<img\b(?![^>]*\bloading=)/gi, '<img loading="lazy" decoding="async" fetchpriority="low"');
 }
 
 function hasHtmlContent(text?: string | null) {
@@ -164,7 +165,15 @@ function renderBlock(block: MateriaContentBlock) {
   if (block.type === "image") {
     return (
       <figure key={block.id} className="my-8">
-        <img src={block.url} alt={block.caption || "Imagem da matéria"} className="w-full rounded-xl border object-cover" />
+        <img
+          src={block.url}
+          alt={block.caption || "Imagem da matéria"}
+          loading="lazy"
+          decoding="async"
+          fetchPriority="low"
+          sizes="(min-width: 1024px) 896px, 100vw"
+          className="w-full rounded-xl border object-cover"
+        />
         {(block.caption || block.credit) && (
           <figcaption className="text-sm text-gray-500 mt-2">
             {block.caption || ""}
@@ -181,7 +190,15 @@ function renderBlock(block: MateriaContentBlock) {
     return (
       <div key={block.id} className={`my-8 flex gap-6 flex-col md:flex-row ${block.align === "right" ? "md:flex-row-reverse" : ""}`}>
         <figure className={`w-full ${widthClass}`}>
-          <img src={block.url} alt={block.caption || "Imagem da matéria"} className="w-full rounded-xl border object-cover" />
+          <img
+            src={block.url}
+            alt={block.caption || "Imagem da matéria"}
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
+            sizes="(min-width: 768px) 50vw, 100vw"
+            className="w-full rounded-xl border object-cover"
+          />
           {(block.caption || block.credit) && (
             <figcaption className="text-sm text-gray-500 mt-2">
               {block.caption || ""}
@@ -498,7 +515,15 @@ export function MateriaDetalhes() {
     <div>
       <section className="relative min-h-[32rem] sm:min-h-[36rem] md:min-h-[40rem] flex items-stretch overflow-hidden">
         <div className="absolute inset-0">
-          <img src={m.imagem} alt={m.titulo} className="w-full h-full object-cover" />
+          <img
+            src={m.imagem}
+            alt={m.titulo}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+            sizes="100vw"
+            className="w-full h-full object-cover"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/70 to-black/35" />
         </div>
 
@@ -580,6 +605,10 @@ export function MateriaDetalhes() {
                         <img
                           src={item.url}
                           alt={item.legenda || `Imagem ${index + 1} da galeria da matéria`}
+                          loading="lazy"
+                          decoding="async"
+                          fetchPriority="low"
+                          sizes="(min-width: 1024px) 220px, (min-width: 640px) 33vw, 50vw"
                           className="w-full h-40 sm:h-44 md:h-40 lg:h-36 object-cover transition-transform duration-200 group-hover:scale-[1.02]"
                         />
                       </button>
@@ -622,7 +651,17 @@ export function MateriaDetalhes() {
                     {m.autorPerfil ? (
                       <Link to={getEquipeHref(m.autorPerfil)} className="flex items-start gap-4 group">
                         <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-[#0F7A3E] to-[#2FA866] flex items-center justify-center flex-shrink-0">
-                          {m.autorPerfil.foto ? <img src={m.autorPerfil.foto} alt={m.autorPerfil.nome} className="w-full h-full object-cover" /> : <User className="w-8 h-8 text-white" />}
+                          {m.autorPerfil.foto ? (
+                            <img
+                              src={m.autorPerfil.foto}
+                              alt={m.autorPerfil.nome}
+                              loading="lazy"
+                              decoding="async"
+                              fetchPriority="low"
+                              sizes="64px"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : <User className="w-8 h-8 text-white" />}
                         </div>
                         <div>
                           <h4 className="font-bold text-lg text-[#2E2E2E] mb-1 group-hover:underline">{m.autorPerfil.nome}</h4>
@@ -685,6 +724,10 @@ export function MateriaDetalhes() {
             <img
               src={activeGalleryItem.url}
               alt={activeGalleryItem.legenda || "Imagem ampliada da galeria"}
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
+              sizes="100vw"
               className="w-full max-h-[80vh] object-contain rounded-xl"
             />
             {activeGalleryItem.legenda && (
