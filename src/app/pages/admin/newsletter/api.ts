@@ -32,7 +32,7 @@ async function readFunctionsError(error: any): Promise<ApiError> {
       }
     }
   } catch {
-    // Fall through to the connector error message.
+    // Fall through to the invoke error message.
   }
 
   return {
@@ -59,12 +59,74 @@ async function callAdmin<T>(action: string, payload: Record<string, unknown> = {
   return response;
 }
 
+async function runCampaignBatches(
+  campaignId: string,
+  retryFailed: boolean,
+): Promise<ApiResponse<{ status: string; sent: number; failed: number; errors: string[] }>> {
+  let sent = 0;
+  let failed = 0;
+  let status = "sending";
+  const errors: string[] = [];
+
+  for (let batch = 0; batch < 250; batch += 1) {
+    const action = batch === 0 && retryFailed ? "retry_failed" : "send_campaign";
+    const result = await callAdmin<any>(action, {
+      campaign_id: campaignId,
+      batch_size: 25,
+    });
+
+    if (!result.ok) return result;
+
+    const data = result.data || {};
+    // newsletter-admin returns cumulative campaign counts after every batch.
+    sent = Number(data.sent ?? sent);
+    failed = Number(data.failed ?? failed);
+    status = String(data.status || status);
+
+    if (Array.isArray(data.errors)) {
+      for (const item of data.errors) {
+        if (item && errors.length < 10) errors.push(String(item));
+      }
+    }
+
+    if (data.done) {
+      return {
+        ok: true,
+        data: { status, sent, failed, errors },
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    error: {
+      code: "batch_limit_reached",
+      message: "O envio foi interrompido por segurança antes de concluir todos os lotes.",
+      details: "Atualize a tela e continue o disparo da campanha.",
+    },
+  };
+}
+
 export async function invokeNewsletter<T>(fn: LegacyNewsletterFunction, body?: any): Promise<ApiResponse<T>> {
   if (fn === "newsletter-config") {
     if (body) {
-      return callAdmin<T>("save_settings", { settings: body });
+      const result = await callAdmin<T>("save_config", {
+        ...body,
+        smtp_secure: Boolean(body.secure),
+      });
+      return result;
     }
-    return callAdmin<T>("get_settings");
+
+    const result = await callAdmin<any>("get_config");
+    if (!result.ok || !result.data) return result as ApiResponse<T>;
+
+    return {
+      ok: true,
+      data: {
+        ...result.data,
+        secure: Boolean(result.data.smtp_secure),
+      } as unknown as T,
+    };
   }
 
   if (fn === "newsletter-validate-smtp") {
@@ -72,57 +134,29 @@ export async function invokeNewsletter<T>(fn: LegacyNewsletterFunction, body?: a
   }
 
   if (fn === "newsletter-send-test") {
-    return callAdmin<T>("send_test", body || {});
+    const result = await callAdmin<any>("send_test", body || {});
+    if (!result.ok) return result as ApiResponse<T>;
+    return {
+      ok: true,
+      data: {
+        ...result.data,
+        sent: 1,
+        failed: 0,
+      } as unknown as T,
+    };
   }
 
   if (fn === "newsletter-send-campaign") {
-    let sent = 0;
-    let failed = 0;
-    let status = "sending";
-    const errors: string[] = [];
-
-    // Each Edge invocation processes a small idempotent batch.
-    // The client continues until the campaign is complete, avoiding long-running requests.
-    for (let batch = 0; batch < 250; batch += 1) {
-      const result = await callAdmin<any>("send_campaign", {
-        ...(body || {}),
-        batch_size: 25,
-      });
-
-      if (!result.ok) return result as ApiResponse<T>;
-
-      const data = result.data || {};
-      sent = Number(data.sent_total ?? sent + Number(data.sent || 0));
-      failed = Number(data.fail_total ?? failed + Number(data.failed || 0));
-      status = String(data.status || status);
-
-      if (Array.isArray(data.errors)) {
-        for (const item of data.errors) {
-          if (item && errors.length < 10) errors.push(String(item));
-        }
-      }
-
-      if (data.done) {
-        return {
-          ok: true,
-          data: {
-            status,
-            sent,
-            failed,
-            errors,
-          } as T,
-        };
-      }
+    const campaignId = String(body?.campaign_id || "").trim();
+    if (!campaignId) {
+      return {
+        ok: false,
+        error: { code: "missing_campaign_id", message: "Campanha não informada." },
+      };
     }
 
-    return {
-      ok: false,
-      error: {
-        code: "batch_limit_reached",
-        message: "O envio foi interrompido por segurança antes de concluir todos os lotes.",
-        details: "Atualize a tela e continue o disparo da campanha.",
-      },
-    };
+    const result = await runCampaignBatches(campaignId, Boolean(body?.retry_failed));
+    return result as unknown as ApiResponse<T>;
   }
 
   return {
