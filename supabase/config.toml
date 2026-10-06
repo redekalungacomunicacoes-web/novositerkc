@@ -31,3 +31,11 @@ verify_jwt = true
 
 [functions.drive-files]
 verify_jwt = true
+
+
+# Public analytics endpoints. They accept only opaque IDs/event enums and write through service-role RPCs.
+[functions.newsletter-track-open]
+verify_jwt = false
+
+[functions.site-popup-track]
+verify_jwt = false
