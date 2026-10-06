@@ -115,7 +115,7 @@ export function AdminLogin() {
       <div className="auth-bg" aria-hidden="true" />
 
       <div className="auth-card relative z-10 w-full max-w-[440px] rounded-2xl border border-white/45 bg-white/92 p-6 shadow-2xl backdrop-blur-[2px] sm:p-8">
-        <div className="text-center mb-8">
+        <div className="text-center mb-7">
           <div className="login-logo">
             <RkcLogo className="login-logo-canvas" />
           </div>

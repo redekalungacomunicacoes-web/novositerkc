@@ -225,14 +225,15 @@
   justify-content: center;
 }
 
-.login-logo img,\n.login-logo canvas {
+.login-logo img,
+.login-logo canvas {
   display: block;
   width: auto;
   height: auto;
-  max-width: min(220px, 72%);
-  max-height: 64px;
+  max-width: min(260px, 82%);
+  max-height: 82px;
   object-fit: contain;
-  margin: 0 auto 10px;
+  margin: 0 auto 14px;
 }
 
 @media (max-width: 640px) {
