@@ -1,24 +1,18 @@
 import { supabase } from "@/lib/supabase";
 
-type ApiError = {
+export type NewsletterApiError = {
   code: string;
   message: string;
   details?: string;
 };
 
-type ApiResponse<T> = {
+export type NewsletterApiResponse<T> = {
   ok: boolean;
   data?: T;
-  error?: ApiError;
+  error?: NewsletterApiError;
 };
 
-type LegacyNewsletterFunction =
-  | "newsletter-config"
-  | "newsletter-validate-smtp"
-  | "newsletter-send-test"
-  | "newsletter-send-campaign";
-
-async function readFunctionsError(error: any): Promise<ApiError> {
+async function readFunctionsError(error: any): Promise<NewsletterApiError> {
   try {
     const context = error?.context;
     if (context && typeof context.json === "function") {
@@ -32,17 +26,20 @@ async function readFunctionsError(error: any): Promise<ApiError> {
       }
     }
   } catch {
-    // Fall through to the connector error message.
+    // Keep the connector error as a fallback.
   }
 
   return {
     code: "edge_invoke_failed",
-    message: "Falha ao chamar o serviço da Newsletter.",
+    message: "Não foi possível falar com o serviço da Newsletter.",
     details: error?.message ? String(error.message) : undefined,
   };
 }
 
-async function callAdmin<T>(action: string, payload: Record<string, unknown> = {}): Promise<ApiResponse<T>> {
+export async function newsletterAdmin<T>(
+  action: string,
+  payload: Record<string, unknown> = {},
+): Promise<NewsletterApiResponse<T>> {
   const { data, error } = await supabase.functions.invoke("newsletter-admin", {
     method: "POST",
     body: { action, ...payload },
@@ -50,104 +47,18 @@ async function callAdmin<T>(action: string, payload: Record<string, unknown> = {
 
   if (error) {
     const parsed = await readFunctionsError(error);
-    console.error("Erro na Newsletter:", parsed);
+    console.error(`Erro ao invocar newsletter-admin/${action}:`, parsed);
     return { ok: false, error: parsed };
   }
 
-  const response = (data || {}) as ApiResponse<T>;
-  if (!response.ok) console.error("Erro retornado pela Newsletter:", response.error);
+  const response = (data || {}) as NewsletterApiResponse<T>;
+  if (!response.ok) {
+    console.error(`Erro retornado por newsletter-admin/${action}:`, response.error);
+  }
   return response;
 }
 
-export async function invokeNewsletter<T>(fn: LegacyNewsletterFunction, body?: any): Promise<ApiResponse<T>> {
-  if (fn === "newsletter-config") {
-    if (body) {
-      return callAdmin<T>("save_config", {
-        ...body,
-        smtp_secure: Boolean(body?.smtp_secure ?? body?.secure),
-      });
-    }
-
-    const result = await callAdmin<any>("get_config");
-    if (!result.ok || !result.data) return result as ApiResponse<T>;
-
-    return {
-      ok: true,
-      data: {
-        ...result.data,
-        secure: Boolean(result.data.smtp_secure ?? result.data.secure),
-      } as T,
-    };
-  }
-
-  if (fn === "newsletter-validate-smtp") {
-    return callAdmin<T>("validate_smtp");
-  }
-
-  if (fn === "newsletter-send-test") {
-    return callAdmin<T>("send_test", body || {});
-  }
-
-  if (fn === "newsletter-send-campaign") {
-    let sent = 0;
-    let failed = 0;
-    let status = "sending";
-    const errors: string[] = [];
-
-    // Each Edge invocation processes a small idempotent batch.
-    // The client continues until the campaign is complete, avoiding long-running requests.
-    for (let batch = 0; batch < 250; batch += 1) {
-      const result = await callAdmin<any>("send_campaign", {
-        ...(body || {}),
-        batch_size: 25,
-      });
-
-      if (!result.ok) return result as ApiResponse<T>;
-
-      const data = result.data || {};
-      sent = Number(data.sent_total ?? data.sent ?? sent);
-      failed = Number(data.fail_total ?? data.failed ?? failed);
-      status = String(data.status || status);
-
-      if (Array.isArray(data.errors)) {
-        for (const item of data.errors) {
-          if (item && errors.length < 10) errors.push(String(item));
-        }
-      }
-
-      if (data.done) {
-        return {
-          ok: true,
-          data: {
-            status,
-            sent,
-            failed,
-            errors,
-          } as T,
-        };
-      }
-    }
-
-    return {
-      ok: false,
-      error: {
-        code: "batch_limit_reached",
-        message: "O envio foi interrompido por segurança antes de concluir todos os lotes.",
-        details: "Atualize a tela e continue o disparo da campanha.",
-      },
-    };
-  }
-
-  return {
-    ok: false,
-    error: {
-      code: "unsupported_newsletter_function",
-      message: "Operação de Newsletter não suportada.",
-    },
-  };
-}
-
-export function errorText(error?: ApiError) {
+export function newsletterErrorText(error?: NewsletterApiError) {
   if (!error) return "Erro desconhecido.";
   return error.details ? `${error.message} (${error.details})` : error.message;
 }
