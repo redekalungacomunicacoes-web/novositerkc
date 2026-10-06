@@ -45,6 +45,7 @@ type Campaign = {
   provider: string | null;
   sent_count: number | null;
   fail_count: number | null;
+  started_at: string | null;
 };
 
 function json(status: number, body: unknown) {
@@ -185,7 +186,7 @@ function transportFor(s: Settings) {
 async function loadCampaign(id: string): Promise<Campaign> {
   const { data, error } = await adminDb
     .from("newsletter_campaigns")
-    .select("id,title,subject,preview_text,content_html,status,audience_mode,audience_filter,template_id,provider,sent_count,fail_count")
+    .select("id,title,subject,preview_text,content_html,status,audience_mode,audience_filter,template_id,provider,sent_count,fail_count,started_at")
     .eq("id", id)
     .single();
 
