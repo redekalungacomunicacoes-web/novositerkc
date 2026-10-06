@@ -4,7 +4,6 @@ import { Menu, X } from 'lucide-react';
 import { cn } from '@/app/components/ui/utils';
 // The Figma export uses the special "figma:asset" scheme, which Vite can't resolve.
 // Assets live in src/assets, so we import via a real path.
-import logoRKC from '../../assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png';
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,7 +33,7 @@ export function Header() {
           <div className="flex-shrink-0">
             <Link to="/" className="flex items-center gap-3">
               <img 
-                src={logoRKC} 
+                src="/relatorios/oficina-2026/assets/Logo_Rede_Kalunga-DSCdAc4t.png" 
                 alt="Rede Kalunga Comunicações" 
                 className="h-14 sm:h-16 w-auto"
               />
