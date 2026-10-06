@@ -18,6 +18,7 @@ import { createCenterFolder, manageCenterFolder, moveCenterFile, uploadCenterFil
 import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
 import { ensureTeamMemberFolder, importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair, uploadTeamPortfolio, removeTeamAvatar, removeTeamPortfolio, requireTeamEditor, confirmTeamAvatar } from "../_shared/team-drive.ts";
+import { uploadProjectDrive, getProjectPreview } from "../_shared/project-drive.ts";
 import { cleanupUnreferencedMateriaFiles, uploadMateriaDrive } from "../_shared/materia-drive.ts";
 
 // Root ID provided and named by RKC in this task; the academy child ID is discovered at runtime.
@@ -103,6 +104,10 @@ Deno.serve(async (req) => {
     const contentType = req.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
+      if (form.get("module") === "projetos") {
+        if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
+        return json({ok:true,file:await uploadProjectDrive(form,requireAcademyRoot(rootFolderId),userClient,admin,auth.user.id)});
+      }
       if (form.get("module") === "materias") {
         if (form.get("action") === "cleanup-unreferenced") {
           const materiaId = String(form.get("materia_id") || "");
@@ -231,6 +236,12 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action ?? "");
+    if (action === "project-preview") {
+      const file = await getProjectPreview(String(body.slug || ""),userClient,admin);
+      const response = await downloadDriveFile(file.drive_file_id);
+      return new Response(response.body,{status:response.status,headers:{...corsHeaders,
+        "Content-Type":"application/octet-stream","Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"}});
+    }
     if (["center-folder-create","center-folder-rename","center-folder-delete","center-file-move"].includes(action)) {
       if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
       const result=await withCenterLease(rootFolderId,admin,async()=>{

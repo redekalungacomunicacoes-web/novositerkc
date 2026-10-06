@@ -1,0 +1,32 @@
+name: Validate Projects
+on:
+  pull_request:
+    paths:
+      - 'src/app/pages/*Projeto*.tsx'
+      - 'src/app/pages/admin/AdminProjetoForm.tsx'
+      - 'src/app/components/ProjectAdminImage.tsx'
+      - 'src/app/repositories/projectRepository.ts'
+      - 'src/lib/projectDrive.ts'
+      - 'supabase/functions/_shared/project-drive.ts'
+      - 'supabase/functions/drive-media/index.ts'
+      - 'supabase/functions/drive-files/index.ts'
+      - 'tsconfig.projects.json'
+      - '.github/workflows/validate-projects.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsc -p tsconfig.projects.json
+      - run: npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --no-config supabase/functions/_shared/project-drive.ts supabase/functions/drive-media/index.ts

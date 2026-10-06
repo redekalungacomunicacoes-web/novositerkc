@@ -22,6 +22,8 @@ export type ProjetoRecord = {
 };
 
 export type ProjetoGaleriaRecord = {
+  drive_file_id?: string | null;
+  thumb_drive_file_id?: string | null;
   id: string;
   projeto_id: string;
   tipo: string;

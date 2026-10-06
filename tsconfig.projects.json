@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.academia.json",
+  "include": [
+    "src/app/pages/admin/AdminProjetoForm.tsx",
+    "src/app/pages/ProjetoDetalhes.tsx",
+    "src/app/pages/Projetos.tsx",
+    "src/app/components/ProjectAdminImage.tsx",
+    "src/lib/projectDrive.ts"
+  ]
+}
