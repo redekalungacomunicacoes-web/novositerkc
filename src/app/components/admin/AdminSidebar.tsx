@@ -96,7 +96,7 @@ export const adminLinks: SidebarLink[] = [
     icon: Users,
     allow: ["admin_alfa"],
   },
-  { href: "/admin/popups", label: "Pop-ups", icon: Megaphone, allow: ["admin_alfa"] },
+  { href: "/admin/popups", label: "Pop-ups", icon: Megaphone, allow: ["admin_alfa", "admin"] },
   {
     href: "/admin/configuracoes",
     label: "Configurações",

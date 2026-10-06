@@ -120,7 +120,7 @@ export const router = createBrowserRouter([
           },
           { path: "usuarios", loader: requireRoles(["admin_alfa"]), element: <AdminUsuarios /> },
           { path: "configuracoes", loader: requireRoles(["admin_alfa"]), element: <AdminConfiguracoes /> },
-          { path: "popups", loader: requireRoles(["admin_alfa"]), element: <AdminPopups /> },
+          { path: "popups", loader: requireRoles(["admin_alfa", "admin"]), element: <AdminPopups /> },
         ],
       },
     ],
