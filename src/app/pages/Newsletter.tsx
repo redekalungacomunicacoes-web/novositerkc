@@ -22,8 +22,8 @@ export function Newsletter() {
     const payload = {
       email: email.trim(),
       name: nome.trim(),
-      // Você pode enviar um "source" se quiser rastrear:
       source: "site_newsletter_page",
+      consent: true,
     };
 
     try {
