@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getHomeBannerUrl } from "@/lib/siteSettings";
 import { buildPublicStorageUrl, getFooterSettings } from "@/lib/footerSettings";
 import { supabase } from "@/lib/supabase";
-import logoRKC from "@/assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png";
+import { RkcLogo } from "@/app/components/RkcLogo";
 
 const LOGIN_BG_FALLBACK = "linear-gradient(140deg, #f5f5f5 0%, #e9ecef 100%)";
 
@@ -117,7 +117,7 @@ export function AdminLogin() {
       <div className="auth-card relative z-10 w-full max-w-[440px] rounded-2xl border border-white/45 bg-white/92 p-6 shadow-2xl backdrop-blur-[2px] sm:p-8">
         <div className="text-center mb-8">
           <div className="login-logo">
-            <img src={logoRKC} alt="Rede Kalunga Comunicações" />
+            <RkcLogo className="login-logo-canvas" />
           </div>
           <p className="text-muted-foreground mt-2">Entre com suas credenciais para acessar o painel.</p>
         </div>
