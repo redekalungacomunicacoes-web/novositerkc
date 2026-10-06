@@ -1082,6 +1082,16 @@ export function Academia() {
                                     courseId: managedCourse.id,
                                   })}
                                   <DriveUploads
+                                    key={`thumbnail-${l.id}`}
+                                    courseId={managedCourse.id}
+                                    lessonId={l.id}
+                                    kind="thumbnail"
+                                    existing={data.driveFiles.filter(
+                                      (f) => f.id === l.thumbnail_drive_file_id,
+                                    )}
+                                    onSaved={reload}
+                                  />
+                                  <DriveUploads
                                     key={`media-${l.id}`}
                                     courseId={managedCourse.id}
                                     lessonId={l.id}
