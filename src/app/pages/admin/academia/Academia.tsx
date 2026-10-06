@@ -1103,7 +1103,7 @@ export function Academia() {
                                               <Badge tone={l.status === "published" ? "published" : "draft"}>{labels[l.status]}</Badge>
                                             </div>
                                             <p className="mt-1 text-xs text-muted-foreground">{labels[l.type]}{l.duration_minutes ? ` · ${l.duration_minutes} min` : ""}</p>
-                                            {l.summary && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{l.summary}</p>}
+                                            {l.description && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{l.description}</p>}
                                           </div>
                                         </div>
                                         <div className="flex shrink-0 flex-wrap gap-2 xl:justify-end">
