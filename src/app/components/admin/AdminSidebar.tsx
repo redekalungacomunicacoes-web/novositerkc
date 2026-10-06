@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
-import logoRKC from "@/assets/4eeb42365666e2aad88f332a0930461cd4eefe17.png";
 import { getCurrentUserRoles } from "@/lib/rbac";
 
 type RoleName =
@@ -174,7 +173,7 @@ export function AdminSidebar() {
     <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border hidden md:flex flex-col h-screen fixed left-0 top-0 z-40">
       <div className="p-6 border-b border-sidebar-border flex items-center gap-3">
         <img
-          src={logoRKC}
+          src="/relatorios/oficina-2026/assets/Logo_Rede_Kalunga-DSCdAc4t.png"
           alt="Rede Kalunga Comunicações"
           className="h-12 w-auto"
         />
