@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
-export type SiteImageCategory = "banner" | "territory" | "about" | "team" | "logo" | "favicon";
+export type SiteImageCategory = "banner" | "territory" | "about" | "team" | "logo" | "favicon" | "popup";
 
 export async function uploadSiteImage(file: File, category: SiteImageCategory): Promise<string> {
   if (!file.size || file.size > 25 * 1024 * 1024) throw new Error("Envie uma imagem de até 25 MB.");
