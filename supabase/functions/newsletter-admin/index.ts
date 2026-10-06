@@ -186,6 +186,7 @@ function renderHtml(args: {
   previewText?: string | null;
   name?: string | null;
   email?: string | null;
+  trackingPixelUrl?: string | null;
 }) {
   const preview = args.previewText
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(args.previewText)}</div>`
@@ -217,7 +218,11 @@ function renderHtml(args: {
     .replaceAll("{{email}}", escapeHtml(args.email || ""))
     .replaceAll("{{preview_text}}", escapeHtml(args.previewText || ""));
 
-  return preview + tpl;
+  const trackingPixel = args.trackingPixelUrl
+    ? `<img src="${args.trackingPixelUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;opacity:0" />`
+    : "";
+
+  return preview + tpl + trackingPixel;
 }
 
 async function listAudience(campaign: Campaign): Promise<Subscriber[]> {
@@ -435,7 +440,7 @@ async function actionSendCampaign(body: Record<string, unknown>) {
 
   const { data: batch, error: batchError } = await adminDb
     .from("newsletter_deliveries")
-    .select("id,subscriber_id,email,status")
+    .select("id,subscriber_id,email,status,tracking_token")
     .eq("campaign_id", campaign.id)
     .eq("status", "queued")
     .order("queued_at", { ascending: true })
@@ -472,6 +477,9 @@ async function actionSendCampaign(body: Record<string, unknown>) {
           previewText: campaign.preview_text,
           name: subscriber?.name || null,
           email: item.email,
+          trackingPixelUrl: item.tracking_token
+            ? `${supabaseUrl}/functions/v1/newsletter-track-open?token=${encodeURIComponent(item.tracking_token)}`
+            : null,
         });
 
         const info = await transport.sendMail({
