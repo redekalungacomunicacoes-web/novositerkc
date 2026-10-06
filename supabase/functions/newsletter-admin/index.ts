@@ -407,8 +407,8 @@ async function actionSendCampaign(body: Record<string, unknown>) {
   const bodyHtml = String(campaign.content_html || "").trim();
   if (!campaign.subject?.trim() || !bodyHtml) return fail("invalid_campaign", "A campanha precisa de assunto e conteúdo.");
 
-  const subscribers = await listAudience(campaign);
-  if (subscribers.length === 0) {
+  const allSubscribers = await listAudience(campaign);
+  if (allSubscribers.length === 0) {
     await adminDb.from("newsletter_campaigns").update({
       status: "failed",
       last_error: "Nenhum inscrito ativo corresponde à audiência selecionada.",
@@ -417,7 +417,28 @@ async function actionSendCampaign(body: Record<string, unknown>) {
     return fail("empty_audience", "Nenhum inscrito ativo corresponde à audiência selecionada.");
   }
 
+  const recipientLimit = Math.max(1, Math.min(Number(settings.max_per_send || 5000), 5000));
+  const subscribers = allSubscribers.slice(0, recipientLimit);
+
   await prepareDeliveries(campaign, subscribers);
+
+  // Recover a delivery lease if a previous invocation stopped after marking it as "sending".
+  // Ten minutes is safely above the SMTP socket timeout and keeps interrupted campaigns resumable.
+  const staleSendingBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { error: recoveryError } = await adminDb
+    .from("newsletter_deliveries")
+    .update({
+      status: "queued",
+      error_message: "Envio recuperado após interrupção da função.",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("campaign_id", campaign.id)
+    .eq("status", "sending")
+    .lt("updated_at", staleSendingBefore);
+
+  if (recoveryError) {
+    return fail("delivery_recovery_failed", "Não foi possível recuperar envios interrompidos.", recoveryError.message);
+  }
 
   if (campaign.status !== "sending") {
     const { error } = await adminDb.from("newsletter_campaigns").update({
@@ -431,7 +452,7 @@ async function actionSendCampaign(body: Record<string, unknown>) {
 
   const { data: batch, error: batchError } = await adminDb
     .from("newsletter_deliveries")
-    .select("id,subscriber_id,email,status")
+    .select("id,subscriber_id,email,status,attempt_count")
     .eq("campaign_id", campaign.id)
     .eq("status", "queued")
     .order("queued_at", { ascending: true })
@@ -441,7 +462,14 @@ async function actionSendCampaign(body: Record<string, unknown>) {
 
   if (!batch || batch.length === 0) {
     const stats = await refreshCampaignStats(campaign.id);
-    return ok({ done: true, ...stats, processed: 0 });
+    return ok({
+      done: stats.queued === 0,
+      ...stats,
+      processed: 0,
+      audience_total: allSubscribers.length,
+      recipient_limit: recipientLimit,
+      truncated: allSubscribers.length > subscribers.length,
+    });
   }
 
   const subscriberMap = new Map(subscribers.map((s) => [s.id, s]));
@@ -458,7 +486,12 @@ async function actionSendCampaign(body: Record<string, unknown>) {
         ? `${supabaseUrl}/functions/v1/newsletter-unsubscribe?token=${encodeURIComponent(token)}`
         : "https://kalungacomunicacoes.org/newsletter";
 
-      await adminDb.from("newsletter_deliveries").update({ status: "sending", error_message: null }).eq("id", item.id);
+      await adminDb.from("newsletter_deliveries").update({
+        status: "sending",
+        error_message: null,
+        attempt_count: Number(item.attempt_count || 0) + 1,
+        updated_at: new Date().toISOString(),
+      }).eq("id", item.id);
 
       try {
         const html = renderHtml({
@@ -509,7 +542,14 @@ async function actionSendCampaign(body: Record<string, unknown>) {
   }
 
   const stats = await refreshCampaignStats(campaign.id);
-  return ok({ done: stats.queued === 0, ...stats, processed });
+  return ok({
+    done: stats.queued === 0,
+    ...stats,
+    processed,
+    audience_total: allSubscribers.length,
+    recipient_limit: recipientLimit,
+    truncated: allSubscribers.length > subscribers.length,
+  });
 }
 
 async function actionRetryFailed(body: Record<string, unknown>) {
