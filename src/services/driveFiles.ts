@@ -257,6 +257,7 @@ export async function uploadAcademyFile(input: {
     form.append("course_id", input.courseId);
     form.append("kind", input.kind);
     form.append("upload_id", input.uploadId);
+    if (input.lessonId) form.append("lesson_id", input.lessonId);
     if (input.replaceMaterialId) form.append("replace_material_id", input.replaceMaterialId);
     input.onProgress(10);
     const { data: uploaded, error: uploadError } = await supabase.functions.invoke("drive-files", { body: form });
