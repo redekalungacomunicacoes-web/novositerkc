@@ -4,8 +4,12 @@ on:
     paths:
       - 'src/app/pages/*Materia*.tsx'
       - 'src/app/pages/admin/AdminMateriaForm.tsx'
+      - 'src/app/components/RKCCard.tsx'
       - 'src/app/components/SiteSeo.tsx'
+      - 'src/lib/materiaMediaOptimization.ts'
+      - 'src/lib/supabase.ts'
       - 'supabase/functions/_shared/materia-drive.ts'
+      - 'supabase/functions/drive-media/index.ts'
       - 'tests/materia*.test.mjs'
       - 'scripts/generate-pilot-seo.mjs'
       - 'tsconfig.materias.json'
