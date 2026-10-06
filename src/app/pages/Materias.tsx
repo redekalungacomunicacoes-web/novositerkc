@@ -20,6 +20,17 @@ type MateriaRow = {
   status: 'published' | 'draft' | 'archived';
 };
 
+const warmedArticleHeroes = new Set<string>();
+
+function warmArticleHero(url?: string | null) {
+  if (!url || warmedArticleHeroes.has(url) || typeof Image === 'undefined') return;
+  warmedArticleHeroes.add(url);
+  const image = new Image();
+  image.decoding = 'async';
+  image.fetchPriority = 'high';
+  image.src = url;
+}
+
 function formatDateBR(iso?: string | null) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -78,6 +89,7 @@ export function Materias() {
         titulo: m.titulo,
         resumo: m.resumo || '',
         imagem: m.capa_thumb_url || m.capa_url || m.banner_url || 'https://images.unsplash.com/photo-1579308343343-6557a756d515?auto=format&fit=crop&w=1200&q=80',
+        heroImage: m.banner_url || m.capa_url || m.capa_thumb_url || '',
         autor: m.autor_nome || 'RKC',
         data: formatDateBR(m.published_at || m.created_at),
         categoria,
@@ -147,7 +159,12 @@ export function Materias() {
               {materiasFiltradas.map((materia, index) => {
                 const firstRow = index < 3;
                 return (
-                  <RKCCard key={materia.id} className="h-full flex flex-col">
+                  <RKCCard
+                    key={materia.id}
+                    className="h-full flex flex-col"
+                    onPointerEnter={() => warmArticleHero(materia.heroImage)}
+                    onFocusCapture={() => warmArticleHero(materia.heroImage)}
+                  >
                     <Link to={`/materias/${materia.slug || materia.id}`} className="block hover:opacity-95 transition-opacity">
                       <RKCCardImage
                         src={materia.imagem}
