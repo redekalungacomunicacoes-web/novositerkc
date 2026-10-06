@@ -18,10 +18,11 @@ test('card images default to lazy async loading', async () => {
   assert.match(source, /decoding="async"/);
 });
 
-test('article uploads are optimized before invoking drive-files', async () => {
+test('article uploads are optimized through the supported custom fetch hook', async () => {
   const client = await read('src/lib/supabase.ts');
   const optimizer = await read('src/lib/materiaMediaOptimization.ts');
-  assert.match(client, /functionName === "drive-files"/);
+  assert.match(client, /\/functions\/v1\/drive-files/);
+  assert.match(client, /fetch: optimizedSupabaseFetch/);
   assert.match(client, /optimizeMateriaDriveForm/);
   assert.match(optimizer, /image\/webp/);
   assert.match(optimizer, /maxEdge: 1600/);
