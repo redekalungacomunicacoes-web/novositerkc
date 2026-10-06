@@ -16,7 +16,16 @@ verify_jwt = false
 [functions.newsletter-admin]
 verify_jwt = true
 
-# Compatibility endpoint for older clients. New admin code uses newsletter-admin directly.
+# Compatibility endpoints. They only proxy into newsletter-admin, which enforces RKC roles.
+[functions.newsletter-config]
+verify_jwt = true
+
+[functions.newsletter-send-test]
+verify_jwt = true
+
+[functions.newsletter-validate-smtp]
+verify_jwt = true
+
 [functions.newsletter-send-campaign]
 verify_jwt = true
 
