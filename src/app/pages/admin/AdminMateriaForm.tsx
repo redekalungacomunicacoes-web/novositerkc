@@ -36,6 +36,9 @@ type MateriaFormData = {
   hashtags: string;
   audioUrl: string;
   photoCredits: string;
+  customSlug: string;
+  seoTitle: string;
+  seoDescription: string;
   status: "published" | "draft" | "archived";
 };
 
@@ -310,6 +313,9 @@ export function AdminMateriaForm() {
       hashtags: "",
       audioUrl: "",
       photoCredits: "",
+      customSlug: "",
+      seoTitle: "",
+      seoDescription: "",
     },
   });
 
@@ -458,6 +464,9 @@ export function AdminMateriaForm() {
         hashtags: Array.isArray(d.hashtags) ? d.hashtags.join(", ") : "",
         audioUrl: d.audio_url || "",
         photoCredits: d.photo_credits || "",
+        customSlug: d.slug || "",
+        seoTitle: d.seo_title || "",
+        seoDescription: d.seo_description || "",
       });
 
       await loadGaleria(id);
@@ -865,7 +874,7 @@ export function AdminMateriaForm() {
     setLoading(true);
     try {
       const tags = data.category ? [data.category] : [];
-      const baseSlug = slugify(data.title);
+      const baseSlug = slugify(data.customSlug.trim() || data.title);
       const uniqueSlug = await ensureUniqueMateriaSlug(baseSlug, id);
       const autor = equipe.find((p) => p.id === data.authorId);
       const autor_nome = autor?.nome || null;
@@ -877,6 +886,8 @@ export function AdminMateriaForm() {
         titulo: data.title,
         slug: uniqueSlug,
         resumo: data.subtitle || null,
+        seo_title: data.seoTitle.trim() || null,
+        seo_description: data.seoDescription.trim() || null,
         conteudo: legacyContent,
         content_blocks: sanitizedBlocks.length ? sanitizedBlocks : null,
         hashtags: normalizeHashtags(data.hashtags),
@@ -1213,6 +1224,20 @@ export function AdminMateriaForm() {
         </div>
 
         <div className="space-y-6">
+          <section className="bg-card border rounded-xl p-4 shadow-sm space-y-3" aria-label="SEO e compartilhamento">
+            <h3 className="font-semibold text-base">SEO e compartilhamento</h3>
+            <label className="block text-sm">URL da matéria (slug)
+              <input {...register("customSlug")} className="mt-1 w-full h-9 rounded-md border bg-background px-2 text-sm" placeholder="automaticamente pelo título" />
+            </label>
+            <p className="text-xs text-muted-foreground">Alterar o slug de uma matéria publicada muda o endereço do link.</p>
+            <label className="block text-sm">Título da prévia
+              <input {...register("seoTitle")} maxLength={120} className="mt-1 w-full h-9 rounded-md border bg-background px-2 text-sm" placeholder={watch("title") || "Título da matéria"} />
+            </label>
+            <label className="block text-sm">Descrição da prévia
+              <textarea {...register("seoDescription")} maxLength={300} rows={3} className="mt-1 w-full rounded-md border bg-background p-2 text-sm" placeholder={watch("subtitle") || "Resumo da matéria"} />
+            </label>
+            <p className="text-xs text-muted-foreground">Imagem: banner; se não houver, capa.</p>
+          </section>
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
               <div className="space-y-2">
