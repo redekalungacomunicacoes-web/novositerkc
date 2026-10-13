@@ -1233,10 +1233,16 @@ export function AdminMateriaForm() {
             <label className="block text-sm">Título da prévia
               <input {...register("seoTitle")} maxLength={120} className="mt-1 w-full h-9 rounded-md border bg-background px-2 text-sm" placeholder={watch("title") || "Título da matéria"} />
             </label>
+            <p className={`text-xs ${(watch("seoTitle") || "").length > 60 ? "text-amber-700" : "text-muted-foreground"}`}>
+              {(watch("seoTitle") || "").length}/120 caracteres. Use um título claro; cerca de 50 a 60 caracteres é uma referência, não uma regra.
+            </p>
             <label className="block text-sm">Descrição da prévia
               <textarea {...register("seoDescription")} maxLength={300} rows={3} className="mt-1 w-full rounded-md border bg-background p-2 text-sm" placeholder={watch("subtitle") || "Resumo da matéria"} />
             </label>
-            <p className="text-xs text-muted-foreground">Imagem: banner; se não houver, capa.</p>
+            <p className={`text-xs ${(watch("seoDescription") || "").length > 170 ? "text-amber-700" : "text-muted-foreground"}`}>
+              {(watch("seoDescription") || "").length}/300 caracteres. Uma descrição específica com cerca de 120 a 160 caracteres costuma caber melhor na prévia.
+            </p>
+            <p className="text-xs text-muted-foreground">Se os campos ficarem vazios, o site usa o título e o resumo da matéria. Imagem: banner; se não houver, capa.</p>
           </section>
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
