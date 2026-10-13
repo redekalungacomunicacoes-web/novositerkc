@@ -450,6 +450,50 @@ export function Academia() {
           )}
           {tab === "Minha Academia" && (
             <>
+              <section className="space-y-3" aria-labelledby="academy-course-catalog">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 id="academy-course-catalog" className="text-xl font-semibold">Cursos disponíveis</h2>
+                    <p className="text-xs text-muted-foreground">Escolha um curso para começar.</p>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{filteredCatalog.length} curso(s)</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex-1 min-w-[160px]">
+                    <span className="sr-only">Buscar cursos</span>
+                    <input type="search" placeholder="Buscar curso" aria-label="Buscar cursos" className="w-full border rounded-md px-3 py-2 bg-background text-sm" value={q} onChange={(e) => setQ(e.target.value)} />
+                  </label>
+                  <label>
+                    <span className="sr-only">Categoria</span>
+                    <select aria-label="Filtrar por categoria" className="border rounded-md px-3 py-2 bg-background text-sm max-w-[140px]" value={category} onChange={(e) => setCategory(e.target.value)}>
+                      <option value="">Todas categorias</option>
+                      {data.categories.map((c) => <option value={c.id} key={c.id}>{c.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {filteredCatalog.map((c) => (
+                    <article key={c.id} className="min-w-0 overflow-hidden rounded-lg border bg-card flex flex-col">
+                      <Link to={`/admin/academia/cursos/${c.id}`} aria-label={`Abrir curso ${c.title}`} className="block aspect-video overflow-hidden bg-muted">
+                        {c.cover_path || c.cover_drive_file_id ? (
+                          <Asset path={c.cover_path} driveFileId={c.cover_drive_file_id} title={c.title} type="image" variant="card" showOpenLink={false} />
+                        ) : (
+                          <div className="flex h-full items-center justify-center"><GraduationCap aria-hidden="true" className="h-9 w-9 text-primary" /></div>
+                        )}
+                      </Link>
+                      <div className="p-2.5 sm:p-3 flex-1 flex flex-col gap-2">
+                        <h3 className="text-sm font-semibold leading-snug line-clamp-2">
+                          <Link to={`/admin/academia/cursos/${c.id}`} className="hover:underline">{c.title}</Link>
+                        </h3>
+                        <Link className="mt-auto rounded-md bg-primary px-3 py-2 text-center text-xs sm:text-sm font-medium text-primary-foreground" to={`/admin/academia/cursos/${c.id}`}>
+                          Acessar curso
+                        </Link>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                {!filteredCatalog.length && <Empty>Nenhum curso publicado corresponde à sua busca ou às suas permissões.</Empty>}
+              </section>
               <div className="grid sm:grid-cols-3 gap-4">
                 {[
                   ["Meus cursos", myEnrollments.length],
@@ -548,25 +592,6 @@ export function Academia() {
                   automaticamente no perfil.
                 </p>
               </Card>
-              <section className="space-y-4">
-                <div>
-                  <h2 className="text-xl font-semibold">Catálogo de cursos</h2>
-                  <p className="text-sm text-muted-foreground">Cursos publicados disponíveis para sua aprendizagem.</p>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <label className="flex-1">Buscar cursos
-                    <input type="search" className="block w-full border rounded-md px-3 py-2 bg-background" value={q} onChange={(e) => setQ(e.target.value)} />
-                  </label>
-                  <label>Categoria
-                    <select className="block border rounded-md px-3 py-2 bg-background" value={category} onChange={(e) => setCategory(e.target.value)}>
-                      <option value="">Todas</option>
-                      {data.categories.map((c) => <option value={c.id} key={c.id}>{c.name}</option>)}
-                    </select>
-                  </label>
-                </div>
-                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{filteredCatalog.map(courseCard)}</div>
-                {!filteredCatalog.length && <Empty>Nenhum curso publicado corresponde à sua busca ou às suas permissões.</Empty>}
-              </section>
               <Card>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
