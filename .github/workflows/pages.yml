@@ -30,8 +30,8 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      - name: Generate pilot article social metadata
-        run: node scripts/generate-pilot-seo.mjs
+      - name: Generate social metadata for published articles
+        run: node scripts/generate-article-seo.mjs
 
       - run: cp dist/index.html dist/404.html
 
