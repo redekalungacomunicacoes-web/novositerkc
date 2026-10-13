@@ -8,6 +8,8 @@ export type MateriaRow = {
   titulo: string;
   slug: string;
   resumo: string | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
   conteudo: string | null;
   content_blocks?: MateriaContentBlock[] | null;
   hashtags?: string[] | null;
