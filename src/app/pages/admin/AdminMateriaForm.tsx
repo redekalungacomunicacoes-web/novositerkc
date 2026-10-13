@@ -802,6 +802,18 @@ export function AdminMateriaForm() {
     });
   };
 
+  const moveBlockTo = (blockId: string, position: number) => {
+    if (!Number.isInteger(position)) return;
+    setBlocks(prev => {
+      const from = prev.findIndex(b => b.id === blockId);
+      if (from < 0 || position < 1 || position > prev.length) return prev;
+      const result = [...prev];
+      const [item] = result.splice(from, 1);
+      result.splice(position - 1, 0, item);
+      return result;
+    });
+    setActiveBlock(null);
+  };
   const handleUploadBlockImage = async (blockId: string, file?: File) => {
     if (!file) return;
 
@@ -944,14 +956,6 @@ export function AdminMateriaForm() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Autor</label>
-                <select {...register("authorId")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
-                  <option value="">{loadingEquipe ? "Carregando equipe..." : equipe.length ? "Selecione um autor..." : "Nenhum integrante cadastrado"}</option>
-                  {equipe.map((p) => <option key={p.id} value={p.id}>{p.nome}{p.cargo ? ` — ${p.cargo}` : ""}</option>)}
-                </select>
-                {selectedAuthorId && <p className="text-xs text-muted-foreground">Autor: <b>{equipe.find((p) => p.id === selectedAuthorId)?.nome || "—"}</b></p>}
-              </div>
-              <div className="space-y-2">
                 <label className="text-sm font-medium">Data de Publicação</label>
                 <input type="date" {...register("date")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
               </div>
@@ -1027,7 +1031,7 @@ export function AdminMateriaForm() {
                   <div
                     key={block.id}
                     id={`block-${index}`}
-                    className={`rounded-lg border-l-4 transition-colors ${blockStyles[block.type].border} ${blockStyles[block.type].bg} ${isActive ? "ring-2 ring-primary/30" : ""}`}
+                    className={`rounded-lg border-2 transition-colors ${blockStyles[block.type].border} ${blockStyles[block.type].bg} ${isActive ? "ring-2 ring-primary/30" : ""}`}
                   >
                     <div className="flex items-center justify-between gap-2 p-4 cursor-pointer" onClick={() => setActiveBlock(isActive ? null : index)}>
                       <div className="flex items-center gap-2">
@@ -1049,8 +1053,7 @@ export function AdminMateriaForm() {
                             <option key={type} value={type}>{blockTypeLabels[type]}</option>
                           ))}
                         </select>
-                        <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === 0} onClick={() => moveBlock(index, -1)}><ChevronUp className="w-3 h-3" /></button>
-                        <button type="button" className="p-1 rounded border hover:bg-muted" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)}><ChevronDown className="w-3 h-3" /></button>
+                        <input key={`${block.id}-${index}`} type="number" min={1} max={blocks.length} defaultValue={index + 1} aria-label={`Mover bloco ${index + 1} para posição`} title="Digite a posição e pressione Enter" className="h-8 w-14 rounded border bg-background text-center text-xs" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); moveBlockTo(block.id, Number(e.currentTarget.value)); } }} onBlur={(e) => {if(Number(e.currentTarget.value)!==index+1)moveBlockTo(block.id,Number(e.currentTarget.value));}} />
                         <button type="button" className="p-1 rounded border hover:bg-destructive/10" onClick={() => removeBlock(block.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
                       </div>
                     </div>
@@ -1212,6 +1215,15 @@ export function AdminMateriaForm() {
         <div className="space-y-6">
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Autor</label>
+                <select {...register("authorId")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                  <option value="">{loadingEquipe ? "Carregando equipe..." : equipe.length ? "Selecione um autor..." : "Nenhum integrante cadastrado"}</option>
+                  {equipe.map((p) => <option key={p.id} value={p.id}>{p.nome}{p.cargo ? ` — ${p.cargo}` : ""}</option>)}
+                </select>
+                {selectedAuthorId && <p className="text-xs text-muted-foreground">Autor: <b>{equipe.find((p) => p.id === selectedAuthorId)?.nome || "—"}</b></p>}
+              </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
               <select {...register("status")} className="w-full h-10 px-3 rounded-md border bg-background">
@@ -1263,8 +1275,8 @@ export function AdminMateriaForm() {
             </div>
           </div>
 
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b pb-4 mb-2">
+          <div className="bg-card border rounded-xl p-3 shadow-sm space-y-2">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold text-lg">Capa da Matéria</h3>
 
               <input ref={coverInputRef} type="file" accept="image/*" className="hidden" id="cover-input" onChange={(e) => handleCoverUpload(e.target.files?.[0])} />
@@ -1274,7 +1286,7 @@ export function AdminMateriaForm() {
               </label>
             </div>
 
-            {coverUrl ? <img src={coverUrl} alt="Capa" className="w-full h-44 object-cover rounded-lg border" /> : <div className="w-full h-44 rounded-lg border-2 border-dashed flex items-center justify-center text-sm text-muted-foreground">Nenhuma capa definida</div>}
+            {coverUrl ? <div className="flex items-center justify-between rounded-md bg-muted p-2 text-xs"><span>✓ Capa carregada</span><button type="button" className="text-destructive underline" onClick={() => { setValue("coverImage", ""); setCoverDriveFileId(null); setCoverThumbDriveFileId(null); setCoverThumbUrl(null); }}>Remover</button></div> : <p className="text-xs text-muted-foreground">Sem capa</p>}
             <p className="text-xs text-muted-foreground">
               Usada na listagem e nos cards. Recomendado: formato quadrado 1:1 (ex.: 800x800 ou 960x960).
             </p>
@@ -1284,8 +1296,8 @@ export function AdminMateriaForm() {
             </div>
           </div>
 
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b pb-4 mb-2">
+          <div className="bg-card border rounded-xl p-3 shadow-sm space-y-2">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold text-lg">Banner da Matéria</h3>
 
               <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" id="banner-input" onChange={(e) => handleBannerUpload(e.target.files?.[0])} />
@@ -1295,7 +1307,7 @@ export function AdminMateriaForm() {
               </label>
             </div>
 
-            {bannerUrl ? <img src={bannerUrl} alt="Banner" className="w-full h-44 object-cover rounded-lg border" /> : <div className="w-full h-44 rounded-lg border-2 border-dashed flex items-center justify-center text-sm text-muted-foreground">Nenhum banner definido</div>}
+            {bannerUrl ? <div className="flex items-center justify-between rounded-md bg-muted p-2 text-xs"><span>✓ Banner carregado</span><button type="button" className="text-destructive underline" onClick={() => { setValue("bannerImage", ""); setBannerDriveFileId(null); }}>Remover</button></div> : <p className="text-xs text-muted-foreground">Sem banner</p>}
             <p className="text-xs text-muted-foreground">
               Usado no topo da matéria publicada. Recomendado: formato horizontal (ex.: 1600x900, 1440x810 ou 1280x720).
             </p>
