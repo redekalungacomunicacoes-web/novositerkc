@@ -30,7 +30,7 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      - name: Generate social metadata for published articles
+      - name: Generate search metadata, structured data and sitemap
         run: node scripts/generate-article-seo.mjs
 
       - run: cp dist/index.html dist/404.html

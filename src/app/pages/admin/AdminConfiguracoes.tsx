@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Save, Image as ImageIcon, Trash2 } from "lucide-react";
+import { Save, Image as ImageIcon, Trash2, AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { getSiteSettings, updateSiteSettings } from "@/lib/siteSettings";
+import { supabase } from "@/lib/supabase";
 import { uploadSiteImage } from "@/lib/siteDrive";
 import {
   FOOTER_DESCRIPTION_MAX_CHARS,
@@ -49,6 +50,23 @@ type AdminSettingsForm = {
 
 type UploadKind = "banner" | "territory" | "footer-logo" | "favicon";
 
+type SeoArticleAudit = {
+  id: string;
+  slug: string;
+  titulo: string;
+  resumo: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  capa_url: string | null;
+  banner_url: string | null;
+  autor_nome: string | null;
+  autor_id: string | null;
+  autor_equipe_id: string | null;
+};
+
+type SeoProjectAudit = { id: string; slug: string; titulo: string; resumo: string | null; descricao: string | null; capa_url: string | null; cover_card_path: string | null };
+type SeoTeamAudit = { id: string; slug: string; nome: string; bio: string | null; avatar_path: string | null; avatar_thumb_path: string | null; foto_url: string | null; avatar_drive_file_id: string | null; avatar_thumb_drive_file_id: string | null };
+
 
 function withCacheBuster(url: string) {
   const sep = url.includes("?") ? "&" : "?";
@@ -59,6 +77,10 @@ export function AdminConfiguracoes() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<null | UploadKind>(null);
+  const [seoAudit, setSeoAudit] = useState<SeoArticleAudit[]>([]);
+  const [seoProjectAudit, setSeoProjectAudit] = useState<SeoProjectAudit[]>([]);
+  const [seoTeamAudit, setSeoTeamAudit] = useState<SeoTeamAudit[]>([]);
+  const [showAllSeoIssues, setShowAllSeoIssues] = useState(false);
 
   const bannerFileRef = useRef<HTMLInputElement | null>(null);
   const territoryFileRef = useRef<HTMLInputElement | null>(null);
@@ -99,6 +121,20 @@ export function AdminConfiguracoes() {
   });
 
   const footerDescriptionCount = form.footer_description.length;
+  const previewTitle = form.seo_title.trim() || "Rede Kalunga Comunicações | Jornalismo quilombola";
+  const previewDescription = form.seo_description.trim() || "Jornalismo independente produzido no Território Quilombola Kalunga, na Chapada dos Veadeiros. Cultura, direitos, meio ambiente e vida no Cerrado.";
+  const seoArticlesWithoutCustomMetadata = seoAudit.filter((article) => !article.seo_title?.trim() || !article.seo_description?.trim());
+  const seoArticlesWithoutAuthor = seoAudit.filter((article) => !article.autor_nome?.trim() && !article.autor_id && !article.autor_equipe_id);
+  const seoArticlesWithoutImage = seoAudit.filter((article) => !article.banner_url?.trim() && !article.capa_url?.trim());
+  const seoArticlesLongTitle = seoAudit.filter((article) => (article.seo_title?.trim().length || 0) > 70);
+  const seoProjectsWithoutSummary = seoProjectAudit.filter((project) => !project.resumo?.trim() && !project.descricao?.trim());
+  const seoTeamWithoutBio = seoTeamAudit.filter((member) => !member.bio?.trim());
+  const seoTeamWithoutAvatar = seoTeamAudit.filter((member) => !member.avatar_thumb_path && !member.avatar_path && !member.foto_url && !member.avatar_drive_file_id && !member.avatar_thumb_drive_file_id);
+  const seoArticlesWithIssues = seoAudit.filter((article) =>
+    !article.seo_title?.trim() || !article.seo_description?.trim() || (article.seo_title?.trim().length || 0) > 70 ||
+    !article.autor_nome?.trim() && !article.autor_id && !article.autor_equipe_id ||
+    !article.banner_url?.trim() && !article.capa_url?.trim()
+  );
 
   const urlWarnings = useMemo(
     () => ({
@@ -120,7 +156,34 @@ export function AdminConfiguracoes() {
     (async () => {
       try {
         setLoading(true);
-        const [s, footer] = await Promise.all([getSiteSettings(), getFooterSettings()]);
+        const [s, footer, audit, projects, team] = await Promise.all([
+          getSiteSettings(),
+          getFooterSettings(),
+          supabase
+            .from("materias")
+            .select("id,slug,titulo,resumo,seo_title,seo_description,capa_url,banner_url,autor_nome,autor_id,autor_equipe_id")
+            .eq("status", "published")
+            .order("published_at", { ascending: false, nullsFirst: false }),
+          supabase
+            .from("projetos")
+            .select("id,slug,titulo,resumo,descricao,capa_url,cover_card_path")
+            .eq("publicado_transparencia", true),
+          supabase
+            .from("equipe")
+            .select("id,slug,nome,bio,avatar_path,avatar_thumb_path,foto_url,avatar_drive_file_id,avatar_thumb_drive_file_id")
+            .eq("is_public", true)
+            .eq("ativo", true),
+        ]);
+
+        if (audit.error) {
+          console.warn("Não foi possível auditar os metadados das matérias:", audit.error.message);
+        } else {
+          setSeoAudit((audit.data || []) as SeoArticleAudit[]);
+        }
+        if (projects.error) console.warn("Não foi possível auditar os projetos públicos:", projects.error.message);
+        else setSeoProjectAudit((projects.data || []) as SeoProjectAudit[]);
+        if (team.error) console.warn("Não foi possível auditar os perfis públicos:", team.error.message);
+        else setSeoTeamAudit((team.data || []) as SeoTeamAudit[]);
 
         setForm((p) => ({
           ...p,
@@ -217,6 +280,15 @@ export function AdminConfiguracoes() {
     if (!isValidEmail(form.footer_email)) {
       toast.error("Informe um e-mail válido para o rodapé.");
       return;
+    }
+    if (form.seo_og_image.trim()) {
+      try {
+        const imageUrl = new URL(form.seo_og_image.trim());
+        if (imageUrl.protocol !== "https:" && imageUrl.protocol !== "http:") throw new Error("invalid protocol");
+      } catch {
+        toast.error("Informe a URL completa da imagem social, começando com https://.");
+        return;
+      }
     }
 
     try {
@@ -354,6 +426,9 @@ export function AdminConfiguracoes() {
         {/* SEO do Site */}
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
           <h3 className="font-semibold text-lg border-b pb-4 mb-4">SEO do Site</h3>
+          <p className="text-sm text-muted-foreground">
+            Configure o resultado padrão da página inicial e os compartilhamentos. Cada matéria usa o próprio título e resumo, com campos opcionais para personalização.
+          </p>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
@@ -361,21 +436,31 @@ export function AdminConfiguracoes() {
               <input
                 value={form.seo_title}
                 onChange={(e) => setField("seo_title", e.target.value)}
-                placeholder="Título do site (SEO)"
+                maxLength={120}
+                placeholder="Rede Kalunga Comunicações | Jornalismo quilombola"
                 className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 disabled={loading}
               />
+              <p className={`text-xs ${form.seo_title.length > 60 ? "text-amber-700" : "text-muted-foreground"}`}>
+                {form.seo_title.length}/120 caracteres. Como referência, mantenha o título claro e próximo de 50 a 60 caracteres.
+              </p>
             </div>
             <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium">Descrição para buscadores</label>
               <textarea
                 value={form.seo_description}
                 onChange={(e) => setField("seo_description", e.target.value)}
-                placeholder="Descrição do site"
+                maxLength={300}
+                placeholder="Jornalismo independente produzido no Território Quilombola Kalunga..."
                 className="w-full min-h-24 px-3 py-2 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 disabled={loading}
               />
+              <p className={`text-xs ${form.seo_description.length > 160 ? "text-amber-700" : "text-muted-foreground"}`}>
+                {form.seo_description.length}/300 caracteres. Prefira uma frase específica, com cerca de 120 a 160 caracteres.
+              </p>
             </div>
             <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium">Termos de referência</label>
               <input
                 value={form.seo_keywords}
                 onChange={(e) => setField("seo_keywords", e.target.value)}
@@ -383,6 +468,7 @@ export function AdminConfiguracoes() {
                 className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 disabled={loading}
               />
+              <p className="text-xs text-muted-foreground">Campo mantido para referência interna. O Google não usa a meta tag keywords para classificar páginas; priorize títulos, resumos e conteúdo útil.</p>
             </div>
 
             <div className="space-y-2 md:col-span-2 mt-2">
@@ -405,13 +491,15 @@ export function AdminConfiguracoes() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium">Imagem de compartilhamento</label>
               <input
                 value={form.seo_og_image}
                 onChange={(e) => setField("seo_og_image", e.target.value)}
-                placeholder="URL da imagem de compartilhamento"
+                placeholder="https://..."
                 className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 disabled={loading}
               />
+              <p className="text-xs text-muted-foreground">Use uma URL pública HTTPS. Uma imagem horizontal de 1200 × 630 px funciona bem em prévias sociais.</p>
             </div>
 
             <div className="space-y-2 md:col-span-2 mt-2">
@@ -425,9 +513,85 @@ export function AdminConfiguracoes() {
                 <option value="index">Permitir indexação (Google)</option>
                 <option value="noindex">Não indexar</option>
               </select>
+              <p className="text-xs text-muted-foreground">“Não indexar” aplica noindex ao site público inteiro, inclusive às matérias. Mantenha “Permitir indexação” para aparecer nas buscas.</p>
+            </div>
+
+            <div className="md:col-span-2 rounded-lg border bg-white p-4 space-y-2" aria-label="Prévia do resultado de pesquisa">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prévia aproximada na busca</p>
+              <p className="text-sm text-green-800">kalungacomunicacoes.org</p>
+              <p className="text-xl leading-6 text-blue-800">{previewTitle}</p>
+              <p className="text-sm leading-5 text-gray-700">{previewDescription}</p>
+              <p className="text-xs text-muted-foreground">Buscadores podem reescrever título ou descrição conforme a pesquisa.</p>
             </div>
           </div>
         </div>
+
+        <section className="bg-card border rounded-xl p-6 shadow-sm space-y-4" aria-labelledby="seo-audit-title">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+            <div>
+              <h3 id="seo-audit-title" className="font-semibold text-lg">Auditoria SEO das matérias</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Verificação ao vivo dos campos das matérias publicadas no Supabase.</p>
+            </div>
+            <a href="/admin/materias" className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
+              Abrir matérias <ExternalLink className="h-4 w-4" />
+            </a>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Publicadas</p><p className="mt-1 text-2xl font-semibold">{seoAudit.length}</p></div>
+            <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Sem metadados personalizados</p><p className="mt-1 text-2xl font-semibold">{seoArticlesWithoutCustomMetadata.length}</p></div>
+            <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Sem autoria associada</p><p className="mt-1 text-2xl font-semibold">{seoArticlesWithoutAuthor.length}</p></div>
+            <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Sem imagem de capa/banner</p><p className="mt-1 text-2xl font-semibold">{seoArticlesWithoutImage.length}</p></div>
+            <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Título SEO acima de 70 caracteres</p><p className="mt-1 text-2xl font-semibold">{seoArticlesLongTitle.length}</p></div>
+          </div>
+
+          <div className="rounded-lg border divide-y">
+            <div className="flex items-center gap-2 bg-muted/40 px-4 py-3 text-sm font-medium">
+              {seoArticlesWithIssues.length
+                ? <><AlertTriangle className="h-4 w-4 text-amber-600" /> Itens que podem ser revisados</>
+                : <><CheckCircle2 className="h-4 w-4 text-green-700" /> Campos principais preenchidos</>}
+            </div>
+            {seoAudit.length === 0 ? (
+              <p className="px-4 py-4 text-sm text-muted-foreground">Carregando auditoria ou nenhuma matéria publicada encontrada.</p>
+            ) : (showAllSeoIssues ? seoAudit : seoArticlesWithIssues.slice(0, 8)).map((article) => {
+              const missing: string[] = [];
+              if (!article.seo_title?.trim()) missing.push("título personalizado");
+              else if (article.seo_title.trim().length > 70) missing.push("título SEO longo");
+              if (!article.seo_description?.trim()) missing.push("descrição personalizada");
+              if (!article.autor_nome?.trim() && !article.autor_id && !article.autor_equipe_id) missing.push("autoria");
+              if (!article.banner_url?.trim() && !article.capa_url?.trim()) missing.push("imagem");
+              return (
+                <div key={article.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{article.titulo}</p>
+                    <p className="text-xs text-muted-foreground">{missing.length ? `Revisar: ${missing.join(", ")}` : "Metadados personalizados preenchidos"}</p>
+                  </div>
+                  <a href={`/admin/materias/editar/${article.id}`} className="shrink-0 text-sm font-medium text-primary hover:underline">Editar</a>
+                </div>
+              );
+            })}
+            {seoArticlesWithIssues.length > 8 && (
+              <button type="button" onClick={() => setShowAllSeoIssues((current) => !current)} className="w-full px-4 py-3 text-left text-sm font-medium text-primary hover:bg-muted/30">
+                {showAllSeoIssues ? "Mostrar menos" : "Mostrar todas as matérias com pendências"}
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Título e resumo já são usados como fallback no resultado das matérias. Personalizar os campos melhora o controle da prévia, mas não garante posição específica no Google.
+          </p>
+          <div className="rounded-lg border bg-muted/20 p-4 space-y-2">
+            <p className="text-sm font-medium">Outras páginas públicas</p>
+            <p className="text-sm text-muted-foreground">
+              {seoProjectAudit.length} projetos ({seoProjectsWithoutSummary.length} sem resumo/descrição) · {seoTeamAudit.length} perfis da equipe ({seoTeamWithoutBio.length} sem biografia, {seoTeamWithoutAvatar.length} sem imagem de perfil).
+            </p>
+            {seoTeamWithoutBio.map((member) => (
+              <p key={member.id} className="flex items-center justify-between gap-3 text-sm">
+                <span>{member.nome}: biografia ausente</span>
+                <a href={`/admin/equipe/editar/${member.id}`} className="shrink-0 font-medium text-primary hover:underline">Editar perfil</a>
+              </p>
+            ))}
+          </div>
+        </section>
 
         {/* Bloco acima do rodapé (Home) */}
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
