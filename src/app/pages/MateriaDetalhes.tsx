@@ -14,6 +14,8 @@ type MateriaUI = {
   slug: string;
   titulo: string;
   resumo: string;
+  seoTitle?: string;
+  seoDescription?: string;
   imagem: string;
   autor: string;
   data: string;
@@ -322,6 +324,33 @@ export function MateriaDetalhes() {
   }), []);
 
   useEffect(() => {
+    if (!materia) return;
+    const title = materia.seoTitle || materia.titulo;
+    const description = materia.seoDescription || materia.resumo || "";
+    const url = `https://kalungacomunicacoes.org/materias/${encodeURIComponent(materia.slug)}`;
+    const upsert = (attribute: "name" | "property", key: string, value: string) => {
+      let tag = document.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
+      if (!tag) {
+        tag = document.createElement("meta");
+        tag.setAttribute(attribute, key);
+        document.head.appendChild(tag);
+      }
+      tag.content = value;
+    };
+    document.title = `${title} | Rede Kalunga Comunicações`;
+    upsert("name", "description", description);
+    upsert("property", "og:type", "article");
+    upsert("property", "og:title", title);
+    upsert("property", "og:description", description);
+    upsert("property", "og:url", url);
+    if (materia.imagem) upsert("property", "og:image", materia.imagem);
+    upsert("name", "twitter:card", "summary_large_image");
+    upsert("name", "twitter:title", title);
+    upsert("name", "twitter:description", description);
+    if (materia.imagem) upsert("name", "twitter:image", materia.imagem);
+  }, [materia]);
+
+  useEffect(() => {
     if (!paramValue) return;
 
     (async () => {
@@ -330,7 +359,7 @@ export function MateriaDetalhes() {
 
       const bySlug = await supabase
         .from("materias")
-        .select("id, slug, titulo, resumo, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, photo_credits, published_at, created_at, status")
+        .select("id, slug, titulo, resumo, seo_title, seo_description, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, photo_credits, published_at, created_at, status")
         .eq("slug", paramValue)
         .eq("status", "published")
         .limit(1);
@@ -340,7 +369,7 @@ export function MateriaDetalhes() {
       } else {
         const byId = await supabase
           .from("materias")
-          .select("id, slug, titulo, resumo, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, photo_credits, published_at, created_at, status")
+          .select("id, slug, titulo, resumo, seo_title, seo_description, capa_url, banner_url, autor_nome, autor_id, autor_equipe_id, tags, conteudo, content_blocks, hashtags, audio_url, photo_credits, published_at, created_at, status")
           .eq("id", paramValue)
           .eq("status", "published")
           .limit(1);
@@ -416,6 +445,8 @@ export function MateriaDetalhes() {
         slug: found.slug,
         titulo: found.titulo || "",
         resumo: found.resumo || "",
+        seoTitle: found.seo_title || found.titulo || "",
+        seoDescription: found.seo_description || found.resumo || "",
         imagem: heroImage,
         autor: authorProfile?.nome || found.autor_nome || "",
         data: formatDateBR(found.published_at || found.created_at),
