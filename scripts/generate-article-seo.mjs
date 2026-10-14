@@ -239,8 +239,11 @@ export function renderSitemap(articles, projects = [], team = [], { indexation =
 }
 
 async function fetchPublicTable(url, key) {
+  const headers = { apikey: key };
+  // Legacy anon keys are JWTs; opaque sb_publishable keys must not be sent as bearer tokens.
+  if (key.split('.').length === 3) headers.Authorization = `Bearer ${key}`;
   const response = await fetch(url, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
+    headers,
     signal: AbortSignal.timeout(30000),
   });
   if (!response.ok) throw Error(`SEO metadata query failed: HTTP ${response.status}`);
