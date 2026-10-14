@@ -287,10 +287,26 @@ export async function generate() {
   const projects = await fetchPublicTable(projectUrl, env.VITE_SUPABASE_ANON_KEY);
   const teamUrl = new URL('/rest/v1/equipe', env.VITE_SUPABASE_URL);
   teamUrl.search = new URLSearchParams({
-    select: 'id,slug,nome,cargo,bio,foto_url,avatar_path,avatar_thumb_path,avatar_drive_file_id,avatar_thumb_drive_file_id,avatar_thumb_drive:drive_files!equipe_avatar_thumb_drive_file_id_fkey(public_slug),avatar_drive:drive_files!equipe_avatar_drive_file_id_fkey(public_slug),updated_at',
+    select: 'id,slug,nome,cargo,bio,foto_url,avatar_path,avatar_thumb_path,avatar_drive_file_id,avatar_thumb_drive_file_id',
     is_public: 'eq.true', ativo: 'eq.true', order: 'order_index.asc', limit: '500',
   }).toString();
   const team = await fetchPublicTable(teamUrl, env.VITE_SUPABASE_ANON_KEY);
+  const driveFileIds = [...new Set(team.flatMap(member => [
+    member.avatar_thumb_drive_file_id, member.avatar_drive_file_id,
+  ]).filter(Boolean))];
+  if (driveFileIds.length) {
+    const driveUrl = new URL('/rest/v1/drive_files_public', env.VITE_SUPABASE_URL);
+    driveUrl.search = new URLSearchParams({
+      select: 'id,public_slug',
+      id: `in.(${driveFileIds.join(',')})`,
+    }).toString();
+    const publicDriveFiles = await fetchPublicTable(driveUrl, env.VITE_SUPABASE_ANON_KEY);
+    const driveById = new Map(publicDriveFiles.map(file => [file.id, file]));
+    for (const member of team) {
+      member.avatar_thumb_drive = driveById.get(member.avatar_thumb_drive_file_id) || null;
+      member.avatar_drive = driveById.get(member.avatar_drive_file_id) || null;
+    }
+  }
 
   const publicStorageUrl = (bucket, path) => `${env.VITE_SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/public/${bucket}/${String(path || '').split('/').map(encodeURIComponent).join('/')}`;
   for (const project of projects) {
