@@ -46,7 +46,7 @@ export async function getProjetoById(id: string) {
 }
 
 export async function getProjetoGaleria(projetoId: string, tipo?: "image" | "video") {
-  let query = supabase.from("projeto_galeria").select("id, projeto_id, tipo, url").eq("projeto_id", projetoId);
+  let query = supabase.from("projeto_galeria").select("id, projeto_id, tipo, url, titulo").eq("projeto_id", projetoId);
   if (tipo) query = query.eq("tipo", tipo);
   return query.order("id", { ascending: false });
 }
