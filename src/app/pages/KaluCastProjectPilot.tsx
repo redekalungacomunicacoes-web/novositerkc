@@ -7,7 +7,6 @@ import { getVideoEmbedUrl } from "@/lib/video";
 type Image = { id: string; url: string; tipo: string };
 type Project = { id: string; slug: string; titulo: string; descricao: string; descricaoCompleta: string; imagem: string; anoLancamento: number | null; instagramUrl: string | null; youtubeUrl: string | null; spotifyUrl: string | null; imagens: Image[] };
 type Video = { id: string; titulo: string | null; url: string; thumb_url: string | null; ordem: number | null };
-type Edition = { number: number; videos: Video[] };
 function editionOf(title: string) {
   const match = title.match(/(?:^|\s)(\d{1,2})\s*(?:ª|a|º|o)?\s*edi[cç][aã]o\b/i);
   return match ? Number(match[1]) : null;
