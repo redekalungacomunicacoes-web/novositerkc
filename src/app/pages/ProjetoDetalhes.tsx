@@ -116,7 +116,7 @@ export function ProjetoDetalhes() {
   if (!projeto) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center text-sm text-gray-500">Projeto não encontrado.</div></div>;
 
   // Pilot only: all other project pages keep their existing approved layout.
-  if (/^kalu[ -]?cast$/i.test(projeto.titulo.trim()) || /^kalu-?cast$/i.test(projeto.slug)) {
+  if (projeto.id === "16956a68-7412-4bf2-825c-0ecfd4a1c8db") {
     return <KaluCastProjectPilot project={projeto} />;
   }
 
