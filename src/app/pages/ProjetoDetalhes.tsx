@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { KaluCastProjectPilot } from "./KaluCastProjectPilot";
 import { ProjectYouTubeGrid } from "@/app/components/ProjectYouTubeGrid";
 import { RKCTag } from "@/app/components/RKCTag";
 import { RKCCard, RKCCardContent } from "@/app/components/RKCCard";
@@ -113,6 +114,11 @@ export function ProjetoDetalhes() {
 
   if (loading) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center text-sm text-gray-500">Carregando projeto...</div></div>;
   if (!projeto) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center text-sm text-gray-500">Projeto não encontrado.</div></div>;
+
+  // Pilot only: all other project pages keep their existing approved layout.
+  if (/^kalu[ -]?cast$/i.test(projeto.titulo.trim()) || /^kalu-?cast$/i.test(projeto.slug)) {
+    return <KaluCastProjectPilot project={projeto} />;
+  }
 
   const selectedImage = selectedImageIndex !== null ? projeto.imagens[selectedImageIndex] : null;
 
