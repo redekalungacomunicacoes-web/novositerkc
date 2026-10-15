@@ -14,6 +14,7 @@ type ProjectImage = {
   projeto_id: string;
   tipo: string;
   url: string;
+  titulo?: string | null;
 };
 
 type ProjetoUI = {
