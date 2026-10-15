@@ -17,7 +17,6 @@ function episodeTitle(title: string | null, index: number) {
 export function KaluCastProjectPilot({ project }: { project: Project }) {
   const [videos, setVideos] = useState<Video[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [album, setAlbum] = useState<number | "all" | "general">("all");
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
   const [params,setParams] = useSearchParams();
   const editionNumber = Number(params.get("edicao"));
@@ -36,7 +35,6 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
       const number = editionOf(v.titulo || "") || 1;
       groups.set(number, [...(groups.get(number) || []), v]);
     }
-    // Show the editorial structure even before video files are attached.
 
     return [...groups].sort(([a], [b]) => a - b).map(([number, values]) => ({ number, videos: values }));
   }, [videos]);
@@ -59,7 +57,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
   const embed = currentVideo ? getVideoEmbedUrl(currentVideo.url) : "";
   return <main className="bg-white">
     <section className="relative isolate min-h-[420px] overflow-hidden bg-zinc-900 text-white">
-      {project.imagem && <img src={project.imagem} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />}
+      {(activeEdition && detailEdition?.videos.find(v=>v.thumb_url)?.thumb_url || project.imagem) && <img src={activeEdition && detailEdition?.videos.find(v=>v.thumb_url)?.thumb_url || project.imagem} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />}
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black/80 via-black/45 to-black/60" />
       <div className="mx-auto flex min-h-[420px] max-w-7xl flex-col justify-end gap-8 px-4 py-12 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-8">
         <div className="max-w-2xl">
@@ -106,7 +104,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
         <div className="mt-4 flex flex-wrap gap-2">
           {([{value:"all",label:"Todas"},{value:"general",label:"Geral"},...imageEditions.map(n=>({value:String(n),label:`${n}ª edição`}))]).map(option=><button key={option.value} type="button" onClick={()=>{const next=new URLSearchParams(params); if(option.value==="all")next.delete("album");else next.set("album",option.value);setParams(next);setGalleryIndex(null);}} className={`rounded-full border px-4 py-2 text-sm ${String(selectedAlbum)===option.value ? "bg-zinc-900 text-white" : "bg-white"}`}>{option.label}</button>)}
         </div>
-        {/* Existing images have no edition identifier; showing them in 'Geral' prevents false attribution. */}
+        {/* Historical images without edition metadata remain in Geral. */}
         <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
           {visibleImages.map((image,index) => <button key={image.id} onClick={() => setGalleryIndex(index)} className="aspect-[4/3] overflow-hidden rounded-xl border"><img src={image.url} alt={`Registro ${index+1} do projeto`} loading="lazy" className="h-full w-full object-cover transition-transform hover:scale-105"/></button>)}
         </div>
