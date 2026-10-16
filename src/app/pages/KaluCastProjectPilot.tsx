@@ -95,10 +95,10 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
       </section> : <section aria-label="Temporadas do KaluCast">
         <h2 className="text-3xl font-bold tracking-tight">Temporadas do KaluCast</h2>
         <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${editionCols}`}>
-          {editions.map(ed => <article key={ed.number} className="min-w-0 rounded-2xl border border-zinc-200 p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3 border-b pb-4">
-              <div><h3 className="text-2xl font-bold">KaluCast {ed.number}ª Temporada</h3><p className="mt-1 text-sm text-zinc-500">{ed.videos.length} {ed.videos.length === 1 ? "vídeo" : "vídeos"}</p></div>
-              <button type="button" onClick={() => openEdition(ed.number)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-50">Ver temporada <ArrowUpRight aria-hidden="true" size={16} className="text-zinc-500" /></button>
+          {editions.map(ed => <article key={ed.number} className="min-w-0 rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-green-50/80 to-white p-5 shadow-sm transition-colors hover:border-emerald-300 hover:from-emerald-100/70">
+            <div className="flex items-start justify-between gap-3 border-b border-emerald-200/70 pb-4">
+              <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-bold text-zinc-900">KaluCast {ed.number}ª Temporada</h3><span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-white">Beta</span></div><p className="mt-1 text-sm text-zinc-600">{ed.videos.length} {ed.videos.length === 1 ? "vídeo" : "vídeos"}</p></div>
+              <button type="button" onClick={() => openEdition(ed.number)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Ver temporada <ArrowUpRight aria-hidden="true" size={16} className="text-emerald-700" /></button>
             </div>
             <div id={`temporada-${ed.number}`} className={`mt-4 grid gap-3 ${editions.length === 1 ? "sm:grid-cols-3" : "grid-cols-1"}`}>
               {ed.videos.slice(0,3).map((v,i) => <button key={v.id} type="button" onClick={() => setSelected(v.id)} className="flex min-w-0 items-center gap-3 text-left">
