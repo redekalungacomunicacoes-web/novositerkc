@@ -12,6 +12,7 @@ async function api(action:string,params:Record<string,unknown>={}) {
 }
 export function YouTubeLibrary() {
   const [playlists,setPlaylists]=useState<Playlist[]>([]);
+  const [loaded,setLoaded]=useState(false);
   const [playlist,setPlaylist]=useState("");
   const [videos,setVideos]=useState<Video[]>([]);
   const [video,setVideo]=useState("");
@@ -31,7 +32,7 @@ export function YouTubeLibrary() {
     try {
       const [p,c,l,pr]=await Promise.all([api("playlists"),supabase.from("academy_courses").select("id,title").order("title"),supabase.from("academy_lessons").select("id,title,course_id").order("title"),supabase.from("projetos").select("id,titulo").order("titulo")]);
       if(!active)return;
-      setPlaylists(p.items||[]);
+      setPlaylists(p.items||[]);setLoaded(true);
       if(c.error || l.error || pr.error) throw Error("Não foi possível carregar os destinos.");
       setCourses(c.data||[]);setLessons(l.data||[]);setProjects(pr.data||[]);
     }catch(e){if(active)setError(e instanceof Error?e.message:"Falha ao carregar biblioteca.");}
@@ -58,13 +59,14 @@ export function YouTubeLibrary() {
     <div className="grid gap-3 md:grid-cols-2">
       <label className="text-sm space-y-1">Playlist
         <select className={field} value={playlist} onChange={e=>{setPlaylist(e.target.value);if(e.target.value)void loadVideos(e.target.value);else setVideos([]);}}>
-          <option value="">Selecione uma playlist</option>{playlists.map(p=><option key={p.id} value={p.id}>{p.title} ({p.count})</option>)}
+          <option value="">{!loaded?"Carregando playlists...":playlists.length?"Selecione uma playlist":"Nenhuma playlist encontrada"}</option>{playlists.map(p=><option key={p.id} value={p.id}>{p.title} ({p.count})</option>)}
         </select>
       </label>
       <label className="text-sm space-y-1">Vincular a
         <select className={field} value={destination} onChange={e=>setDestination(e.target.value as Destination)}><option value="academy">Aula da Academia</option><option value="project">Projeto / edição</option></select>
       </label>
     </div>
+    {loaded&&!playlists.length&&!error&&<p className="text-sm text-muted-foreground">Não encontramos playlists ou vídeos no canal. Confira se há vídeos enviados no YouTube Studio.</p>}
     {videos.length>0 && <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{videos.map(v=><button type="button" key={v.id} onClick={()=>setVideo(v.id)} aria-pressed={video===v.id} className={`flex gap-3 rounded-lg border p-2 text-left ${video===v.id?"border-green-700 ring-1 ring-green-700":""}`}>
       {v.thumbnail?<img src={v.thumbnail} alt="" className="h-16 w-24 rounded-md object-cover"/>:<span className="h-16 w-24 shrink-0 rounded-md bg-muted"/>}
       <span className="min-w-0"><span className="line-clamp-2 text-sm font-medium">{v.title}</span><span className="text-xs text-muted-foreground">{v.visibility==="public"?"Público":v.visibility==="unlisted"?"Não listado":"Privado"}</span></span>
