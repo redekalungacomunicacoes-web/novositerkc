@@ -75,8 +75,9 @@ Deno.serve(async req => {
       const channel = channels.items[0];
       // Require the intended YouTube handle; never connect an unrelated personal channel by accident.
       const snippet = channel.snippet || {};
-      const custom = String(snippet.customUrl || "").toLowerCase().replace(/^@/, "");
-      if (custom !== "kalungacomunicacoes") return returnToPanel("wrong_channel");
+      const matched = await fetch("https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=kalungacomunicacoes", { headers: { Authorization: "Bearer " + token.access_token } });
+      const expected = await matched.json();
+      if (!matched.ok || !expected.items?.some((item: { id: string }) => item.id === channel.id)) return returnToPanel("wrong_channel");
       const encrypted = await encrypt(token.refresh_token);
       const { error: saveError } = await admin.from("rkc_youtube_connections").upsert({
         id: "official", channel_id: channel.id, channel_title: snippet.title || "RKC",
