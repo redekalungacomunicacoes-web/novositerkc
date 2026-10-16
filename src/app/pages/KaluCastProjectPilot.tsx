@@ -31,17 +31,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
   const [params,setParams] = useSearchParams();
-  useEffect(() => {
-    if (galleryIndex === null) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setGalleryIndex(null);
-      if (event.key === "ArrowLeft") setGalleryIndex(i => i === null ? null : (i - 1 + visibleImages.length) % visibleImages.length);
-      if (event.key === "ArrowRight") setGalleryIndex(i => i === null ? null : (i + 1) % visibleImages.length);
-    };
-    window.addEventListener("keydown",onKey);
-    return () => window.removeEventListener("keydown",onKey);
-  }, [galleryIndex,visibleImages.length]);
-    const editionNumber = Number(params.get("temporada") || params.get("edicao"));
+  const editionNumber = Number(params.get("temporada") || params.get("edicao"));
   const activeEdition = Number.isInteger(editionNumber) && editionNumber >= 1 && editionNumber <= 99 ? editionNumber : null;
   useEffect(() => {
     let active = true;
@@ -66,7 +56,17 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
   const albumEdition = Number(albumParam);
   const selectedAlbum = albumParam === "general" ? "general" : albumParam && Number.isInteger(albumEdition) && albumEdition > 0 ? albumEdition : "all";
   const visibleImages = project.imagens.filter(img => selectedAlbum === "all" || (selectedAlbum === "general" ? editionForImage(img) === null : editionForImage(img) === selectedAlbum));
-  const detailEdition = editions.find(e=>e.number===activeEdition);
+  useEffect(() => {
+    if (galleryIndex === null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setGalleryIndex(null);
+      if (event.key === "ArrowLeft") setGalleryIndex(i => i === null ? null : (i - 1 + visibleImages.length) % visibleImages.length);
+      if (event.key === "ArrowRight") setGalleryIndex(i => i === null ? null : (i + 1) % visibleImages.length);
+    };
+    window.addEventListener("keydown",onKey);
+    return () => window.removeEventListener("keydown",onKey);
+  }, [galleryIndex,visibleImages.length]);
+    const detailEdition = editions.find(e=>e.number===activeEdition);
   const openEdition = (number: number) => {const next=new URLSearchParams(params);next.set("temporada",String(number));next.delete("edicao");setParams(next);window.scrollTo({top:0,behavior:"smooth"});};
   const closeEdition = () => {const next=new URLSearchParams(params);next.delete("temporada");next.delete("edicao");setParams(next);};
   const links = [
