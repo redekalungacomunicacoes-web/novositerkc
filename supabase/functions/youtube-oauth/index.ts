@@ -120,8 +120,17 @@ Deno.serve(async req => {
     }
     if (body.action === "playlists") {
       const token = await youtubeAccessToken();
-      const result = await youtubeGet("playlists", token, {part:"snippet,contentDetails",mine:"true",maxResults:"50",pageToken:typeof body.pageToken==="string" && /^[\w-]{1,200}$/.test(body.pageToken)?body.pageToken:""});
-      return json({items:(result.items||[]).map((p: any)=>({id:p.id,title:p.snippet?.title||"",thumbnail:p.snippet?.thumbnails?.medium?.url||"",count:p.contentDetails?.itemCount||0})),nextPageToken:result.nextPageToken||null});
+      const params: Record<string,string> = {part:"snippet,contentDetails",mine:"true",maxResults:"50"};
+      if (typeof body.pageToken === "string" && /^[\\w-]{1,200}$/.test(body.pageToken)) params.pageToken = body.pageToken;
+      const [result, channel] = await Promise.all([
+        youtubeGet("playlists", token, params),
+        youtubeGet("channels", token, {part:"contentDetails",mine:"true"}),
+      ]);
+      const uploads = channel.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+      const items = (result.items||[]).map((p: any)=>({id:p.id,title:p.snippet?.title||"",thumbnail:p.snippet?.thumbnails?.medium?.url||"",count:p.contentDetails?.itemCount||0}));
+      // YouTube's automatic uploads list is available even when the channel has no manual playlists.
+      if (uploads && !body.pageToken && !items.some((p:any)=>p.id===uploads)) items.unshift({id:uploads,title:"Todos os vídeos do canal",thumbnail:"",count:0});
+      return json({items,nextPageToken:result.nextPageToken||null});
     }
     if (body.action === "videos") {
       const token = await youtubeAccessToken();
