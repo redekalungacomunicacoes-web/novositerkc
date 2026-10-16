@@ -28,6 +28,7 @@ type ProjetoFormData = {
   instagramUrl: string;
   youtubeUrl: string;
   spotifyUrl: string;
+  spotifyLatestEpisodeUrl: string;
 };
 
 type ProjetoRecord = {
@@ -41,6 +42,7 @@ type ProjetoRecord = {
   instagram_url: string | null;
   youtube_url: string | null;
   spotify_url: string | null;
+  spotify_latest_episode_url: string | null;
 };
 
 type ProjetoFoto = {
@@ -91,6 +93,7 @@ export function AdminProjetoForm() {
       instagramUrl: "",
       youtubeUrl: "",
       spotifyUrl: "",
+      spotifyLatestEpisodeUrl: "",
     },
   });
 
@@ -177,6 +180,7 @@ export function AdminProjetoForm() {
         instagramUrl: projeto.instagram_url || "",
         youtubeUrl: projeto.youtube_url || "",
         spotifyUrl: projeto.spotify_url || "",
+        spotifyLatestEpisodeUrl: projeto.spotify_latest_episode_url || "",
       });
 
       if (projeto.id) {
@@ -285,6 +289,8 @@ export function AdminProjetoForm() {
       return;
     }
 
+    if (form.spotifyLatestEpisodeUrl.trim() && !/^https:\/\/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?episode\/[A-Za-z0-9]{22}\/?(?:\?.*)?$/.test(form.spotifyLatestEpisodeUrl.trim())) { toast.error("Informe um link de episódio válido do Spotify."); return; }
+
     const payload = {
       titulo: form.titulo.trim(),
       descricao: form.descricao.trim() || null,
@@ -297,6 +303,7 @@ export function AdminProjetoForm() {
       instagram_url: normalizeOptionalUrl(form.instagramUrl),
       youtube_url: normalizedVideoUrl,
       spotify_url: normalizeOptionalUrl(form.spotifyUrl),
+      spotify_latest_episode_url: (() => { const raw = form.spotifyLatestEpisodeUrl.trim(); if (!raw) return null; try { const u = new URL(raw); return u.protocol === "https:" && u.hostname === "open.spotify.com" && /^\/(?:intl-[a-z]{2}\/)?episode\/[A-Za-z0-9]{22}\/?$/.test(u.pathname) ? u.origin + u.pathname : null; } catch { return null; } })(),
     };
 
     setIsSaving(true);
@@ -488,6 +495,11 @@ export function AdminProjetoForm() {
             <div>
               <label className="text-sm font-medium">Spotify URL</label>
               <input type="url" {...register("spotifyUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://open.spotify.com/..." />
+            </div>
+            <div className="xl:col-span-2">
+              <label className="text-sm font-medium">Último episódio do Spotify (destaque)</label>
+              <input type="url" {...register("spotifyLatestEpisodeUrl")} className="mt-1 w-full rounded-lg border px-3 py-2" placeholder="https://open.spotify.com/episode/..." />
+              <p className="mt-1 text-xs text-muted-foreground">Opcional. Se vazio, o player mostra o programa completo.</p>
             </div>
 
             <div>
