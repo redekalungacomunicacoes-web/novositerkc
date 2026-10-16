@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { getVideoEmbedUrl } from "@/lib/video";
 
 type Image = { id: string; url: string; tipo: string; titulo?: string | null };
-type Project = { id: string; slug: string; titulo: string; descricao: string; descricaoCompleta: string; imagem: string; anoLancamento: number | null; instagramUrl: string | null; youtubeUrl: string | null; spotifyUrl: string | null; imagens: Image[] };
+type Project = { id: string; slug: string; titulo: string; descricao: string; descricaoCompleta: string; imagem: string; anoLancamento: number | null; instagramUrl: string | null; youtubeUrl: string | null; spotifyUrl: string | null; spotifyLatestEpisodeUrl: string | null; imagens: Image[] };
 type Video = { id: string; titulo: string | null; url: string; thumb_url: string | null; ordem: number | null };
 function editionOf(title: string) {
   const match = title.match(/(?:^|\s)(\d{1,2})\s*(?:ª|a|º|o)?\s*edi[cç][aã]o\b/i);
@@ -64,7 +64,8 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
     project.youtubeUrl && { label: "YouTube", url: project.youtubeUrl, Icon: Youtube },
     project.spotifyUrl && { label: "Spotify", url: project.spotifyUrl, Icon: Music2 },
   ].filter(Boolean) as { label: string; url: string; Icon: typeof Instagram }[];
-  const spotifyEmbed = spotifyEmbedUrl(project.spotifyUrl);
+  const spotifyEpisodeEmbed = spotifyEmbedUrl(project.spotifyLatestEpisodeUrl);
+  const spotifyEmbed = spotifyEpisodeEmbed || spotifyEmbedUrl(project.spotifyUrl);
   const editionCols = editions.length === 1 ? "lg:grid-cols-1" : editions.length === 2 ? "lg:grid-cols-2" : "lg:grid-cols-3";
   const currentVideo = selected ? videos.find(v => v.id === selected) : null;
   const embed = currentVideo ? getVideoEmbedUrl(currentVideo.url) : "";
@@ -125,7 +126,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
       </section>
       {project.spotifyUrl && <section aria-label="KaluCast no Spotify" className="border-t pt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="text-2xl font-bold">Ouça o KaluCast no Spotify</h2><p className="mt-1 text-sm text-zinc-600">Episódios disponíveis para ouvir aqui na página.</p></div>
+          <div><h2 className="text-2xl font-bold">Ouça o KaluCast no Spotify</h2><p className="mt-1 text-sm text-zinc-600">{spotifyEpisodeEmbed ? "Ouça o episódio em destaque." : "Ouça os episódios disponíveis diretamente aqui."}</p></div>
           <a className="inline-flex items-center gap-2 text-sm font-medium text-green-800 hover:underline" href={project.spotifyUrl} target="_blank" rel="noopener noreferrer"><Music2 size={17}/> Ver no Spotify <ArrowRight size={16}/></a>
         </div>
         {spotifyEmbed ? <div className="mt-5 overflow-hidden rounded-2xl border bg-zinc-100">
