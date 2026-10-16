@@ -1,0 +1,9 @@
+# HTML inicial com Open Graph para links de matérias.
+# Somente ativo quando o domínio estiver hospedado no Netlify.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[edge_functions]]
+  path = "/materias/*"
+  function = "materia-social"
