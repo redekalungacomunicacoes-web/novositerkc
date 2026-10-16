@@ -106,7 +106,7 @@ export function AdminProjetoForm() {
   const [projectDbId, setProjectDbId] = useState<string | null>(id || null);
   const [fotos, setFotos] = useState<ProjetoFoto[]>([]);
   const [linkedVideos, setLinkedVideos] = useState<LinkedVideo[]>([]);
-  const [edition, setEdition] = useState(1);
+  const [season, setSeason] = useState(1);
   const [videoBusy, setVideoBusy] = useState(false);
 
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
@@ -144,12 +144,12 @@ export function AdminProjetoForm() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw Error("Entre novamente no painel.");
       const { data, error } = await supabase.functions.invoke("youtube-oauth", {
-        body: { action: "link_project", projectId: projectDbId, videoId: item.id, edition },
+        body: { action: "link_project", projectId: projectDbId, videoId: item.id, season },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error || data?.error) throw Error(data?.error || error?.message || "Falha ao vincular vídeo.");
       await loadLinkedVideos(projectDbId);
-      toast.success("Vídeo vinculado à edição. A lista abaixo foi atualizada.");
+      toast.success("Vídeo vinculado à temporada. A lista abaixo foi atualizada.");
     } finally { setVideoBusy(false); }
   };
   useEffect(() => {
@@ -567,7 +567,7 @@ export function AdminProjetoForm() {
         <div className="space-y-4 rounded-2xl border p-5">
           <div className="space-y-3">
             <h2 className="text-lg font-semibold">Vídeos vinculados ao projeto</h2>
-            <p className="text-sm text-muted-foreground">Cada vídeo aparece na edição informada, sem alterar o banner ou a página institucional.</p>
+            <p className="text-sm text-muted-foreground">Cada vídeo aparece na temporada informada, sem alterar o banner ou a página institucional.</p>
             {linkedVideos.length ? <div className="grid gap-2 sm:grid-cols-2">
               {linkedVideos.map(v => <div key={v.id} className="flex items-center gap-3 rounded-lg border p-2">
                 {v.thumb_url && <img src={v.thumb_url} alt="" className="h-14 w-20 shrink-0 rounded object-cover"/>}
@@ -575,8 +575,8 @@ export function AdminProjetoForm() {
               </div>)}
             </div> : <p className="text-sm text-muted-foreground">Nenhum vídeo vinculado ainda.</p>}
             {projectDbId && <>
-              <label className="block space-y-1 text-sm">Edição
-                <input type="number" min={1} max={99} value={edition} onChange={e=>setEdition(Number(e.target.value))} className="block w-full max-w-36 rounded-md border bg-background px-3 py-2" />
+              <label className="block space-y-1 text-sm">Temporada
+                <input type="number" min={1} max={99} value={season} onChange={e=>setSeason(Number(e.target.value))} className="block w-full max-w-36 rounded-md border bg-background px-3 py-2" />
               </label>
               {videoBusy && <p className="text-sm" role="status">Vinculando...</p>}
               <YouTubeVideoPicker publicOnly onChoose={linkYouTube}/>
