@@ -8,7 +8,7 @@ type Image = { id: string; url: string; tipo: string; titulo?: string | null };
 type Project = { id: string; slug: string; titulo: string; descricao: string; descricaoCompleta: string; imagem: string; anoLancamento: number | null; instagramUrl: string | null; youtubeUrl: string | null; spotifyUrl: string | null; spotifyLatestEpisodeUrl: string | null; imagens: Image[] };
 type Video = { id: string; titulo: string | null; url: string; thumb_url: string | null; ordem: number | null };
 function editionOf(title: string) {
-  const match = title.match(/(?:^|\s)(\d{1,2})\s*(?:ª|a|º|o)?\s*edi[cç][aã]o\b/i);
+  const match = title.match(/(?:^|\s)(\d{1,2})\s*(?:ª|a|º|o)?\s*(?:edi[cç][aã]o|temporada)\b/i);
   return match ? Number(match[1]) : null;
 }
 function spotifyEmbedUrl(link: string | null) {
@@ -24,7 +24,7 @@ function spotifyEmbedUrl(link: string | null) {
   } catch { return null; }
 }
 function episodeTitle(title: string | null, index: number) {
-  return title?.replace(/(?:^|\s)\d{1,2}\s*(?:ª|a|º|o)?\s*edi[cç][aã]o\s*[:—-]?\s*/i, "").trim() || `Vídeo ${index + 1}`;
+  return title?.replace(/(?:^|\s)\d{1,2}\s*(?:ª|a|º|o)?\s*(?:edi[cç][aã]o|temporada)\s*[:—-]?\s*/i, "").trim() || `Vídeo ${index + 1}`;
 }
 export function KaluCastProjectPilot({ project }: { project: Project }) {
   const [videos, setVideos] = useState<Video[]>([]);
