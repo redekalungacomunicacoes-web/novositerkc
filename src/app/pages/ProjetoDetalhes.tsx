@@ -29,6 +29,7 @@ type ProjetoUI = {
   instagramUrl: string | null;
   youtubeUrl: string | null;
   spotifyUrl: string | null;
+  spotifyLatestEpisodeUrl: string | null;
   imagens: ProjectImage[];
 };
 
@@ -77,7 +78,7 @@ export function ProjetoDetalhes() {
         imagem: resolveProjectMediaUrl(found.capa_url) || "",
         tag: "Projeto", anoLancamento: found.ano_lancamento ?? null,
         instagramUrl: found.instagram_url ?? null, youtubeUrl: normalizeVideoUrl(found.youtube_url) ?? null,
-        spotifyUrl: found.spotify_url ?? null, imagens: [],
+        spotifyUrl: found.spotify_url ?? null, spotifyLatestEpisodeUrl: found.spotify_latest_episode_url ?? null, imagens: [],
       };
       setProjeto(initialProject);
       setLoading(false);
@@ -102,6 +103,7 @@ export function ProjetoDetalhes() {
         instagramUrl: found.instagram_url ?? null,
         youtubeUrl: normalizeVideoUrl(found.youtube_url) ?? null,
         spotifyUrl: found.spotify_url ?? null,
+        spotifyLatestEpisodeUrl: found.spotify_latest_episode_url ?? null,
         imagens,
       };
 
