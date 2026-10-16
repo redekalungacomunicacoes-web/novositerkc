@@ -23,7 +23,7 @@ export function YouTubeLibrary() {
   const [course,setCourse]=useState("");
   const [lesson,setLesson]=useState("");
   const [project,setProject]=useState("");
-  const [edition,setEdition]=useState(1);
+  const [season,setSeason]=useState(1);
   const [next,setNext]=useState<string|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -49,7 +49,7 @@ export function YouTubeLibrary() {
     try{
       if(!video)throw Error("Escolha um vídeo.");
       if(destination==="academy") {if(!lesson)throw Error("Selecione uma aula."); await api("link_lesson",{videoId:video,lessonId:lesson});}
-      else {if(!project)throw Error("Selecione um projeto.");await api("link_project",{videoId:video,projectId:project,edition});}
+      else {if(!project)throw Error("Selecione um projeto.");await api("link_project",{videoId:video,projectId:project,season});}
       setNotice("Vídeo vinculado. Atualize a página do conteúdo para conferir.");
     }catch(e){setError(e instanceof Error?e.message:"Falha ao vincular.");}finally{setBusy(false);}
   }
@@ -63,7 +63,7 @@ export function YouTubeLibrary() {
         </select>
       </label>
       <label className="text-sm space-y-1">Vincular a
-        <select className={field} value={destination} onChange={e=>setDestination(e.target.value as Destination)}><option value="academy">Aula da Academia</option><option value="project">Projeto / edição</option></select>
+        <select className={field} value={destination} onChange={e=>setDestination(e.target.value as Destination)}><option value="academy">Aula da Academia</option><option value="project">Projeto / temporada</option></select>
       </label>
     </div>
     {loaded&&!playlists.length&&!error&&<p className="text-sm text-muted-foreground">Não encontramos playlists ou vídeos no canal. Confira se há vídeos enviados no YouTube Studio.</p>}
@@ -78,7 +78,7 @@ export function YouTubeLibrary() {
       <label className="space-y-1 text-sm">Aula<select className={field} value={lesson} onChange={e=>setLesson(e.target.value)}><option value="">Selecione a aula</option>{lessons.filter(l=>l.course_id===course).map(l=><option key={l.id} value={l.id}>{l.title}</option>)}</select></label>
     </div>:<div className="grid gap-3 sm:grid-cols-2">
       <label className="space-y-1 text-sm">Projeto<select className={field} value={project} onChange={e=>setProject(e.target.value)}><option value="">Selecione o projeto</option>{projects.map(p=><option key={p.id} value={p.id}>{p.titulo}</option>)}</select></label>
-      <label className="space-y-1 text-sm">Edição<input type="number" min={1} max={99} className={field} value={edition} onChange={e=>setEdition(Number(e.target.value))}/></label>
+      <label className="space-y-1 text-sm">Temporada<input type="number" min={1} max={99} className={field} value={season} onChange={e=>setSeason(Number(e.target.value))}/></label>
     </div>}
     {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
     {notice&&<p role="status" className="text-sm text-green-700">{notice}</p>}
