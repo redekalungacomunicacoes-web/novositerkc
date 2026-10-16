@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CalendarDays, Instagram, Youtube, Music2, Play, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Instagram, Youtube, Music2, Play, X, ChevronLeft, ChevronRight, ArrowUpRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getVideoEmbedUrl } from "@/lib/video";
 
@@ -98,7 +98,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
           {editions.map(ed => <article key={ed.number} className="min-w-0 rounded-2xl border border-zinc-200 p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3 border-b pb-4">
               <div><h3 className="text-2xl font-bold">{ed.number}ª edição</h3><p className="mt-1 text-sm text-zinc-500">{ed.videos.length} {ed.videos.length === 1 ? "vídeo" : "vídeos"}</p></div>
-              <button type="button" onClick={() => openEdition(ed.number)} className="shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-zinc-50">Ver edição ↗</button>
+              <button type="button" onClick={() => openEdition(ed.number)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-50">Ver edição <ArrowUpRight aria-hidden="true" size={16} className="text-zinc-500" /></button>
             </div>
             <div id={`edicao-${ed.number}`} className={`mt-4 grid gap-3 ${editions.length === 1 ? "sm:grid-cols-3" : "grid-cols-1"}`}>
               {ed.videos.slice(0,3).map((v,i) => <button key={v.id} type="button" onClick={() => setSelected(v.id)} className="flex min-w-0 items-center gap-3 text-left">
