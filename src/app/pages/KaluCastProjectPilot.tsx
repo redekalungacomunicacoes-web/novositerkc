@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CalendarDays, Instagram, Youtube, Music2, Play, X, ChevronLeft, ChevronRight, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Instagram, Youtube, Music2, Play, X, ChevronLeft, ChevronRight, ArrowUpRight, Images, Maximize2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getVideoEmbedUrl } from "@/lib/video";
 
@@ -31,7 +31,17 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
   const [params,setParams] = useSearchParams();
-  const editionNumber = Number(params.get("temporada") || params.get("edicao"));
+  useEffect(() => {
+    if (galleryIndex === null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setGalleryIndex(null);
+      if (event.key === "ArrowLeft") setGalleryIndex(i => i === null ? null : (i - 1 + visibleImages.length) % visibleImages.length);
+      if (event.key === "ArrowRight") setGalleryIndex(i => i === null ? null : (i + 1) % visibleImages.length);
+    };
+    window.addEventListener("keydown",onKey);
+    return () => window.removeEventListener("keydown",onKey);
+  }, [galleryIndex,visibleImages.length]);
+    const editionNumber = Number(params.get("temporada") || params.get("edicao"));
   const activeEdition = Number.isInteger(editionNumber) && editionNumber >= 1 && editionNumber <= 99 ? editionNumber : null;
   useEffect(() => {
     let active = true;
@@ -97,7 +107,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
         <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${editionCols}`}>
           {editions.map(ed => <article key={ed.number} className="min-w-0 rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-green-50/80 to-white p-5 shadow-sm transition-colors hover:border-emerald-300 hover:from-emerald-100/70">
             <div className="flex items-start justify-between gap-3 border-b border-emerald-200/70 pb-4">
-              <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-bold text-zinc-900">KaluCast {ed.number}ª Temporada</h3><span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-white">Beta</span></div><p className="mt-1 text-sm text-zinc-600">{ed.videos.length} {ed.videos.length === 1 ? "vídeo" : "vídeos"}</p></div>
+              <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-bold text-zinc-900">KaluCast {ed.number}ª Temporada</h3></div><p className="mt-1 text-sm text-zinc-600">{ed.videos.length} {ed.videos.length === 1 ? "vídeo" : "vídeos"}</p></div>
               <button type="button" onClick={() => openEdition(ed.number)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">Ver temporada <ArrowUpRight aria-hidden="true" size={16} className="text-emerald-700" /></button>
             </div>
             <div id={`temporada-${ed.number}`} className={`mt-4 grid gap-3 ${editions.length === 1 ? "sm:grid-cols-3" : "grid-cols-1"}`}>
@@ -113,16 +123,29 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
         {!editions.length && <p className="mt-5 rounded-xl border p-5 text-sm text-zinc-600">As temporadas aparecerão conforme os episódios forem publicados.</p>}
       </section>}
       {project.descricaoCompleta && <section className="max-w-4xl"><h2 className="text-2xl font-bold">Sobre o projeto</h2><p className="mt-4 whitespace-pre-line leading-7 text-zinc-700">{project.descricaoCompleta}</p></section>}
-      <section id="galeria" aria-label="Galeria">
-        <div className="flex items-center justify-between gap-4"><h2 className="text-2xl font-bold">Galeria</h2><span className="text-sm text-zinc-500">{project.imagens.length} imagens</span></div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {([{value:"all",label:"Todas"},{value:"general",label:"Geral"},...imageEditions.map(n=>({value:String(n),label:`${n}ª Temporada`}))]).map(option=><button key={option.value} type="button" onClick={()=>{const next=new URLSearchParams(params); if(option.value==="all")next.delete("album");else next.set("album",option.value);setParams(next);setGalleryIndex(null);}} className={`rounded-full border px-4 py-2 text-sm ${String(selectedAlbum)===option.value ? "bg-zinc-900 text-white" : "bg-white"}`}>{option.label}</button>)}
+      <section id="galeria" aria-label="Galeria de fotografias" className="scroll-mt-24">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700"><Images size={15} aria-hidden="true"/> Memórias em imagens</span>
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-900">Galeria do KaluCast</h2>
+            <p className="max-w-xl text-sm text-zinc-600">Registros visuais do projeto, organizados por temporada.</p>
+          </div>
+          <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600">{visibleImages.length} {visibleImages.length === 1 ? "foto" : "fotos"}</span>
+        </div>
+        <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filtrar fotografias">
+          {([{value:"all",label:"Todas"},{value:"general",label:"Geral"},...imageEditions.map(n=>({value:String(n),label:`${n}ª Temporada`}))]).map(option=><button key={option.value} type="button" aria-pressed={String(selectedAlbum)===option.value} onClick={()=>{const next=new URLSearchParams(params); if(option.value==="all")next.delete("album");else next.set("album",option.value);setParams(next,{replace:true});setGalleryIndex(null);}} className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${String(selectedAlbum)===option.value ? "border-emerald-800 bg-emerald-800 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-emerald-300 hover:bg-emerald-50"}`}>{option.label}</button>)}
         </div>
         {/* Historical images without season metadata remain in Geral. */}
-        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-          {visibleImages.map((image,index) => <button key={image.id} onClick={() => setGalleryIndex(index)} className="aspect-[4/3] overflow-hidden rounded-xl border"><img src={image.url} alt={`Registro ${index+1} do projeto`} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform hover:scale-105"/></button>)}
-        </div>
-        {!visibleImages.length && <p className="mt-4 text-sm text-zinc-500">Nenhuma imagem cadastrada.</p>}
+        {visibleImages.length > 0 ? <div className="mt-5 grid auto-rows-[104px] grid-cols-2 gap-3 sm:auto-rows-[128px] md:grid-cols-4 md:auto-rows-[124px] lg:auto-rows-[136px]">
+          {visibleImages.map((image,index) => <button key={image.id} type="button" onClick={() => setGalleryIndex(index)} aria-label={`Ampliar fotografia ${index+1} de ${visibleImages.length}`} className={`group relative min-h-0 overflow-hidden rounded-2xl bg-zinc-100 text-left ring-1 ring-zinc-200/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${index===0 && visibleImages.length>2 ? "col-span-2 row-span-2" : index%7===4 && visibleImages.length>5 ? "row-span-2" : "row-span-2 md:row-span-1"}`}>
+            <img src={image.url} alt={image.titulo || `Registro fotográfico ${index+1} do KaluCast`} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"/>
+            <span className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-50 transition-opacity group-hover:opacity-100" aria-hidden="true"/>
+            <span className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 text-xs font-semibold text-white">
+              <span className="truncate">{image.titulo || `Registro ${String(index+1).padStart(2,"0")}`}</span>
+              <Maximize2 size={16} className="shrink-0 opacity-80" aria-hidden="true"/>
+            </span>
+          </button>)}
+        </div> : <div className="mt-5 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-5 py-12 text-center text-sm text-zinc-500">Nenhuma fotografia neste álbum.</div>}
       </section>
       {project.spotifyUrl && <section aria-label="KaluCast no Spotify" className="border-t pt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -140,7 +163,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
     {galleryIndex !== null && visibleImages[galleryIndex] && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" role="dialog" aria-modal="true" aria-label="Galeria de fotos" onClick={() => setGalleryIndex(null)}>
       <button onClick={e=>{e.stopPropagation();setGalleryIndex(null)}} aria-label="Fechar galeria" className="absolute right-5 top-5 text-white"><X/></button>
       <button onClick={e=>{e.stopPropagation();setGalleryIndex((galleryIndex-1+visibleImages.length)%visibleImages.length)}} aria-label="Imagem anterior" className="absolute left-3 text-white"><ChevronLeft/></button>
-      <img src={visibleImages[galleryIndex].url} alt="Imagem da galeria" className="max-h-[85vh] max-w-[85vw] object-contain" onClick={e=>e.stopPropagation()}/>
+      <div className="flex max-w-[90vw] flex-col items-center gap-3" onClick={e=>e.stopPropagation()}><img src={visibleImages[galleryIndex].url} alt={visibleImages[galleryIndex].titulo || "Fotografia do KaluCast"} className="max-h-[78vh] max-w-[90vw] rounded-lg object-contain"/><div className="flex max-w-full flex-wrap items-center justify-center gap-3 text-center text-xs text-white/80"><span>{galleryIndex+1} / {visibleImages.length}</span>{visibleImages[galleryIndex].titulo && <span className="max-w-xl truncate">{visibleImages[galleryIndex].titulo}</span>}</div></div>
       <button onClick={e=>{e.stopPropagation();setGalleryIndex((galleryIndex+1)%visibleImages.length)}} aria-label="Próxima imagem" className="absolute right-3 text-white"><ChevronRight/></button>
     </div>}
   </main>;
