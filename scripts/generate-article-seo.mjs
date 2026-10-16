@@ -139,6 +139,8 @@ function renderEntitySeo(html, { title, description, image, canonical, type, sch
     metaTag('name', 'twitter:title', safeTitle),
     metaTag('name', 'twitter:description', safeDescription),
     safeImage && metaTag('property', 'og:image', safeImage),
+    safeImage && metaTag('property', 'og:image:secure_url', safeImage),
+    safeImage && metaTag('property', 'og:image:alt', safeTitle),
     safeImage && metaTag('name', 'twitter:image', safeImage),
     `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
     `<script type="application/ld+json">${safeJson(schema)}</script>`,
@@ -169,6 +171,31 @@ export function renderStaticPageSeo(html, page, { indexation = 'index' } = {}) {
       isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: `${SITE}/` },
     },
   });
+}
+
+// Social crawlers need a stable, publicly reachable image instead of a protected/dynamic Drive response.
+export async function cacheProjectShareImage(project, sourceUrl, root = 'dist') {
+  if (!/^https:\/\//i.test(sourceUrl || '') || !/^[a-z0-9-]{1,220}$/i.test(project.slug || '')) return '';
+  try {
+    const response = await fetch(sourceUrl, {
+      redirect: 'follow',
+      headers: { Accept: 'image/jpeg,image/png,image/webp,image/*;q=0.8' },
+      signal: AbortSignal.timeout(15000),
+    });
+    const mediaType = (response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+    const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[mediaType];
+    const advertisedSize = Number(response.headers.get('content-length') || 0);
+    if (!response.ok || !ext || advertisedSize > 5_000_000) return '';
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length < 100 || bytes.length > 5_000_000) return '';
+    const dir = `${root}/social/projetos`;
+    await mkdir(dir, { recursive: true });
+    await writeFile(`${dir}/${project.slug}.${ext}`, bytes);
+    return `${SITE}/social/projetos/${project.slug}.${ext}`;
+  } catch (error) {
+    console.warn(`[project-social] Could not cache image for ${project.slug}: ${String(error)}`);
+    return '';
+  }
 }
 
 export function renderProjectSeo(html, project, { indexation = 'index' } = {}) {
@@ -313,6 +340,10 @@ export async function generate() {
     if (!/^[a-z0-9-]{1,220}$/i.test(project.slug || '')) continue;
     const imagePath = project.cover_card_path || project.capa_url || '';
     project.image = /^https?:\/\//i.test(imagePath) ? imagePath : imagePath ? publicStorageUrl('projetos', imagePath) : '';
+    if (project.image) {
+      const stableImage = await cacheProjectShareImage(project, project.image);
+      if (stableImage) project.image = stableImage;
+    }
     const dir = `dist/projetos/${project.slug}`;
     await mkdir(dir, { recursive: true });
     await writeFile(`${dir}/index.html`, renderProjectSeo(template, project, { indexation: settings.seo_indexation }));
