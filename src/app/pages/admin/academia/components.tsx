@@ -1,3 +1,4 @@
+import { YouTubeVideoPicker } from "@/app/components/YouTubeVideoPicker";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/app/components/ui/button";
@@ -318,6 +319,15 @@ export function Editor({
               )}
             </div>
           ))}
+          {fields.some(f => f.name === "media_source") && values.media_source === "youtube" && (
+            <YouTubeVideoPicker onChoose={item => setValues(current => ({
+              ...current, media_source: "youtube", type: "video", media_url: item.url,
+              ...(current.title ? {} : { title: item.title }),
+            }))}/>
+          )}
+          {fields.some(f => f.name === "media_source") && values.media_source === "youtube" && (
+            <p className="text-xs text-muted-foreground">Ao escolher um vídeo, confira o link preenchido e clique em Salvar para vincular à aula.</p>
+          )}
           {error && (
             <p role="alert" className="text-destructive text-sm">
               {error}
