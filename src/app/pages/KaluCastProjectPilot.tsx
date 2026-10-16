@@ -85,8 +85,8 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
     return () => window.removeEventListener("keydown",onKey);
   }, [galleryIndex,visibleImages.length]);
     const detailEdition = editions.find(e=>e.number===activeEdition);
-  const openEdition = (number: number) => {const next=new URLSearchParams(params);next.set("temporada",String(number));next.delete("edicao");setParams(next);window.scrollTo({top:0,behavior:"smooth"});};
-  const closeEdition = () => {const next=new URLSearchParams(params);next.delete("temporada");next.delete("edicao");setParams(next);};
+  const openEdition = (number: number) => {const next=new URLSearchParams(params);next.set("temporada",String(number));next.delete("edicao");next.delete("album");setParams(next);setGalleryIndex(null);window.scrollTo({top:0,behavior:"smooth"});};
+  const closeEdition = () => {const next=new URLSearchParams(params);next.delete("temporada");next.delete("edicao");next.delete("album");setParams(next);};
   const links = [
     project.instagramUrl && { label: "Instagram", url: project.instagramUrl, Icon: Instagram },
     project.youtubeUrl && { label: "YouTube", url: project.youtubeUrl, Icon: Youtube },
@@ -107,7 +107,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
           <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">{activeEdition ? `KaluCast ${activeEdition}ª Temporada` : project.titulo}</h1>
           {!activeEdition && project.descricao && <p className="mt-4 max-w-xl text-lg leading-relaxed text-white/95">{project.descricao}</p>}
         </div>
-        {(project.anoLancamento || links.length > 0) && <aside className="w-full rounded-2xl border border-white/25 bg-black/40 p-5 backdrop-blur-md lg:w-80 lg:shrink-0">
+        {!activeEdition && (project.anoLancamento || links.length > 0) && <aside className="w-full rounded-2xl border border-white/25 bg-black/40 p-5 backdrop-blur-md lg:w-80 lg:shrink-0">
           <h2 className="font-semibold">Informações do projeto</h2>
           {project.anoLancamento && <div className="mt-4 flex items-center justify-between gap-2 text-sm"><span className="flex items-center gap-2"><CalendarDays size={17}/> Ano de fundação</span><strong>{project.anoLancamento}</strong></div>}
           {links.map(({label,url,Icon}) => <a key={label} href={url} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center justify-between gap-3 border-t border-white/20 pt-3 text-sm hover:underline"><span className="flex items-center gap-2"><Icon size={17}/>{label}</span><ArrowRight size={16}/></a>)}
