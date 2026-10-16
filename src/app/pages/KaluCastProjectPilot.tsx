@@ -23,6 +23,19 @@ function spotifyEmbedUrl(link: string | null) {
     return `https://open.spotify.com/embed/${kind}/${id}?utm_source=generator&theme=0`;
   } catch { return null; }
 }
+function episodeNumber(title: string | null): number | null {
+  const match = (title || "").match(/(?:epis[oó]dio|ep\.?)[\s.:º°-]*0?(\d{1,2})\b/i);
+  return match ? Number(match[1]) : null;
+}
+function isPresentation(title: string | null) {
+  return episodeNumber(title) === null;
+}
+function orderEpisodes(items: Video[]) {
+  return [...items].sort((a, b) =>
+    (episodeNumber(a.titulo) ?? 999) - (episodeNumber(b.titulo) ?? 999)
+    || (a.titulo || "").localeCompare(b.titulo || "", "pt-BR")
+  );
+}
 function episodeTitle(title: string | null, index: number) {
   return title?.replace(/(?:^|\s)\d{1,2}\s*(?:ª|a|º|o)?\s*(?:edi[cç][aã]o|temporada)\s*[:—-]?\s*/i, "").trim() || `Vídeo ${index + 1}`;
 }
@@ -48,14 +61,19 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
       groups.set(number, [...(groups.get(number) || []), v]);
     }
 
-    return [...groups].sort(([a], [b]) => a - b).map(([number, values]) => ({ number, videos: values }));
+    return [...groups].sort(([a], [b]) => a - b).map(([number, values]) => ({
+      number,
+      videos: orderEpisodes(values.filter(v => !isPresentation(v.titulo))),
+      extras: values.filter(v => isPresentation(v.titulo)),
+    }));
   }, [videos]);
   const editionForImage = (image: Image) => editionOf(image.titulo || "");
   const imageEditions = [...new Set(project.imagens.map(editionForImage).filter((n): n is number => n !== null))].sort((a,b)=>a-b);
   const albumParam = params.get("album");
   const albumEdition = Number(albumParam);
   const selectedAlbum = albumParam && albumParam !== "general" && Number.isInteger(albumEdition) && albumEdition > 0 ? albumEdition : "all";
-  const visibleImages = project.imagens.filter(img => selectedAlbum === "all" || (editionForImage(img) === selectedAlbum));
+  const effectiveAlbum = activeEdition || selectedAlbum;
+  const visibleImages = project.imagens.filter(img => effectiveAlbum === "all" || editionForImage(img) === effectiveAlbum);
   useEffect(() => {
     if (galleryIndex === null) return;
     const onKey = (event: KeyboardEvent) => {
@@ -87,7 +105,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
         <div className="max-w-2xl">
           {activeEdition ? <button type="button" onClick={closeEdition} className="mb-6 inline-flex items-center gap-2 text-sm text-white/90 hover:underline"><ArrowLeft size={16}/> Voltar ao KaluCast</button> : <Link to="/projetos" className="mb-6 inline-flex items-center gap-2 text-sm text-white/90 hover:underline"><ArrowLeft size={16}/> Projetos</Link>}
           <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">{activeEdition ? `KaluCast ${activeEdition}ª Temporada` : project.titulo}</h1>
-          {project.descricao && <p className="mt-4 max-w-xl text-lg leading-relaxed text-white/95">{project.descricao}</p>}
+          {!activeEdition && project.descricao && <p className="mt-4 max-w-xl text-lg leading-relaxed text-white/95">{project.descricao}</p>}
         </div>
         {(project.anoLancamento || links.length > 0) && <aside className="w-full rounded-2xl border border-white/25 bg-black/40 p-5 backdrop-blur-md lg:w-80 lg:shrink-0">
           <h2 className="font-semibold">Informações do projeto</h2>
@@ -99,9 +117,11 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
     <div className="mx-auto max-w-7xl space-y-12 px-4 py-12 sm:px-6 lg:px-8">
       {activeEdition ? <section aria-label="Página da temporada" className="space-y-5">
         <button type="button" onClick={closeEdition} className="inline-flex items-center gap-2 text-sm font-medium text-green-800"><ArrowLeft size={16}/> Todas as temporadas</button>
-        <div className="flex items-center justify-between gap-3"><h2 className="text-3xl font-bold">KaluCast {activeEdition}ª Temporada</h2><span className="text-sm text-zinc-500">{detailEdition?.videos.length || 0} episódios</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-3xl font-bold">KaluCast {activeEdition}ª Temporada</h2><p className="mt-1 text-sm text-zinc-600">Episódios e registros desta temporada</p></div><span className="text-sm text-zinc-500">{detailEdition?.videos.length || 0} episódios</span></div>
+        <nav aria-label="Navegar entre temporadas" className="flex flex-wrap gap-2">{editions.map(ed => <button key={ed.number} type="button" onClick={() => openEdition(ed.number)} aria-current={ed.number === activeEdition ? "page" : undefined} className={`rounded-full border px-4 py-2 text-sm font-medium ${ed.number === activeEdition ? "border-green-800 bg-green-800 text-white" : "border-zinc-200 hover:border-green-500"}`}>{ed.number}ª Temporada</button>)}</nav>
         {detailEdition?.videos.length ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{detailEdition.videos.map((v,i)=><button key={v.id} type="button" onClick={()=>setSelected(v.id)} className="overflow-hidden rounded-xl border text-left"><span className="relative flex aspect-video items-center justify-center bg-zinc-900 text-white">{v.thumb_url && <img src={v.thumb_url} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async"/>}<Play className="relative" size={32}/></span><span className="block p-4 font-medium">{episodeTitle(v.titulo,i)}</span></button>)}</div> : <p className="rounded-xl border p-5 text-sm text-zinc-600">Nenhum episódio publicado nesta temporada.</p>}
-        {project.imagens.some(img=>editionForImage(img)===activeEdition) && <a href={`?temporada=${activeEdition}&album=${activeEdition}#galeria`} className="text-sm text-green-800">Ver fotografias desta temporada →</a>}
+        {detailEdition?.extras.length ? <div className="space-y-2"><h3 className="text-sm font-semibold text-zinc-700">Apresentação da temporada</h3>{detailEdition.extras.map(v => <button key={v.id} type="button" onClick={() => setSelected(v.id)} className="flex w-full max-w-xl items-center gap-3 rounded-xl border p-3 text-left text-sm hover:bg-zinc-50"><Play size={18} className="shrink-0 text-green-800"/><span>{episodeTitle(v.titulo,0)}</span></button>)}</div> : null}
+        {project.imagens.some(img=>editionForImage(img)===activeEdition) && <a href="#galeria" className="inline-flex text-sm font-medium text-green-800 hover:underline">Ver fotografias desta temporada →</a>}
       </section> : <section aria-label="Temporadas do KaluCast">
         <h2 className="text-3xl font-bold tracking-tight">Temporadas do KaluCast</h2>
         <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${editionCols}`}>
@@ -122,20 +142,19 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
         </div>
         {!editions.length && <p className="mt-5 rounded-xl border p-5 text-sm text-zinc-600">As temporadas aparecerão conforme os episódios forem publicados.</p>}
       </section>}
-      {project.descricaoCompleta && <section className="max-w-4xl"><h2 className="text-2xl font-bold">Sobre o projeto</h2><p className="mt-4 whitespace-pre-line leading-7 text-zinc-700">{project.descricaoCompleta}</p></section>}
+      {!activeEdition && project.descricaoCompleta && <section className="max-w-4xl"><h2 className="text-2xl font-bold">Sobre o projeto</h2><p className="mt-4 whitespace-pre-line leading-7 text-zinc-700">{project.descricaoCompleta}</p></section>}
       <section id="galeria" aria-label="Galeria de fotografias" className="scroll-mt-24">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-2">
             <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700"><Images size={15} aria-hidden="true"/> Memórias em imagens</span>
             <h2 className="text-3xl font-bold tracking-tight text-zinc-900">Galeria do KaluCast</h2>
-            <p className="max-w-xl text-sm text-zinc-600">Registros visuais do projeto, organizados por temporada.</p>
+            <p className="max-w-xl text-sm text-zinc-600">{activeEdition ? `Registros fotográficos da ${activeEdition}ª temporada.` : "Registros visuais do projeto, organizados por temporada."}</p>
           </div>
           <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600">{visibleImages.length} {visibleImages.length === 1 ? "foto" : "fotos"}</span>
         </div>
-        <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filtrar fotografias">
+        {!activeEdition && <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filtrar fotografias">
           {([{value:"all",label:"Todas"},...imageEditions.map(n=>({value:String(n),label:`${n}ª Temporada`}))]).map(option=><button key={option.value} type="button" aria-pressed={String(selectedAlbum)===option.value} onClick={()=>{const next=new URLSearchParams(params); if(option.value==="all")next.delete("album");else next.set("album",option.value);setParams(next,{replace:true});setGalleryIndex(null);}} className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${String(selectedAlbum)===option.value ? "border-emerald-800 bg-emerald-800 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-emerald-300 hover:bg-emerald-50"}`}>{option.label}</button>)}
-        </div>
-        
+        </div>}
         {visibleImages.length > 0 ? <div className="mt-5 grid auto-rows-[104px] grid-cols-2 gap-3 sm:auto-rows-[128px] md:grid-cols-4 md:auto-rows-[124px] lg:auto-rows-[136px]">
           {visibleImages.map((image,index) => <button key={image.id} type="button" onClick={() => setGalleryIndex(index)} aria-label={`Ampliar fotografia ${index+1} de ${visibleImages.length}`} className={`group relative min-h-0 overflow-hidden rounded-2xl bg-zinc-100 text-left ring-1 ring-zinc-200/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${index===0 && visibleImages.length>2 ? "col-span-2 row-span-2" : index%7===4 && visibleImages.length>5 ? "row-span-2" : "row-span-2 md:row-span-1"}`}>
             <img src={image.url} alt={image.titulo || `Registro fotográfico ${index+1} do KaluCast`} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"/>
@@ -147,7 +166,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
           </button>)}
         </div> : <div className="mt-5 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-5 py-12 text-center text-sm text-zinc-500">Nenhuma fotografia neste álbum.</div>}
       </section>
-      {project.spotifyUrl && <section aria-label="KaluCast no Spotify" className="border-t pt-8">
+      {!activeEdition && project.spotifyUrl && <section aria-label="KaluCast no Spotify" className="border-t pt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-2xl font-bold">Ouça o KaluCast no Spotify</h2><p className="mt-1 text-sm text-zinc-600">{spotifyEpisodeEmbed ? "Ouça o episódio em destaque." : "Ouça os episódios disponíveis diretamente aqui."}</p></div>
           <a className="inline-flex items-center gap-2 text-sm font-medium text-green-800 hover:underline" href={project.spotifyUrl} target="_blank" rel="noopener noreferrer"><Music2 size={17}/> Ver no Spotify <ArrowRight size={16}/></a>
