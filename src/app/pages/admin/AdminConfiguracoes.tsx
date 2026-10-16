@@ -1,3 +1,4 @@
+import { YouTubeConnection } from "./YouTubeConnection";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Save, Image as ImageIcon, Trash2, AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -346,6 +347,7 @@ export function AdminConfiguracoes() {
       </div>
 
       <div className="grid gap-6">
+        <YouTubeConnection />
         {/* Banner (Home) */}
         <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
           <h3 className="font-semibold text-lg border-b pb-4 mb-4">Banner (Home)</h3>
