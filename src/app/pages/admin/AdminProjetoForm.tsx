@@ -1,3 +1,4 @@
+import { YouTubeVideoPicker, type YouTubeChoice } from "@/app/components/YouTubeVideoPicker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -49,6 +50,7 @@ type ProjetoFoto = {
 };
 
 type TabKey = "informacoes" | "fotos" | "videos";
+type LinkedVideo = { id: string; titulo: string | null; url: string; thumb_url: string | null };
 
 function normalizeOptionalUrl(value?: string) {
   const trimmed = (value || "").trim();
@@ -100,6 +102,9 @@ export function AdminProjetoForm() {
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [projectDbId, setProjectDbId] = useState<string | null>(id || null);
   const [fotos, setFotos] = useState<ProjetoFoto[]>([]);
+  const [linkedVideos, setLinkedVideos] = useState<LinkedVideo[]>([]);
+  const [edition, setEdition] = useState(1);
+  const [videoBusy, setVideoBusy] = useState(false);
 
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
   const coverCardInputRef = useRef<HTMLInputElement | null>(null);
@@ -115,12 +120,35 @@ export function AdminProjetoForm() {
     if (error) {
       toast.error(error.message || "Erro ao carregar fotos.");
       setFotos([]);
+      setLinkedVideos([]);
       return;
     }
 
     setFotos(((data || []) as ProjetoFoto[]).map((item) => ({ ...item, url: resolveProjectMediaUrl(item.url) })));
   };
 
+  const loadLinkedVideos = async (projetoId: string) => {
+    const { data, error } = await supabase.from("projeto_galeria")
+      .select("id,titulo,url,thumb_url")
+      .eq("projeto_id",projetoId).eq("tipo","video").order("created_at",{ascending:true});
+    if (error) { toast.error("Não foi possível carregar os vídeos vinculados."); return; }
+    setLinkedVideos(data || []);
+  };
+  const linkYouTube = async (item: YouTubeChoice) => {
+    if (!projectDbId) throw Error("Salve o projeto antes de vincular vídeos.");
+    setVideoBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw Error("Entre novamente no painel.");
+      const { data, error } = await supabase.functions.invoke("youtube-oauth", {
+        body: { action: "link_project", projectId: projectDbId, videoId: item.id, edition },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error || data?.error) throw Error(data?.error || error?.message || "Falha ao vincular vídeo.");
+      await loadLinkedVideos(projectDbId);
+      toast.success("Vídeo vinculado à edição. A lista abaixo foi atualizada.");
+    } finally { setVideoBusy(false); }
+  };
   useEffect(() => {
     if (!id) {
       setProjectDbId(null);
@@ -155,6 +183,7 @@ export function AdminProjetoForm() {
         const dbId = String(projeto.id);
         setProjectDbId(dbId);
         await loadFotos(dbId);
+        await loadLinkedVideos(dbId);
       }
     })();
   }, [id, reset]);
@@ -524,6 +553,24 @@ export function AdminProjetoForm() {
 
       {activeTab === "videos" && (
         <div className="space-y-4 rounded-2xl border p-5">
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">Vídeos vinculados ao projeto</h2>
+            <p className="text-sm text-muted-foreground">Cada vídeo aparece na edição informada, sem alterar o banner ou a página institucional.</p>
+            {linkedVideos.length ? <div className="grid gap-2 sm:grid-cols-2">
+              {linkedVideos.map(v => <div key={v.id} className="flex items-center gap-3 rounded-lg border p-2">
+                {v.thumb_url && <img src={v.thumb_url} alt="" className="h-14 w-20 shrink-0 rounded object-cover"/>}
+                <a href={v.url} target="_blank" rel="noopener noreferrer" className="line-clamp-2 text-sm underline-offset-2 hover:underline">{v.titulo || "Vídeo do projeto"}</a>
+              </div>)}
+            </div> : <p className="text-sm text-muted-foreground">Nenhum vídeo vinculado ainda.</p>}
+            {projectDbId && <>
+              <label className="block space-y-1 text-sm">Edição
+                <input type="number" min={1} max={99} value={edition} onChange={e=>setEdition(Number(e.target.value))} className="block w-full max-w-36 rounded-md border bg-background px-3 py-2" />
+              </label>
+              {videoBusy && <p className="text-sm" role="status">Vinculando...</p>}
+              <YouTubeVideoPicker publicOnly onChoose={linkYouTube}/>
+            </>}
+            {!projectDbId && <p className="text-sm text-muted-foreground">Salve o projeto antes de adicionar vídeos.</p>}
+          </div>
           <div>
             <label className="text-sm font-medium">URL de vídeo (YouTube, Vimeo ou Google Drive)</label>
             <input
