@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import {
   PROJECTS_BUCKET,
-  createProjetoMidia,
   deleteProjetoMidia,
   getProjetoById,
   getProjetoGaleria,
