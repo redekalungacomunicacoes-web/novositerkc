@@ -29,6 +29,7 @@ type ProjetoUI = {
   instagramUrl: string | null;
   youtubeUrl: string | null;
   spotifyUrl: string | null;
+  spotifyLatestEpisodeUrl: string | null;
   imagens: ProjectImage[];
 };
 
@@ -70,6 +71,18 @@ export function ProjetoDetalhes() {
         return;
       }
 
+      // The hero and approved project copy can render immediately; the gallery loads separately.
+      const initialProject: ProjetoUI = {
+        id: found.id, slug: found.slug || "", titulo: found.titulo || "",
+        descricao: found.resumo || "", descricaoCompleta: found.descricao || found.resumo || "",
+        imagem: resolveProjectMediaUrl(found.capa_url) || "",
+        tag: "Projeto", anoLancamento: found.ano_lancamento ?? null,
+        instagramUrl: found.instagram_url ?? null, youtubeUrl: normalizeVideoUrl(found.youtube_url) ?? null,
+        spotifyUrl: found.spotify_url ?? null, spotifyLatestEpisodeUrl: found.spotify_latest_episode_url ?? null, imagens: [],
+      };
+      setProjeto(initialProject);
+      setLoading(false);
+      void trackPageView({ pageType: "projeto", path: `/projetos/${initialProject.slug || initialProject.id}`, contentId: initialProject.id, contentSlug: initialProject.slug }).catch(() => {});
       const { data: imagesData } = await getProjetoGaleria(found.id, "image");
 
       const imagens = ((imagesData || []) as ProjectImage[]).map((item) => ({
@@ -90,13 +103,13 @@ export function ProjetoDetalhes() {
         instagramUrl: found.instagram_url ?? null,
         youtubeUrl: normalizeVideoUrl(found.youtube_url) ?? null,
         spotifyUrl: found.spotify_url ?? null,
+        spotifyLatestEpisodeUrl: found.spotify_latest_episode_url ?? null,
         imagens,
       };
 
       setProjeto(mapped);
 
-      await trackPageView({ pageType: "projeto", path: `/projetos/${mapped.slug || mapped.id}`, contentId: mapped.id, contentSlug: mapped.slug });
-      setLoading(false);
+      // Analytics already run without blocking first paint.
     })();
   }, [paramValue]);
 
