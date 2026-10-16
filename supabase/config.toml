@@ -39,3 +39,7 @@ verify_jwt = false
 
 [functions.site-popup-track]
 verify_jwt = false
+
+# Callback must be reachable without a Supabase JWT; the function authenticates admin POST actions itself.
+[functions.youtube-oauth]
+verify_jwt = false
