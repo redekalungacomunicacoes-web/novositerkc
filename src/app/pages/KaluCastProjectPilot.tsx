@@ -76,7 +76,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
       <div className="mx-auto flex min-h-[420px] max-w-7xl flex-col justify-end gap-8 px-4 py-12 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-8">
         <div className="max-w-2xl">
           {activeEdition ? <button type="button" onClick={closeEdition} className="mb-6 inline-flex items-center gap-2 text-sm text-white/90 hover:underline"><ArrowLeft size={16}/> Voltar ao KaluCast</button> : <Link to="/projetos" className="mb-6 inline-flex items-center gap-2 text-sm text-white/90 hover:underline"><ArrowLeft size={16}/> Projetos</Link>}
-          <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">{activeEdition ? `KaluCast — ${activeEdition}ª Temporada` : project.titulo}</h1>
+          <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">{activeEdition ? `KaluCast ${activeEdition}ª Temporada` : project.titulo}</h1>
           {project.descricao && <p className="mt-4 max-w-xl text-lg leading-relaxed text-white/95">{project.descricao}</p>}
         </div>
         {(project.anoLancamento || links.length > 0) && <aside className="w-full rounded-2xl border border-white/25 bg-black/40 p-5 backdrop-blur-md lg:w-80 lg:shrink-0">
@@ -89,15 +89,15 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
     <div className="mx-auto max-w-7xl space-y-12 px-4 py-12 sm:px-6 lg:px-8">
       {activeEdition ? <section aria-label="Página da temporada" className="space-y-5">
         <button type="button" onClick={closeEdition} className="inline-flex items-center gap-2 text-sm font-medium text-green-800"><ArrowLeft size={16}/> Todas as temporadas</button>
-        <div className="flex items-center justify-between gap-3"><h2 className="text-3xl font-bold">KaluCast — {activeEdition}ª Temporada</h2><span className="text-sm text-zinc-500">{detailEdition?.videos.length || 0} episódios</span></div>
+        <div className="flex items-center justify-between gap-3"><h2 className="text-3xl font-bold">KaluCast {activeEdition}ª Temporada</h2><span className="text-sm text-zinc-500">{detailEdition?.videos.length || 0} episódios</span></div>
         {detailEdition?.videos.length ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{detailEdition.videos.map((v,i)=><button key={v.id} type="button" onClick={()=>setSelected(v.id)} className="overflow-hidden rounded-xl border text-left"><span className="relative flex aspect-video items-center justify-center bg-zinc-900 text-white">{v.thumb_url && <img src={v.thumb_url} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async"/>}<Play className="relative" size={32}/></span><span className="block p-4 font-medium">{episodeTitle(v.titulo,i)}</span></button>)}</div> : <p className="rounded-xl border p-5 text-sm text-zinc-600">Nenhum episódio publicado nesta temporada.</p>}
-        {project.imagens.some(img=>editionForImage(img)===activeEdition) && <a href={`?temporada=${activeEdition}&album=${activeEdition}#galeria`} className="text-sm text-green-800">Ver fotografias desta edição →</a>}
+        {project.imagens.some(img=>editionForImage(img)===activeEdition) && <a href={`?temporada=${activeEdition}&album=${activeEdition}#galeria`} className="text-sm text-green-800">Ver fotografias desta temporada →</a>}
       </section> : <section aria-label="Temporadas do KaluCast">
         <h2 className="text-3xl font-bold tracking-tight">Temporadas do KaluCast</h2>
         <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${editionCols}`}>
           {editions.map(ed => <article key={ed.number} className="min-w-0 rounded-2xl border border-zinc-200 p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3 border-b pb-4">
-              <div><h3 className="text-2xl font-bold">KaluCast — {ed.number}ª Temporada</h3><p className="mt-1 text-sm text-zinc-500">{ed.videos.length} {ed.videos.length === 1 ? "vídeo" : "vídeos"}</p></div>
+              <div><h3 className="text-2xl font-bold">KaluCast {ed.number}ª Temporada</h3><p className="mt-1 text-sm text-zinc-500">{ed.videos.length} {ed.videos.length === 1 ? "vídeo" : "vídeos"}</p></div>
               <button type="button" onClick={() => openEdition(ed.number)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-colors hover:border-zinc-300 hover:bg-zinc-50">Ver temporada <ArrowUpRight aria-hidden="true" size={16} className="text-zinc-500" /></button>
             </div>
             <div id={`temporada-${ed.number}`} className={`mt-4 grid gap-3 ${editions.length === 1 ? "sm:grid-cols-3" : "grid-cols-1"}`}>
