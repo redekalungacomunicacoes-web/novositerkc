@@ -4,7 +4,6 @@ import { Card, Button, Badge, Meter, Empty, Asset, labels } from "./components";
 import { Textarea } from "@/app/components/ui/textarea";
 import { rpc, safeContextRoute, message } from "./service";
 import type { AcademyData, Activity, Course, Question } from "./types";
-import { videoEmbed } from "./media";
 
 declare global {
   interface Window {
