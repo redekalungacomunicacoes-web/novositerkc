@@ -14,6 +14,7 @@ export type ProjetoRecord = {
   instagram_url: string | null;
   youtube_url: string | null;
   spotify_url: string | null;
+  spotify_latest_episode_url: string | null;
   publicado_transparencia: boolean | null;
   sort_order?: number | null;
   updated_at?: string | null;
@@ -73,7 +74,7 @@ export async function deleteProjetoMidia(id: string) {
 
 export async function findProjetoPublicBySlugOrId(paramValue: string) {
   const PUBLIC_FILTER = "publicado_transparencia.eq.true";
-  const columns = "id, slug, titulo, resumo, descricao, capa_url, cover_card_path, ano_lancamento, instagram_url, youtube_url, spotify_url, publicado_transparencia";
+  const columns = "id, slug, titulo, resumo, descricao, capa_url, cover_card_path, ano_lancamento, instagram_url, youtube_url, spotify_url, spotify_latest_episode_url, publicado_transparencia";
 
   const bySlug = await supabase.from("projetos").select(columns).eq("slug", paramValue).or(PUBLIC_FILTER).limit(1);
   if (!bySlug.error && bySlug.data?.length) return bySlug.data[0] as ProjetoRecord;
