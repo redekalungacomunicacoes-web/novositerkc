@@ -163,14 +163,14 @@ Deno.serve(async req => {
       }
       if (video.status?.privacyStatus!=="public") return json({error:"Para vincular ao projeto público, publique o vídeo no YouTube primeiro."},409);
       if (!validUuid(body.projectId)) return json({error:"Projeto inválido."},400);
-      const number=Number(body.edition);
-      if (!Number.isInteger(number) || number<1 || number>99) return json({error:"Edição inválida."},400);
+      const number=Number(body.season ?? body.edition);
+      if (!Number.isInteger(number) || number<1 || number>99) return json({error:"Temporada inválida."},400);
       const {data:project,error:projectError}=await admin.from("projetos").select("id").eq("id",body.projectId).maybeSingle();
       if (projectError || !project) return json({error:"Projeto não encontrado."},404);
       const {data:already}=await admin.from("projeto_galeria").select("id").eq("projeto_id",project.id).eq("tipo","video").eq("url",videoUrl).maybeSingle();
       if (already) return json({error:"Este vídeo já está vinculado ao projeto."},409);
       const title=String(video.snippet?.title||"Vídeo").slice(0,180);
-      const {error}=await admin.from("projeto_galeria").insert({projeto_id:project.id,tipo:"video",url:videoUrl,titulo:`${number}ª edição — ${title}`,thumb_url:video.snippet?.thumbnails?.medium?.url||null});
+      const {error}=await admin.from("projeto_galeria").insert({projeto_id:project.id,tipo:"video",url:videoUrl,titulo:`${number}ª temporada — ${title}`,thumb_url:video.snippet?.thumbnails?.medium?.url||null});
       return error?json({error:"Não foi possível vincular o projeto."},500):json({ok:true,url:videoUrl});
     }
     if (body.action === "connect") {
