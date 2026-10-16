@@ -23,6 +23,29 @@ async function encrypt(value: string) {
   const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(value)));
   return btoa(String.fromCharCode(...iv, ...ciphertext));
 }
+async function youtubeAccessToken() {
+  const { data: row, error } = await admin.from("rkc_youtube_connections").select("refresh_token_ciphertext").eq("id", "official").maybeSingle();
+  if (error || !row) throw new Error("O canal ainda não está conectado.");
+  const encrypted = Uint8Array.from(atob(row.refresh_token_ciphertext), c => c.charCodeAt(0));
+  const keyBytes = Uint8Array.from(atob(ENC_KEY), c => c.charCodeAt(0));
+  if (keyBytes.length !== 32 || encrypted.length <= 28) throw new Error("Chave de autenticação inválida.");
+  const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["decrypt"]);
+  const refreshToken = new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: encrypted.slice(0,12) }, key, encrypted.slice(12)));
+  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({client_id:CLIENT_ID,client_secret:CLIENT_SECRET,refresh_token:refreshToken,grant_type:"refresh_token"}) });
+  const token = await response.json();
+  if (!response.ok || !token.access_token) throw new Error("A autorização do canal expirou ou foi revogada.");
+  return token.access_token as string;
+}
+async function youtubeGet(endpoint: string, token: string, params: Record<string, string>) {
+  const url = new URL("https://www.googleapis.com/youtube/v3/" + endpoint);
+  for (const [key,value] of Object.entries(params)) url.searchParams.set(key,value);
+  const response = await fetch(url, { headers: { Authorization: "Bearer " + token } });
+  const payload = await response.json();
+  if (!response.ok) throw new Error("O YouTube não retornou os dados solicitados.");
+  return payload;
+}
+const validUuid = (id: unknown) => typeof id === "string" && /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id);
+const validVideoId = (id: unknown) => typeof id === "string" && /^[A-Za-z0-9_-]{11}$/.test(id);
 async function isAdmin(userId: string) {
   const { data, error } = await admin.from("user_roles").select("roles!inner(name)").eq("user_id", userId);
   if (error) return false;
@@ -94,6 +117,52 @@ Deno.serve(async req => {
     if (body.action === "status") {
       const { data } = await admin.from("rkc_youtube_connections").select("channel_id,channel_title,connected_at").eq("id","official").maybeSingle();
       return json({ connected: Boolean(data), channel: data || null });
+    }
+    if (body.action === "playlists") {
+      const token = await youtubeAccessToken();
+      const result = await youtubeGet("playlists", token, {part:"snippet,contentDetails",mine:"true",maxResults:"50",pageToken:typeof body.pageToken==="string" && /^[\w-]{1,200}$/.test(body.pageToken)?body.pageToken:""});
+      return json({items:(result.items||[]).map((p: any)=>({id:p.id,title:p.snippet?.title||"",thumbnail:p.snippet?.thumbnails?.medium?.url||"",count:p.contentDetails?.itemCount||0})),nextPageToken:result.nextPageToken||null});
+    }
+    if (body.action === "videos") {
+      const token = await youtubeAccessToken();
+      const params: Record<string,string> = {part:"snippet",maxResults:"50"};
+      const playlistId = typeof body.playlistId==="string" && /^[\w-]{1,100}$/.test(body.playlistId)?body.playlistId:"";
+      if (!playlistId) return json({error:"Escolha uma playlist válida."},400);
+      params.playlistId = playlistId;
+      if (typeof body.pageToken==="string" && /^[\w-]{1,200}$/.test(body.pageToken)) params.pageToken=body.pageToken;
+      const response=await youtubeGet("playlistItems",token,params);
+      const all=(response.items||[]).map((v:any)=>({id:v.snippet?.resourceId?.videoId,title:v.snippet?.title||"",thumbnail:v.snippet?.thumbnails?.medium?.url||"",publishedAt:v.snippet?.publishedAt||""})).filter((v:any)=>validVideoId(v.id) && v.title!=="Private video" && v.title!=="Deleted video");
+      const details=all.length?await youtubeGet("videos",token,{part:"status",id:all.map((v:any)=>v.id).join(",")}):{items:[]};
+      const statuses=new Map((details.items||[]).map((v:any)=>[v.id,v.status?.privacyStatus]));
+      return json({items:all.map((v:any)=>({...v,visibility:statuses.get(v.id)||"unknown"})),nextPageToken:response.nextPageToken||null});
+    }
+    if (body.action === "link_lesson" || body.action === "link_project") {
+      if (!validVideoId(body.videoId)) return json({error:"Vídeo inválido."},400);
+      const token = await youtubeAccessToken();
+      const details=await youtubeGet("videos",token,{part:"snippet,status",id:body.videoId});
+      const video=details.items?.[0];
+      if (!video) return json({error:"Vídeo não encontrado no canal."},404);
+      const owner=await youtubeGet("channels",token,{part:"id",mine:"true"});
+      if (!owner.items?.some((c:any)=>c.id===video.snippet?.channelId)) return json({error:"O vídeo não pertence ao canal RKC."},403);
+      const videoUrl="https://www.youtube.com/watch?v="+body.videoId;
+      if (body.action==="link_lesson") {
+        if (!validUuid(body.lessonId)) return json({error:"Aula inválida."},400);
+        const {data:lesson,error:lookupError}=await admin.from("academy_lessons").select("id").eq("id",body.lessonId).maybeSingle();
+        if (lookupError || !lesson) return json({error:"Aula não encontrada."},404);
+        const {error}=await admin.from("academy_lessons").update({media_source:"youtube",media_url:videoUrl,type:"video"}).eq("id",lesson.id);
+        return error?json({error:"Não foi possível atualizar a aula."},500):json({ok:true,url:videoUrl});
+      }
+      if (video.status?.privacyStatus!=="public") return json({error:"Para vincular ao projeto público, publique o vídeo no YouTube primeiro."},409);
+      if (!validUuid(body.projectId)) return json({error:"Projeto inválido."},400);
+      const number=Number(body.edition);
+      if (!Number.isInteger(number) || number<1 || number>99) return json({error:"Edição inválida."},400);
+      const {data:project,error:projectError}=await admin.from("projetos").select("id").eq("id",body.projectId).maybeSingle();
+      if (projectError || !project) return json({error:"Projeto não encontrado."},404);
+      const {data:already}=await admin.from("projeto_galeria").select("id").eq("projeto_id",project.id).eq("tipo","video").eq("url",videoUrl).maybeSingle();
+      if (already) return json({error:"Este vídeo já está vinculado ao projeto."},409);
+      const title=String(video.snippet?.title||"Vídeo").slice(0,180);
+      const {error}=await admin.from("projeto_galeria").insert({projeto_id:project.id,tipo:"video",url:videoUrl,titulo:`${number}ª edição — ${title}`,thumb_url:video.snippet?.thumbnails?.medium?.url||null});
+      return error?json({error:"Não foi possível vincular o projeto."},500):json({ok:true,url:videoUrl});
     }
     if (body.action === "connect") {
       const state = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(n => n.toString(16).padStart(2, "0")).join("");
