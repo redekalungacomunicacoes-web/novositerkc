@@ -57,7 +57,7 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
   const selectedAlbum = albumParam === "general" ? "general" : albumParam && Number.isInteger(albumEdition) && albumEdition > 0 ? albumEdition : "all";
   const visibleImages = project.imagens.filter(img => selectedAlbum === "all" || (selectedAlbum === "general" ? editionForImage(img) === null : editionForImage(img) === selectedAlbum));
   const detailEdition = editions.find(e=>e.number===activeEdition);
-  const openEdition = (number: number) => {const next=new URLSearchParams(params);next.set("temporada",String(number));next.delete("temporada");next.delete("edicao");setParams(next);window.scrollTo({top:0,behavior:"smooth"});};
+  const openEdition = (number: number) => {const next=new URLSearchParams(params);next.set("temporada",String(number));next.delete("edicao");setParams(next);window.scrollTo({top:0,behavior:"smooth"});};
   const closeEdition = () => {const next=new URLSearchParams(params);next.delete("temporada");next.delete("edicao");setParams(next);};
   const links = [
     project.instagramUrl && { label: "Instagram", url: project.instagramUrl, Icon: Instagram },
