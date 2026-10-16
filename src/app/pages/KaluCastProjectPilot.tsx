@@ -54,8 +54,8 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
   const imageEditions = [...new Set(project.imagens.map(editionForImage).filter((n): n is number => n !== null))].sort((a,b)=>a-b);
   const albumParam = params.get("album");
   const albumEdition = Number(albumParam);
-  const selectedAlbum = albumParam === "general" ? "general" : albumParam && Number.isInteger(albumEdition) && albumEdition > 0 ? albumEdition : "all";
-  const visibleImages = project.imagens.filter(img => selectedAlbum === "all" || (selectedAlbum === "general" ? editionForImage(img) === null : editionForImage(img) === selectedAlbum));
+  const selectedAlbum = albumParam && albumParam !== "general" && Number.isInteger(albumEdition) && albumEdition > 0 ? albumEdition : "all";
+  const visibleImages = project.imagens.filter(img => selectedAlbum === "all" || (editionForImage(img) === selectedAlbum));
   useEffect(() => {
     if (galleryIndex === null) return;
     const onKey = (event: KeyboardEvent) => {
@@ -133,9 +133,9 @@ export function KaluCastProjectPilot({ project }: { project: Project }) {
           <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600">{visibleImages.length} {visibleImages.length === 1 ? "foto" : "fotos"}</span>
         </div>
         <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Filtrar fotografias">
-          {([{value:"all",label:"Todas"},{value:"general",label:"Geral"},...imageEditions.map(n=>({value:String(n),label:`${n}ª Temporada`}))]).map(option=><button key={option.value} type="button" aria-pressed={String(selectedAlbum)===option.value} onClick={()=>{const next=new URLSearchParams(params); if(option.value==="all")next.delete("album");else next.set("album",option.value);setParams(next,{replace:true});setGalleryIndex(null);}} className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${String(selectedAlbum)===option.value ? "border-emerald-800 bg-emerald-800 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-emerald-300 hover:bg-emerald-50"}`}>{option.label}</button>)}
+          {([{value:"all",label:"Todas"},...imageEditions.map(n=>({value:String(n),label:`${n}ª Temporada`}))]).map(option=><button key={option.value} type="button" aria-pressed={String(selectedAlbum)===option.value} onClick={()=>{const next=new URLSearchParams(params); if(option.value==="all")next.delete("album");else next.set("album",option.value);setParams(next,{replace:true});setGalleryIndex(null);}} className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${String(selectedAlbum)===option.value ? "border-emerald-800 bg-emerald-800 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-emerald-300 hover:bg-emerald-50"}`}>{option.label}</button>)}
         </div>
-        {/* Historical images without season metadata remain in Geral. */}
+        
         {visibleImages.length > 0 ? <div className="mt-5 grid auto-rows-[104px] grid-cols-2 gap-3 sm:auto-rows-[128px] md:grid-cols-4 md:auto-rows-[124px] lg:auto-rows-[136px]">
           {visibleImages.map((image,index) => <button key={image.id} type="button" onClick={() => setGalleryIndex(index)} aria-label={`Ampliar fotografia ${index+1} de ${visibleImages.length}`} className={`group relative min-h-0 overflow-hidden rounded-2xl bg-zinc-100 text-left ring-1 ring-zinc-200/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${index===0 && visibleImages.length>2 ? "col-span-2 row-span-2" : index%7===4 && visibleImages.length>5 ? "row-span-2" : "row-span-2 md:row-span-1"}`}>
             <img src={image.url} alt={image.titulo || `Registro fotográfico ${index+1} do KaluCast`} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"/>
