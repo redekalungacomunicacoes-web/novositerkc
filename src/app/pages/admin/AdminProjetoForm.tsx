@@ -49,7 +49,13 @@ type ProjetoFoto = {
   id: string;
   projeto_id: string;
   url: string;
+  titulo?: string | null;
 };
+
+function temporadaDaFoto(titulo?: string | null) {
+  const match = (titulo || "").match(/(\d{1,2})\s*[ªaºo]?\s*temporada/i);
+  return match ? Number(match[1]) : null;
+}
 
 type TabKey = "informacoes" | "fotos" | "videos";
 type LinkedVideo = { id: string; titulo: string | null; url: string; thumb_url: string | null };
@@ -107,6 +113,9 @@ export function AdminProjetoForm() {
   const [fotos, setFotos] = useState<ProjetoFoto[]>([]);
   const [linkedVideos, setLinkedVideos] = useState<LinkedVideo[]>([]);
   const [season, setSeason] = useState(1);
+  const [photoSeason, setPhotoSeason] = useState(1);
+  const [photoEpisode, setPhotoEpisode] = useState(0);
+  const [photoFilter, setPhotoFilter] = useState(0);
   const [videoBusy, setVideoBusy] = useState(false);
 
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
@@ -244,12 +253,13 @@ export function AdminProjetoForm() {
         const fotoId = crypto.randomUUID();
         const uploaded = await uploadProjectImage(projectDbId, "gallery", file);
 
-        const { error: insertError } = await createProjetoMidia({
+        const { error: insertError } = await supabase.from("projeto_galeria").insert({
           id: fotoId,
           projeto_id: projectDbId,
           tipo: "image",
           url: uploaded.url,
           drive_file_id: uploaded.id,
+          titulo: `${photoSeason}ª Temporada — ${photoEpisode > 0 ? `Episódio ${String(photoEpisode).padStart(2, "0")} — ` : ""}${file.name.replace(/\.[^.]+$/, "")}`,
         });
         if (insertError) throw insertError;
       }
@@ -518,7 +528,7 @@ export function AdminProjetoForm() {
       {activeTab === "fotos" && (
         <div className="space-y-4 rounded-2xl border p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-semibold">Fotos do Projeto</h2>
+            <div><h2 className="font-semibold">Fotografias por temporada</h2><p className="text-xs text-muted-foreground">Escolha a temporada e, quando conhecido, o episódio antes de enviar. A organização por pasta no Drive depende da integração de upload.</p></div>
             <input
               ref={photosInputRef}
               type="file"
@@ -540,15 +550,30 @@ export function AdminProjetoForm() {
             </label>
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-sm font-medium">Temporada de destino
+              <input type="number" min={1} max={99} value={photoSeason} onChange={e => setPhotoSeason(Math.max(1,Math.min(99,Number(e.target.value)||1)))} className="mt-1 block w-full rounded-lg border px-3 py-2" />
+            </label>
+            <label className="text-sm font-medium">Episódio (opcional)
+              <input type="number" min={0} max={99} value={photoEpisode} onChange={e => setPhotoEpisode(Math.max(0,Math.min(99,Number(e.target.value)||0)))} className="mt-1 block w-full rounded-lg border px-3 py-2" />
+              <span className="text-xs text-muted-foreground">Use 0 para fotos gerais da temporada.</span>
+            </label>
+            <label className="text-sm font-medium">Visualizar fotos
+              <select value={photoFilter} onChange={e => setPhotoFilter(Number(e.target.value))} className="mt-1 block w-full rounded-lg border px-3 py-2">
+                <option value={0}>Todas</option>
+                {[...new Set(fotos.map(f => temporadaDaFoto(f.titulo)).filter((n): n is number => n !== null))].sort((a,b)=>a-b).map(n=><option key={n} value={n}>{n}ª temporada</option>)}
+              </select>
+            </label>
+          </div>
           {!canManageMedia && <p className="text-sm text-muted-foreground">Salve o projeto para habilitar upload de fotos.</p>}
 
           {fotos.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma foto cadastrada.</p>
           ) : (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-              {fotos.map((foto) => (
+              {fotos.filter(foto => photoFilter === 0 || temporadaDaFoto(foto.titulo) === photoFilter).map((foto) => (
                 <div key={foto.id} className="group relative overflow-hidden rounded-xl border">
-                      <ProjectAdminImage src={foto.url} alt="Foto do projeto" className="aspect-square w-full object-cover" loading="lazy" />
+                      <ProjectAdminImage src={foto.url} alt={foto.titulo || "Foto do projeto"} className="aspect-square w-full object-cover" loading="lazy" /><span className="block truncate px-2 py-1 text-xs text-muted-foreground" title={foto.titulo || ""}>{foto.titulo || "Sem temporada"}</span>
                   <button
                     type="button"
                     onClick={() => removeFoto(foto)}
