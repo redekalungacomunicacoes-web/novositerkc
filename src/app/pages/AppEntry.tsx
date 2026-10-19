@@ -7,7 +7,7 @@ export function AppEntry() {
     <main className="grid min-h-[100svh] place-items-center bg-[#f5f6ef] px-5 py-8">
       <section className="w-full max-w-md" aria-labelledby="app-entry-title">
         <header className="mb-8 text-center">
-          <RkcLogo className="mx-auto mb-4 h-20 w-20" />
+          <RkcLogo className="mx-auto mb-4 h-20 w-auto max-w-full" />
           <p className="text-sm font-semibold tracking-wide text-[#376b4d]">
             REDE KALUNGA COMUNICAÇÕES
           </p>
