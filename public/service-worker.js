@@ -31,10 +31,10 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
-        .then((response) => {
+        .then(async (response) => {
           if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, response.clone());
           }
           return response;
         })
@@ -49,20 +49,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache only versioned application bundles. API, media, and user data stay network-only.
+  // Versioned Vite bundles are safe to cache; API, media, and user data stay network-only.
   if (url.pathname.startsWith("/assets/")) {
     event.respondWith(
-      caches.match(request).then(async (cached) => {
-        const update = fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              const copy = response.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached || update;
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+
+        return fetch(request).then(async (response) => {
+          if (response.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, response.clone());
+          }
+          return response;
+        });
       })
     );
   }
