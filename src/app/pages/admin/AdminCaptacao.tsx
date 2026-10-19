@@ -50,28 +50,42 @@ export function AdminCaptacao() {
   async function load() {
     setLoading(true); setError("");
     try {
-      const [{ data: ed, error: ee }, { data: req, error: re }, { data: ts, error: te }, { data: team, error: me }, { data: files, error: fe }, { data: log, error: le }, user] = await Promise.all([
+      const [{ data: ed, error: ee }, { data: req, error: re }, { data: ts, error: te }, { data: team, error: me }, { data: files, error: fe }, user] = await Promise.all([
         supabase.from("captacao_editais").select("*").order("deadline", { ascending: true, nullsFirst: false }),
         supabase.from("captacao_requisitos").select("*").order("created_at"),
         supabase.from("captacao_tarefas").select("id,edital_id,title,assignee_id,due_date,priority,status,assignee:equipe!captacao_tarefas_assignee_id_fkey(nome)").order("due_date", { ascending: true, nullsFirst: false }),
         supabase.from("equipe").select("id,nome,user_id,ativo").eq("ativo", true).order("nome"),
         supabase.from("captacao_anexos").select("*").order("created_at", { ascending: false }),
-        supabase.from("captacao_auditoria").select("id,actor_name,action,entity,edital_id,created_at,detail").order("created_at", { ascending: false }).limit(20),
         supabase.auth.getUser(),
       ]);
-      const firstError = ee || re || te || me || fe || le;
+      const firstError = ee || re || te || me || fe;
       if (firstError) throw firstError;
       const current = user.data.user?.id;
       const member = (team || []).find((m: any) => m.user_id === current);
       setEditais((ed || []) as Edital[]); setRequirements((req || []) as Requirement[]);
       setTasks((ts || []).map((t: any) => ({ ...t, assignee_name: Array.isArray(t.assignee) ? t.assignee[0]?.nome : t.assignee?.nome })) as Task[]);
-      setMembers((team || []) as Member[]); setAttachments((files || []) as Attachment[]); setAudit((log || []) as Audit[]);
+      setMembers((team || []) as Member[]); setAttachments((files || []) as Attachment[]);
       setMyMemberId(member?.id || ""); setCanApprove(Boolean(member && member.nome.trim().toLocaleLowerCase("pt-BR") === "felipe"));
       setSelectedId((old) => (ed || []).some((x: Edital) => x.id === old) ? old : (ed?.[0]?.id || ""));
     } catch (e) { setError((e as Error).message || "Não foi possível carregar o módulo."); }
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (!selectedId) { setAudit([]); return; }
+    let active = true;
+    void supabase.from("captacao_auditoria")
+      .select("id,actor_name,action,entity,edital_id,created_at,detail")
+      .eq("edital_id", selectedId)
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data, error: auditError }) => {
+        if (!active) return;
+        if (auditError) { setAudit([]); return; }
+        setAudit((data || []) as Audit[]);
+      });
+    return () => { active = false; };
+  }, [selectedId]);
 
   const selected = editais.find((e) => e.id === selectedId) || null;
   const filtered = useMemo(() => editais.filter((e) => (statusFilter === "all" || e.status === statusFilter) && `${e.protocol} ${e.title} ${e.funder}`.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR"))), [editais, statusFilter, query]);

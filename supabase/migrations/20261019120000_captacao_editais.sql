@@ -149,7 +149,8 @@ begin
   insert into public.captacao_auditoria(entity,entity_id,edital_id,action,actor_id,actor_name,detail,changes)
   values (tg_table_name,v_id,v_edital_id,lower(tg_op),v_actor,coalesce(v_name,'Sistema'),coalesce(v_row->>'protocol',v_row->>'title',v_row->>'description',v_row->>'file_name',''),
     jsonb_build_object('before',case when tg_op='INSERT' then null else to_jsonb(old) end,'after',case when tg_op='DELETE' then null else to_jsonb(new) end));
-  return case when tg_op='DELETE' then old else new end;
+  if tg_op='DELETE' then return old; end if;
+  return new;
 end;
 $$;
 
