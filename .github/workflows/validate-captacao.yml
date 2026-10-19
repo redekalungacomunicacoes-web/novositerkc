@@ -19,7 +19,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Typecheck editais routes and navigation
+      - name: Typecheck the captação page
         run: npx tsc -p tsconfig.captacao.json
       - name: Build application with placeholder public Supabase settings
         run: VITE_SUPABASE_URL=https://fixture.supabase.co VITE_SUPABASE_ANON_KEY=fixture-public-key npm run build

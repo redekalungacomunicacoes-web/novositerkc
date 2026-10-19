@@ -1,8 +1,6 @@
 {
   "extends": "./tsconfig.academia.json",
   "include": [
-    "src/app/pages/admin/AdminCaptacao.tsx",
-    "src/app/routes.tsx",
-    "src/app/components/admin/AdminSidebar.tsx"
+    "src/app/pages/admin/AdminCaptacao.tsx"
   ]
 }
