@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1f6b45" />
+    <title>Sem conexão | Rede Kalunga Comunicações</title>
+    <style>
+      :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f8f7f2; color: #183c2b; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
+      main { max-width: 34rem; padding: 2rem; text-align: center; }
+      .mark { display: grid; place-items: center; width: 5rem; height: 5rem; margin: 0 auto 1.5rem; border: 3px solid #d9c89e; border-radius: 50%; background: #1f6b45; color: white; font-weight: 800; font-size: 1.4rem; }
+      h1 { font-size: clamp(1.6rem, 5vw, 2.3rem); }
+      p { line-height: 1.6; color: #43564a; }
+      button { border: 0; border-radius: 999px; padding: .85rem 1.25rem; background: #1f6b45; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark" aria-hidden="true">RKC</div>
+      <h1>Você está sem conexão</h1>
+      <p>Quando a internet voltar, tente novamente para acessar as notícias e histórias do Território Kalunga.</p>
+      <button type="button" onclick="location.reload()">Tentar novamente</button>
+    </main>
+  </body>
+</html>
