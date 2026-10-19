@@ -1,5 +1,6 @@
 import { YouTubeConnection } from "./YouTubeConnection";
 import { YouTubeLibrary } from "./YouTubeLibrary";
+import { AppSettingsSection } from "./AppSettingsSection";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Save, Image as ImageIcon, Trash2, AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -346,6 +347,8 @@ export function AdminConfiguracoes() {
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
         <p className="text-muted-foreground mt-1">Gerencie as informações gerais do site e preferências.</p>
       </div>
+
+      <AppSettingsSection />
 
       <div className="grid gap-6">
         <YouTubeConnection />
