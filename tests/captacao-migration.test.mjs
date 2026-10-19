@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
-  .filter((name) => /^20\\d{12}_captacao_(editais|acl_hardening|fk_indexes)\\.sql$/.test(name))
+  .filter((name) => name.startsWith('20261019') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
 assert.equal(migrationFiles.length, 3, 'expected the applied captação migrations to be present');
 const migration = (await Promise.all(
