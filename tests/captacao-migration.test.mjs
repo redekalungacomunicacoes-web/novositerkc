@@ -7,7 +7,7 @@ const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
   .filter((name) => name.startsWith('20261019') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
-assert.equal(migrationFiles.length, 3, 'expected the applied captação migrations to be present');
+assert.equal(migrationFiles.length, 4, 'expected the applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
 )).join('\n');
@@ -48,11 +48,11 @@ async function fixture() {
   `);
   await db.exec(migration);
   await db.exec(`
-    insert into public.roles(name) values ('admin'), ('autor');
+    insert into public.roles(name) values ('admin_alfa'), ('admin'), ('autor');
     insert into public.user_roles(user_id, role_id)
       select '${ids.reviewer}', id from public.roles where name='autor';
     insert into public.user_roles(user_id, role_id)
-      select '${ids.manager}', id from public.roles where name='admin';
+      select '${ids.manager}', id from public.roles where name='admin_alfa';
     insert into public.equipe(id,user_id,nome) values
       ('${ids.reviewerMember}','${ids.reviewer}','Isabelle'),
       ('${ids.managerMember}','${ids.manager}','Felipe');
@@ -91,12 +91,23 @@ test('does not expose privileged helpers or trigger functions through anon RPC',
       has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute
     from pg_proc p
     where p.pronamespace='public'::regnamespace
-      and p.proname in ('can_access_captacao','is_captacao_manager','captacao_assign_protocol','captacao_guard_editais','captacao_audit_change')
+      and p.proname in ('can_access_captacao','is_captacao_manager','captacao_assign_protocol','captacao_guard_editais','captacao_audit_change','captacao_invalidate_eligibility')
   `);
-  assert.equal(rows.length, 5);
+  assert.equal(rows.length, 6);
   assert.ok(rows.every((r) => !r.anon_execute), 'anon must not execute captação functions');
   assert.equal(rows.find((r) => r.proname === 'can_access_captacao').authenticated_execute, true);
-  assert.ok(rows.filter((r) => r.proname !== 'can_access_captacao').every((r) => !r.authenticated_execute));
+  assert.equal(rows.find((r) => r.proname === 'is_captacao_manager').authenticated_execute, true);
+  assert.ok(rows.filter((r) => !['can_access_captacao','is_captacao_manager'].includes(r.proname)).every((r) => !r.authenticated_execute));
+});
+
+test('rejects inserted editais that bypass eligibility and manager approval', async (t) => {
+  const db = await fixture(); t.after(() => db.close());
+  await asUser(db, ids.reviewer, async () => {
+    await assert.rejects(
+      db.query("insert into public.captacao_editais(title,funder,status,eligibility_status,eligibility_opinion,manager_approved_at) values ('Teste','Fundo','em_elaboracao','approved','Parecer',now())"),
+      /iniciam sem aprovação/i,
+    );
+  });
 });
 
 test('adds indexes for captação foreign-key lookups', async (t) => {
@@ -122,4 +133,12 @@ test('requires all requirements and a documented opinion before eligibility, the
   const { rows: final } = await db.query('select status, manager_approved_at from public.captacao_editais where id=$1', [editalId]);
   assert.equal(final[0].status, 'em_elaboracao');
   assert.ok(final[0].manager_approved_at);
+  await asUser(db, ids.reviewer, async () => {
+    await db.query("update public.captacao_requisitos set status='pending' where edital_id=$1", [editalId]);
+  });
+  const { rows: invalidated } = await db.query('select status, eligibility_status, manager_approved_at, eligibility_opinion from public.captacao_editais where id=$1', [editalId]);
+  assert.equal(invalidated[0].status, 'pending_eligibility');
+  assert.equal(invalidated[0].eligibility_status, 'pending_verification');
+  assert.equal(invalidated[0].manager_approved_at, null);
+  assert.equal(invalidated[0].eligibility_opinion, null);
 });
