@@ -10,7 +10,7 @@ const migrationFiles = (await readdir(migrationsDir))
 assert.equal(migrationFiles.length, 3, 'expected the applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
-)).join('\\n');
+)).join('\n');
 
 const ids = {
   reviewer: '00000000-0000-4000-8000-000000000101',
