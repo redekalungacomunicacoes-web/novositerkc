@@ -7,7 +7,7 @@ const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
   .filter((name) => name.startsWith('20261019') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
-assert.equal(migrationFiles.length, 4, 'expected the applied captação migrations to be present');
+assert.equal(migrationFiles.length, 5, 'expected the applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
 )).join('\n');
@@ -124,7 +124,7 @@ test('requires all requirements and a documented opinion before eligibility, the
     await db.query("insert into public.captacao_requisitos(edital_id,description,status) values ($1,'Requisito oficial','met')", [editalId]);
     await assert.rejects(db.query("update public.captacao_editais set eligibility_status='approved' where id=$1", [editalId]), /parecer/i);
     await db.query("update public.captacao_editais set eligibility_status='approved', eligibility_opinion='Requisitos conferidos na fonte oficial.' where id=$1", [editalId]);
-    await assert.rejects(db.query("update public.captacao_editais set status='em_elaboracao' where id=$1", [editalId]), /gestor Felipe/i);
+    await assert.rejects(db.query("update public.captacao_editais set status='em_elaboracao' where id=$1", [editalId]), /gestor autorizar/i);
     await assert.rejects(db.query("update public.captacao_editais set manager_approved_at=now() where id=$1", [editalId]), /Felipe/i);
   });
   await asUser(db, ids.manager, async () => {
