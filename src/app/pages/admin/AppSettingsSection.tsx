@@ -133,6 +133,14 @@ export function AppSettingsSection() {
         </div>
 
         <div className="rounded-2xl border bg-muted/20 p-4">
+          <h3 className="mb-3 font-semibold">Prévia da identidade do app</h3>
+          <div className="flex items-center gap-3 rounded-xl border bg-background p-3">
+            {form.app_logo_url ? <img src={form.app_logo_url} alt="" className="h-12 w-12 rounded-xl object-contain" /> : <span className="grid h-12 w-12 place-items-center rounded-xl bg-green-800 text-xs font-bold text-white">RKC</span>}
+            <div className="min-w-0"><p className="truncate font-semibold">{form.app_name || "Nome do aplicativo"}</p><p className="line-clamp-2 text-sm text-muted-foreground">{form.app_description || "A descrição do aplicativo aparecerá aqui."}</p></div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-muted/20 p-4">
           <div className="mb-4 flex items-center gap-2"><Share2 className="h-4 w-4" /><h3 className="font-semibold">Compartilhamento</h3></div>
           <label className="mb-4 flex min-h-11 items-center gap-3 text-sm">
             <input type="checkbox" checked={form.app_share_enabled} onChange={(event) => update("app_share_enabled", event.target.checked)} disabled={loading} className="h-4 w-4 accent-green-700" />
@@ -158,7 +166,7 @@ export function AppSettingsSection() {
           </button>
         </div>
 
-        <p className="text-xs text-muted-foreground">As opções de nome e logo personalizam a interface do painel e o compartilhamento. A imagem e o nome exibidos ao instalar o app no celular vêm do manifesto publicado no site.</p>
+        <p className="text-xs text-muted-foreground">Nome e logo personalizam a interface mobile do painel. O título e a mensagem controlam o botão de compartilhamento; o nome e o ícone da instalação continuam definidos no manifesto publicado no site.</p>
       </div>
     </section>
   );
