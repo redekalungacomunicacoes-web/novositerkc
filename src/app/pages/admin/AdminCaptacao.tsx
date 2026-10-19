@@ -51,22 +51,23 @@ export function AdminCaptacao() {
   async function load() {
     setLoading(true); setError("");
     try {
-      const [{ data: ed, error: ee }, { data: req, error: re }, { data: ts, error: te }, { data: team, error: me }, { data: files, error: fe }, user] = await Promise.all([
+      const [{ data: ed, error: ee }, { data: req, error: re }, { data: ts, error: te }, { data: team, error: me }, { data: files, error: fe }, user, { data: managerAllowed, error: managerError }] = await Promise.all([
         supabase.from("captacao_editais").select("*").order("deadline", { ascending: true, nullsFirst: false }),
         supabase.from("captacao_requisitos").select("*").order("created_at"),
         supabase.from("captacao_tarefas").select("id,edital_id,title,assignee_id,due_date,priority,status,assignee:equipe!captacao_tarefas_assignee_id_fkey(nome)").order("due_date", { ascending: true, nullsFirst: false }),
         supabase.from("equipe").select("id,nome,user_id,ativo").eq("ativo", true).order("nome"),
         supabase.from("captacao_anexos").select("*").order("created_at", { ascending: false }),
         supabase.auth.getUser(),
+        supabase.rpc("is_captacao_manager"),
       ]);
-      const firstError = ee || re || te || me || fe;
+      const firstError = ee || re || te || me || fe || managerError;
       if (firstError) throw firstError;
       const current = user.data.user?.id;
       const member = (team || []).find((m: any) => m.user_id === current);
       setEditais((ed || []) as Edital[]); setRequirements((req || []) as Requirement[]);
       setTasks((ts || []).map((t: any) => ({ ...t, assignee_name: Array.isArray(t.assignee) ? t.assignee[0]?.nome : t.assignee?.nome })) as Task[]);
       setMembers((team || []) as Member[]); setAttachments((files || []) as Attachment[]);
-      setMyMemberId(member?.id || ""); setCanApprove(Boolean(member && member.nome.trim().toLocaleLowerCase("pt-BR") === "felipe"));
+      setMyMemberId(member?.id || ""); setCanApprove(Boolean(managerAllowed));
       setSelectedId((old) => (ed || []).some((x: Edital) => x.id === old) ? old : (ed?.[0]?.id || ""));
     } catch (e) { setError((e as Error).message || "Não foi possível carregar o módulo."); }
     finally { setLoading(false); }
@@ -131,7 +132,7 @@ export function AdminCaptacao() {
   }
   async function addTask(event: React.FormEvent) {
     event.preventDefault(); if (!selected || !taskTitle.trim() || !taskAssignee) return; setSaving(true);
-    try { const { error: e } = await supabase.from("captacao_tarefas").insert({ edital_id: selected.id, title: taskTitle.trim(), assignee_id: taskAssignee, due_date: taskDue || null, priority: taskPriority, status: "pendente", created_by: myMemberId }); if (e) throw e; setTaskTitle(""); setTaskDue(""); setTaskOpen(false); await load(); }
+    try { const { error: e } = await supabase.from("captacao_tarefas").insert({ edital_id: selected.id, title: taskTitle.trim(), assignee_id: taskAssignee, due_date: taskDue || null, priority: taskPriority, status: "pendente", created_by: myMemberId || null }); if (e) throw e; setTaskTitle(""); setTaskDue(""); setTaskOpen(false); await load(); }
     catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function updateTask(task: Task, patch: Partial<Task>) { const { error: e } = await supabase.from("captacao_tarefas").update(patch).eq("id", task.id); if (e) toast.error(e.message); else await load(); }
@@ -140,7 +141,7 @@ export function AdminCaptacao() {
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_"); const storagePath = `${selected.id}/${crypto.randomUUID()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("captacao-editais").upload(storagePath, file, { upsert: false, contentType: file.type || "application/octet-stream" }); if (uploadError) throw uploadError;
-      const { error: insertError } = await supabase.from("captacao_anexos").insert({ edital_id: selected.id, file_name: file.name, storage_path: storagePath, category: fileCategory, uploaded_by: myMemberId });
+      const { error: insertError } = await supabase.from("captacao_anexos").insert({ edital_id: selected.id, file_name: file.name, storage_path: storagePath, category: fileCategory, uploaded_by: myMemberId || null });
       if (insertError) { await supabase.storage.from("captacao-editais").remove([storagePath]); throw insertError; }
       setFile(null); await load(); toast.success("Arquivo privado anexado ao edital.");
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
