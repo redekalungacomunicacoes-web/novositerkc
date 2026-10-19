@@ -26,9 +26,11 @@ async function fixture() {
     create role authenticated;
     create role anon;
     create schema auth;
-    create function auth.uid() returns uuid language sql stable as $$
+    create function auth.uid() returns uuid language sql stable as $
       select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
-    $$;
+    $;
+    grant usage on schema auth to authenticated;
+    grant execute on function auth.uid() to authenticated;
     create schema storage;
     create function storage.foldername(text) returns text[] language sql immutable as $$
       select string_to_array(trim(both '/' from $1), '/')
