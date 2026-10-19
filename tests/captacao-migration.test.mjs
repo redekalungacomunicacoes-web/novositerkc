@@ -7,7 +7,7 @@ const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
   .filter((name) => name.startsWith('20261019') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
-assert.equal(migrationFiles.length, 5, 'expected the applied captação migrations to be present');
+assert.equal(migrationFiles.length, 6, 'expected the applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
 )).join('\n');
@@ -108,6 +108,17 @@ test('rejects inserted editais that bypass eligibility and manager approval', as
       /iniciam sem aprovação/i,
     );
   });
+});
+
+test('audit log identifies an authorized user without an equipe link', async (t) => {
+  const db = await fixture(); t.after(() => db.close());
+  const { rows } = await db.query("select id from public.captacao_editais where protocol='RKC-CAP-2026-001'");
+  await db.query('delete from public.equipe where user_id=$1', [ids.reviewer]);
+  await asUser(db, ids.reviewer, async () => {
+    await db.query("insert into public.captacao_tarefas(edital_id,title) values ($1,'Tarefa rastreável')", [rows[0].id]);
+  });
+  const { rows: audit } = await db.query("select actor_name from public.captacao_auditoria where entity='captacao_tarefas' order by created_at desc limit 1");
+  assert.equal(audit[0].actor_name, `Usuário ${ids.reviewer.slice(0,8)}`);
 });
 
 test('adds indexes for captação foreign-key lookups', async (t) => {
