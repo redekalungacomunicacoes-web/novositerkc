@@ -28,6 +28,7 @@ const AdminEquipe = lazy(() => import("@/app/pages/admin/AdminEquipe").then(m =>
 const AdminEquipeForm = lazy(() => import("@/app/pages/admin/AdminEquipeForm").then(m => ({ default: m.AdminEquipeForm })));
 const Dashboard = lazy(() => import("@/app/pages/admin/Dashboard").then(m => ({ default: m.Dashboard })));
 const AdminLogin = lazy(() => import("@/app/pages/admin/AdminLogin").then(m => ({ default: m.AdminLogin })));
+const AdminCaptacao = lazy(() => import("@/app/pages/admin/AdminCaptacao").then(m => ({ default: m.AdminCaptacao })));
 const AdminMateriaForm = lazy(() => import("@/app/pages/admin/AdminMateriaForm").then(m => ({ default: m.AdminMateriaForm })));
 const AdminMateriasAlias = lazy(() => import("@/app/pages/admin/AdminMaterias").then(m => ({ default: m.AdminMaterias })));
 const AdminNewsletter = lazy(() => import("@/app/pages/admin/AdminNewsletter").then(m => ({ default: m.AdminNewsletter })));
@@ -106,6 +107,7 @@ export const router = createBrowserRouter([
           { path: "quem-somos", loader: requireRoles(["admin", "editor"]), element: <AdminQuemSomos /> },
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), element: <AdminNewsletter /> },
           { path: "tarefas", loader: requireRoles(taskRoles), element: <AdminTarefas /> },
+          { path: "editais", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <AdminCaptacao /> },
           { path: "tarefas/kanban", loader: requireRoles(taskRoles), element: <AdminTarefasKanban /> },
           { path: "tarefas/anexos", loader: requireRoles(taskRoles), element: <AdminTarefasAnexos /> },
           { path: "tarefas/relatorios", loader: requireRoles(taskRoles), element: <AdminTarefasRelatorios /> },

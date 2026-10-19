@@ -1,0 +1,29 @@
+name: Validate Editais e Captacao
+on:
+  pull_request:
+    paths:
+      - 'src/app/pages/admin/AdminCaptacao.tsx'
+      - 'src/app/routes.tsx'
+      - 'src/app/components/admin/AdminSidebar.tsx'
+      - 'supabase/migrations/*captacao*'
+      - 'tests/captacao-*'
+      - 'tsconfig.captacao.json'
+      - '.github/workflows/validate-captacao.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Typecheck the captação page
+        run: npx tsc -p tsconfig.captacao.json
+      - name: Test migration access and workflow guards
+        run: node --test tests/captacao-migration.test.mjs
+      - name: Build application with placeholder public Supabase settings
+        run: VITE_SUPABASE_URL=https://fixture.supabase.co VITE_SUPABASE_ANON_KEY=fixture-public-key npm run build
