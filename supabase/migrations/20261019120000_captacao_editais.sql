@@ -129,6 +129,13 @@ begin
       end if;
     end if;
   end if;
+  if new.eligibility_status = 'approved' and (
+    not exists (select 1 from public.captacao_requisitos r where r.edital_id = new.id)
+    or exists (select 1 from public.captacao_requisitos r where r.edital_id = new.id and r.status <> 'met')
+    or nullif(trim(new.eligibility_opinion), '') is null
+  ) then
+    raise exception 'A elegibilidade exige parecer e todos os requisitos registrados como atendidos.' using errcode = '42501';
+  end if;
   if new.status in ('em_elaboracao','inscrito') and (new.eligibility_status <> 'approved' or new.manager_approved_at is null) then
     raise exception 'A elaboração está bloqueada até a elegibilidade ser aprovada e o gestor Felipe autorizar o avanço.' using errcode = '42501';
   end if;
