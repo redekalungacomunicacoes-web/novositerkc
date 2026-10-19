@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 
-const migration = await readFile(new URL('../supabase/migrations/20261019120000_captacao_editais.sql', import.meta.url), 'utf8');
+const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
+const migrationFiles = (await readdir(migrationsDir))
+  .filter((name) => /^20\\d{12}_captacao_(editais|acl_hardening|fk_indexes)\\.sql$/.test(name))
+  .sort();
+assert.equal(migrationFiles.length, 3, 'expected the applied captação migrations to be present');
+const migration = (await Promise.all(
+  migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
+)).join('\\n');
+
 const ids = {
   reviewer: '00000000-0000-4000-8000-000000000101',
   manager: '00000000-0000-4000-8000-000000000102',
@@ -30,6 +38,13 @@ async function fixture() {
     create table public.equipe(id uuid primary key, user_id uuid, nome text not null, ativo boolean default true);
     create table storage.buckets(id text primary key, name text not null, public boolean not null default false);
     create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text not null, name text not null);
+    grant select on public.roles, public.user_roles, public.equipe to authenticated;
+    alter table public.roles enable row level security;
+    alter table public.user_roles enable row level security;
+    alter table public.equipe enable row level security;
+    create policy roles_read_all on public.roles for select to authenticated using (true);
+    create policy user_roles_read_own on public.user_roles for select to authenticated using (user_id = auth.uid());
+    create policy equipe_read_own on public.equipe for select to authenticated using (user_id = auth.uid());
   `);
   await db.exec(migration);
   await db.exec(`
@@ -66,6 +81,28 @@ test('RLS grants access to panel roles and hides records from other authenticate
   const { rows: visible } = await asUser(db, ids.reviewer, () => db.query('select id from public.captacao_editais'));
   assert.equal(hidden.length, 0);
   assert.equal(visible.length, 3);
+});
+
+test('does not expose privileged helpers or trigger functions through anon RPC', async (t) => {
+  const db = await fixture(); t.after(() => db.close());
+  const { rows } = await db.query(`
+    select p.proname,
+      has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute,
+      has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute
+    from pg_proc p
+    where p.pronamespace='public'::regnamespace
+      and p.proname in ('can_access_captacao','is_captacao_manager','captacao_assign_protocol','captacao_guard_editais','captacao_audit_change')
+  `);
+  assert.equal(rows.length, 5);
+  assert.ok(rows.every((r) => !r.anon_execute), 'anon must not execute captação functions');
+  assert.equal(rows.find((r) => r.proname === 'can_access_captacao').authenticated_execute, true);
+  assert.ok(rows.filter((r) => r.proname !== 'can_access_captacao').every((r) => !r.authenticated_execute));
+});
+
+test('adds indexes for captação foreign-key lookups', async (t) => {
+  const db = await fixture(); t.after(() => db.close());
+  const { rows } = await db.query("select indexname from pg_indexes where schemaname='public' and indexname like 'captacao_%_idx'");
+  assert.equal(rows.length, 10);
 });
 
 test('requires all requirements and a documented opinion before eligibility, then requires Felipe to release drafting', async (t) => {
