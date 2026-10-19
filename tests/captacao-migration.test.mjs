@@ -7,7 +7,7 @@ const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
   .filter((name) => name.startsWith('20261019') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
-assert.equal(migrationFiles.length, 6, 'expected the applied captação migrations to be present');
+assert.equal(migrationFiles.length, 7, 'expected all applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
 )).join('\n');
@@ -73,6 +73,15 @@ test('seeds the three opportunities as unconfirmed with only the provided deadli
   assert.equal(rows[0].deadline.toISOString().slice(0,10), '2026-11-11');
   assert.deepEqual(rows.slice(1).map((r) => r.deadline), [null, null]);
   assert.ok(rows.every((r) => r.status === 'pending_confirmation' && r.eligibility_status === 'pending_verification'));
+});
+
+test('allows submitted applications to wait for evaluation without approving eligibility', async (t) => {
+  const db = await fixture(); t.after(() => db.close());
+  await db.query("insert into public.captacao_editais (title, funder, category, status, eligibility_status) values ('Prêmio Pretas Potências — Projeto KaluCast', 'Prêmio Pretas Potências', 'Comunicação e Cultura Digital', 'aguardando_avaliacao', 'pending_verification')");
+  const { rows } = await db.query("select status, eligibility_status, manager_approved_at from public.captacao_editais where title like '%KaluCast%'");
+  assert.equal(rows[0].status, 'aguardando_avaliacao');
+  assert.equal(rows[0].eligibility_status, 'pending_verification');
+  assert.equal(rows[0].manager_approved_at, null);
 });
 
 test('RLS grants access to panel roles and hides records from other authenticated users', async (t) => {
