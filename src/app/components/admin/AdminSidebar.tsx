@@ -12,6 +12,7 @@ import {
   Settings,
   LogOut,
   Landmark,
+  HandCoins,
   ListTodo,
   Megaphone,
   type LucideIcon,
@@ -83,6 +84,12 @@ export const adminLinks: SidebarLink[] = [
     label: "Tarefas",
     icon: ListTodo,
     allow: ["admin_alfa", "admin", "editor", "autor"],
+  },
+  {
+    href: "/admin/editais",
+    label: "Editais e captação",
+    icon: HandCoins,
+    allow: ["admin_alfa", "admin", "editor", "autor", "financeiro"],
   },
   {
     href: "/admin/financeiro",
