@@ -49,7 +49,7 @@ create table if not exists public.captacao_editais (
 );
 
 create or replace function public.captacao_assign_protocol()
-returns trigger language plpgsql set search_path = '' as $$
+returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if new.protocol is null or btrim(new.protocol) = '' then
     new.protocol := 'RKC-CAP-' || extract(year from now())::text || '-' || lpad(nextval('public.captacao_protocol_seq')::text, 3, '0');
@@ -111,7 +111,7 @@ create table if not exists public.captacao_auditoria (
 );
 
 create or replace function public.captacao_guard_editais()
-returns trigger language plpgsql security invoker set search_path = '' as $$
+returns trigger language plpgsql security definer set search_path = '' as $$
 declare v_actor uuid := auth.uid();
 begin
   if tg_op = 'UPDATE' then
