@@ -9,7 +9,7 @@ type Task = { id: string; edital_id: string; title: string; assignee_id: string 
 type Member = { id: string; nome: string; user_id?: string | null };
 type Attachment = { id: string; edital_id: string; file_name: string; storage_path: string; category: string; created_at: string };
 type Audit = { id: string; actor_name: string; action: string; entity: string; edital_id: string; created_at: string; detail: string };
-const STATUS: Record<string, string> = { pending_confirmation: "A confirmar", pending_eligibility: "Análise de elegibilidade", em_elaboracao: "Em elaboração", inscrito: "Inscrito", encerrado: "Encerrado" };
+const STATUS: Record<string, string> = { pending_confirmation: "A confirmar", pending_eligibility: "Análise de elegibilidade", em_elaboracao: "Em elaboração", inscrito: "Inscrito", aguardando_avaliacao: "Aguardando avaliação", encerrado: "Encerrado" };
 const PRIORITY: Record<string, string> = { baixa: "Baixa", media: "Média", alta: "Alta", urgente: "Urgente" };
 const dateLabel = (value?: string | null) => value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "Prazo a confirmar";
 
@@ -51,23 +51,22 @@ export function AdminCaptacao() {
   async function load() {
     setLoading(true); setError("");
     try {
-      const [{ data: ed, error: ee }, { data: req, error: re }, { data: ts, error: te }, { data: team, error: me }, { data: files, error: fe }, user, { data: managerAllowed, error: managerError }] = await Promise.all([
+      const [{ data: ed, error: ee }, { data: req, error: re }, { data: ts, error: te }, { data: team, error: me }, { data: files, error: fe }, user] = await Promise.all([
         supabase.from("captacao_editais").select("*").order("deadline", { ascending: true, nullsFirst: false }),
         supabase.from("captacao_requisitos").select("*").order("created_at"),
         supabase.from("captacao_tarefas").select("id,edital_id,title,assignee_id,due_date,priority,status,assignee:equipe!captacao_tarefas_assignee_id_fkey(nome)").order("due_date", { ascending: true, nullsFirst: false }),
         supabase.from("equipe").select("id,nome,user_id,ativo").eq("ativo", true).order("nome"),
         supabase.from("captacao_anexos").select("*").order("created_at", { ascending: false }),
         supabase.auth.getUser(),
-        supabase.rpc("is_captacao_manager"),
       ]);
-      const firstError = ee || re || te || me || fe || managerError;
+      const firstError = ee || re || te || me || fe;
       if (firstError) throw firstError;
       const current = user.data.user?.id;
       const member = (team || []).find((m: any) => m.user_id === current);
       setEditais((ed || []) as Edital[]); setRequirements((req || []) as Requirement[]);
       setTasks((ts || []).map((t: any) => ({ ...t, assignee_name: Array.isArray(t.assignee) ? t.assignee[0]?.nome : t.assignee?.nome })) as Task[]);
       setMembers((team || []) as Member[]); setAttachments((files || []) as Attachment[]);
-      setMyMemberId(member?.id || ""); setCanApprove(Boolean(managerAllowed));
+      setMyMemberId(member?.id || ""); setCanApprove(Boolean(member && member.nome.trim().toLocaleLowerCase("pt-BR") === "felipe"));
       setSelectedId((old) => (ed || []).some((x: Edital) => x.id === old) ? old : (ed?.[0]?.id || ""));
     } catch (e) { setError((e as Error).message || "Não foi possível carregar o módulo."); }
     finally { setLoading(false); }
@@ -99,7 +98,7 @@ export function AdminCaptacao() {
   const selectedRequirements = requirements.filter((r) => r.edital_id === selectedId);
   const selectedAttachments = attachments.filter((a) => a.edital_id === selectedId);
   const lateTasks = tasks.filter((t) => t.due_date && t.due_date < today && t.status !== "concluida").length;
-  const dueSoon = editais.filter((e) => e.deadline && e.deadline >= today && (new Date(`${e.deadline}T12:00:00`).getTime() - Date.now()) < 8 * 86400000 && !["encerrado", "inscrito"].includes(e.status)).length;
+  const dueSoon = editais.filter((e) => e.deadline && e.deadline >= today && (new Date(`${e.deadline}T12:00:00`).getTime() - Date.now()) < 8 * 86400000 && !["encerrado", "inscrito", "aguardando_avaliacao"].includes(e.status)).length;
   const openTasks = tasks.filter((t) => t.status !== "concluida").length;
 
   async function addEdital(event: React.FormEvent) {
@@ -132,7 +131,7 @@ export function AdminCaptacao() {
   }
   async function addTask(event: React.FormEvent) {
     event.preventDefault(); if (!selected || !taskTitle.trim() || !taskAssignee) return; setSaving(true);
-    try { const { error: e } = await supabase.from("captacao_tarefas").insert({ edital_id: selected.id, title: taskTitle.trim(), assignee_id: taskAssignee, due_date: taskDue || null, priority: taskPriority, status: "pendente", created_by: myMemberId || null }); if (e) throw e; setTaskTitle(""); setTaskDue(""); setTaskOpen(false); await load(); }
+    try { const { error: e } = await supabase.from("captacao_tarefas").insert({ edital_id: selected.id, title: taskTitle.trim(), assignee_id: taskAssignee, due_date: taskDue || null, priority: taskPriority, status: "pendente", created_by: myMemberId }); if (e) throw e; setTaskTitle(""); setTaskDue(""); setTaskOpen(false); await load(); }
     catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function updateTask(task: Task, patch: Partial<Task>) { const { error: e } = await supabase.from("captacao_tarefas").update(patch).eq("id", task.id); if (e) toast.error(e.message); else await load(); }
@@ -141,7 +140,7 @@ export function AdminCaptacao() {
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_"); const storagePath = `${selected.id}/${crypto.randomUUID()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("captacao-editais").upload(storagePath, file, { upsert: false, contentType: file.type || "application/octet-stream" }); if (uploadError) throw uploadError;
-      const { error: insertError } = await supabase.from("captacao_anexos").insert({ edital_id: selected.id, file_name: file.name, storage_path: storagePath, category: fileCategory, uploaded_by: myMemberId || null });
+      const { error: insertError } = await supabase.from("captacao_anexos").insert({ edital_id: selected.id, file_name: file.name, storage_path: storagePath, category: fileCategory, uploaded_by: myMemberId });
       if (insertError) { await supabase.storage.from("captacao-editais").remove([storagePath]); throw insertError; }
       setFile(null); await load(); toast.success("Arquivo privado anexado ao edital.");
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
@@ -151,7 +150,7 @@ export function AdminCaptacao() {
   return <div className="space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold text-emerald-700">REDE KALUNGA · ADMINISTRAÇÃO</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Editais e captação</h1><p className="mt-2 max-w-2xl text-sm text-muted-foreground">Oportunidades, elegibilidade, tarefas e documentos em um só lugar.</p></div><div className="flex gap-2"><button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted" aria-label="Atualizar"><RefreshCw size={16}/><span>Atualizar</span></button><button onClick={() => {setEditing(false);setNewTitle("");setNewFunder("");setNewCategory("");setNewDeadline("");setNewStatus("pending_confirmation");setFormOpen(true)}} className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"><CirclePlus size={17}/> Novo edital</button></div></header>
     {error && <div role="alert" className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><AlertCircle size={18}/><div><strong>Falha ao carregar o módulo.</strong><p>{error}</p><p className="mt-1">Confirme que a migração desta branch foi aplicada em homologação e que seu usuário está vinculado a um integrante com acesso administrativo.</p></div></div>}
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Oportunidades ativas", editais.filter(e=>!['encerrado','inscrito'].includes(e.status)).length, "text-emerald-700"],["Prazos nos próximos 7 dias", dueSoon, "text-amber-700"],["Tarefas em aberto", openTasks, "text-sky-700"],["Tarefas atrasadas", lateTasks, "text-rose-700"]].map(([label,value,color])=><article key={String(label)} className="rounded-2xl border bg-card p-4 shadow-sm"><p className="text-sm text-muted-foreground">{label}</p><p className={`mt-2 text-3xl font-bold ${color}`}>{value}</p></article>)}</section>
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Oportunidades ativas", editais.filter(e=>!['encerrado','inscrito','aguardando_avaliacao'].includes(e.status)).length, "text-emerald-700"],["Prazos nos próximos 7 dias", dueSoon, "text-amber-700"],["Tarefas em aberto", openTasks, "text-sky-700"],["Tarefas atrasadas", lateTasks, "text-rose-700"]].map(([label,value,color])=><article key={String(label)} className="rounded-2xl border bg-card p-4 shadow-sm"><p className="text-sm text-muted-foreground">{label}</p><p className={`mt-2 text-3xl font-bold ${color}`}>{value}</p></article>)}</section>
     <div className="grid gap-5 xl:grid-cols-[minmax(290px,0.8fr)_minmax(0,1.7fr)]">
       <section className="overflow-hidden rounded-2xl border bg-card shadow-sm"><div className="space-y-3 border-b p-4"><div className="flex items-center justify-between"><h2 className="font-semibold">Oportunidades</h2><span className="text-xs text-muted-foreground">{filtered.length}</span></div><label className="flex items-center gap-2 rounded-lg border px-3"><Search size={15} className="text-muted-foreground"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar edital" className="w-full py-2 text-sm outline-none"/></label><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 text-sm"><option value="all">Todas as situações</option>{Object.entries(STATUS).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div className="divide-y">{loading?<div className="p-8 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto mb-2 animate-spin"/>Carregando oportunidades…</div>:filtered.length?filtered.map(e=><button key={e.id} onClick={()=>{setSelectedId(e.id);setOpinion(e.eligibility_opinion||"")}} className={`w-full p-4 text-left transition hover:bg-emerald-50/70 ${e.id===selectedId?"bg-emerald-50 ring-inset ring-2 ring-emerald-600":""}`}><div className="flex items-start justify-between gap-2"><span className="font-mono text-xs font-semibold text-emerald-800">{e.protocol}</span><span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">{STATUS[e.status]||e.status}</span></div><h3 className="mt-2 font-semibold leading-snug">{e.title}</h3><p className="mt-1 text-sm text-muted-foreground">{e.funder}</p><p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><CalendarDays size={13}/>{dateLabel(e.deadline)}</p></button>):<div className="p-7 text-center text-sm text-muted-foreground">Nenhuma oportunidade encontrada.</div>}</div></section>
       <section className="min-w-0 space-y-4">{selected?<>
