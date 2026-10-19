@@ -1,12 +1,12 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminSidebar, useVisibleAdminLinks } from "@/app/components/admin/AdminSidebar";
-import { Home, ListTodo, LogOut, Menu, FileText, X } from "lucide-react";
+import { LogOut, Menu, Share2, X } from "lucide-react";
 import { getCurrentUserRoles } from "@/lib/rbac";
 import { getAppSettings } from "@/lib/appSettings";
 import { supabase } from "@/lib/supabase";
 
-type AppBrand = { name: string; shortName: string; logoUrl: string | null };
+type AppBrand = { name: string; shortName: string; logoUrl: string | null; shareEnabled: boolean; shareTitle: string; shareText: string };
 
 export function AdminLayout() {
   const location = useLocation();
@@ -16,6 +16,9 @@ export function AdminLayout() {
     name: "Rede Kalunga Comunicações",
     shortName: "RKC",
     logoUrl: null,
+    shareEnabled: true,
+    shareTitle: "Rede Kalunga Comunicações",
+    shareText: "Acompanhe as notícias, a cultura e as histórias do Território Kalunga.",
   });
 
   useEffect(() => {
@@ -26,12 +29,28 @@ export function AdminLayout() {
         name: settings.app_name,
         shortName: settings.app_short_name,
         logoUrl: settings.app_logo_url,
+        shareEnabled: settings.app_share_enabled,
+        shareTitle: settings.app_share_title,
+        shareText: settings.app_share_text,
       });
     }).catch(() => {
       // Keep the defaults when the settings table is temporarily unavailable.
     });
     return () => { active = false; };
   }, []);
+
+  async function handleShareApp() {
+    try {
+      const data = { title: brand.shareTitle || brand.name, text: brand.shareText, url: `${window.location.origin}/` };
+      if (navigator.share) {
+        await navigator.share(data);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText([data.title, data.text, data.url].join("\\n"));
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) console.error("Não foi possível compartilhar o app:", error);
+    }
+  }
 
   return (
     <div className="min-h-dvh bg-muted/20 font-sans">
@@ -46,6 +65,8 @@ export function AdminLayout() {
           )}
           <span className="truncate text-sm font-semibold">{brand.shortName || brand.name}</span>
         </div>
+        <div className="flex items-center gap-1">
+        {brand.shareEnabled && <button type="button" onClick={() => void handleShareApp()} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-muted" aria-label="Compartilhar aplicativo"><Share2 className="h-5 w-5" /></button>}
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen(true)}
@@ -55,6 +76,7 @@ export function AdminLayout() {
         >
           <Menu className="h-5 w-5" />
         </button>
+        </div>
       </header>
 
       {isMobileMenuOpen && (
@@ -94,11 +116,12 @@ function AdminBottomNavigation({ onMore, onNavigate }: { onMore: () => void; onN
     return () => { active = false; };
   }, []);
 
-  const links = useMemo(() => useVisibleAdminLinks(roles), [roles]);
+  const links = useVisibleAdminLinks(roles);
   const preferred = ["/admin", "/admin/materias", "/admin/tarefas"];
-  const primaryLinks = preferred
-    .map((href) => links.find((link) => link.href === href))
-    .filter((link): link is NonNullable<typeof link> => Boolean(link));
+  const primaryLinks = preferred.flatMap((href) => {
+    const link = links.find((item) => item.href === href);
+    return link ? [link] : [];
+  });
 
   return (
     <nav
@@ -148,7 +171,7 @@ function AdminSidebarMobile({ onClose }: { onClose: () => void }) {
     return () => { mounted = false; };
   }, []);
 
-  const links = useMemo(() => useVisibleAdminLinks(roles), [roles]);
+  const links = useVisibleAdminLinks(roles);
 
   async function handleLogout() {
     await supabase.auth.signOut();
