@@ -216,6 +216,31 @@ export function AdminCaptacao() {
     finally { setSaving(false); }
   }
 
+  const featuredEdital = editais.find((e) =>
+    e.title.includes("Ciclo de Saberes com Mestras e Mestres") &&
+    e.funder.includes("Ministério da Cultura")
+  );
+  const featuredShareText = [
+    "EDITAL MinC/MEC nº 13/2026 | CICLO DE SABERES",
+    "Inscrições: 19/10 a 08/11/2026 (horário de Brasília).",
+    "Investimento total: R$ 5 milhões. Categoria A: até R$ 500 mil (7 projetos); Categoria B: até R$ 250 mil (6 projetos).",
+    "Proponentes: exclusivamente instituições federais de ensino superior (IFES). Associações como a RKC podem participar como parceiras, não como proponentes diretas.",
+    "Categoria A: 10 mestras/mestres; 5 escolas; 3 municípios (ou 2 com mais de um distrito em cada); 2 manifestações culturais de naturezas distintas; registro documental público.",
+    "Categoria B: 5 mestras/mestres; 3 escolas; 1 município; 1 manifestação cultural.",
+    "Obrigatório: atividades na universidade, nos espaços das mestras/mestres e nas escolas públicas; no mínimo 40% do orçamento em bolsas/cachês; execução em até 12 meses.",
+    "Inscrições: https://mapa.cultura.gov.br/oportunidade/12667/#info",
+    "Edital e anexos: https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-abertas/programa-ciclo-de-saberes-com-mestras-e-mestres-das-culturas-tradicionais-e-populares-e-das-artes",
+    featuredEdital ? "Registro interno RKC: " + window.location.origin + "/admin/editais/" + featuredEdital.id : "",
+  ].filter(Boolean).join("\n");
+  async function copyFeaturedEdital() {
+    try {
+      await navigator.clipboard.writeText(featuredShareText);
+      toast.success("Resumo do edital copiado para compartilhar.");
+    } catch {
+      toast.error("Não foi possível copiar. Use os links oficiais exibidos no banner.");
+    }
+  }
+
   const activeOpportunities = editais.filter((e) => !["encerrado", "inscrito", "aguardando_avaliacao"].includes(e.status)).length;
   const awaitingEvaluation = editais.filter((e) => e.status === "aguardando_avaliacao").length;
 
@@ -234,6 +259,42 @@ export function AdminCaptacao() {
     {error && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><AlertCircle size={19} className="mt-0.5 shrink-0"/><div><strong>Não foi possível carregar o painel.</strong><p className="mt-1">{error}</p><p className="mt-2 text-xs">Confira se seu usuário tem acesso administrativo e se as migrações do módulo estão aplicadas.</p></div></div>}
 
     {!routeId && <>
+    {!routeId && featuredEdital && (
+      <section aria-label="Edital MinC/MEC nº 13 de 2026 em destaque" className="relative overflow-hidden rounded-3xl border border-emerald-700/30 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-800 p-5 text-white shadow-lg shadow-emerald-950/10 md:p-7">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-52 w-52 rounded-full bg-emerald-300/10 blur-3xl" />
+        <div className="relative space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-emerald-50">
+              <CalendarClock size={15} /> Oportunidade em destaque
+            </span>
+            <span className="rounded-full border border-amber-200/60 bg-amber-200/15 px-3 py-1.5 text-xs font-semibold text-amber-100">
+              Inscrições até 08/11/2026
+            </span>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-200">Ministério da Cultura + Ministério da Educação · Edital nº 13/2026</p>
+            <h2 className="mt-2 max-w-3xl text-2xl font-extrabold leading-tight tracking-tight md:text-3xl">Ciclo de Saberes com Mestras e Mestres</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-emerald-50/90">Apoio a projetos que conectam universidades, escolas públicas e comunidades detentoras dos saberes tradicionais e populares. Investimento nacional de <strong>R$ 5 milhões</strong>.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/20 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">Categoria A · até 7 projetos</p><p className="mt-1 text-2xl font-bold">Até R$ 500 mil</p><p className="mt-2 text-xs leading-5 text-white/85">10 mestras/mestres, 5 escolas, 3 municípios (ou 2 multidistritais), 2 manifestações distintas e registro público.</p></div>
+            <div className="rounded-2xl border border-white/20 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">Categoria B · até 6 projetos</p><p className="mt-1 text-2xl font-bold">Até R$ 250 mil</p><p className="mt-2 text-xs leading-5 text-white/85">5 mestras/mestres, 3 escolas, 1 município e 1 manifestação cultural.</p></div>
+            <div className="rounded-2xl border border-amber-200/30 bg-amber-100/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-amber-100">Quem pode apresentar</p><p className="mt-1 text-lg font-bold">Somente IFES</p><p className="mt-2 text-xs leading-5 text-white/90">A RKC pode colaborar como parceira cultural e territorial, mas não pode submeter diretamente a proposta.</p></div>
+          </div>
+          <div className="rounded-xl border border-white/15 bg-black/15 px-4 py-3 text-xs leading-relaxed text-emerald-50/90">
+            <strong>Regras essenciais:</strong> atividades na universidade, nos espaços das mestras e mestres e nas escolas públicas; pelo menos 40% do valor para bolsas ou cachês; prazo de execução de até 12 meses. Inscrições de 19/10 a 08/11/2026.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a href="https://mapa.cultura.gov.br/oportunidade/12667/#info" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-emerald-950 transition hover:bg-emerald-50">Inscrição oficial <ExternalLink size={15}/></a>
+            <a href="https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-abertas/programa-ciclo-de-saberes-com-mestras-e-mestres-das-culturas-tradicionais-e-populares-e-das-artes/edital-minc-mec-no-13-sei_3193023" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20">Edital completo (PDF) <ExternalLink size={15}/></a>
+            <button type="button" onClick={() => void copyFeaturedEdital()} className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"><Link2 size={16}/> Copiar resumo para compartilhar</button>
+            <button type="button" onClick={() => navigate("/admin/editais/" + featuredEdital.id)} className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"><FileCheck2 size={16}/> Ver registro na RKC</button>
+          </div>
+          <p className="text-xs text-emerald-100/80">Informação para divulgação e articulação. A parceria com uma IFES ainda precisa ser formalizada; este destaque não representa inscrição enviada.</p>
+        </div>
+      </section>
+    )}
+
     <section aria-label="Resumo da captação" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Oportunidades abertas</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800"><FolderKanban size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{activeOpportunities}</strong><span className="pb-1 text-xs text-muted-foreground">em acompanhamento</span></div></article>
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Aguardando avaliação</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800"><CalendarClock size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{awaitingEvaluation}</strong><span className="pb-1 text-xs text-muted-foreground">inscrições enviadas</span></div></article>
