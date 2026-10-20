@@ -13,8 +13,8 @@ type Audit = { id: string; actor_name: string; action: string; entity: string; e
 const STATUS: Record<string, string> = { pending_confirmation: "Pendente de confirmação", pending_eligibility: "Aguardando análise", em_elaboracao: "Em elaboração", inscrito: "Inscrição enviada", aguardando_avaliacao: "Aguardando avaliação", encerrado: "Encerrado" };
 const PRIORITY: Record<string, string> = { baixa: "Baixa", media: "Média", alta: "Alta", urgente: "Urgente" };
 const dateLabel = (value?: string | null) => value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "Prazo a confirmar";
-const statusTone = (status: string) => ["pending_confirmation", "pending_eligibility", "inscrito", "aguardando_avaliacao"].includes(status) ? "border-amber-300 bg-amber-100 text-amber-950" : status === "em_elaboracao" ? "border-sky-200 bg-sky-50 text-sky-900" : status === "encerrado" ? "border-slate-200 bg-slate-100 text-slate-700" : "border-emerald-200 bg-emerald-50 text-emerald-800";
-const statusCardTone = (status: string) => ["pending_confirmation", "pending_eligibility", "inscrito", "aguardando_avaliacao"].includes(status) ? "border-amber-300 bg-amber-50/80 hover:border-amber-400 hover:bg-amber-50" : status === "em_elaboracao" ? "border-sky-200 bg-sky-50/80 hover:border-sky-300 hover:bg-sky-50" : status === "encerrado" ? "border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:bg-slate-50" : "border-emerald-200 bg-emerald-50/80 hover:border-emerald-300 hover:bg-emerald-50";
+const statusTone = (status: string) => status === "pending_confirmation" ? "border-amber-300 bg-amber-100 text-amber-950" : status === "pending_eligibility" ? "border-violet-300 bg-violet-100 text-violet-950" : status === "em_elaboracao" ? "border-sky-300 bg-sky-100 text-sky-950" : status === "inscrito" ? "border-emerald-300 bg-emerald-100 text-emerald-950" : status === "aguardando_avaliacao" ? "border-orange-300 bg-orange-100 text-orange-950" : "border-slate-300 bg-slate-100 text-slate-700";
+const statusCardTone = (status: string) => status === "pending_confirmation" ? "border-amber-300 bg-amber-50/80 hover:border-amber-400 hover:bg-amber-50" : status === "pending_eligibility" ? "border-violet-300 bg-violet-50/80 hover:border-violet-400 hover:bg-violet-50" : status === "em_elaboracao" ? "border-sky-300 bg-sky-50/80 hover:border-sky-400 hover:bg-sky-50" : status === "inscrito" ? "border-emerald-300 bg-emerald-50/80 hover:border-emerald-400 hover:bg-emerald-50" : status === "aguardando_avaliacao" ? "border-orange-300 bg-orange-50/80 hover:border-orange-400 hover:bg-orange-50" : "border-slate-300 bg-slate-50/80 hover:border-slate-400 hover:bg-slate-50";
 
 export function AdminCaptacao() {
   const navigate = useNavigate();
@@ -143,7 +143,7 @@ export function AdminCaptacao() {
   }
   async function addTask(event: React.FormEvent) {
     event.preventDefault(); if (!selected || !taskTitle.trim() || !taskAssignee) return; setSaving(true);
-    try { const { error: e } = await supabase.from("captacao_tarefas").insert({ edital_id: selected.id, title: taskTitle.trim(), assignee_id: taskAssignee, due_date: taskDue || null, priority: taskPriority, status: "pendente", created_by: myMemberId }); if (e) throw e; setTaskTitle(""); setTaskDue(""); setTaskOpen(false); await load(); }
+    try { const { error: e } = await supabase.from("captacao_tarefas").insert({ edital_id: selected.id, title: taskTitle.trim(), assignee_id: taskAssignee, due_date: taskDue || null, priority: taskPriority, status: "pendente", created_by: myMemberId || null }); if (e) throw e; setTaskTitle(""); setTaskDue(""); setTaskOpen(false); await load(); }
     catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function updateTask(task: Task, patch: Partial<Task>) { const { error: e } = await supabase.from("captacao_tarefas").update(patch).eq("id", task.id); if (e) toast.error(e.message); else await load(); }
@@ -152,7 +152,7 @@ export function AdminCaptacao() {
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_"); const storagePath = `${selected.id}/${crypto.randomUUID()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("captacao-editais").upload(storagePath, file, { upsert: false, contentType: file.type || "application/octet-stream" }); if (uploadError) throw uploadError;
-      const { error: insertError } = await supabase.from("captacao_anexos").insert({ edital_id: selected.id, file_name: file.name, storage_path: storagePath, category: fileCategory, uploaded_by: myMemberId });
+      const { error: insertError } = await supabase.from("captacao_anexos").insert({ edital_id: selected.id, file_name: file.name, storage_path: storagePath, category: fileCategory, uploaded_by: myMemberId || null });
       if (insertError) { await supabase.storage.from("captacao-editais").remove([storagePath]); throw insertError; }
       setFile(null); await load(); toast.success("Arquivo privado anexado ao edital.");
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
@@ -189,6 +189,14 @@ export function AdminCaptacao() {
       <div className="flex flex-col gap-3 rounded-2xl border bg-card p-3 shadow-sm sm:flex-row">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border bg-background px-3 text-muted-foreground"><Search size={16}/><input aria-label="Buscar edital" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por edital, financiador ou protocolo" className="w-full py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/70"/></label>
         <label className="flex items-center gap-2 rounded-xl border bg-background px-3 text-muted-foreground"><CircleDot size={15}/><select aria-label="Filtrar por situação" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="min-w-40 bg-transparent py-2.5 text-sm text-foreground outline-none"><option value="all">Todas as situações</option>{Object.entries(STATUS).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
+      </div>
+      <div aria-label="Legenda das situações" className="flex flex-wrap gap-2">
+        <span className="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-950">Aguardando confirmação</span>
+        <span className="rounded-full border border-violet-300 bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-950">Aguardando análise</span>
+        <span className="rounded-full border border-sky-300 bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-950">Em elaboração</span>
+        <span className="rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-950">Inscrição enviada</span>
+        <span className="rounded-full border border-orange-300 bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-950">Aguardando avaliação</span>
+        <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Encerrado</span>
       </div>
       {loading ? <div className="rounded-2xl border bg-card p-12 text-center text-sm text-muted-foreground shadow-sm"><Loader2 className="mx-auto mb-2 animate-spin"/>Carregando oportunidades…</div> : filtered.length ? <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{filtered.map(e => <button key={e.id} type="button" aria-label={`Abrir ${e.title}, ${STATUS[e.status] || e.status}`} onClick={()=>{setSelectedId(e.id);setOpinion(e.eligibility_opinion||"");setDetailTab("overview");navigate(`/admin/editais/${e.id}`)}} className={"group rounded-2xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 " + statusCardTone(e.status)}>
         <div className="flex items-start justify-between gap-3"><span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 font-mono text-[11px] font-semibold tracking-wide text-slate-700"><ClipboardCheck size={13}/>{e.protocol}</span><span className={"inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold " + statusTone(e.status)}><span className="h-1.5 w-1.5 rounded-full bg-current"/>{STATUS[e.status]||e.status}</span></div>
