@@ -5,9 +5,9 @@ import { PGlite } from '@electric-sql/pglite';
 
 const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
-  .filter((name) => name.startsWith('20261019') && name.includes('_captacao_') && name.endsWith('.sql'))
+  .filter((name) => name.startsWith('202610') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
-assert.equal(migrationFiles.length, 7, 'expected all applied captação migrations to be present');
+assert.equal(migrationFiles.length, 8, 'expected all applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
 )).join('\n');
@@ -128,6 +128,28 @@ test('audit log identifies an authorized user without an equipe link', async (t)
   });
   const { rows: audit } = await db.query("select actor_name from public.captacao_auditoria where entity='captacao_tarefas' order by created_at desc limit 1");
   assert.equal(audit[0].actor_name, `Usuário ${ids.reviewer.slice(0,8)}`);
+});
+
+test('supports a stored document or safe external link without invalidating existing attachments', async (t) => {
+  const db = await fixture(); t.after(() => db.close());
+  const { rows } = await db.query("select id from public.captacao_editais where protocol='RKC-CAP-2026-001'");
+  const editalId = rows[0].id;
+  await db.query("insert into public.captacao_anexos(edital_id,file_name,storage_path) values ($1,'regulamento.pdf','/private/regulamento.pdf')", [editalId]);
+  await db.query("insert into public.captacao_anexos(edital_id,file_name,external_url) values ($1,'Projeto no Google Docs','https://docs.google.com/document/d/example')", [editalId]);
+  await assert.rejects(
+    db.query("insert into public.captacao_anexos(edital_id,file_name,external_url) values ($1,'Link inválido','javascript:alert(1)')", [editalId]),
+    /captacao_anexos_source_check/,
+  );
+  await assert.rejects(
+    db.query("insert into public.captacao_anexos(edital_id,file_name) values ($1,'Sem origem')", [editalId]),
+    /captacao_anexos_source_check/,
+  );
+  const { rows: saved } = await db.query("select file_name,storage_path,external_url from public.captacao_anexos order by file_name");
+  assert.equal(saved.length, 2);
+  assert.equal(saved[0].storage_path, '/private/regulamento.pdf');
+  assert.equal(saved[0].external_url, null);
+  assert.equal(saved[1].storage_path, null);
+  assert.match(saved[1].external_url, /^https:\/\//);
 });
 
 test('adds indexes for captação foreign-key lookups', async (t) => {
