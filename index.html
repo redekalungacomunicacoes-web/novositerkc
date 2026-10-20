@@ -3,9 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1f6b45" />
+    <meta name="description" content="Notícias, cultura e informação do Território Kalunga e da Chapada dos Veadeiros." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="RKC" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/rkc-app.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/rkc-app-180.png" />
     <link rel="preconnect" href="https://yycfqeymdsjyulexwrlb.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="//yycfqeymdsjyulexwrlb.supabase.co" />
     <title>Rede Kalunga Comunicações</title>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+            console.error("Falha ao registrar o service worker da RKC:", error);
+          });
+        });
+      }
+    </script>
   </head>
 
   <body>

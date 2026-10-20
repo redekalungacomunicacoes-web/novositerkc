@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 const Academia = lazy(() => import("@/app/pages/admin/academia/Academia").then(m => ({ default: m.Academia })));
 const AdminLayout = lazy(() => import("@/app/layouts/AdminLayout").then(m => ({ default: m.AdminLayout })));
 const RootLayout = lazy(() => import("@/app/layouts/RootLayout").then(m => ({ default: m.RootLayout })));
+const AppEntry = lazy(() => import("@/app/pages/AppEntry").then(m => ({ default: m.AppEntry })));
 const Contato = lazy(() => import("@/app/pages/Contato").then(m => ({ default: m.Contato })));
 const Home = lazy(() => import("@/app/pages/Home").then(m => ({ default: m.Home })));
 const MateriaDetalhes = lazy(() => import("@/app/pages/MateriaDetalhes").then(m => ({ default: m.MateriaDetalhes })));
@@ -80,6 +81,10 @@ function requireRoles(required: RoleName[]) {
 const taskRoles: RoleName[] = ["admin", "editor", "autor"];
 
 export const router = createBrowserRouter([
+  {
+    path: "/app",
+    element: <AppEntry />,
+  },
   {
     path: "/admin",
     children: [
