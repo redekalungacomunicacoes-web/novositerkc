@@ -113,6 +113,7 @@ export const router = createBrowserRouter([
           { path: "newsletter", loader: requireRoles(["admin", "editor"]), element: <AdminNewsletter /> },
           { path: "tarefas", loader: requireRoles(taskRoles), element: <AdminTarefas /> },
           { path: "editais", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <AdminCaptacao /> },
+          { path: "editais/:id", loader: requireRoles(["admin", "editor", "autor", "financeiro"]), element: <AdminCaptacao /> },
           { path: "tarefas/kanban", loader: requireRoles(taskRoles), element: <AdminTarefasKanban /> },
           { path: "tarefas/anexos", loader: requireRoles(taskRoles), element: <AdminTarefasAnexos /> },
           { path: "tarefas/relatorios", loader: requireRoles(taskRoles), element: <AdminTarefasRelatorios /> },
