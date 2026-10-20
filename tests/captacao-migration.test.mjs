@@ -7,7 +7,7 @@ const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
   .filter((name) => name.startsWith('202610') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
-assert.equal(migrationFiles.length, 9, 'expected all applied captação migrations to be present');
+assert.equal(migrationFiles.length, 10, 'expected all applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
 )).join('\n');
@@ -73,6 +73,24 @@ test('seeds the three opportunities as unconfirmed with only the provided deadli
   assert.equal(rows[0].deadline.toISOString().slice(0,10), '2026-11-11');
   assert.deepEqual(rows.slice(1).map((r) => r.deadline), [null, null]);
   assert.ok(rows.every((r) => r.status === 'pending_confirmation' && r.eligibility_status === 'pending_verification'));
+});
+
+test('stores optional deadline time and award details for each opportunity', async (t) => {
+  const db = await fixture(); t.after(() => db.close());
+  const { rows } = await db.query(`
+    select column_name
+    from information_schema.columns
+    where table_schema='public' and table_name='captacao_editais'
+      and column_name = any(array['deadline_time','award_amount','award_amount_note'])
+    order by column_name
+  `);
+  assert.deepEqual(rows.map((row) => row.column_name), ['award_amount','award_amount_note','deadline_time']);
+  await db.query("insert into public.captacao_editais (title,funder,category,status,eligibility_status,deadline,deadline_time,award_amount,award_amount_note) values ('KaluCast','Feira Preta','Podcast','aguardando_avaliacao','pending_verification','2026-10-16','18:00',15000,'Prêmio bruto para grupos/coletivos')");
+  const { rows: edital } = await db.query("select deadline::text as deadline, deadline_time::text as deadline_time, award_amount::numeric as award_amount, award_amount_note from public.captacao_editais where title='KaluCast'");
+  assert.equal(edital[0].deadline, '2026-10-16');
+  assert.match(edital[0].deadline_time, /^18:00/);
+  assert.equal(Number(edital[0].award_amount), 15000);
+  assert.equal(edital[0].award_amount_note, 'Prêmio bruto para grupos/coletivos');
 });
 
 test('allows submitted applications to wait for evaluation without approving eligibility', async (t) => {
