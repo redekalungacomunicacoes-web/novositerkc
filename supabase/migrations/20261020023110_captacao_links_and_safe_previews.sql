@@ -1,6 +1,6 @@
 begin;
 
--- Preserve all stored documents while permitting link-only attachment records.
+-- Preserve stored files while allowing records that point to external documents.
 alter table public.captacao_anexos
   add column external_url text;
 
@@ -12,11 +12,11 @@ alter table public.captacao_anexos
   check (
     (storage_path is not null and external_url is null)
     or
-    (storage_path is null and external_url is not null and external_url ~* '^https?://[^[:space:]/?#]+([/?#][^[:space:]]*)?)
-  );
-
-commit;
-)
+    (
+      storage_path is null
+      and external_url is not null
+      and external_url ~* '^https?://[^[:space:]/?#]+([/?#][^[:space:]]*)?$'
+    )
   );
 
 commit;
