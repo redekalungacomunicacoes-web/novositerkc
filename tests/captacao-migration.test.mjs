@@ -7,7 +7,7 @@ const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
   .filter((name) => name.startsWith('202610') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
-assert.equal(migrationFiles.length, 8, 'expected all applied captação migrations to be present');
+assert.equal(migrationFiles.length, 9, 'expected all applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
 )).join('\n');
@@ -117,6 +117,21 @@ test('rejects inserted editais that bypass eligibility and manager approval', as
       /iniciam sem aprovação/i,
     );
   });
+});
+
+test('allows recording submitted and awaiting-evaluation applications without approving eligibility', async (t) => {
+  const db = await fixture(); t.after(() => db.close());
+  const { rows } = await db.query("select id from public.captacao_editais where protocol='RKC-CAP-2026-001'");
+  await asUser(db, ids.reviewer, async () => {
+    await db.query("update public.captacao_editais set status='inscrito', submitted_at='2026-10-16', external_reference='Prosas 19149 - 633291' where id=$1", [rows[0].id]);
+    await db.query("update public.captacao_editais set status='aguardando_avaliacao' where id=$1", [rows[0].id]);
+  });
+  const { rows: submitted } = await db.query("select status, eligibility_status, manager_approved_at, submitted_at, external_reference from public.captacao_editais where id=$1", [rows[0].id]);
+  assert.equal(submitted[0].status, 'aguardando_avaliacao');
+  assert.equal(submitted[0].eligibility_status, 'pending_verification');
+  assert.equal(submitted[0].manager_approved_at, null);
+  assert.equal(submitted[0].submitted_at.toISOString().slice(0,10), '2026-10-16');
+  assert.equal(submitted[0].external_reference, 'Prosas 19149 - 633291');
 });
 
 test('audit log identifies an authorized user without an equipe link', async (t) => {
