@@ -12,7 +12,11 @@ alter table public.captacao_anexos
   check (
     (storage_path is not null and external_url is null)
     or
-    (storage_path is null and external_url is not null and external_url ~* '^https?://')
+    (storage_path is null and external_url is not null and external_url ~* '^https?://[^[:space:]/?#]+([/?#][^[:space:]]*)?)
+  );
+
+commit;
+)
   );
 
 commit;
