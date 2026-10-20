@@ -146,10 +146,12 @@ test('supports a stored document or safe external link without invalidating exis
   );
   const { rows: saved } = await db.query("select file_name,storage_path,external_url from public.captacao_anexos order by file_name");
   assert.equal(saved.length, 2);
-  assert.equal(saved[0].storage_path, '/private/regulamento.pdf');
-  assert.equal(saved[0].external_url, null);
-  assert.equal(saved[1].storage_path, null);
-  assert.match(saved[1].external_url, /^https:\/\//);
+  const storedFile = saved.find((item) => item.file_name === 'regulamento.pdf');
+  const linkedDocument = saved.find((item) => item.file_name === 'Projeto no Google Docs');
+  assert.equal(storedFile.storage_path, '/private/regulamento.pdf');
+  assert.equal(storedFile.external_url, null);
+  assert.equal(linkedDocument.storage_path, null);
+  assert.match(linkedDocument.external_url, /^https:\/\//);
 });
 
 test('adds indexes for captação foreign-key lookups', async (t) => {
