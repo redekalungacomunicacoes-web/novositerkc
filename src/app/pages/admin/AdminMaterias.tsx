@@ -9,10 +9,12 @@ function statusLabel(status: MateriaRow["status"]) {
   return "Rascunho";
 }
 
-function MateriaThumbnail({ thumb, cover, title }: { thumb?: string | null; cover?: string | null; title: string }) {
+function MateriaThumbnail({ thumb, cover, banner, title }: { thumb?: string | null; cover?: string | null; banner?: string | null; title: string }) {
   const [failed, setFailed] = useState(false);
-  const [useCover, setUseCover] = useState(false);
-  const url = !failed ? (useCover ? cover : (thumb || cover)) : null;
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+  const sources = [thumb, cover, banner].filter((value, index, all): value is string =>
+    !!value && all.indexOf(value) === index);
+  const url = failed ? null : (sources[fallbackIndex] || null);
   return (
     <span className="relative flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/40 text-muted-foreground" aria-hidden="true">
       {url ? (
@@ -26,7 +28,7 @@ function MateriaThumbnail({ thumb, cover, title }: { thumb?: string | null; cove
           height={56}
           className="h-full w-full object-cover"
           onError={() => {
-            if (!useCover && thumb && cover && thumb !== cover) setUseCover(true);
+            if (fallbackIndex + 1 < sources.length) setFallbackIndex((index) => index + 1);
             else setFailed(true);
           }}
         />
@@ -214,7 +216,7 @@ export function AdminMaterias() {
                     <tr key={m.id} className="hover:bg-muted/50 transition-colors">
                       <td className="px-3 sm:px-6 py-3 font-medium text-foreground">
                         <div className="flex min-w-[220px] items-center gap-3">
-                          <MateriaThumbnail key={m.id + ":" + (m.capa_thumb_url || "") + ":" + (m.capa_url || "")} thumb={m.capa_thumb_url} cover={m.capa_url} title={m.titulo} />
+                          <MateriaThumbnail key={m.id + ":" + (m.capa_thumb_url || "") + ":" + (m.capa_url || "") + ":" + (m.banner_url || "")} thumb={m.capa_thumb_url} cover={m.capa_url} banner={m.banner_url} title={m.titulo} />
                           <div className="min-w-0">
                             <Link to={`/admin/materias/editar/${m.id}`} className="block leading-snug hover:text-primary hover:underline" title={m.titulo}>{m.titulo}</Link>
                             <p className="mt-1 truncate text-xs font-normal text-muted-foreground" title={m.autor_nome?.trim() || "Autor não informado"}>Por {m.autor_nome?.trim() || "Autor não informado"}</p>
