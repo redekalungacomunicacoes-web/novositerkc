@@ -213,18 +213,40 @@ function buildLegacyHtml(blocks: MateriaContentBlock[]) {
     .join("\n");
 }
 
-async function makeCoverThumbnail(file: File) {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 768 / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Não foi possível preparar a miniatura da capa.");
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Não foi possível gerar a miniatura WebP.")), "image/webp", 0.78));
-  return new File([blob], "capa-thumb.webp", { type: "image/webp" });
+async function makeCoverThumbnail(file: File): Promise<File | null> {
+  // Safari may silently return a PNG when WebP encoding is unavailable.
+  // A failed optional thumbnail must never block uploading the full cover.
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return null;
+  }
+  try {
+    const longest = Math.max(bitmap.width, bitmap.height);
+    for (const maxSide of [640, 480, 360, 256]) {
+      const scale = Math.min(1, maxSide / longest);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.72, 0.52, 0.35]) {
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/webp", quality));
+        if (!blob || blob.type !== "image/webp" || !blob.size ||
+            blob.size > 1024 * 1024) continue;
+        const signature = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+        const webp = String.fromCharCode(...signature.slice(0, 4)) === "RIFF" &&
+          String.fromCharCode(...signature.slice(8, 12)) === "WEBP";
+        if (webp) return new File([blob], "capa-thumb.webp", { type: "image/webp" });
+      }
+    }
+    return null;
+  } finally {
+    bitmap.close();
+  }
 }
 
 async function uploadToDrive(params: {
