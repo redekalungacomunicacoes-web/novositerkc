@@ -98,8 +98,18 @@ async function serviceAccountAccessToken() {
 }
 
 async function accessToken() {
-  const oauthToken = await oauthRefreshAccessToken();
-  if (oauthToken) return oauthToken;
+  const clientId = Deno.env.get("GOOGLE_OAUTH_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_OAUTH_CLIENT_SECRET");
+  const refreshToken = Deno.env.get("GOOGLE_OAUTH_REFRESH_TOKEN");
+  if (clientId || clientSecret || refreshToken) {
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new Error("OAuth do Drive incompleto neste ambiente: as três credenciais precisam estar disponíveis na função.");
+    }
+    // A rejected OAuth grant must not silently fall back to a service account:
+    // service accounts have no My Drive storage quota.
+    return await oauthRefreshAccessToken();
+  }
+  // Explicit legacy service-account setups still work with shared drives.
   return await serviceAccountAccessToken();
 }
 
