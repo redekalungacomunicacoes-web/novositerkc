@@ -217,7 +217,7 @@ export function AdminMaterias() {
                           <MateriaThumbnail key={m.id + ":" + (m.capa_thumb_url || "") + ":" + (m.capa_url || "")} thumb={m.capa_thumb_url} cover={m.capa_url} title={m.titulo} />
                           <div className="min-w-0">
                             <Link to={`/admin/materias/editar/${m.id}`} className="block leading-snug hover:text-primary hover:underline" title={m.titulo}>{m.titulo}</Link>
-                            {m.resumo ? <p className="mt-1 max-w-[430px] truncate text-xs font-normal text-muted-foreground" title={m.resumo}>{m.resumo}</p> : null}
+                            <p className="mt-1 truncate text-xs font-normal text-muted-foreground" title={m.autor_nome?.trim() || "Autor não informado"}>Por {m.autor_nome?.trim() || "Autor não informado"}</p>
                           </div>
                         </div>
                       </td>
