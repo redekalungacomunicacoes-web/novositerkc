@@ -1,12 +1,38 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Search, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, Image as ImageIcon } from "lucide-react";
 import { createMateriaCategoria, deleteMateria, listMateriaCategoryNames, listMaterias, MateriaRow } from "@/lib/cms";
 
 function statusLabel(status: MateriaRow["status"]) {
   if (status === "published") return "Publicado";
   if (status === "archived") return "Arquivado";
   return "Rascunho";
+}
+
+function MateriaThumbnail({ thumb, cover, title }: { thumb?: string | null; cover?: string | null; title: string }) {
+  const [failed, setFailed] = useState(false);
+  const [useCover, setUseCover] = useState(false);
+  const url = !failed ? (useCover ? cover : (thumb || cover)) : null;
+  return (
+    <span className="relative flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/40 text-muted-foreground" aria-hidden="true">
+      {url ? (
+        <img
+          key={url}
+          src={url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          width={56}
+          height={56}
+          className="h-full w-full object-cover"
+          onError={() => {
+            if (!useCover && thumb && cover && thumb !== cover) setUseCover(true);
+            else setFailed(true);
+          }}
+        />
+      ) : <ImageIcon className="h-5 w-5 opacity-50" />}
+    </span>
+  );
 }
 
 export function AdminMaterias() {
@@ -186,7 +212,15 @@ export function AdminMaterias() {
                   const status = statusLabel(m.status);
                   return (
                     <tr key={m.id} className="hover:bg-muted/50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-foreground">{m.titulo}</td>
+                      <td className="px-3 sm:px-6 py-3 font-medium text-foreground">
+                        <div className="flex min-w-[220px] items-center gap-3">
+                          <MateriaThumbnail key={m.id + ":" + (m.capa_thumb_url || "") + ":" + (m.capa_url || "")} thumb={m.capa_thumb_url} cover={m.capa_url} title={m.titulo} />
+                          <div className="min-w-0">
+                            <Link to={`/admin/materias/editar/${m.id}`} className="block leading-snug hover:text-primary hover:underline" title={m.titulo}>{m.titulo}</Link>
+                            {m.resumo ? <p className="mt-1 max-w-[430px] truncate text-xs font-normal text-muted-foreground" title={m.resumo}>{m.resumo}</p> : null}
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-6 py-4">{category}</td>
                       <td className="px-6 py-4">{date}</td>
                       <td className="px-6 py-4">{status}</td>
