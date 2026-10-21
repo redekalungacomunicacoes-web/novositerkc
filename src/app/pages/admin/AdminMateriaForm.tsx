@@ -342,6 +342,46 @@ export function AdminMateriaForm() {
   const [activeBlock, setActiveBlock] = useState<number | null>(0);
   const [activeTab, setActiveTab] = useState<"conteudo" | "galeria">("conteudo");
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
+  // Local, low-resolution thumbnails are presentation-only; never saved as CMS URLs.
+  const [blockPreviews, setBlockPreviews] = useState<Record<string, string>>({});
+  const previewObjects = useRef(new Set<string>());
+  useEffect(() => () => {
+    previewObjects.current.forEach((url) => URL.revokeObjectURL(url));
+    previewObjects.current.clear();
+  }, []);
+
+  async function makeBlockPreview(file: File): Promise<string> {
+    const bitmap = await createImageBitmap(file);
+    try {
+      const ratio = Math.min(1, 640 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
+      canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Sem contexto de imagem");
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const thumb = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Miniatura indisponível")), "image/webp", 0.68));
+      const url = URL.createObjectURL(thumb);
+      previewObjects.current.add(url);
+      return url;
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  function clearBlockPreview(blockId: string) {
+    setBlockPreviews((current) => {
+      const url = current[blockId];
+      if (url) {
+        URL.revokeObjectURL(url);
+        previewObjects.current.delete(url);
+      }
+      const next = { ...current };
+      delete next[blockId];
+      return next;
+    });
+  }
   const [forceRender, setForceRender] = useState(0);
   const isMounted = useRef(true);
   const cleanupCandidateIds = useRef(new Set<string>());
@@ -827,7 +867,16 @@ export function AdminMateriaForm() {
     if (!file) return;
 
     setUploadingBlockImageId(blockId);
+    // Preview is generated from the selected file, independently of Drive latency.
     try {
+      const preview = await makeBlockPreview(file).catch(() => null);
+      if (preview) {
+        setBlockPreviews((current) => {
+          const old = current[blockId];
+          if (old) { URL.revokeObjectURL(old); previewObjects.current.delete(old); }
+          return { ...current, [blockId]: preview };
+        });
+      }
       const uploaded = await uploadToDrive({
         materiaId: id,
         category: "content",
@@ -837,6 +886,7 @@ export function AdminMateriaForm() {
       updateBlock(blockId, { url: uploaded.publicUrl, drive_file_id: uploaded.id });
       cleanupCandidateIds.current.add(uploaded.id);
     } catch (err: any) {
+      clearBlockPreview(blockId);
       alert(err?.message || "Erro ao enviar imagem do bloco.");
     } finally {
       setUploadingBlockImageId(null);
@@ -1079,7 +1129,7 @@ export function AdminMateriaForm() {
                             {uploadingBlockImageId === block.id ? "Enviando..." : "Upload"}
                           </label>
                         </div>
-                        {block.url ? <img src={block.url} alt="Preview" className="w-full max-h-56 object-cover rounded-md border" /> : null}
+                        {(blockPreviews[block.id] || block.url) ? <img src={blockPreviews[block.id] || block.url} alt="Prévia da imagem" loading="lazy" decoding="async" className="w-full max-h-56 object-contain rounded-md border bg-muted/20" /> : null}
                         <input value={block.caption || ""} onChange={(e) => updateBlock(block.id, { caption: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Legenda (opcional)" />
                         <input value={block.credit || ""} onChange={(e) => updateBlock(block.id, { credit: e.target.value })} className="w-full h-10 px-3 rounded-md border" placeholder="Crédito (opcional)" />
                       </div>
@@ -1097,8 +1147,8 @@ export function AdminMateriaForm() {
 
                         <div className={`flex flex-col md:flex-row gap-4 ${block.align === "right" ? "md:flex-row-reverse" : ""}`}>
                           <figure className={`${block.width === "sm" ? "md:w-[30%]" : block.width === "lg" ? "md:w-[50%]" : "md:w-[40%]"} w-full`}>
-                            {block.url ? (
-                              <img src={block.url} alt={block.caption || "Preview"} className="w-full max-h-56 object-cover rounded-md border" />
+                            {(blockPreviews[block.id] || block.url) ? (
+                              <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Prévia da imagem"} loading="lazy" decoding="async" className="w-full max-h-56 object-contain rounded-md border bg-muted/20" />
                             ) : (
                               <div className="w-full h-40 rounded-md border-2 border-dashed flex items-center justify-center text-xs text-muted-foreground">Sem imagem</div>
                             )}
