@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, BadgeCheck, CalendarClock, CalendarDays, Check, CircleDot, CirclePlus, ClipboardCheck, FileCheck2, FileUp, ExternalLink, Eye, Link2, X, FolderKanban, HandCoins, History, LayoutDashboard, ListChecks, Loader2, RefreshCw, Search, ShieldCheck, Trash2, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import propostasRkc from "@/app/data/captacao-propostas-rkc.json";
 
 type Edital = { id: string; protocol: string; title: string; funder: string; category: string; deadline: string | null; status: string; eligibility_status: string; eligibility_opinion: string | null; manager_approved_at: string | null; submitted_at: string | null; external_reference: string | null; created_at: string };
 type Requirement = { id: string; edital_id: string; description: string; status: "pending" | "met" | "not_met"; evidence: string | null };
@@ -21,6 +22,25 @@ export function AdminCaptacao() {
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id?: string }>();
   const [editais, setEditais] = useState<Edital[]>([]);
+  const [radarItems,setRadarItems] = useState<Array<{id:string;titulo:string;organizador:string|null;url_oficial:string;prazo:string|null;status_triagem:string}>>([]);
+  const [radarSync,setRadarSync] = useState<{finalizada_em:string|null;status:string;erro:string|null}|null>(null);
+  const [radarError,setRadarError] = useState<string|null>(null);
+  const [radarLoading,setRadarLoading] = useState(false);
+  async function refreshRadar() {
+    setRadarLoading(true);
+    try {
+      const [items,sync] = await Promise.all([
+        supabase.from("captacao_radar_oportunidades").select("id,titulo,organizador,url_oficial,prazo,status_triagem").order("prazo",{ascending:true,nullsFirst:false}).limit(40),
+        supabase.from("captacao_radar_sincronizacoes").select("finalizada_em,status,erro").order("iniciada_em",{ascending:false}).limit(1)
+      ]);
+      if(items.error) throw items.error;
+      if(sync.error) throw sync.error;
+      setRadarItems(items.data||[]);setRadarSync(sync.data?.[0]||null);setRadarError(null);
+    } catch(e) {setRadarError((e as Error).message);}
+    finally {setRadarLoading(false);}
+  }
+  useEffect(()=>{if(!routeId)void refreshRadar();},[routeId]);
+
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -259,42 +279,18 @@ export function AdminCaptacao() {
     {error && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><AlertCircle size={19} className="mt-0.5 shrink-0"/><div><strong>Não foi possível carregar o painel.</strong><p className="mt-1">{error}</p><p className="mt-2 text-xs">Confira se seu usuário tem acesso administrativo e se as migrações do módulo estão aplicadas.</p></div></div>}
 
     {!routeId && <>
-    {!routeId && featuredEdital && (
-      <section aria-label="Edital MinC/MEC nº 13 de 2026 em destaque" className="relative overflow-hidden rounded-3xl border border-emerald-700/30 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-800 p-5 text-white shadow-lg shadow-emerald-950/10 md:p-7">
-        <div className="pointer-events-none absolute -right-10 -top-10 h-52 w-52 rounded-full bg-emerald-300/10 blur-3xl" />
-        <div className="relative space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-emerald-50">
-              <CalendarClock size={15} /> Oportunidade em destaque
-            </span>
-            <span className="rounded-full border border-amber-200/60 bg-amber-200/15 px-3 py-1.5 text-xs font-semibold text-amber-100">
-              Inscrições até 08/11/2026
-            </span>
-          </div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-emerald-200">Ministério da Cultura + Ministério da Educação · Edital nº 13/2026</p>
-            <h2 className="mt-2 max-w-3xl text-2xl font-extrabold leading-tight tracking-tight md:text-3xl">Ciclo de Saberes com Mestras e Mestres</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-emerald-50/90">Apoio a projetos que conectam universidades, escolas públicas e comunidades detentoras dos saberes tradicionais e populares. Investimento nacional de <strong>R$ 5 milhões</strong>.</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/20 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">Categoria A · até 7 projetos</p><p className="mt-1 text-2xl font-bold">Até R$ 500 mil</p><p className="mt-2 text-xs leading-5 text-white/85">10 mestras/mestres, 5 escolas, 3 municípios (ou 2 multidistritais), 2 manifestações distintas e registro público.</p></div>
-            <div className="rounded-2xl border border-white/20 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">Categoria B · até 6 projetos</p><p className="mt-1 text-2xl font-bold">Até R$ 250 mil</p><p className="mt-2 text-xs leading-5 text-white/85">5 mestras/mestres, 3 escolas, 1 município e 1 manifestação cultural.</p></div>
-            <div className="rounded-2xl border border-amber-200/30 bg-amber-100/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-amber-100">Quem pode apresentar</p><p className="mt-1 text-lg font-bold">Somente IFES</p><p className="mt-2 text-xs leading-5 text-white/90">A RKC pode colaborar como parceira cultural e territorial, mas não pode submeter diretamente a proposta.</p></div>
-          </div>
-          <div className="rounded-xl border border-white/15 bg-black/15 px-4 py-3 text-xs leading-relaxed text-emerald-50/90">
-            <strong>Regras essenciais:</strong> atividades na universidade, nos espaços das mestras e mestres e nas escolas públicas; pelo menos 40% do valor para bolsas ou cachês; prazo de execução de até 12 meses. Inscrições de 19/10 a 08/11/2026.
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <a href="https://mapa.cultura.gov.br/oportunidade/12667/#info" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-emerald-950 transition hover:bg-emerald-50">Inscrição oficial <ExternalLink size={15}/></a>
-            <a href="https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-abertas/programa-ciclo-de-saberes-com-mestras-e-mestres-das-culturas-tradicionais-e-populares-e-das-artes/edital-minc-mec-no-13-sei_3193023" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20">Edital completo (PDF) <ExternalLink size={15}/></a>
-            <button type="button" onClick={() => void copyFeaturedEdital()} className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"><Link2 size={16}/> Copiar resumo para compartilhar</button>
-            <button type="button" onClick={() => navigate("/admin/editais/" + featuredEdital.id)} className="inline-flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"><FileCheck2 size={16}/> Ver registro na RKC</button>
-          </div>
-          <p className="text-xs text-emerald-100/80">Informação para divulgação e articulação. A parceria com uma IFES ainda precisa ser formalizada; este destaque não representa inscrição enviada.</p>
-        </div>
-      </section>
-    )}
-
+    <section aria-label="Radar de Editais RKC" className="rounded-2xl border bg-card p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">Radar de Editais</h2><p className="mt-1 text-sm text-muted-foreground">Oportunidades de fontes oficiais. A triagem e a aprovação são manuais.</p></div><button type="button" onClick={()=>void refreshRadar()} disabled={radarLoading} className="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50">{radarLoading?"Consultando...":"Atualizar visualização"}</button></div>
+      <p className="mt-2 text-xs text-muted-foreground">{radarSync ? `Última sincronização: ${radarSync.finalizada_em ? new Date(radarSync.finalizada_em).toLocaleString("pt-BR") : "em andamento"} · ${radarSync.status}` : "Coleta automática ainda não configurada."}</p>
+      {radarError&&<p role="alert" className="mt-2 text-sm text-rose-700">{radarError}</p>}
+      {radarSync?.erro&&<p role="alert" className="mt-2 text-xs text-rose-700">{radarSync.erro}</p>}
+      <div className="mt-4 grid gap-3 md:grid-cols-2">{radarItems.map(o=><article key={o.id} className="rounded-xl border p-4"><h3 className="font-semibold">{o.titulo}</h3><p className="mt-1 text-xs text-muted-foreground">{o.organizador||"Organizador a verificar"} · {dateLabel(o.prazo)} · {o.status_triagem.replaceAll("_"," ")}</p><a className="mt-2 inline-block text-xs font-semibold text-emerald-800 underline" href={o.url_oficial} target="_blank" rel="noopener noreferrer">Fonte oficial</a></article>)}</div>
+      {!radarLoading&&!radarError&&!radarItems.length&&<p className="mt-3 text-sm text-muted-foreground">Nenhuma oportunidade sincronizada.</p>}
+    </section>
+    <section aria-label="Carteira de projetos RKC" className="rounded-2xl border bg-card p-5 shadow-sm">
+      <h2 className="text-lg font-bold">Carteira de projetos da RKC</h2><p className="mt-1 text-sm text-muted-foreground">Propostas planejadas, não submetidas. Elegibilidade não verificada.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{propostasRkc.proposals.map(p=><article key={p.id} className="rounded-xl border p-4"><span className="text-xs font-semibold text-emerald-800">Prioridade {p.priority}</span><h3 className="mt-2 font-semibold">{p.title}</h3><p className="mt-2 text-xs text-muted-foreground">{p.themes.join(" · ")}</p></article>)}</div>
+    </section>
     <section aria-label="Resumo da captação" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Oportunidades abertas</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800"><FolderKanban size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{activeOpportunities}</strong><span className="pb-1 text-xs text-muted-foreground">em acompanhamento</span></div></article>
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Aguardando avaliação</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800"><CalendarClock size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{awaitingEvaluation}</strong><span className="pb-1 text-xs text-muted-foreground">inscrições enviadas</span></div></article>
