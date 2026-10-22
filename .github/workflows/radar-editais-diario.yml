@@ -1,0 +1,36 @@
+name: Radar RKC - Coleta diaria de editais
+on:
+  schedule:
+    # 09:15 UTC = 06:15 Brasilia (UTC-3)
+    - cron: '15 9 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: radar-rkc-coleta
+  cancel-in-progress: false
+jobs:
+  coleta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar segredo de automacao
+        env:
+          RKC_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RKC_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$RKC_SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Configure RKC_SUPABASE_SERVICE_ROLE_KEY em Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+      - name: Pesquisar oportunidades oficiais
+        env:
+          RKC_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RKC_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl --fail-with-body --show-error --silent --max-time 180 --retry 2 \
+            --request POST \
+            --header "Authorization: Bearer $RKC_SUPABASE_SERVICE_ROLE_KEY" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            "https://yycfqeymdsjyulexwrlb.supabase.co/functions/v1/radar-editais" \
+            -o radar-response.json
+          node -e 'const r=require("./radar-response.json"); if(r.status!=="sucesso"){console.error("Falha na coleta:",r.erros||r.error);process.exit(1)} console.log("Radar RKC:",r.encontradas,"links encontrados,",r.novas,"novas oportunidades")'
