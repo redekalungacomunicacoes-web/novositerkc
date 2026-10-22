@@ -52,10 +52,15 @@ try{for(const width of [390,1440]){
  await page.getByLabel('Situação do requisito Comprovar atuação').selectOption('met');
  await page.waitForFunction(()=>document.querySelector('[aria-label="Situação do requisito Comprovar atuação"]')?.value==='met');
  assert.equal(await page.getByLabel('Situação do requisito Comprovar atuação').inputValue(),'met');
- await page.getByRole('button',{name:'Tarefas',exact:true}).click();
+ await page.getByRole('button',{name:/^Tarefas/}).click();
  await page.getByLabel('Situação de Preparar proposta').selectOption('concluida');
  await page.waitForFunction(()=>document.querySelector('[aria-label="Situação de Preparar proposta"]')?.value==='concluida');
- await page.reload();await page.getByRole('button',{name:'Tarefas',exact:true}).waitFor();await page.getByRole('button',{name:'Tarefas',exact:true}).click();
+ await page.reload();await page.getByRole('button',{name:/^Tarefas/}).waitFor();await page.getByRole('button',{name:/^Tarefas/}).click();
  await page.getByLabel('Situação de Preparar proposta').waitFor();assert.equal(await page.getByLabel('Situação de Preparar proposta').inputValue(),'concluida');
+ await page.getByRole('button',{name:'Editar edital',exact:true}).click();
+ await page.getByPlaceholder('Nome do edital').fill('Edital atualizado');await page.getByRole('dialog').locator('select').selectOption('aguardando_avaliacao');
+ await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();await page.getByRole('heading',{name:'Edital atualizado',exact:true}).waitFor();
+ assert.equal(editais[0].status,'aguardando_avaliacao');
+ await page.reload();await page.getByRole('heading',{name:'Edital atualizado',exact:true}).waitFor();
  assert.deepEqual(errors,[]);await context.close();console.log(`PASS ${width}px: abas, filtros, cache, cadastro, checklist, sem erros`);
 }}finally{await browser.close();server.kill();}
