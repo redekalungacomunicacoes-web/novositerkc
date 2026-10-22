@@ -7,7 +7,8 @@ const migrationsDir = new URL('../supabase/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
   .filter((name) => name.startsWith('202610') && name.includes('_captacao_') && name.endsWith('.sql'))
   .sort();
-assert.equal(migrationFiles.length, 9, 'expected all applied captação migrations to be present');
+assert.ok(migrationFiles.includes('20261022164000_captacao_radar.sql'), 'radar migration must exist');
+assert.equal(migrationFiles.length, 10, 'expected all applied captação migrations to be present');
 const migration = (await Promise.all(
   migrationFiles.map((name) => readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8')),
 )).join('\n');
