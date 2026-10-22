@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-22",
+  "status": "planejado",
+  "proposals": [
+    {
+      "id": "memorias-vivas",
+      "priority": 1,
+      "title": "Memórias Vivas do Território Kalunga",
+      "themes": [
+        "patrimonio",
+        "memoria",
+        "audiovisual"
+      ],
+      "objective": "Documentar memórias orais, trajetórias e saberes com protagonismo comunitário.",
+      "deliverables": [
+        "entrevistas",
+        "obra audiovisual",
+        "acervo consentido",
+        "exibicoes comunitarias"
+      ],
+      "eligibility": "nao_verificada",
+      "submission": "nao_submetido",
+      "pending": [
+        "escuta comunitaria",
+        "direitos de imagem e voz",
+        "orcamento",
+        "cronograma",
+        "equipe",
+        "edital aderente"
+      ]
+    },
+    {
+      "id": "escola-comunicacao",
+      "priority": 2,
+      "title": "Escola Kalunga de Comunicação Comunitária",
+      "themes": [
+        "juventude",
+        "formacao",
+        "comunicacao comunitaria",
+        "audiovisual"
+      ],
+      "objective": "Formar jovens do territorio em fotografia, video, podcast e comunicacao comunitaria.",
+      "deliverables": [
+        "oficinas",
+        "laboratorio de midia",
+        "portfolio coletivo",
+        "mostra comunitaria"
+      ],
+      "eligibility": "nao_verificada",
+      "submission": "nao_submetido",
+      "pending": [
+        "parceiros",
+        "local",
+        "instrutores",
+        "equipamentos",
+        "acessibilidade",
+        "orcamento"
+      ]
+    },
+    {
+      "id": "vozes-mulheres",
+      "priority": 3,
+      "title": "Vozes das Mulheres Kalunga",
+      "themes": [
+        "mulheres",
+        "memoria",
+        "equidade",
+        "cultura"
+      ],
+      "objective": "Valorizar narrativas e protagonismo de mulheres Kalunga com participacao e consentimento.",
+      "deliverables": [
+        "serie de perfis",
+        "podcast",
+        "rodas de escuta",
+        "mostra comunitaria"
+      ],
+      "eligibility": "nao_verificada",
+      "submission": "nao_submetido",
+      "pending": [
+        "escuta participativa",
+        "consentimento",
+        "protecao de dados",
+        "orcamento",
+        "equipe"
+      ]
+    },
+    {
+      "id": "kalucast",
+      "priority": 4,
+      "title": "KaluCast — Vozes do Território",
+      "themes": [
+        "podcast",
+        "comunicacao comunitaria"
+      ],
+      "eligibility": "nao_verificada",
+      "submission": "comprovante_pendente",
+      "pending": [
+        "verificar candidatura 2 Premio Pretas Potencias"
+      ]
+    },
+    {
+      "id": "cerrado-kalunga",
+      "priority": 5,
+      "title": "Cerrado Kalunga — Cultura, Água e Território",
+      "themes": [
+        "meio ambiente",
+        "educacao",
+        "audiovisual"
+      ],
+      "eligibility": "nao_verificada",
+      "submission": "nao_submetido"
+    },
+    {
+      "id": "calendario-vivo",
+      "priority": 6,
+      "title": "Calendário Vivo das Tradições Kalunga",
+      "themes": [
+        "cultura popular",
+        "patrimonio imaterial"
+      ],
+      "eligibility": "nao_verificada",
+      "submission": "nao_submetido"
+    }
+  ],
+  "radar_policy": {
+    "do_not_auto_submit": true,
+    "do_not_auto_approve_eligibility": true,
+    "do_not_mix_discovery_with_applications": true,
+    "organization_cnpj_since": "2025-07",
+    "sources_require_official_url": true,
+    "required_fields": [
+      "source_url",
+      "deadline",
+      "funder",
+      "eligibility",
+      "last_checked_at"
+    ],
+    "human_review_required": true
+  }
+}
