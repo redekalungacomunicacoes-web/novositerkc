@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, BadgeCheck, CalendarClock, CalendarDays, Check, CircleDot, CirclePlus, ClipboardCheck, FileCheck2, FileUp, ExternalLink, Eye, Link2, X, FolderKanban, HandCoins, History, LayoutDashboard, ListChecks, Loader2, RefreshCw, Search, ShieldCheck, Trash2, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/app/components/ui/tabs";
+import { CaptacaoRepasses, CaptacaoGestao } from "./captacao/CaptacaoSupport";
 import propostasRkc from "@/app/data/captacao-propostas-rkc.json";
 
 type Edital = { id: string; protocol: string; title: string; funder: string; category: string; deadline: string | null; status: string; eligibility_status: string; eligibility_opinion: string | null; manager_approved_at: string | null; submitted_at: string | null; external_reference: string | null; created_at: string };
@@ -22,7 +24,14 @@ export function AdminCaptacao() {
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id?: string }>();
   const [editais, setEditais] = useState<Edital[]>([]);
-  const [radarItems,setRadarItems] = useState<Array<{id:string;titulo:string;organizador:string|null;url_oficial:string;prazo:string|null;status_triagem:string}>>([]);
+  const [mainTab, setMainTab] = useState("radar");
+  const [visitedTabs,setVisitedTabs] = useState(["radar"]);
+  function switchMainTab(tab:string){setMainTab(tab);setVisitedTabs(current=>current.includes(tab)?current:[...current,tab]);}
+  const [radarQuery, setRadarQuery] = useState("");
+  const [radarStatus, setRadarStatus] = useState("all");
+  const [radarArea, setRadarArea] = useState("all");
+  const [radarPrazo, setRadarPrazo] = useState("all");
+  const [radarItems,setRadarItems] = useState<Array<{id:string;titulo:string;organizador:string|null;url_oficial:string;prazo:string|null;status_triagem:string;area:string|null;resumo:string|null;captacao_edital_id:string|null}>>([]);
   const [radarSync,setRadarSync] = useState<{finalizada_em:string|null;status:string;erro:string|null}|null>(null);
   const [radarError,setRadarError] = useState<string|null>(null);
   const [radarLoading,setRadarLoading] = useState(false);
@@ -30,7 +39,7 @@ export function AdminCaptacao() {
     setRadarLoading(true);
     try {
       const [items,sync] = await Promise.all([
-        supabase.from("captacao_radar_oportunidades").select("id,titulo,organizador,url_oficial,prazo,status_triagem").order("prazo",{ascending:true,nullsFirst:false}).limit(40),
+        supabase.from("captacao_radar_oportunidades").select("id,titulo,organizador,url_oficial,prazo,status_triagem,area,resumo,captacao_edital_id").order("prazo",{ascending:true,nullsFirst:false}).limit(200),
         supabase.from("captacao_radar_sincronizacoes").select("finalizada_em,status,erro").order("iniciada_em",{ascending:false}).limit(1)
       ]);
       if(items.error) throw items.error;
@@ -93,8 +102,8 @@ export function AdminCaptacao() {
   const [linkUrl, setLinkUrl] = useState("");
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreview | null>(null);
 
-  async function load() {
-    setLoading(true); setError("");
+  async function load(background = false) {
+    if (!background) setLoading(true); setError("");
     try {
       const [{ data: ed, error: ee }, { data: req, error: re }, { data: ts, error: te }, { data: team, error: me }, { data: files, error: fe }, user] = await Promise.all([
         supabase.from("captacao_editais").select("*").order("deadline", { ascending: true, nullsFirst: false }),
@@ -121,8 +130,8 @@ export function AdminCaptacao() {
     if (!routeId) return;
     setSelectedId(routeId);
     setOpinion(editais.find((item) => item.id === routeId)?.eligibility_opinion || "");
-    setDetailTab("overview");
-  }, [routeId, editais]);
+  }, [routeId]);
+  useEffect(()=>{setOpinion(editais.find(e=>e.id===(routeId||selectedId))?.eligibility_opinion||"");},[routeId,selectedId,editais.find(e=>e.id===(routeId||selectedId))?.eligibility_opinion]);
   useEffect(() => {
     if (!selectedId) { setAudit([]); return; }
     let active = true;
@@ -141,6 +150,7 @@ export function AdminCaptacao() {
 
   const selected = editais.find((e) => e.id === (routeId || selectedId)) || null;
   const filtered = useMemo(() => editais.filter((e) => (statusFilter === "all" || e.status === statusFilter) && `${e.protocol} ${e.title} ${e.funder}`.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR"))), [editais, statusFilter, query]);
+  const filteredRadar = radarItems.filter(o=>(radarStatus==="all"||o.status_triagem===radarStatus)&&(radarArea==="all"||o.area===radarArea)&&`${o.titulo} ${o.organizador||""} ${o.area||""}`.toLocaleLowerCase("pt-BR").includes(radarQuery.toLocaleLowerCase("pt-BR"))).filter(o=>radarPrazo==="all" || (radarPrazo==="none" ? !o.prazo : Boolean(o.prazo && (radarPrazo==="open" ? o.prazo>=new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"}) : o.prazo<new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"})))));
   const today = new Date().toISOString().slice(0, 10);
   const myTasks = taskFilter === "all" ? tasks : tasks.filter((t) => t.assignee_id === (taskFilter === "mine" ? myMemberId : taskFilter));
   const visibleTasks = myTasks.filter((t) => t.edital_id === selectedId)
@@ -157,35 +167,35 @@ export function AdminCaptacao() {
     setSaving(true);
     try {
       const payload = { title: newTitle.trim(), funder: newFunder.trim(), category: newCategory.trim() || "Não informado", deadline: newDeadline || null };
-      const result = editing && selected ? await supabase.from("captacao_editais").update({ ...payload, status: newStatus, submitted_at: submittedAt || null, external_reference: externalReference.trim() || null }).eq("id", selected.id) : await supabase.from("captacao_editais").insert({ ...payload, status: "pending_confirmation", eligibility_status: "pending_verification" });
-      if (result.error) throw result.error; toast.success(editing ? "Edital atualizado." : "Oportunidade cadastrada para confirmação."); setFormOpen(false); setEditing(false); setNewTitle(""); setNewFunder(""); setNewCategory(""); setNewDeadline(""); setNewStatus("pending_confirmation"); setSubmittedAt(""); setExternalReference(""); await load();
+      const result = editing && selected ? await supabase.from("captacao_editais").update({ ...payload, status: newStatus, submitted_at: submittedAt || null, external_reference: externalReference.trim() || null }).eq("id", selected.id) : await supabase.from("captacao_editais").insert({ ...payload, status: "pending_confirmation", eligibility_status: "pending_verification", external_reference: externalReference.trim() || null });
+      if (result.error) throw result.error; toast.success(editing ? "Edital atualizado." : "Oportunidade cadastrada para confirmação."); setFormOpen(false); setEditing(false); setNewTitle(""); setNewFunder(""); setNewCategory(""); setNewDeadline(""); setNewStatus("pending_confirmation"); setSubmittedAt(""); setExternalReference(""); await load(true);
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function addRequirement(event: React.FormEvent) {
     event.preventDefault(); if (!selected || !requirementText.trim()) return; setSaving(true);
-    try { const { error: e } = await supabase.from("captacao_requisitos").insert({ edital_id: selected.id, description: requirementText.trim(), status: "pending" }); if (e) throw e; setRequirementText(""); await load(); }
+    try { const { error: e } = await supabase.from("captacao_requisitos").insert({ edital_id: selected.id, description: requirementText.trim(), status: "pending" }); if (e) throw e; setRequirementText(""); await load(true); }
     catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function updateRequirement(r: Requirement, status: Requirement["status"]) {
-    const { error: e } = await supabase.from("captacao_requisitos").update({ status }).eq("id", r.id); if (e) toast.error(e.message); else await load();
+    const { error: e } = await supabase.from("captacao_requisitos").update({ status }).eq("id", r.id); if (e) toast.error(e.message); else await load(true);
   }
   async function saveEligibility(event: React.FormEvent) {
     event.preventDefault(); if (!selected) return; setSaving(true);
     const next = selectedRequirements.length > 0 && selectedRequirements.every((r) => r.status === "met") ? "approved" : selectedRequirements.some((r) => r.status === "not_met") ? "not_eligible" : "pending_verification";
-    try { const { error: e } = await supabase.from("captacao_editais").update({ eligibility_status: next, eligibility_opinion: opinion.trim() }).eq("id", selected.id); if (e) throw e; toast.success("Parecer de elegibilidade registrado."); await load(); }
+    try { const { error: e } = await supabase.from("captacao_editais").update({ eligibility_status: next, eligibility_opinion: opinion.trim() }).eq("id", selected.id); if (e) throw e; toast.success("Parecer de elegibilidade registrado."); await load(true); }
     catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function approveAdvance() {
     if (!selected) return; setSaving(true);
-    try { const { error: e } = await supabase.from("captacao_editais").update({ manager_approved_at: new Date().toISOString(), status: "em_elaboracao" }).eq("id", selected.id); if (e) throw e; toast.success("Avanço aprovado; edital liberado para elaboração."); await load(); }
+    try { const { error: e } = await supabase.from("captacao_editais").update({ manager_approved_at: new Date().toISOString(), status: "em_elaboracao" }).eq("id", selected.id); if (e) throw e; toast.success("Avanço aprovado; edital liberado para elaboração."); await load(true); }
     catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function addTask(event: React.FormEvent) {
     event.preventDefault(); if (!selected || !taskTitle.trim() || !taskAssignee) return; setSaving(true);
-    try { const { error: e } = await supabase.from("captacao_tarefas").insert({ edital_id: selected.id, title: taskTitle.trim(), assignee_id: taskAssignee, due_date: taskDue || null, priority: taskPriority, status: "pendente", created_by: myMemberId || null }); if (e) throw e; setTaskTitle(""); setTaskDue(""); setTaskOpen(false); await load(); }
+    try { const { error: e } = await supabase.from("captacao_tarefas").insert({ edital_id: selected.id, title: taskTitle.trim(), assignee_id: taskAssignee, due_date: taskDue || null, priority: taskPriority, status: "pendente", created_by: myMemberId || null }); if (e) throw e; setTaskTitle(""); setTaskDue(""); setTaskOpen(false); await load(true); }
     catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
-  async function updateTask(task: Task, patch: Partial<Task>) { const { error: e } = await supabase.from("captacao_tarefas").update(patch).eq("id", task.id); if (e) toast.error(e.message); else await load(); }
+  async function updateTask(task: Task, patch: Partial<Task>) { const { error: e } = await supabase.from("captacao_tarefas").update(patch).eq("id", task.id); if (e) toast.error(e.message); else await load(true); }
   async function uploadAttachment(event: React.FormEvent) {
     event.preventDefault(); if (!selected || !file) return; setSaving(true);
     try {
@@ -193,7 +203,7 @@ export function AdminCaptacao() {
       const { error: uploadError } = await supabase.storage.from("captacao-editais").upload(storagePath, file, { upsert: false, contentType: file.type || "application/octet-stream" }); if (uploadError) throw uploadError;
       const { error: insertError } = await supabase.from("captacao_anexos").insert({ edital_id: selected.id, file_name: file.name, storage_path: storagePath, category: fileCategory, uploaded_by: myMemberId || null });
       if (insertError) { await supabase.storage.from("captacao-editais").remove([storagePath]); throw insertError; }
-      setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; await load(); toast.success("Arquivo privado anexado ao edital.");
+      setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; await load(true); toast.success("Arquivo privado anexado ao edital.");
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function addAttachmentLink(event: React.FormEvent) {
@@ -213,7 +223,7 @@ export function AdminCaptacao() {
           : insertError.message;
         throw new Error(message);
       }
-      setLinkTitle(""); setLinkUrl(""); await load(); toast.success("Link adicionado aos documentos do edital.");
+      setLinkTitle(""); setLinkUrl(""); await load(true); toast.success("Link adicionado aos documentos do edital.");
     } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
   async function openAttachment(item: Attachment) {
@@ -283,34 +293,50 @@ export function AdminCaptacao() {
           <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-700 text-white shadow-lg shadow-emerald-900/15 sm:flex"><HandCoins size={27}/></div>
           <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-800">Rede Kalunga <span className="mx-1 text-emerald-400">/</span> Administração</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 dark:text-foreground md:text-4xl">Captação de recursos</h1><p className="mt-2 max-w-xl text-sm leading-6 text-slate-600 dark:text-muted-foreground">Acompanhe oportunidades, inscrições, prazos e entregas da equipe em um só lugar.</p></div>
         </div>
-        <div className="flex w-full gap-2 sm:w-auto"><button onClick={() => void load()} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/80 bg-white/80 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white sm:flex-none dark:border-border dark:bg-card" aria-label="Atualizar painel"><RefreshCw size={16}/><span>Atualizar</span></button><button onClick={() => {setEditing(false);setNewTitle("");setNewFunder("");setNewCategory("");setNewDeadline("");setNewStatus("pending_confirmation");setFormOpen(true)}} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/10 transition hover:bg-emerald-900 sm:flex-none"><CirclePlus size={17}/> Novo edital</button></div>
+        <div className="flex w-full gap-2 sm:w-auto"><button onClick={() => void load()} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/80 bg-white/80 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white sm:flex-none dark:border-border dark:bg-card" aria-label="Atualizar painel"><RefreshCw size={16}/><span>Atualizar</span></button><button onClick={() => {setEditing(false);setNewTitle("");setNewFunder("");setNewCategory("");setNewDeadline("");setNewStatus("pending_confirmation");setExternalReference("");setFormOpen(true)}} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-950/10 transition hover:bg-emerald-900 sm:flex-none"><CirclePlus size={17}/> Novo edital</button></div>
       </div>
     </header>
 
     {error && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><AlertCircle size={19} className="mt-0.5 shrink-0"/><div><strong>Não foi possível carregar o painel.</strong><p className="mt-1">{error}</p><p className="mt-2 text-xs">Confira se seu usuário tem acesso administrativo e se as migrações do módulo estão aplicadas.</p></div></div>}
 
-    {!routeId && <>
-    <section aria-label="Radar de Editais RKC" className="rounded-2xl border bg-card p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">Radar de Editais</h2><p className="mt-1 text-sm text-muted-foreground">Oportunidades de fontes oficiais. A triagem e a aprovação são manuais.</p></div><button type="button" onClick={()=>void runRadarScan()} disabled={radarLoading} className="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50">{radarLoading?"Pesquisando fontes oficiais...":"Pesquisar editais agora"}</button></div>
-      <p className="mt-2 text-xs text-muted-foreground">{radarSync ? `Última sincronização: ${radarSync.finalizada_em ? new Date(radarSync.finalizada_em).toLocaleString("pt-BR") : "em andamento"} · ${radarSync.status}` : "Pesquisa manual disponível. Agendamento diário ainda não configurado."}</p>
+    {!routeId && <Tabs value={mainTab} onValueChange={switchMainTab} className="gap-5">
+      <div className="max-w-full overflow-x-auto rounded-2xl border bg-card p-1 shadow-sm">
+        <TabsList aria-label="Áreas do painel de editais" className="h-auto min-w-full justify-start gap-1 bg-transparent p-0">
+          <TabsTrigger value="radar" className="px-4 py-3 data-[state=active]:bg-sky-100 data-[state=active]:text-sky-950"><Search/>Radar e inscrições</TabsTrigger>
+          <TabsTrigger value="repasses" className="px-4 py-3 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-950"><HandCoins/>Repasses</TabsTrigger>
+          <TabsTrigger value="carteira" className="px-4 py-3 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-950"><WalletCards/>Carteira RKC</TabsTrigger>
+          <TabsTrigger value="gestao" className="px-4 py-3 data-[state=active]:bg-slate-100 data-[state=active]:text-slate-950"><ShieldCheck/>Gestão</TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent forceMount hidden={mainTab!=="radar"} value="radar" className="space-y-6">
+    <section aria-label="Radar de Editais RKC" className="rounded-2xl border border-sky-200 bg-sky-50/50 p-5 shadow-sm dark:bg-card">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-bold text-sky-900 dark:text-sky-200"><Search size={21}/>Radar de Editais</h2><p className="mt-1 text-sm text-muted-foreground">Oportunidades de fontes oficiais. A triagem e a aprovação são manuais.</p></div><button type="button" onClick={()=>void runRadarScan()} disabled={radarLoading || radarSync?.status === "executando"} className="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50">{radarLoading?"Pesquisando fontes oficiais...":"Pesquisar editais agora"}</button></div>
+      <p className="mt-2 text-xs text-muted-foreground">{radarSync ? `Última sincronização: ${radarSync.finalizada_em ? new Date(radarSync.finalizada_em).toLocaleString("pt-BR") : "em andamento"} · ${radarSync.status}` : "Nenhuma execução registrada. Consulte o histórico em Gestão."}</p>
       {radarError&&<p role="alert" className="mt-2 text-sm text-rose-700">{radarError}</p>}
       {radarSync?.erro&&<p role="alert" className="mt-2 text-xs text-rose-700">{radarSync.erro}</p>}
-      <div className="mt-4 grid gap-3 md:grid-cols-2">{radarItems.map(o=><article key={o.id} className="rounded-xl border p-4"><h3 className="font-semibold">{o.titulo}</h3><p className="mt-1 text-xs text-muted-foreground">{o.organizador||"Organizador a verificar"} · {dateLabel(o.prazo)} · {o.status_triagem.replaceAll("_"," ")}</p><a className="mt-2 inline-block text-xs font-semibold text-emerald-800 underline" href={o.url_oficial} target="_blank" rel="noopener noreferrer">Fonte oficial</a></article>)}</div>
-      {!radarLoading&&!radarError&&!radarItems.length&&<p className="mt-3 text-sm text-muted-foreground">Nenhuma oportunidade sincronizada.</p>}
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <input aria-label="Pesquisar no Radar" placeholder="Pesquisar no Radar" value={radarQuery} onChange={e=>setRadarQuery(e.target.value)} className="min-w-0 rounded-xl border bg-background p-3 text-sm"/>
+        <select aria-label="Situação no Radar" value={radarStatus} onChange={e=>setRadarStatus(e.target.value)} className="rounded-xl border bg-background p-3 text-sm"><option value="all">Todas as situações</option>{[...new Set(radarItems.map(o=>o.status_triagem))].map(v=><option key={v} value={v}>{v.replaceAll("_"," ")}</option>)}</select>
+        <select aria-label="Área no Radar" value={radarArea} onChange={e=>setRadarArea(e.target.value)} className="rounded-xl border bg-background p-3 text-sm"><option value="all">Todas as áreas</option>{[...new Set(radarItems.map(o=>o.area).filter(Boolean))].map(v=><option key={v} value={v!}>{v}</option>)}</select>
+        <select aria-label="Prazo no Radar" value={radarPrazo} onChange={e=>setRadarPrazo(e.target.value)} className="rounded-xl border bg-background p-3 text-sm"><option value="all">Todos os prazos</option><option value="open">Prazo aberto</option><option value="late">Prazo encerrado</option><option value="none">Sem prazo confirmado</option></select>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{filteredRadar.length} oportunidade(s) entre os até 200 registros mais próximos do prazo.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">{filteredRadar.map(o=><article key={o.id} className="rounded-xl border border-sky-100 bg-background p-4"><h3 className="font-semibold">{o.titulo}</h3><p className="mt-1 text-xs text-muted-foreground">{o.organizador||"Organizador a verificar"} · {dateLabel(o.prazo)} · {o.status_triagem.replaceAll("_"," ")}</p><a className="mt-2 inline-block text-xs font-semibold text-emerald-800 underline" href={o.url_oficial} target="_blank" rel="noopener noreferrer">Fonte oficial</a><p className="mt-2 text-sm text-muted-foreground">{o.resumo}</p><button type="button" className="mt-3 block rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-sky-900 dark:text-sky-200" onClick={()=>{
+        const linked = editais.find(e=>e.id===o.captacao_edital_id || e.external_reference===o.url_oficial);
+        if(linked){navigate(`/admin/editais/${linked.id}`);return;}
+        setEditing(false);setNewTitle(o.titulo);setNewFunder(o.organizador||"");setNewCategory(o.area||"");setNewDeadline(o.prazo||"");setExternalReference(o.url_oficial);setFormOpen(true);
+      }}>{editais.some(e=>e.id===o.captacao_edital_id || e.external_reference===o.url_oficial)?"Acompanhar inscrição":"Preparar inscrição"}</button></article>)}</div>
+      {!radarLoading&&!radarError&&!filteredRadar.length&&<p className="mt-3 text-sm text-muted-foreground">Nenhuma oportunidade sincronizada.</p>}
     </section>
-    <section aria-label="Carteira de projetos RKC" className="rounded-2xl border bg-card p-5 shadow-sm">
-      <h2 className="text-lg font-bold">Carteira de projetos da RKC</h2><p className="mt-1 text-sm text-muted-foreground">Propostas planejadas, não submetidas. Elegibilidade não verificada.</p>
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{propostasRkc.proposals.map(p=><article key={p.id} className="rounded-xl border p-4"><span className="text-xs font-semibold text-emerald-800">Prioridade {p.priority}</span><h3 className="mt-2 font-semibold">{p.title}</h3><p className="mt-2 text-xs text-muted-foreground">{p.themes.join(" · ")}</p></article>)}</div>
-    </section>
-    <section aria-label="Resumo da captação" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section aria-label="Resumo da captação" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Oportunidades abertas</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800"><FolderKanban size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{activeOpportunities}</strong><span className="pb-1 text-xs text-muted-foreground">em acompanhamento</span></div></article>
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Aguardando avaliação</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800"><CalendarClock size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{awaitingEvaluation}</strong><span className="pb-1 text-xs text-muted-foreground">inscrições enviadas</span></div></article>
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Tarefas em aberto</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-800"><ListChecks size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{openTasks}</strong><span className="pb-1 text-xs text-muted-foreground">da equipe</span></div></article>
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Tarefas atrasadas</span><span className={"flex h-10 w-10 items-center justify-center rounded-xl " + (lateTasks ? "bg-rose-50 text-rose-800" : "bg-slate-100 text-slate-500")}><CalendarDays size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className={"text-3xl font-bold tracking-tight " + (lateTasks ? "text-rose-700" : "")}>{lateTasks}</strong><span className="pb-1 text-xs text-muted-foreground">precisam de atenção</span></div></article>
     </section>
 
-    <section className="space-y-4" aria-labelledby="opportunities-heading">
-      <div className="flex flex-wrap items-end justify-between gap-3"><div><div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><FolderKanban size={18}/></span><h2 id="opportunities-heading" className="text-xl font-bold tracking-tight">Carteira de editais</h2></div><p className="mt-2 text-sm text-muted-foreground">Selecione uma oportunidade para ver etapas, tarefas e documentos.</p></div><span className="rounded-full border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground">{filtered.length} {filtered.length === 1 ? "oportunidade" : "oportunidades"}</span></div>
+    <section className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5 dark:bg-card" aria-labelledby="opportunities-heading">
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><FolderKanban size={18}/></span><h2 id="opportunities-heading" className="text-xl font-bold tracking-tight">Editais em inscrição</h2></div><p className="mt-2 text-sm text-muted-foreground">Selecione uma oportunidade para ver etapas, tarefas e documentos.</p></div><button type="button" onClick={()=>{setEditing(false);setNewTitle("");setNewFunder("");setNewCategory("");setNewDeadline("");setExternalReference("");setFormOpen(true)}} className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 px-4 py-3 text-sm font-semibold text-white"><CirclePlus size={17}/>Adicionar edital</button><span className="rounded-full border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground">{filtered.length} {filtered.length === 1 ? "oportunidade" : "oportunidades"}</span></div>
       <div className="flex flex-col gap-3 rounded-2xl border bg-card p-3 shadow-sm sm:flex-row">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border bg-background px-3 text-muted-foreground"><Search size={16}/><input aria-label="Buscar edital" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por edital, financiador ou protocolo" className="w-full py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/70"/></label>
         <label className="flex items-center gap-2 rounded-xl border bg-background px-3 text-muted-foreground"><CircleDot size={15}/><select aria-label="Filtrar por situação" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="min-w-40 bg-transparent py-2.5 text-sm text-foreground outline-none"><option value="all">Todas as situações</option>{Object.entries(STATUS).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
@@ -329,7 +355,15 @@ export function AdminCaptacao() {
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1.5 rounded-lg bg-muted/70 px-2 py-1.5"><WalletCards size={14}/>{e.category}</span><span className="inline-flex items-center gap-1.5 px-1 py-1.5"><CalendarDays size={14}/>{dateLabel(e.deadline)}</span></div>
       </button>)}</div> : <div className="rounded-2xl border border-dashed bg-card p-10 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500"><Search size={20}/></div><p className="mt-3 font-semibold">Nenhum edital encontrado</p><p className="mt-1 text-sm text-muted-foreground">Ajuste a busca ou o filtro de situação.</p></div>}
     </section>
-    </>}
+    </TabsContent>
+    <TabsContent forceMount hidden={mainTab!=="repasses"} value="repasses">{visitedTabs.includes("repasses")&&<CaptacaoRepasses/>}</TabsContent>
+    <TabsContent forceMount hidden={mainTab!=="carteira"} value="carteira" className="space-y-5">    <section aria-label="Carteira de projetos RKC" className="rounded-2xl border border-violet-200 bg-violet-50/40 p-5 shadow-sm dark:bg-card">
+      <h2 className="flex items-center gap-2 text-lg font-bold"><WalletCards size={21}/>Carteira de projetos da RKC</h2><p className="mt-1 text-sm text-muted-foreground">Propostas planejadas, não submetidas. Elegibilidade não verificada.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{propostasRkc.proposals.map(p=><article key={p.id} className="rounded-xl border p-4"><span className="text-xs font-semibold text-emerald-800">Prioridade {p.priority}</span><h3 className="mt-2 font-semibold">{p.title}</h3><p className="mt-2 text-xs text-muted-foreground">{p.themes.join(" · ")}</p></article>)}</div>
+    </section>
+<section className="rounded-2xl border border-violet-200 bg-violet-50/40 p-5 dark:bg-card"><h2 className="text-lg font-bold">Histórico de candidaturas</h2><div className="mt-4 grid gap-3 md:grid-cols-2">{editais.filter(e=>["inscrito","aguardando_avaliacao","encerrado"].includes(e.status)).map(e=><button key={e.id} onClick={()=>navigate(`/admin/editais/${e.id}`)} className="rounded-xl border bg-background p-4 text-left"><strong>{e.title}</strong><p className="mt-2 text-sm">{STATUS[e.status]} · {dateLabel(e.submitted_at)}</p></button>)}</div><p className="mt-3 text-xs text-muted-foreground">Resultados de contemplação e conclusão são acompanhados nos projetos do Financeiro.</p></section></TabsContent>
+    <TabsContent forceMount hidden={mainTab!=="gestao"} value="gestao">{visitedTabs.includes("gestao")&&<CaptacaoGestao/>}</TabsContent>
+    </Tabs>}
 
     {routeId ? selected ? <section aria-labelledby="selected-edital-heading" className="overflow-hidden rounded-3xl border bg-card shadow-sm">
       <div className="border-b bg-muted/20 px-4 py-3"><button type="button" onClick={()=>navigate("/admin/editais")} className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50"><ArrowLeft size={16}/> Voltar para oportunidades</button></div>

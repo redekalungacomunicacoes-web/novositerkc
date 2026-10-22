@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'src/app/pages/admin/AdminCaptacao.tsx'
+      - 'src/app/pages/admin/captacao/**'
       - 'src/app/routes.tsx'
       - 'src/app/components/admin/AdminSidebar.tsx'
       - 'supabase/migrations/*captacao*'
