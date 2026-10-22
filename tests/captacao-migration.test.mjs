@@ -173,7 +173,7 @@ test('supports a stored document or safe external link without invalidating exis
 test('adds indexes for captação foreign-key lookups', async (t) => {
   const db = await fixture(); t.after(() => db.close());
   const { rows } = await db.query("select indexname from pg_indexes where schemaname='public' and indexname like 'captacao_%_idx'");
-  assert.equal(rows.length, 10);
+  assert.equal(rows.length, 11);
 });
 
 test('requires all requirements and a documented opinion before eligibility, then requires Felipe to release drafting', async (t) => {
