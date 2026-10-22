@@ -39,6 +39,17 @@ export function AdminCaptacao() {
     } catch(e) {setRadarError((e as Error).message);}
     finally {setRadarLoading(false);}
   }
+  async function runRadarScan() {
+    setRadarLoading(true);setRadarError(null);
+    try {
+      const {data,error}=await supabase.functions.invoke("radar-editais",{method:"POST",body:{}});
+      if(error) throw error;
+      if(data?.error) throw new Error(data.error);
+      if(data?.status==="erro") toast.error("Pesquisa parcial: confira os erros de sincronização.");
+      else toast.success(`Pesquisa concluída: ${data?.novas??0} nova(s) oportunidade(s).`);
+    } catch(e) {setRadarError((e as Error).message);toast.error("Não foi possível executar a pesquisa.");}
+    finally {await refreshRadar();}
+  }
   useEffect(()=>{if(!routeId)void refreshRadar();},[routeId]);
 
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -280,8 +291,8 @@ export function AdminCaptacao() {
 
     {!routeId && <>
     <section aria-label="Radar de Editais RKC" className="rounded-2xl border bg-card p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">Radar de Editais</h2><p className="mt-1 text-sm text-muted-foreground">Oportunidades de fontes oficiais. A triagem e a aprovação são manuais.</p></div><button type="button" onClick={()=>void refreshRadar()} disabled={radarLoading} className="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50">{radarLoading?"Consultando...":"Atualizar visualização"}</button></div>
-      <p className="mt-2 text-xs text-muted-foreground">{radarSync ? `Última sincronização: ${radarSync.finalizada_em ? new Date(radarSync.finalizada_em).toLocaleString("pt-BR") : "em andamento"} · ${radarSync.status}` : "Coleta automática ainda não configurada."}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">Radar de Editais</h2><p className="mt-1 text-sm text-muted-foreground">Oportunidades de fontes oficiais. A triagem e a aprovação são manuais.</p></div><button type="button" onClick={()=>void runRadarScan()} disabled={radarLoading} className="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50">{radarLoading?"Pesquisando fontes oficiais...":"Pesquisar editais agora"}</button></div>
+      <p className="mt-2 text-xs text-muted-foreground">{radarSync ? `Última sincronização: ${radarSync.finalizada_em ? new Date(radarSync.finalizada_em).toLocaleString("pt-BR") : "em andamento"} · ${radarSync.status}` : "Pesquisa manual disponível. Agendamento diário ainda não configurado."}</p>
       {radarError&&<p role="alert" className="mt-2 text-sm text-rose-700">{radarError}</p>}
       {radarSync?.erro&&<p role="alert" className="mt-2 text-xs text-rose-700">{radarSync.erro}</p>}
       <div className="mt-4 grid gap-3 md:grid-cols-2">{radarItems.map(o=><article key={o.id} className="rounded-xl border p-4"><h3 className="font-semibold">{o.titulo}</h3><p className="mt-1 text-xs text-muted-foreground">{o.organizador||"Organizador a verificar"} · {dateLabel(o.prazo)} · {o.status_triagem.replaceAll("_"," ")}</p><a className="mt-2 inline-block text-xs font-semibold text-emerald-800 underline" href={o.url_oficial} target="_blank" rel="noopener noreferrer">Fonte oficial</a></article>)}</div>
