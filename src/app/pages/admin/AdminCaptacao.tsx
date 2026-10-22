@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, BadgeCheck, CalendarClock, CalendarDays, Check, CircleDot, CirclePlus, ClipboardCheck, FileCheck2, FileUp, FolderKanban, HandCoins, History, LayoutDashboard, ListChecks, Loader2, RefreshCw, Search, ShieldCheck, Trash2, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import propostasRkc from "@/app/data/captacao-propostas-rkc.json";
 
 type Edital = { id: string; protocol: string; title: string; funder: string; category: string; deadline: string | null; status: string; eligibility_status: string; eligibility_opinion: string | null; manager_approved_at: string | null; created_at: string };
 type Requirement = { id: string; edital_id: string; description: string; status: "pending" | "met" | "not_met"; evidence: string | null };
@@ -177,6 +178,23 @@ export function AdminCaptacao() {
     {error && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><AlertCircle size={19} className="mt-0.5 shrink-0"/><div><strong>Não foi possível carregar o painel.</strong><p className="mt-1">{error}</p><p className="mt-2 text-xs">Confira se seu usuário tem acesso administrativo e se as migrações do módulo estão aplicadas.</p></div></div>}
 
     {!routeId && <>
+    <section aria-label="Carteira de projetos RKC" className="rounded-2xl border bg-card p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h2 className="text-lg font-bold">Carteira de projetos da RKC</h2><p className="mt-1 text-sm text-muted-foreground">Propostas-base para cruzamento com editais. Nenhuma representa inscrição enviada ou elegibilidade aprovada.</p></div>
+        <span className="rounded-full border bg-muted/50 px-3 py-1 text-xs font-semibold">6 propostas planejadas</span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {propostasRkc.proposals.map((proposta) => <article key={proposta.id} className="rounded-xl border bg-background p-4">
+          <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-emerald-800">Prioridade {proposta.priority}</span><span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] text-amber-900">Elegibilidade não verificada</span></div>
+          <h3 className="mt-2 font-semibold">{proposta.title}</h3>
+          <p className="mt-2 text-xs text-muted-foreground">{proposta.themes.join(" · ")}</p>
+          <button type="button" onClick={() => { setEditing(false); setNewTitle(proposta.title); setNewFunder(""); setNewCategory(proposta.themes.join(", ")); setNewDeadline(""); setNewStatus("pending_confirmation"); setFormOpen(true); }} className="mt-4 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-muted">
+            <CirclePlus size={14}/> Preparar oportunidade
+          </button>
+        </article>)}
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">A ação apenas preenche o formulário de oportunidade; é necessário informar o financiador e confirmar o cadastro. Não envia inscrições.</p>
+    </section>
     <section aria-label="Resumo da captação" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Oportunidades abertas</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800"><FolderKanban size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{activeOpportunities}</strong><span className="pb-1 text-xs text-muted-foreground">em acompanhamento</span></div></article>
       <article className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className="text-sm font-medium text-muted-foreground">Aguardando avaliação</span><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800"><CalendarClock size={19}/></span></div><div className="mt-3 flex items-end justify-between"><strong className="text-3xl font-bold tracking-tight">{awaitingEvaluation}</strong><span className="pb-1 text-xs text-muted-foreground">inscrições enviadas</span></div></article>
