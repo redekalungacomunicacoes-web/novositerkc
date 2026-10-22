@@ -21,6 +21,27 @@ export function AdminCaptacao() {
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id?: string }>();
   const [editais, setEditais] = useState<Edital[]>([]);
+  const [radarOportunidades, setRadarOportunidades] = useState<Array<{id:string;titulo:string;organizador:string|null;url_oficial:string;prazo:string|null;status_triagem:string;area:string|null}>>([]);
+  const [radarSync, setRadarSync] = useState<{finalizada_em:string|null;status:string;erro:string|null}|null>(null);
+  const [radarError, setRadarError] = useState<string|null>(null);
+  const [radarLoading, setRadarLoading] = useState(false);
+  async function loadRadar() {
+    setRadarLoading(true);
+    try {
+      const [opportunities, sync] = await Promise.all([
+        supabase.from("captacao_radar_oportunidades").select("id,titulo,organizador,url_oficial,prazo,status_triagem,area").order("prazo",{ascending:true,nullsFirst:false}).limit(40),
+        supabase.from("captacao_radar_sincronizacoes").select("finalizada_em,status,erro").order("iniciada_em",{ascending:false}).limit(1)
+      ]);
+      if(opportunities.error) throw opportunities.error;
+      if(sync.error) throw sync.error;
+      setRadarOportunidades(opportunities.data||[]);
+      setRadarSync(sync.data?.[0]||null);
+      setRadarError(null);
+    } catch(e) { setRadarError((e as Error).message); }
+    finally { setRadarLoading(false); }
+  }
+  useEffect(() => { if(!routeId) void loadRadar(); }, [routeId]);
+
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -178,6 +199,24 @@ export function AdminCaptacao() {
     {error && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><AlertCircle size={19} className="mt-0.5 shrink-0"/><div><strong>Não foi possível carregar o painel.</strong><p className="mt-1">{error}</p><p className="mt-2 text-xs">Confira se seu usuário tem acesso administrativo e se as migrações do módulo estão aplicadas.</p></div></div>}
 
     {!routeId && <>
+    <section aria-label="Radar de Editais RKC" className="rounded-2xl border bg-card p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h2 className="text-lg font-bold">Radar de Editais</h2><p className="mt-1 text-sm text-muted-foreground">Oportunidades identificadas em fontes oficiais, separadas das candidaturas da Rede.</p></div>
+        <button type="button" onClick={() => void loadRadar()} disabled={radarLoading} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50"><RefreshCw size={14}/> {radarLoading ? "Consultando..." : "Atualizar visualização"}</button>
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">{radarSync ? `Última sincronização: ${radarSync.finalizada_em ? new Date(radarSync.finalizada_em).toLocaleString("pt-BR") : "em andamento"} · ${radarSync.status}` : "Sincronização automática ainda não configurada."}</p>
+      {radarSync?.erro && <p role="alert" className="mt-2 text-xs text-rose-700">{radarSync.erro}</p>}
+      {radarError && <p role="alert" className="mt-3 text-sm text-rose-700">Não foi possível consultar o radar: {radarError}</p>}
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {radarOportunidades.map(o => <article key={o.id} className="rounded-xl border bg-background p-4">
+          <h3 className="font-semibold">{o.titulo}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{o.organizador || "Organizador não informado"} · {dateLabel(o.prazo)} · {o.status_triagem.replaceAll("_"," ")}</p>
+          {o.area && <p className="mt-2 text-xs text-muted-foreground">{o.area}</p>}
+          <a href={o.url_oficial} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-xs font-semibold text-emerald-800 underline">Consultar fonte oficial</a>
+        </article>)}
+        {!radarLoading && !radarError && radarOportunidades.length === 0 && <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Nenhuma oportunidade sincronizada ainda. O radar não apresenta resultados inventados.</p>}
+      </div>
+    </section>
     <section aria-label="Carteira de projetos RKC" className="rounded-2xl border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h2 className="text-lg font-bold">Carteira de projetos da RKC</h2><p className="mt-1 text-sm text-muted-foreground">Propostas-base para cruzamento com editais. Nenhuma representa inscrição enviada ou elegibilidade aprovada.</p></div>
