@@ -80,16 +80,16 @@ export const adminLinks: SidebarLink[] = [
     allow: ["admin_alfa", "admin", "editor"],
   },
   {
-    href: "/admin/tarefas",
-    label: "Tarefas",
-    icon: ListTodo,
-    allow: ["admin_alfa", "admin", "editor", "autor"],
+    href: "/admin/usuarios",
+    label: "Usuários",
+    icon: Users,
+    allow: ["admin_alfa"],
   },
   {
-    href: "/admin/editais",
-    label: "Editais e captação",
-    icon: HandCoins,
-    allow: ["admin_alfa", "admin", "editor", "autor", "financeiro"],
+    href: "/admin/configuracoes",
+    label: "Configurações",
+    icon: Settings,
+    allow: ["admin_alfa"],
   },
   {
     href: "/admin/financeiro",
@@ -98,19 +98,19 @@ export const adminLinks: SidebarLink[] = [
     allow: ["admin_alfa", "admin", "financeiro"],
   },
   {
-    href: "/admin/usuarios",
-    label: "Usuários",
-    icon: Users,
-    allow: ["admin_alfa"],
+    href: "/admin/tarefas",
+    label: "Tarefas",
+    icon: ListTodo,
+    allow: ["admin_alfa", "admin", "editor", "autor"],
   },
-  { href: "/admin/popups", label: "Pop-ups", icon: Megaphone, allow: ["admin_alfa", "admin"] },
   {
-    href: "/admin/configuracoes",
-    label: "Configurações",
-    icon: Settings,
-    allow: ["admin_alfa"],
+    href: "/admin/editais",
+    label: "Editais e captações",
+    icon: HandCoins,
+    allow: ["admin_alfa", "admin", "editor", "autor", "financeiro"],
   },
   { href: "/admin/academia", label: "Academia", icon: GraduationCap, allow: ["admin_alfa", "admin", "editor", "autor", "financeiro"] },
+  { href: "/admin/popups", label: "Pop-ups", icon: Megaphone, allow: ["admin_alfa", "admin"] },
 ];
 
 function normalizeRoles(roles: string[]): RoleName[] {
