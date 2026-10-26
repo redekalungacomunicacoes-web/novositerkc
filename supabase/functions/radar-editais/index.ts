@@ -31,9 +31,10 @@ export async function collectPages(
       const stamp = (d: Date) => d.toISOString().slice(0,10).replaceAll("-", "");
       for (const [key,value] of Object.entries({dataInicial:stamp(new Date(today.getTime()-3*86400000)),dataFinal:stamp(today),codigoModalidadeContratacao:String(modality),pagina:String(page),tamanhoPagina:"50"})) api.searchParams.set(key,value);
       let body: any;
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      for (let attempt = 1; attempt <= 4; attempt++) {
         const remaining = deadline - now();
         if (remaining < 1000) throw Error("Limite de tempo da coleta atingido");
+        let retryAfterMs = 0;
         try {
           const res = await request(api, {signal:AbortSignal.timeout(Math.min(10_000, remaining)),headers:{accept:"application/json"}});
           if (res.status === 204) {
@@ -41,6 +42,11 @@ export async function collectPages(
             return {modalidade:modality,paginas:completed,totalPaginas:total,completa:true};
           }
           if (!res.ok) {
+            const retryAfter = res.headers.get("retry-after");
+            if (retryAfter) {
+              const seconds = Number(retryAfter);
+              retryAfterMs = Number.isFinite(seconds) ? seconds * 1000 : Math.max(0,Date.parse(retryAfter)-now());
+            }
             if (res.status !== 429 && res.status < 500) throw new TypeError("HTTP " + res.status);
             throw Error("HTTP " + res.status);
           }
@@ -48,8 +54,8 @@ export async function collectPages(
           break;
         } catch (error) {
           if (error instanceof TypeError && /^HTTP /.test(error.message)) throw error;
-          if (attempt === 3) throw Error("Após 3 tentativas: " + errorMessage(error));
-          const delay = 250 * attempt;
+          if (attempt === 4) throw Error("Após 4 tentativas: " + errorMessage(error));
+          const delay = Math.max(1000 * 2 ** (attempt-1), Number.isFinite(retryAfterMs) ? retryAfterMs : 0);
           if (deadline - now() < delay + 1000) throw Error("Limite de tempo durante retentativa: " + errorMessage(error));
           await new Promise(resolve => setTimeout(resolve,delay));
         }
@@ -66,6 +72,8 @@ export async function collectPages(
       }
       completed = page;
       if (page >= total) return {modalidade:modality,paginas:completed,totalPaginas:total,completa:true};
+      // Avoid bursts against the national API. Backoff also honors Retry-After.
+      if (deadline-now() > 1300) await new Promise(resolve=>setTimeout(resolve,300));
     }
     throw Error("Limite seguro de " + MAX_PAGES + " páginas atingido");
   } catch (error) {
