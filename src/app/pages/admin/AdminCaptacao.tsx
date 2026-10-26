@@ -67,7 +67,7 @@ export function AdminCaptacao() {
       const {data,error}=await supabase.functions.invoke("radar-editais",{method:"POST",body:{}});
       if(error) throw error;
       if(data?.error) throw new Error(data.error);
-      if(data?.status==="erro") toast.error("Pesquisa parcial: confira os erros de sincronização.");
+      if(data?.status==="erro") toast.info("Atualização parcial. As oportunidades já cadastradas continuam disponíveis. Detalhes em Gestão.");
       else toast.success(`Pesquisa concluída: ${data?.novas??0} nova(s) oportunidade(s).`);
     } catch(e) {setRadarError((e as Error).message);toast.error("Não foi possível executar a pesquisa.");}
     finally {await refreshRadar();}
@@ -330,9 +330,9 @@ export function AdminCaptacao() {
       <TabsContent forceMount hidden={mainTab!=="radar"} value="radar" className="space-y-6">
     <section aria-label="Radar de Editais RKC" className="rounded-2xl border border-sky-200 bg-sky-50/50 p-5 shadow-sm dark:bg-card">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-bold text-sky-900 dark:text-sky-200"><Search size={21}/>Radar de Editais</h2><p className="mt-1 text-sm text-muted-foreground">Oportunidades de fontes oficiais. A triagem e a aprovação são manuais.</p></div><button type="button" onClick={()=>void runRadarScan()} disabled={radarLoading || radarSync?.status === "executando"} className="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50">{radarLoading?"Pesquisando fontes oficiais...":"Pesquisar editais agora"}</button></div>
-      <p className="mt-2 text-xs text-muted-foreground">{radarSync ? `Última sincronização: ${radarSync.finalizada_em ? new Date(radarSync.finalizada_em).toLocaleString("pt-BR") : "em andamento"} · ${radarSync.status}` : "Nenhuma execução registrada. Consulte o histórico em Gestão."}</p>
+      <p className="mt-2 text-xs text-muted-foreground">{radarSync ? `Última sincronização: ${radarSync.finalizada_em ? new Date(radarSync.finalizada_em).toLocaleString("pt-BR") : "em andamento"} · ${radarSync.status === "erro" ? "atualização parcial" : radarSync.status === "sucesso" ? "concluída" : "em andamento"}` : "Nenhuma execução registrada. Consulte o histórico em Gestão."}</p>
       {radarError&&<p role="alert" className="mt-2 text-sm text-rose-700">{radarError}</p>}
-      {radarSync?.erro&&<p role="alert" className="mt-2 text-xs text-rose-700">{radarSync.erro}</p>}
+      {radarSync?.erro&&<p className="mt-2 text-xs text-muted-foreground">Uma ou mais fontes não concluíram a atualização. As oportunidades cadastradas continuam disponíveis. Consulte os detalhes técnicos em Gestão.</p>}
       <div className="mt-4 flex items-center gap-2">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border bg-background px-3 text-muted-foreground"><Search size={16} className="shrink-0"/><input aria-label="Pesquisar no Radar" placeholder="Pesquisar no Radar" value={radarQuery} onChange={e=>setRadarQuery(e.target.value)} className="min-w-0 w-full bg-transparent py-2.5 text-sm text-foreground outline-none"/></label>
         <CompactFilters label="Filtros do Radar" count={radarFilterCount} onClear={()=>{setRadarStatus("all");setRadarArea("all");setRadarPrazo("all");}}>
