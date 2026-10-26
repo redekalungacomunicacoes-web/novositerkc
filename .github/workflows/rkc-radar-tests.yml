@@ -1,0 +1,24 @@
+name: RKC Radar - Testes
+on:
+  push:
+    branches:
+      - feat/radar-nacional-rkc
+    paths:
+      - 'src/lib/radar/**'
+      - 'tests/*radar*.test.mjs'
+      - 'tests/pncp-client.test.mjs'
+      - '.github/workflows/rkc-radar-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Testar Radar RKC
+        run: node --test tests/radar-core.test.mjs tests/pncp-client.test.mjs tests/radar-persistence.test.mjs
