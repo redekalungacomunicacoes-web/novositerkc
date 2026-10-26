@@ -1,8 +1,8 @@
 name: Radar RKC - Coleta diaria de editais
 on:
   schedule:
-    # 09:15 UTC = 06:15 Brasilia (UTC-3)
-    - cron: '15 9 * * *'
+    # 09:15 UTC = 06:15 Brasilia (UTC-3), de segunda a sexta-feira
+    - cron: '15 9 * * 1-5'
   workflow_dispatch:
 permissions:
   contents: read
