@@ -22,7 +22,7 @@ export function prepareRadarRow(item, fonteId) {
     valor_estimado: record.estimated_value,
     area: classifyOpportunity(record).join(", ") || "A classificar",
     resumo: String(item.informacaoComplementar ?? "").slice(0, 2000),
-    status_triagem: "pendente"
+    status_triagem: "nao_verificado"
   };
 }
 
