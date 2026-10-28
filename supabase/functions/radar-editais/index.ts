@@ -3,12 +3,75 @@ const URL_BASE = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const client = createClient(URL_BASE, KEY, {auth:{persistSession:false}});
 const SOURCES = [
- {nome:"MinC — Editais abertos",url:"https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-abertas"},
- {nome:"MinC — Editais em andamento",url:"https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-em-andamento"}
-];
+ {nome:"Secult Goiás — PNAB 2026",url:"https://goias.gov.br/cultura/pnab/edital-2026-pnab/",kind:"goias"},
+ {nome:"MinC — Editais abertos",url:"https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-abertas",kind:"federal"},
+ {nome:"MinC — Editais em andamento",url:"https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-em-andamento",kind:"federal"},
+ {nome:"Funarte — Editais",url:"https://www.gov.br/funarte/pt-br/editais-1",kind:"federal"},
+ {nome:"Iphan — Editais e seleções",url:"https://www.gov.br/iphan/pt-br/acesso-a-informacao/editais-e-selecoes",kind:"federal"},
+ {nome:"SECEC-RJ — Editais",url:"https://cultura.rj.gov.br/editais-3/",kind:"rio"}
+] as const;
 const headers={"content-type":"application/json","access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,content-type","access-control-allow-methods":"POST,OPTIONS"};
 function response(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers});}
 function clean(text:string){return text.replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/\s+/g," ").trim();}
+
+
+export const AREAS = [
+ {area:"Artes visuais e fotografia",terms:["artes visuais","exposicao","fotografia","curadoria","cenografia","artesanato","moda","galeria","museu","arte contemporanea"]},
+ {area:"Audiovisual e comunicação",terms:["audiovisual","documentario","cinema","video","podcast","radio comunitaria","comunicacao","jornalismo","publicidade","marketing","midia","imprensa"]},
+ {area:"Cultura e patrimônio",terms:["cultura","cultural","patrimonio","memoria","quilombola","quilombo","cultura popular","identidade","territorio","circulacao","intercambio","musica","danca","teatro","literatura"]},
+ {area:"Educação e pesquisa",terms:["educacao","formacao","pedagogia","professor","pesquisa","historia","ciencia","capacitacao","oficina","saberes tradicionais"]},
+ {area:"Meio ambiente",terms:["meio ambiente","ambiental","ecologia","sustentabilidade","biodiversidade","agroecologia"]},
+ {area:"Design e tecnologia",terms:["design","designer","identidade visual","comunicacao visual","diagramacao","tecnologia","software","site","aplicativo","digital"]},
+ {area:"Direitos e comunidade",terms:["direitos humanos","justica social","igualdade","juventude","negritude","participacao","comunidade","coletivo","diversidade","povos tradicionais"]}
+] as const;
+const normalize=(s:string)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim();
+function teamKeywords(rows:any[]){
+ const text=normalize(rows.map(r=>String(r.cargo||"")+" "+String(r.bio||"")).join(" "));
+ return [...new Set(AREAS.flatMap(a=>a.terms).filter(t=>text.includes(normalize(t))))];
+}
+function classify(s:string,teamTerms:string[]){
+ const text=normalize(s);
+ const matched=AREAS.map(a=>({area:a.area,terms:a.terms.filter(t=>text.includes(t))})).filter(a=>a.terms.length);
+ matched.sort((a,b)=>b.terms.length-a.terms.length);
+ const terms=matched.flatMap(a=>a.terms).slice(0,8);
+ return {area:matched[0]?.area||"Cultura e fomento — triagem geral",terms,team:terms.filter(t=>teamTerms.includes(t))};
+}
+export function extractOfficialLinks(html:string,source:typeof SOURCES[number],teamTerms:string[]){
+ const headings=[...html.matchAll(/<h[2-4]\b[^>]*>([\s\S]*?)<\/h[2-4]>/gi)]
+  .map(m=>({pos:m.index||0,title:clean(m[1])}))
+  .filter(x=>x.title.length>5&&!/acesse os documento|editais 2026|edital n[oº°]?\s*\d+\/\d+/i.test(x.title));
+ const seen=new Set<string>();
+ const links:{title:string;url:string;area:string;summary:string}[]=[];
+ const anchors=[...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+ for(const m of anchors){
+   const label=clean(m[2]).slice(0,240),simple=normalize(label);
+   if(!label||/^(anexo|audio|errata|retifica|resultado|extrato|cronograma|termo|declaracao|relatorio)/i.test(simple))continue;
+   let url:URL;try{url=new URL(m[1],source.url)}catch{continue}
+   if(!["http:","https:"].includes(url.protocol)||!url.hostname.endsWith(".gov.br"))continue;
+   url.hash="";url.search="";
+   const link=url.toString(),path=normalize(url.pathname);
+   if(link===source.url||seen.has(link))continue;
+   const heading=[...headings].reverse().find(h=>h.pos<=(m.index||0));
+   const section=heading?.title||"";
+   if(source.kind==="goias"){
+      if(!/^edital(\s|$)/i.test(simple)||!/\.pdf$/.test(path))continue;
+      const segment=clean(html.slice(heading?.pos||0,m.index||0));
+      if(/\bencerrado\b/i.test(segment)&&!/inscricoes abertas/i.test(normalize(segment)))continue;
+   } else if(source.kind==="federal"){
+      if(!/\/editais(?:-1)?\/|\/editais-e-selecoes\/|\.pdf$/.test(path))continue;
+      if(!/edital|chamada|selecao|programa|bolsa|premio|fomento|convocatoria|ocupacao|intercambio/i.test(simple))continue;
+   } else {
+      if(!url.hostname.endsWith("rj.gov.br")||!/2026|cultura|artes|parecerista|fluxos|fomento|premio|mobilidade|feira|moda|ecologia|raizes|cenografia|narrativas/i.test(simple+" "+path))continue;
+   }
+   const title=(source.kind==="goias"&&section)?("Edital "+section.replace(/^edital\s*/i,"")):label;
+   const matched=classify(title+" "+section,teamTerms);
+   const geo=source.kind==="rio"?"Fonte do RJ: conferir se exige residência/sede no RJ":source.kind==="goias"?"Fonte de Goiás: conferir sede/residência em Goiás":"Abrangência nacional/estadual a conferir";
+   const summary="Áreas: "+(matched.terms.join(", ")||"fomento cultural geral")+". Competências RKC: "+(matched.team.join(", ")||"triagem multidisciplinar")+". "+geo+". Pessoa física, jurídica, MEI e coletivo: verificar regras. Prazo/valor: verificar edital integral.";
+   seen.add(link);
+   links.push({title:title.slice(0,500),url:link,area:matched.area,summary});
+ }
+ return links;
+}
 
 // Bound work below the hosted 150s request timeout, leaving time to persist the log.
 const SCAN_BUDGET_MS = 120_000;
@@ -73,7 +136,7 @@ export async function collectPages(
       completed = page;
       if (page >= total) return {modalidade:modality,paginas:completed,totalPaginas:total,completa:true};
       // Avoid bursts against the national API. Backoff also honors Retry-After.
-      if (deadline-now() > 1300) await new Promise(resolve=>setTimeout(resolve,300));
+      if (deadline-now() > 1300) await new Promise(resolve=>setTimeout(resolve,750));
     }
     throw Error("Limite seguro de " + MAX_PAGES + " páginas atingido");
   } catch (error) {
@@ -100,26 +163,35 @@ Deno.serve(async(req)=>{
  let found=0,created=0;const errors:string[]=[];
  const seenPNCP=new Set<string>(); const progress:any[]=[];
  try{
+  const {data:members,error:membersError}=await client.from("equipe").select("cargo,bio").eq("ativo",true).limit(100);
+  if(membersError)errors.push("Equipe/competências: "+errorMessage(membersError));
+  const teamTerms=teamKeywords(members||[]);
+  const sourcesReport:any[]=[];
   for(const source of SOURCES){
+   let total=0,added=0;
    try{
-    const {data:row,error:sourceError}=await client.from("captacao_radar_fontes").upsert(source,{onConflict:"url"}).select("id").single();
+    const {data:row,error:sourceError}=await client.from("captacao_radar_fontes")
+      .upsert({nome:source.nome,url:source.url,ativa:true},{onConflict:"url"}).select("id").single();
     if(sourceError)throw sourceError;
-    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);
-    let html="";try{const res=await fetch(source.url,{signal:controller.signal,headers:{"user-agent":"RKC-Editais-Radar/1.0"}});if(!res.ok)throw Error("HTTP "+res.status);html=await res.text();}finally{clearTimeout(timer);}
-    // Extract only real official links from the Ministry's listing; no inferred deadlines or awards.
-    const pattern=/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    const seen=new Set<string>();let match:RegExpExecArray|null;
-    while((match=pattern.exec(html))!==null){
-      const title=clean(match[2]);if(title.length<14||title.length>230||!/edital|programa rouanet|chamada|fomento|bolsa|pr[eê]mio|sele[cç][aã]o/i.test(title))continue;
-      let url:URL;try{url=new URL(match[1],source.url);}catch{continue;}
-      if(url.hostname!=="www.gov.br"||!url.pathname.startsWith("/cultura/pt-br/assuntos/editais/"))continue;
-      url.hash="";url.search="";const link=url.toString();if(link===source.url||seen.has(link))continue;seen.add(link);found++;
-      const {data:existing,error:checkError}=await client.from("captacao_radar_oportunidades").select("id").eq("url_oficial",link).maybeSingle();if(checkError)throw checkError;
-      if(existing)continue;
-      const {error:insertError}=await client.from("captacao_radar_oportunidades").insert({fonte_id:row.id,titulo:title,organizador:"Ministério da Cultura",url_oficial:link,status_triagem:"nao_verificado",resumo:"Prazo, valores e elegibilidade aguardam conferência no edital oficial."});
-      if(insertError)throw insertError;created++;
+    const res=await fetch(source.url,{signal:AbortSignal.timeout(12_000),headers:{"user-agent":"RKC-Editais-Radar/2.0","accept":"text/html"}});
+    if(!res.ok)throw Error("HTTP "+res.status);
+    const candidates=extractOfficialLinks(await res.text(),source,teamTerms);
+    total=candidates.length;
+    for(let i=0;i<candidates.length;i+=30){
+      const batch=candidates.slice(i,i+30).map(item=>({
+        fonte_id:row.id,titulo:item.title,organizador:source.nome,url_oficial:item.url,area:item.area,resumo:item.summary,status_triagem:"nao_verificado"
+      }));
+      const {data:inserted,error}=await client.from("captacao_radar_oportunidades")
+        .upsert(batch,{onConflict:"url_oficial",ignoreDuplicates:true}).select("id");
+      if(error)throw error;
+      added+=inserted?.length||0;
     }
-   }catch(e){errors.push(source.nome+": "+String(e));}
+    found+=total;created+=added;
+    sourcesReport.push({nome:source.nome,encontrados:total,novos:added,status:"ok"});
+   }catch(e){
+    errors.push(source.nome+": "+errorMessage(e));
+    sourcesReport.push({nome:source.nome,encontrados:total,novos:added,status:"erro"});
+   }
   }
 
   // PNCP: apenas novas oportunidades; nunca altera triagens humanas.
@@ -130,7 +202,7 @@ Deno.serve(async(req)=>{
     const term=/cultura|patrim[oô]nio|museu|mem[oó]ria|quilomb|comunica[cç][aã]o|assessoria|imprensa|publicidade|audiovisual|document[aá]rio|filmagem|v[ií]deo|cinema|fotografia|educa[cç][aã]o|forma[cç][aã]o|capacita[cç][aã]o|direitos humanos|design|identidade visual|diagrama[cç][aã]o|editora[cç][aã]o|software|site|portal|aplicativo|marketing|m[ií]dia/i;
     const modalities=[1,4,6,8,9,12,13];
     // Three bounded workers; each modality retains sequential pagination.
-    await Promise.all(Array.from({length:3},async()=>{
+    await Promise.all(Array.from({length:1},async()=>{
       while(modalities.length){
         const modality=modalities.shift()!;
         const result=await collectPages(modality,deadline,async(items)=>{
@@ -164,6 +236,6 @@ Deno.serve(async(req)=>{
   const status=errors.length?"erro":"sucesso";
   const {error:finishError}=await client.from("captacao_radar_sincronizacoes").update({status,finalizada_em:new Date().toISOString(),encontradas:found,novas:created,erro:errors.join(" | ")||null}).eq("id",log.id);
   if(finishError)throw finishError;
-  return response({status,encontradas:found,novas:created,erros:errors,pncp:progress});
+  return response({status,encontradas:found,novas:created,erros:errors,fontes:sourcesReport,competencias:teamTerms,pncp:progress});
  }catch(e){await client.from("captacao_radar_sincronizacoes").update({status:"erro",finalizada_em:new Date().toISOString(),erro:String(e)}).eq("id",log.id);return response({error:"Synchronization failed"},500);}
 });
