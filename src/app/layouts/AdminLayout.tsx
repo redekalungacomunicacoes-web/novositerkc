@@ -117,7 +117,7 @@ function AdminBottomNavigation({ onMore, onNavigate }: { onMore: () => void; onN
   }, []);
 
   const links = useVisibleAdminLinks(roles);
-  const preferred = ["/admin", "/admin/materias", "/admin/tarefas"];
+  const preferred = ["/admin", "/admin/materias", "/admin/editais"];
   const primaryLinks = preferred.flatMap((href) => {
     const link = links.find((item) => item.href === href);
     return link ? [link] : [];
@@ -142,7 +142,7 @@ function AdminBottomNavigation({ onMore, onNavigate }: { onMore: () => void; onN
               aria-current={active ? "page" : undefined}
             >
               <Icon className="h-5 w-5" />
-              <span>{link.href === "/admin" ? "Início" : link.label}</span>
+              <span>{link.href === "/admin" ? "Início" : link.href === "/admin/editais" ? "Editais" : link.label}</span>
             </Link>
           );
         })}
