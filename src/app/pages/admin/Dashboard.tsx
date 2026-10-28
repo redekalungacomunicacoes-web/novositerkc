@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, FolderOpen, Users, Users2, Mail, Eye } from "lucide-react";
+import { FileText, FolderOpen, Users, Users2, Mail, Eye, HandCoins, ListTodo, GraduationCap, ChevronDown, ArrowUpRight } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useVisibleAdminLinks } from "@/app/components/admin/AdminSidebar";
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Line } from "recharts";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRoles } from "@/lib/rbac";
@@ -129,9 +131,26 @@ export function Dashboard() {
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
   const [countState, setCountState] = useState<CountBlockState>(INITIAL_COUNT_STATE);
   const [analyticsState, setAnalyticsState] = useState<AnalyticsBlockState>(INITIAL_ANALYTICS_STATE);
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [quickRoles, setQuickRoles] = useState<string[]>([]);
+  const [loadingQuickRoles, setLoadingQuickRoles] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    getCurrentUserRoles().then(({ roles }) => {
+      if (active) setQuickRoles(roles);
+    }).catch(() => {
+      // Do not show privileged links when role lookup fails.
+    }).finally(() => {
+      if (active) setLoadingQuickRoles(false);
+    });
+    return () => { active = false; };
+  }, []);
+
 
 
   useEffect(() => {
+    if (!metricsOpen) return;
     let mounted = true;
 
     async function loadDashboard() {
@@ -325,7 +344,7 @@ export function Dashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [metricsOpen]);
 
   const stats = useMemo(
     () => [
@@ -339,79 +358,136 @@ export function Dashboard() {
     [analytics.siteTotal, analyticsState.siteViews, countState, counts],
   );
 
+  const visibleRoutes = new Set(useVisibleAdminLinks(quickRoles).map((link) => link.href));
+  const quickActions = [
+    { href: "/admin/materias", label: "Matérias", description: "Publicar e acompanhar", icon: FileText },
+    { href: "/admin/editais", label: "Editais", description: "Radar e captações", icon: HandCoins },
+    { href: "/admin/tarefas", label: "Tarefas", description: "Organizar atividades", icon: ListTodo },
+    { href: "/admin/projetos", label: "Projetos", description: "Gerenciar projetos", icon: FolderOpen },
+    { href: "/admin/academia", label: "Academia", description: "Cursos e materiais", icon: GraduationCap },
+    { href: "/admin/equipe", label: "Equipe", description: "Integrantes e funções", icon: Users2 },
+    { href: "/admin/newsletter", label: "Newsletter", description: "Inscritos e campanhas", icon: Mail },
+  ].filter((action) => visibleRoutes.has(action.href));
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">Bem-vindo ao painel administrativo da Rede Kalunga Comunicações.</p>
+    <div className="space-y-5 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Painel RKC</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Acesso rápido ao que você precisa.</p>
+        </div>
+        {visibleRoutes.has("/admin/materias") && (
+          <Link to="/admin/materias/nova" className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-green-800 px-3 text-sm font-medium text-white hover:bg-green-900">
+            Nova matéria <ArrowUpRight className="h-4 w-4" />
+          </Link>
+        )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {stats.map((stat) => (
-          <div key={stat.title} className="rounded-xl border bg-card text-card-foreground shadow-sm p-6">
-            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <h3 className="tracking-tight text-sm font-medium text-muted-foreground">{stat.title}</h3>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
+      <section aria-labelledby="rkc-quick-access">
+        <h2 id="rkc-quick-access" className="mb-3 text-base font-semibold">Acesso rápido</h2>
+        {loadingQuickRoles ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />)}
+          </div>
+        ) : quickActions.length ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            {quickActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Link key={action.href} to={action.href} className="group flex min-h-24 flex-col justify-between rounded-xl border bg-card p-3 shadow-sm transition-colors hover:border-green-600 hover:bg-green-50/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700 sm:p-4">
+                  <span className="flex items-center justify-between">
+                    <Icon className="h-5 w-5 text-green-800" aria-hidden="true" />
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-green-800" aria-hidden="true" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold">{action.label}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{action.description}</span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="rounded-xl border p-4 text-sm text-muted-foreground">Nenhum atalho disponível para as permissões atuais.</p>
+        )}
+      </section>
+
+      <section aria-label="Indicadores e relatórios">
+        <button type="button" onClick={() => setMetricsOpen((open) => !open)} aria-expanded={metricsOpen} aria-controls="rkc-dashboard-metrics" className="flex min-h-14 w-full items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40">
+          <span>
+            <span className="block text-sm font-semibold">Indicadores e relatórios</span>
+            <span className="block text-xs text-muted-foreground">Visualizar estatísticas somente quando precisar</span>
+          </span>
+          <ChevronDown className={metricsOpen ? "h-5 w-5 shrink-0 rotate-180 transition-transform" : "h-5 w-5 shrink-0 transition-transform"} aria-hidden="true" />
+        </button>
+        {metricsOpen && (
+          <div id="rkc-dashboard-metrics" className="mt-3 space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+              {stats.map((stat) => {
+                const Icon = stat.icon;
+                return (
+                  <div key={stat.title} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm">
+                    <div className="flex items-start justify-between gap-1">
+                      <span className="text-xs leading-tight text-muted-foreground">{stat.title}</span>
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    </div>
+                    {loadingCounts || (stat.title === "Visualizações no site" && loadingAnalytics) ? (
+                      <div className="mt-2 h-7 w-12 animate-pulse rounded bg-muted" aria-label="Carregando indicador" />
+                    ) : stat.state === "forbidden" ? (
+                      <div className="mt-2 text-xs text-muted-foreground">Sem permissão</div>
+                    ) : (
+                      <div className="mt-2 text-xl font-bold tabular-nums">{stat.value ?? "—"}</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <div className="pt-2">
-              {loadingCounts || (stat.title === "Visualizações no site" && loadingAnalytics) ? (
-                <div className="h-8 w-16 rounded bg-muted animate-pulse" aria-label="Carregando indicador" />
-              ) : stat.state === "forbidden" ? (
-                <div className="text-sm text-muted-foreground">Sem permissão para visualizar</div>
-              ) : (
-                <div className="text-2xl font-bold">{stat.value ?? "—"}</div>
-              )}
-              <p className="text-xs text-muted-foreground mt-1">Indicador em tempo real</p>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-xl border bg-card p-4 lg:col-span-2">
+                <h3 className="text-sm font-semibold">Visualizações por dia (últimos 14 dias)</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Total no período: {loadingAnalytics ? "..." : analytics.lastDaysTotal ?? "—"}</p>
+                <div className="mt-4 h-56 sm:h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={analytics.daily} margin={{ left: 0, right: 4, top: 8, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="day" />
+                      <YAxis allowDecimals={false} width={28} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="site" stroke="#0F7A3E" strokeWidth={3} dot={false} name="Visitas no site" />
+                      <Line type="monotone" dataKey="materias" stroke="#2FA866" strokeWidth={2} dot={false} name="Visitas em matérias" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="rounded-xl border bg-card p-4">
+                <h3 className="text-sm font-semibold">Top matérias (14 dias)</h3>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {analyticsState.topMaterias === "forbidden" && <li className="text-muted-foreground">Sem permissão para visualizar.</li>}
+                  {analyticsState.topMaterias === "ok" && analytics.topMaterias.length === 0 && <li className="text-muted-foreground">Sem dados ainda.</li>}
+                  {analytics.topMaterias.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-3">
+                      <span className="line-clamp-1">{item.titulo}</span>
+                      <strong>{item.views}</strong>
+                    </li>
+                  ))}
+                </ul>
+                <h3 className="mt-6 text-sm font-semibold">Top projetos (14 dias)</h3>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {analyticsState.topProjetos === "forbidden" && <li className="text-muted-foreground">Sem permissão para visualizar.</li>}
+                  {analyticsState.topProjetos === "ok" && analytics.topProjetos.length === 0 && <li className="text-muted-foreground">Sem dados ainda.</li>}
+                  {analytics.topProjetos.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-3">
+                      <span className="line-clamp-1">{item.titulo}</span>
+                      <strong>{item.views}</strong>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border bg-card p-6 lg:col-span-2">
-          <h3 className="font-semibold">Visualizações por dia (últimos 14 dias)</h3>
-          <p className="text-sm text-muted-foreground mt-1">Total no período: {loadingAnalytics ? "..." : analytics.lastDaysTotal ?? "—"}</p>
-
-          <div className="h-72 mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={analytics.daily} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="site" stroke="#0F7A3E" strokeWidth={3} dot={false} name="Visitas no site" />
-                <Line type="monotone" dataKey="materias" stroke="#2FA866" strokeWidth={2} dot={false} name="Visitas em matérias" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="rounded-xl border bg-card p-6">
-          <h3 className="font-semibold">Top matérias (14 dias)</h3>
-          <ul className="mt-3 space-y-2 text-sm">
-            {analyticsState.topMaterias === "forbidden" && <li className="text-muted-foreground">Sem permissão para visualizar.</li>}
-            {analyticsState.topMaterias === "ok" && analytics.topMaterias.length === 0 && <li className="text-muted-foreground">Sem dados ainda.</li>}
-            {analytics.topMaterias.map((item) => (
-              <li key={item.id} className="flex items-center justify-between gap-3">
-                <span className="line-clamp-1">{item.titulo}</span>
-                <strong>{item.views}</strong>
-              </li>
-            ))}
-          </ul>
-
-          <h3 className="font-semibold mt-6">Top projetos (14 dias)</h3>
-          <ul className="mt-3 space-y-2 text-sm">
-            {analyticsState.topProjetos === "forbidden" && <li className="text-muted-foreground">Sem permissão para visualizar.</li>}
-            {analyticsState.topProjetos === "ok" && analytics.topProjetos.length === 0 && <li className="text-muted-foreground">Sem dados ainda.</li>}
-            {analytics.topProjetos.map((item) => (
-              <li key={item.id} className="flex items-center justify-between gap-3">
-                <span className="line-clamp-1">{item.titulo}</span>
-                <strong>{item.views}</strong>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+        )}
+      </section>
     </div>
   );
 }
