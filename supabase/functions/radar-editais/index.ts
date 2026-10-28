@@ -66,7 +66,9 @@ export function extractOfficialLinks(html:string,source:typeof SOURCES[number],t
    const title=(source.kind==="goias"&&section)?("Edital "+section.replace(/^edital\s*/i,"")):label;
    const matched=classify(title+" "+section,teamTerms);
    const geo=source.kind==="rio"?"Fonte do RJ: conferir se exige residência/sede no RJ":source.kind==="goias"?"Fonte de Goiás: conferir sede/residência em Goiás":"Abrangência nacional/estadual a conferir";
-   const summary="Áreas: "+(matched.terms.join(", ")||"fomento cultural geral")+". Competências RKC: "+(matched.team.join(", ")||"triagem multidisciplinar")+". "+geo+". Pessoa física, jurídica, MEI e coletivo: verificar regras. Prazo/valor: verificar edital integral.";
+   const audienceHint=normalize(clean(html.slice(heading?.pos||Math.max(0,(m.index||0)-500),m.index||0)));
+   const audience=/\bpessoa fisica\b|\bcpf\b/i.test(audienceHint)?"Pessoa física citada na listagem; verificar regulamento":/\bpessoa juridica\b|\bcnpj\b/i.test(audienceHint)?"Pessoa jurídica citada na listagem; verificar regulamento":"Perfil elegível não verificado na listagem";
+   const summary="Áreas: "+(matched.terms.join(", ")||"fomento cultural geral")+". Competências RKC: "+(matched.team.join(", ")||"triagem multidisciplinar")+". "+geo+". "+audience+". Prazo/valor: verificar edital integral.";
    seen.add(link);
    links.push({title:title.slice(0,500),url:link,area:matched.area,summary});
  }
