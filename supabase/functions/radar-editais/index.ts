@@ -199,7 +199,7 @@ Deno.serve(async(req)=>{
     const pncpSource={nome:"PNCP — Contratações públicas",url:"https://pncp.gov.br/app/editais"};
     const {data:pncpRow,error:pncpSourceError}=await client.from("captacao_radar_fontes").upsert(pncpSource,{onConflict:"url"}).select("id").single();
     if(pncpSourceError)throw pncpSourceError;
-    const term=/cultura|patrim[oô]nio|museu|mem[oó]ria|quilomb|comunica[cç][aã]o|assessoria|imprensa|publicidade|audiovisual|document[aá]rio|filmagem|v[ií]deo|cinema|fotografia|educa[cç][aã]o|forma[cç][aã]o|capacita[cç][aã]o|direitos humanos|design|identidade visual|diagrama[cç][aã]o|editora[cç][aã]o|software|site|portal|aplicativo|marketing|m[ií]dia/i;
+    const term=/cultura|patrim[oô]nio|museu|mem[oó]ria|quilomb|comunica[cç][aã]o|assessoria|imprensa|publicidade|audiovisual|document[aá]rio|filmagem|v[ií]deo|cinema|fotografia|educa[cç][aã]o|forma[cç][aã]o|capacita[cç][aã]o|direitos humanos|design|identidade visual|diagrama[cç][aã]o|editora[cç][aã]o|software|site|portal|aplicativo|marketing|m[ií]dia|exposi[cç][aã]o|curadoria|cenografia|artesanato|moda|sustentabilidade|ecologia|meio ambiente|comunidades tradicionais|produ[cç][aã]o cultural|oficina|acessibilidade|interc[aâ]mbio/i;
     const modalities=[1,4,6,8,9,12,13];
     // Three bounded workers; each modality retains sequential pagination.
     await Promise.all(Array.from({length:1},async()=>{
@@ -209,7 +209,7 @@ Deno.serve(async(req)=>{
           const candidates=[];
           for(const item of items){
             const title=String(item.objetoCompra??"").trim();
-            if(!term.test(title))continue;
+            if(!term.test(title)&&!teamTerms.some(keyword=>normalize(title).includes(keyword)))continue;
             const m=/^(\d{14})-(\d+)-(\d{4})$/.exec(String(item.numeroControlePNCP??""));
             if(!m)continue;
             const link="https://pncp.gov.br/app/editais/"+m[1]+"/"+m[3]+"/"+m[2];
