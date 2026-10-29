@@ -20,6 +20,57 @@ type MateriaRow = {
   status: 'published' | 'draft' | 'archived';
 };
 
+const PUBLIC_MATERIAS_CACHE_TTL_MS = 60_000;
+let publicMateriasCache: { data: MateriaRow[]; expiresAt: number } | null = null;
+let publicMateriasRequest: Promise<MateriaRow[]> | null = null;
+
+async function loadPublicMaterias(): Promise<MateriaRow[]> {
+  if (publicMateriasCache && publicMateriasCache.expiresAt > Date.now()) {
+    return publicMateriasCache.data;
+  }
+  if (publicMateriasRequest) return publicMateriasRequest;
+
+  const request = (async () => {
+    const { data, error } = await supabase
+      .from('materias')
+      .select('id, slug, titulo, resumo, capa_url, capa_thumb_url, banner_url, audio_url, autor_nome, tags, published_at, created_at, status')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
+
+    const shouldFallbackSelect = !!error && /column .* does not exist/i.test(error.message || '');
+    let safeData = data;
+    let safeError = error;
+
+    if (shouldFallbackSelect) {
+      const fallback = await supabase
+        .from('materias')
+        .select('id, slug, titulo, resumo, capa_url, capa_thumb_url, banner_url, autor_nome, tags, published_at, created_at, status')
+        .eq('status', 'published')
+        .order('published_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      safeData = fallback.data?.map((materia) => ({ ...materia, audio_url: null })) ?? null;
+      safeError = fallback.error;
+    }
+
+    if (safeError) throw safeError;
+
+    const result = (safeData || []) as MateriaRow[];
+    publicMateriasCache = {
+      data: result,
+      expiresAt: Date.now() + PUBLIC_MATERIAS_CACHE_TTL_MS,
+    };
+    return result;
+  })();
+
+  publicMateriasRequest = request;
+  try {
+    return await request;
+  } finally {
+    if (publicMateriasRequest === request) publicMateriasRequest = null;
+  }
+}
+
 const warmedArticleHeroes = new Set<string>();
 
 function warmArticleHero(url?: string | null) {
@@ -43,41 +94,24 @@ export function Materias() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
+    let active = true;
+    setLoading(true);
 
-      const { data, error } = await supabase
-        .from('materias')
-        .select('id, slug, titulo, resumo, capa_url, capa_thumb_url, banner_url, audio_url, autor_nome, tags, published_at, created_at, status')
-        .eq('status', 'published')
-        .order('published_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false });
+    loadPublicMaterias()
+      .then((data) => {
+        if (active) setMaterias(data);
+      })
+      .catch((loadError) => {
+        console.error(loadError);
+        if (active) setMaterias([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-      const shouldFallbackSelect = !!error && /column .* does not exist/i.test(error.message || '');
-      let safeData = data;
-      let safeError = error;
-
-      if (shouldFallbackSelect) {
-        const fallback = await supabase
-          .from('materias')
-          .select('id, slug, titulo, resumo, capa_url, capa_thumb_url, banner_url, autor_nome, tags, published_at, created_at, status')
-          .eq('status', 'published')
-          .order('published_at', { ascending: false, nullsFirst: false })
-          .order('created_at', { ascending: false });
-        safeData = fallback.data?.map((materia) => ({ ...materia, audio_url: null })) ?? null;
-        safeError = fallback.error;
-      }
-
-      setLoading(false);
-
-      if (safeError) {
-        console.error(safeError);
-        setMaterias([]);
-        return;
-      }
-
-      setMaterias((safeData || []) as MateriaRow[]);
-    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const materiasUI = useMemo(() => {
