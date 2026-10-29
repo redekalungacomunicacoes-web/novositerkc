@@ -20,6 +20,28 @@ type MateriaRow = {
   status: 'published' | 'draft' | 'archived';
 };
 
+function isMateriaRow(value: unknown): value is MateriaRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  const nullableString = (field: unknown) => field === null || typeof field === 'string';
+
+  return (
+    typeof row.id === 'string' &&
+    typeof row.slug === 'string' &&
+    typeof row.titulo === 'string' &&
+    nullableString(row.resumo) &&
+    nullableString(row.capa_url) &&
+    nullableString(row.capa_thumb_url) &&
+    nullableString(row.banner_url) &&
+    nullableString(row.audio_url) &&
+    nullableString(row.autor_nome) &&
+    (row.tags === null || (Array.isArray(row.tags) && row.tags.every((tag) => typeof tag === 'string'))) &&
+    nullableString(row.published_at) &&
+    typeof row.created_at === 'string' &&
+    row.status === 'published'
+  );
+}
+
 const warmedArticleHeroes = new Set<string>();
 
 function warmArticleHero(url?: string | null) {
@@ -57,8 +79,10 @@ export function Materias() {
         if (!response.ok) throw new Error(`Cloudflare respondeu com status ${response.status}`);
 
         const payload: unknown = await response.json();
-        if (!Array.isArray(payload)) throw new Error('Resposta inesperada do cache público.');
-        safeData = payload as MateriaRow[];
+        if (!Array.isArray(payload) || !payload.every(isMateriaRow)) {
+          throw new Error('Resposta inesperada do cache público.');
+        }
+        safeData = payload;
       } catch (workerError) {
         console.warn('[materias] cache Cloudflare indisponível; usando Supabase diretamente.', workerError);
 
