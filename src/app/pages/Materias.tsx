@@ -20,6 +20,28 @@ type MateriaRow = {
   status: 'published' | 'draft' | 'archived';
 };
 
+function isMateriaRow(value: unknown): value is MateriaRow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  const nullableString = (field: unknown) => field === null || typeof field === 'string';
+
+  return (
+    typeof row.id === 'string' &&
+    typeof row.slug === 'string' &&
+    typeof row.titulo === 'string' &&
+    nullableString(row.resumo) &&
+    nullableString(row.capa_url) &&
+    nullableString(row.capa_thumb_url) &&
+    nullableString(row.banner_url) &&
+    nullableString(row.audio_url) &&
+    nullableString(row.autor_nome) &&
+    (row.tags === null || (Array.isArray(row.tags) && row.tags.every((tag) => typeof tag === 'string'))) &&
+    nullableString(row.published_at) &&
+    typeof row.created_at === 'string' &&
+    row.status === 'published'
+  );
+}
+
 const warmedArticleHeroes = new Set<string>();
 
 function warmArticleHero(url?: string | null) {
@@ -46,26 +68,45 @@ export function Materias() {
     (async () => {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from('materias')
-        .select('id, slug, titulo, resumo, capa_url, capa_thumb_url, banner_url, audio_url, autor_nome, tags, published_at, created_at, status')
-        .eq('status', 'published')
-        .order('published_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false });
+      let safeData: MateriaRow[] | null = null;
+      let safeError: unknown = null;
 
-      const shouldFallbackSelect = !!error && /column .* does not exist/i.test(error.message || '');
-      let safeData = data;
-      let safeError = error;
+      try {
+        const response = await fetch(
+          'https://rkc-public-materias-cache.redekalungacomunicacoes.workers.dev/materias',
+          { headers: { Accept: 'application/json' } },
+        );
+        if (!response.ok) throw new Error(`Cloudflare respondeu com status ${response.status}`);
 
-      if (shouldFallbackSelect) {
-        const fallback = await supabase
+        const payload: unknown = await response.json();
+        if (!Array.isArray(payload) || !payload.every(isMateriaRow)) {
+          throw new Error('Resposta inesperada do cache público.');
+        }
+        safeData = payload;
+      } catch (workerError) {
+        console.warn('[materias] cache Cloudflare indisponível; usando Supabase diretamente.', workerError);
+
+        const { data, error } = await supabase
           .from('materias')
-          .select('id, slug, titulo, resumo, capa_url, capa_thumb_url, banner_url, autor_nome, tags, published_at, created_at, status')
+          .select('id, slug, titulo, resumo, capa_url, capa_thumb_url, banner_url, audio_url, autor_nome, tags, published_at, created_at, status')
           .eq('status', 'published')
           .order('published_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false });
-        safeData = fallback.data?.map((materia) => ({ ...materia, audio_url: null })) ?? null;
-        safeError = fallback.error;
+
+        const shouldFallbackSelect = !!error && /column .* does not exist/i.test(error.message || '');
+        safeData = data as MateriaRow[] | null;
+        safeError = error;
+
+        if (shouldFallbackSelect) {
+          const fallback = await supabase
+            .from('materias')
+            .select('id, slug, titulo, resumo, capa_url, capa_thumb_url, banner_url, autor_nome, tags, published_at, created_at, status')
+            .eq('status', 'published')
+            .order('published_at', { ascending: false, nullsFirst: false })
+            .order('created_at', { ascending: false });
+          safeData = fallback.data?.map((materia) => ({ ...materia, audio_url: null })) ?? null;
+          safeError = fallback.error;
+        }
       }
 
       setLoading(false);
@@ -76,7 +117,7 @@ export function Materias() {
         return;
       }
 
-      setMaterias((safeData || []) as MateriaRow[]);
+      setMaterias(safeData || []);
     })();
   }, []);
 
