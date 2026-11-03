@@ -54,7 +54,7 @@ test("gateway-verified service-role token requires matching apikey, role and pro
   const end=fn.indexOf("Deno.serve",start);
   assert.ok(start>=0&&end>start,"Expected auth helper");
   const ctx=vm.createContext({URL,Date,JSON,atob,console});
-  vm.runInContext('const URL_BASE="https://yycfqeymdsjyulexwrlb.supabase.co";'+fn.slice(start,end)+';globalThis.authorize=verifiedGatewayServiceRole',ctx);
+  vm.runInContext(stripTypeScriptTypes('const URL_BASE="https://yycfqeymdsjyulexwrlb.supabase.co";'+fn.slice(start,end))+';globalThis.authorize=verifiedGatewayServiceRole',ctx);
   const jwt=(claims)=>["header",Buffer.from(JSON.stringify(claims)).toString("base64url"),"signature"].join(".");
   const valid=jwt({role:"service_role",ref:"yycfqeymdsjyulexwrlb",exp:Math.floor(Date.now()/1000)+3600});
   assert.equal(ctx.authorize(valid,valid),true);
