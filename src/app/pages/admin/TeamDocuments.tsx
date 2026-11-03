@@ -157,8 +157,8 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
         <div>
           <h2 className="text-lg font-semibold">Documentos internos da equipe</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Área privada. Integrantes autenticados podem consultar documentos da equipe; toda prévia e consulta de dado fica registrada.
-            Não use a área pública de portfólio para documentos pessoais.
+            Área privada. Cada integrante consulta apenas os próprios documentos; administradores autorizados podem consultar documentos da equipe.
+            Toda prévia e consulta de dado fica registrada. Não use a área pública de portfólio para documentos pessoais.
           </p>
         </div>
       </div>
@@ -213,7 +213,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h3 className="font-medium flex-1">Documentos cadastrados</h3>
-          <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={showAll} onChange={e=>setShowAll(e.target.checked)} /> Ver toda a equipe</label>
+          {isAdmin && <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={showAll} onChange={e=>setShowAll(e.target.checked)} /> Ver toda a equipe</label>}
         </div>
         <label className="block text-sm">Finalidade da consulta (obrigatória para abrir arquivo ou revelar um dado)
           <input value={purpose} maxLength={400} onChange={e=>setPurpose(e.target.value)}
