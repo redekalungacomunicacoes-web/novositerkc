@@ -1050,7 +1050,7 @@ export function AdminMateriaForm() {
         </div>
       </div>
 
-      <nav aria-label="Acesso rápido às seções da matéria" className="sticky top-2 z-20 rounded-xl border bg-background/95 backdrop-blur shadow-sm px-3 py-2 flex flex-wrap items-center gap-2">
+      <nav aria-label="Acesso rápido às seções da matéria" className="sticky top-2 z-20 rounded-xl border bg-background/95 backdrop-blur shadow-sm px-3 py-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap">
         <span className="text-xs font-medium text-muted-foreground mr-1">Ir para:</span>
         {([
           ["principal", "Informações"],
@@ -1064,7 +1064,7 @@ export function AdminMateriaForm() {
             key={section}
             type="button"
             onClick={() => goToSection(section)}
-            className="px-3 py-1.5 rounded-md border bg-card text-xs font-medium hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+            className="shrink-0 px-3 py-1.5 rounded-md border bg-card text-xs font-medium hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-primary"
           >
             {label}
           </button>
@@ -1075,7 +1075,7 @@ export function AdminMateriaForm() {
         <div className="lg:col-span-2 space-y-6">
           <div id="materia-section-principal" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
             <button type="button" aria-expanded={expandedSections.principal} aria-controls="materia-principal-body" onClick={() => toggleSection("principal")} className="flex w-full items-center justify-between gap-2 text-left border-b pb-4">
-              <h3 className="font-semibold text-lg">Informações Principais</h3>
+              <span className="font-semibold text-lg">Informações Principais</span>
               {expandedSections.principal ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
             </button>
             <div id="materia-principal-body" hidden={!expandedSections.principal} className="space-y-4">
@@ -1359,7 +1359,7 @@ export function AdminMateriaForm() {
         <div className="space-y-6">
           <section id="materia-section-seo" className="bg-card border rounded-xl p-4 shadow-sm space-y-3 scroll-mt-24" aria-label="SEO e compartilhamento">
             <button type="button" aria-expanded={expandedSections.seo} aria-controls="materia-seo-body" onClick={() => toggleSection("seo")} className="flex w-full items-center justify-between gap-2 text-left">
-              <h3 className="font-semibold text-base">SEO e compartilhamento</h3>
+              <span className="font-semibold text-base">SEO e compartilhamento</span>
               {expandedSections.seo ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
             </button>
             <div id="materia-seo-body" hidden={!expandedSections.seo} className="space-y-3">
