@@ -55,3 +55,13 @@ test("bucket e metadados sem leitura pública ou autenticada direta",()=>{
   assert.match(frontend,/action:"field"/);
   assert.match(frontend,/action:"history"/);
 });
+
+test("listagem restringe integrante aos próprios documentos e administradores têm papéis específicos",()=>{
+  assert.match(source,/admin\.from\("user_roles"\)\.select\("role_id"\)/);
+  assert.match(source,/role\.name==="admin_alfa"\|\|role\.name==="admin"/);
+  assert.doesNotMatch(source,/userClient\.rpc\("is_team_admin"\)/);
+  assert.match(source,/if\(!isAdmin\) memberQuery=memberQuery\.eq\("id",ownMember\.id\)/);
+  assert.match(source,/if\(!isAdmin\) docsQuery=docsQuery\.eq\("member_id",ownMember\.id\)/);
+  assert.match(source,/if\(!isAdmin && ownMember\?\.id!==doc\.member_id\) fail\("Acesso ao documento não autorizado\.",403\)/);
+  assert.match(frontend,/\{isAdmin && <label[^\n]+Ver toda a equipe/);
+});
