@@ -5,7 +5,8 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const source = await readFile("supabase/functions/team-documents/index.ts","utf8");
-const migration = await readFile("supabase/migrations/20261103130000_team_private_documents.sql","utf8");
+const migration = await readFile("supabase/migrations/20261103153007_team_private_documents.sql","utf8");
+const hardening = await readFile("supabase/migrations/20261103170908_team_private_documents_storage_hardening.sql","utf8");
 const frontend = await readFile("src/app/pages/admin/TeamDocuments.tsx","utf8");
 const code = ts.transpileModule(source.replace(/import \{ createClient \} from [^;]+;/,""),{
   compilerOptions: { target:ts.ScriptTarget.ES2022, module:ts.ModuleKind.None }
@@ -148,4 +149,10 @@ test("servidor bloqueia vazamento entre integrantes e mantém auditoria no acess
 test("prévia binária preserva os bytes de PDFs e imagens com MIME correto",()=>{
   assert.ok(source.includes('"Content-Type":"application/octet-stream"'));
   assert.ok(frontend.includes("new Blob([data],{type:doc.mime_type})"));
+});
+
+test("política restritiva impede alterações diretas no bucket privado por usuários autenticados",()=>{
+  assert.match(hardening,/as restrictive for update to authenticated/);
+  assert.match(hardening,/as restrictive for delete to authenticated/);
+  assert.ok(hardening.includes("bucket_id <> 'team-internal-docs'"));
 });
