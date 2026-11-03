@@ -22,7 +22,7 @@ test("somente PDFs ou imagens reconhecidas pelo conteúdo são aceitos",()=>{
 });
 test("campos cadastrados respeitam tamanho e nomes controlados",()=>{
   assert.equal(helpers.fieldsOf({numero:"  123-45 ",orgao:"SSP"}).numero,"123-45");
-  assert.throws(()=>helpers.fieldsOf({"__proto__":"evil"}), {message:/inválido/});
+  assert.throws(()=>helpers.fieldsOf(Object.fromEntries([["__proto__", "evil"]])), {message:/inválido/});
   assert.throws(()=>helpers.fieldsOf({numero:"a".repeat(401)}), {message:/inválido/});
   assert.throws(()=>helpers.fieldsOf(Array.from({length:25},(_,i)=>["campo"+i,"x"]).reduce((o,[k,v])=>({...o,[k]:v}),{})), {message:/excessivo/});
 });
