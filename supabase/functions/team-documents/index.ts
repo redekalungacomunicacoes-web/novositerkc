@@ -72,13 +72,21 @@ Deno.serve(async (req:Request) => {
     if(authError||!identity.user) fail("Sessão inválida.",401);
     const userId=identity.user.id;
     const admin=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
-    const [memberRes,adminRes]=await Promise.all([
+    // Somente administradores formais acessam documentos de outros integrantes.
+    // A função is_team_admin também inclui editores; não é adequada para dados pessoais.
+    const [memberRes,assignedRolesRes]=await Promise.all([
       admin.from("equipe").select("id,nome").eq("user_id",userId).eq("ativo",true).maybeSingle(),
-      userClient.rpc("is_team_admin"),
+      admin.from("user_roles").select("role_id").eq("user_id",userId),
     ]);
-    if(memberRes.error||adminRes.error) fail("Não foi possível verificar as permissões.",503);
+    if(memberRes.error||assignedRolesRes.error) fail("Não foi possível verificar as permissões.",503);
     const ownMember=memberRes.data;
-    const isAdmin=adminRes.data===true;
+    const roleIds=(assignedRolesRes.data||[]).map((row:{role_id:string})=>row.role_id);
+    let isAdmin=false;
+    if(roleIds.length) {
+      const {data:roles,error:rolesError}=await admin.from("roles").select("name").in("id",roleIds);
+      if(rolesError) fail("Não foi possível verificar as permissões.",503);
+      isAdmin=(roles||[]).some((role:{name:string})=>role.name==="admin_alfa"||role.name==="admin");
+    }
     if(!ownMember&&!isAdmin) fail("Acesso reservado à equipe vinculada da RKC.",403);
 
     const form=req.headers.get("Content-Type")?.includes("multipart/form-data") ? await req.formData() : null;
@@ -93,11 +101,15 @@ Deno.serve(async (req:Request) => {
       if(error) fail("Não foi possível registrar o acesso. Tente novamente.",503);
     };
     if(action==="list") {
-      const {data:members,error:memberError}=await admin.from("equipe").select("id,nome").eq("ativo",true).order("nome");
+      let memberQuery=admin.from("equipe").select("id,nome").eq("ativo",true).order("nome");
+      if(!isAdmin) memberQuery=memberQuery.eq("id",ownMember.id);
+      const {data:members,error:memberError}=await memberQuery;
       if(memberError) fail("Falha ao listar integrantes.",503);
-      const {data:docs,error:docError}=await admin.from("team_private_documents")
+      let docsQuery=admin.from("team_private_documents")
         .select("id,member_id,document_type,title,fields,expires_on,signed_copy,mime_type,created_at")
-        .eq("status","active").order("created_at",{ascending:false}).limit(500);
+        .eq("status","active").order("created_at",{ascending:false});
+      if(!isAdmin) docsQuery=docsQuery.eq("member_id",ownMember.id);
+      const {data:docs,error:docError}=await docsQuery.limit(500);
       if(docError) fail("Falha ao listar documentos.",503);
       const names=new Map((members||[]).map((m:any)=>[m.id,m.nome]));
       return json({ok:true,members:(members||[]),own_member_id:ownMember?.id||null,is_admin:isAdmin,
@@ -151,6 +163,8 @@ Deno.serve(async (req:Request) => {
       .eq("id",id).eq("status","active").maybeSingle();
     if(error) fail("Falha ao consultar documento.",503);
     if(!doc) fail("Documento não encontrado.",404);
+    // Verificar propriedade ANTES de fazer download, revelar campos ou histórico.
+    if(!isAdmin && ownMember?.id!==doc.member_id) fail("Acesso ao documento não autorizado.",403);
     if(action==="preview") {
       const purpose=validPurpose(input.purpose);
       const {data:file,error:storageError}=await admin.storage.from(BUCKET).download(doc.storage_path);
