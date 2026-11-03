@@ -203,7 +203,8 @@ try {
   for (const role of ["admin_alfa", "admin", "editor", "autor", "financeiro"]) {
     const { page, context, errors, artwork, artworkRequests } = await setup(role, role === "autor");
     const links = page.locator("aside nav a");
-    assert.equal(await links.last().textContent(), "Academia");
+    // A ordem do menu varia com novos módulos (ex.: Pop-ups).
+    assert.equal(await links.filter({hasText:/^Academia$/}).count(), 1);
     assert.ok(
       await page
         .getByRole("heading", { name: "Curso da equipe", exact: true })
