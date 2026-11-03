@@ -144,3 +144,8 @@ test("servidor bloqueia vazamento entre integrantes e mantém auditoria no acess
   response=await call("preview",docA,"edital autorizado");
   assert.equal(response.status,401);
 });
+
+test("prévia binária preserva os bytes de PDFs e imagens com MIME correto",()=>{
+  assert.match(source,/"Content-Type":"application\\/octet-stream"/);
+  assert.match(frontend,/new Blob\\(\\[data\\],\\{type:doc\\.mime_type\\}\\)/);
+});
