@@ -146,6 +146,6 @@ test("servidor bloqueia vazamento entre integrantes e mantém auditoria no acess
 });
 
 test("prévia binária preserva os bytes de PDFs e imagens com MIME correto",()=>{
-  assert.match(source,/"Content-Type":"application\\/octet-stream"/);
-  assert.match(frontend,/new Blob\\(\\[data\\],\\{type:doc\\.mime_type\\}\\)/);
+  assert.ok(source.includes('"Content-Type":"application/octet-stream"'));
+  assert.ok(frontend.includes("new Blob([data],{type:doc.mime_type})"));
 });
