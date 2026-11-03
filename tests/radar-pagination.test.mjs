@@ -45,15 +45,16 @@ test('handler deduplicates across pages and reruns, preserving human triage',asy
  const original=JSON.stringify(rows.get(existingUrl));let handler;let finalLog;
  const client={from(table){let action,values,options;const q={
   insert(v){action='insert';values=v;return q},upsert(v,o){action='upsert';values=v;options=o;return q},
-  select(){return q},single(){return q},update(v){action='update';values=v;return q},eq(){return q},abortSignal(){return q},
+  select(){return q},single(){return q},update(v){action='update';values=v;return q},eq(){return q},limit(){return q},abortSignal(){return q},
   then(resolve){
    if(table==='captacao_radar_sincronizacoes'){if(action==='update')finalLog=values;return Promise.resolve({data:{id:7},error:null}).then(resolve)}
    if(table==='captacao_radar_fontes')return Promise.resolve({data:{id:'source'},error:null}).then(resolve);
+   if(table==='equipe')return Promise.resolve({data:[],error:null}).then(resolve);
    assert.equal(options.ignoreDuplicates,true);const inserted=[];
    for(const row of values){if(!rows.has(row.url_oficial)){rows.set(row.url_oficial,row);inserted.push({id:row.url_oficial})}}
    return Promise.resolve({data:inserted,error:null}).then(resolve);
   }};return q;}};
- const sandbox=vm.createContext({URL,Date,Set,JSON,Number,Math,Error,TypeError,AbortSignal,AbortController,Response,setTimeout,clearTimeout,console:{log(){}},
+ const sandbox=vm.createContext({URL,Date,Set,JSON,Number,Math,Error,TypeError,AbortSignal,AbortController,Response,setTimeout:done=>{done();return 0;},clearTimeout,console:{log(){}},
   createClient:()=>client,Deno:{env:{get:key=>key==='SUPABASE_SERVICE_ROLE_KEY'?'test-key':'test'},serve:fn=>handler=fn},
   fetch:async input=>{
    const url=new URL(input);if(url.hostname==='www.gov.br')return new Response('<html></html>');
