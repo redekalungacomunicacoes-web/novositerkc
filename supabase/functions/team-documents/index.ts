@@ -171,7 +171,9 @@ Deno.serve(async (req:Request) => {
       if(storageError||!file) fail("Arquivo indisponível.",503);
       await audit(id,"preview",purpose);
       return new Response(file,{status:200,headers:{
-        ...cors,"Content-Type":doc.mime_type,
+        // O cliente Supabase 2.94 interpreta imagens como texto se devolvermos image/*.
+        // Enviar octet-stream faz invoke() preservar os bytes; o frontend restaura o MIME verificado.
+        ...cors,"Content-Type":"application/octet-stream",
         "Content-Disposition":`inline; filename="${fileName(doc.title,doc.mime_type)}"`,
         "Cache-Control":"private, no-store, max-age=0","Pragma":"no-cache",
         "X-Content-Type-Options":"nosniff",
