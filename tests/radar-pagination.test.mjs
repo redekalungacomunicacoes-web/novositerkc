@@ -60,7 +60,7 @@ test('handler deduplicates across pages and reruns, preserving human triage',asy
    const page=Number(url.searchParams.get('pagina'));
    return body(page,3,[{numeroControlePNCP:`12345678901234-00000${page}-2026`,objetoCompra:'cultura',orgaoEntidade:{razaoSocial:'Órgão'}}]);
   }});
- vm.runInContext(stripTypeScriptTypes(source.replace(/^import .*\n/,'').replace('export async function','async function')),sandbox);
+ vm.runInContext(stripTypeScriptTypes(source.replace(/^import .*\n/,'').replace(/\bexport\s+/g,'')),sandbox);
  for(let i=0;i<2;i++){
   const res=await handler(new Request('https://example.test',{method:'POST',headers:{authorization:'Bearer test-key'}}));
   const result=await res.json();assert.equal(result.status,'sucesso',JSON.stringify(result));assert.equal(result.encontradas,3);assert.equal(result.novas,i===0?2:0);
