@@ -47,12 +47,15 @@ jobs:
         env:
           RKC_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RKC_SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl --fail-with-body --show-error --silent --max-time 180 --retry 2 \
+          if ! curl --fail-with-body --show-error --silent --max-time 180 --retry 2 \
             --request POST \
             --header "Authorization: Bearer $RKC_SUPABASE_SERVICE_ROLE_KEY" \
             --header "apikey: $RKC_SUPABASE_SERVICE_ROLE_KEY" \
             --header "Content-Type: application/json" \
             --data '{}' \
             "https://yycfqeymdsjyulexwrlb.supabase.co/functions/v1/radar-editais" \
-            -o radar-response.json
+            -o radar-response.json; then
+            node -e 'const fs=require("fs");let message="Resposta não identificada";try{const x=JSON.parse(fs.readFileSync("radar-response.json","utf8"));message=String(x.message||x.error||x.msg||x.code||message)}catch{}const secret=process.env.RKC_SUPABASE_SERVICE_ROLE_KEY||"";if(secret)message=message.replaceAll(secret,"[redacted]");console.error("::error::Resposta do Supabase: "+message.slice(0,150));'
+            exit 1
+          fi
           node -e 'const r=require("./radar-response.json"); if(r.status!=="sucesso"){console.error("Falha na coleta:",r.erros||r.error);process.exit(1)} console.log("Radar RKC:",r.encontradas,"links encontrados,",r.novas,"novas oportunidades")'
