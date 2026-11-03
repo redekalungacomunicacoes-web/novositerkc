@@ -1,5 +1,9 @@
 name: Radar RKC - Coleta diaria de editais
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/radar-editais-diario.yml'
   schedule:
     # 09:15 UTC = 06:15 Brasilia (UTC-3), de segunda a sexta-feira
     - cron: '15 9 * * 1-5'
