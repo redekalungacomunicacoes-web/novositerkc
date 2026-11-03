@@ -48,3 +48,25 @@ test("UI retains diagnostics after refreshing data",()=>{
   assert.match(ui,/response\?\.status===401/);
   assert.match(ui,/response\?\.status===403/);
 });
+
+test("gateway-verified service-role token requires matching apikey, role and project",()=>{
+  const start=fn.indexOf("function verifiedGatewayServiceRole(");
+  const end=fn.indexOf("Deno.serve",start);
+  assert.ok(start>=0&&end>start,"Expected auth helper");
+  const ctx=vm.createContext({URL,Date,JSON,atob,console});
+  vm.runInContext('const URL_BASE="https://yycfqeymdsjyulexwrlb.supabase.co";'+fn.slice(start,end)+';globalThis.authorize=verifiedGatewayServiceRole',ctx);
+  const jwt=(claims)=>["header",Buffer.from(JSON.stringify(claims)).toString("base64url"),"signature"].join(".");
+  const valid=jwt({role:"service_role",ref:"yycfqeymdsjyulexwrlb",exp:Math.floor(Date.now()/1000)+3600});
+  assert.equal(ctx.authorize(valid,valid),true);
+  assert.equal(ctx.authorize(valid,null),false);
+  assert.equal(ctx.authorize(valid,"wrong-apikey"),false);
+  const wrongProject=jwt({role:"service_role",ref:"another-project"});
+  assert.equal(ctx.authorize(wrongProject,wrongProject),false);
+  const user=jwt({role:"authenticated",ref:"yycfqeymdsjyulexwrlb"});
+  assert.equal(ctx.authorize(user,user),false);
+  const expired=jwt({role:"service_role",exp:Math.floor(Date.now()/1000)-60});
+  assert.equal(ctx.authorize(expired,expired),false);
+  assert.match(fn,/if\(bearer!==KEY && !gatewayServiceRole\)/);
+  assert.match(fn,/gatewayServiceRole\?bearer:KEY/);
+  // The server must remain deployed with verify_jwt=true, which validates signatures.
+});
