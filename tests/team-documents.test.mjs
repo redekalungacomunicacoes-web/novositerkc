@@ -65,3 +65,82 @@ test("listagem restringe integrante aos próprios documentos e administradores t
   assert.match(source,/if\(!isAdmin && ownMember\?\.id!==doc\.member_id\) fail\("Acesso ao documento não autorizado\.",403\)/);
   assert.match(frontend,/\{isAdmin && <label[^\n]+Ver toda a equipe/);
 });
+
+test("servidor bloqueia vazamento entre integrantes e mantém auditoria no acesso permitido", async()=>{
+  const ownerA="10000000-0000-4000-8000-000000000001";
+  const ownerB="10000000-0000-4000-8000-000000000002";
+  const docA="20000000-0000-4000-8000-000000000001";
+  const docB="20000000-0000-4000-8000-000000000002";
+  const users={a:"user-a",b:"user-b",admin:"user-admin"};
+  let acting=users.a, role="editor", handler;
+  const audit=[], members=[
+    {id:ownerA,nome:"A",user_id:users.a,ativo:true},
+    {id:ownerB,nome:"B",user_id:users.b,ativo:true},
+  ];
+  const docs=[
+    {id:docA,member_id:ownerA,document_type:"rg",title:"RG A",status:"active",fields:{numero:"111"},storage_path:"a/a.pdf",mime_type:"application/pdf"},
+    {id:docB,member_id:ownerB,document_type:"cpf",title:"CPF B",status:"active",fields:{numero:"222"},storage_path:"b/b.pdf",mime_type:"application/pdf"},
+  ];
+  let downloads=0;
+  function query(table) {
+    let rows={
+      equipe:members,
+      user_roles:[{user_id:users.a,role_id:"r"},{user_id:users.b,role_id:"r"},{user_id:users.admin,role_id:"r"}],
+      roles:[{id:"r",name:role}],
+      team_private_documents:docs,
+    }[table]||[];
+    const q={
+      select:()=>q,
+      eq:(key,val)=>{rows=rows.filter(x=>x[key]===val);return q;},
+      in:(key,vals)=>{rows=rows.filter(x=>vals.includes(x[key]));return q;},
+      order:()=>q,
+      limit:(max)=>{rows=rows.slice(0,max);return q;},
+      maybeSingle:async()=>({data:rows[0]||null,error:null}),
+      insert:async(payload)=>{audit.push(payload);return {error:null};},
+      then:(yes,no)=>Promise.resolve({data:rows,error:null}).then(yes,no),
+    };
+    return q;
+  }
+  const vmSandbox={
+    Deno:{
+      env:{get:key=>key==="SUPABASE_URL"?"https://fixture.supabase.co":key==="SUPABASE_ANON_KEY"?"anon":"secret"},
+      serve:fn=>{handler=fn;},
+    },
+    console, Uint8Array, Set, Object, RegExp, Error, Response, Request, Blob, File, crypto,
+    createClient:(_url,key)=>key==="secret"
+      ? {from:query,storage:{from:()=>({download:async()=>{downloads++;return {data:new Blob(["pdf"]),error:null};}})}}
+      : {auth:{getUser:async()=>({data:{user:acting?{id:acting}:null},error:null})}},
+  };
+  vm.runInNewContext(code,vmSandbox);
+  const call=(action,id,purpose)=>handler(new Request("https://fixture/documents",{method:"POST",
+    headers:{Authorization:"Bearer fixture","Content-Type":"application/json"},
+    body:JSON.stringify({action,id,purpose})}));
+  let response=await call("list");
+  assert.equal(response.status,200);
+  let body=await response.json();
+  assert.equal(body.is_admin,false);
+  assert.deepEqual(body.documents.map(x=>x.id),[docA]);
+  assert.deepEqual(body.members.map(x=>x.id),[ownerA]);
+  response=await call("preview",docB,"inscrição de projeto");
+  assert.equal(response.status,403);
+  assert.equal(downloads,0);
+  response=await call("field",docB,"inscrição de projeto");
+  assert.equal(response.status,403);
+  response=await call("preview",docA,"inscrição de projeto");
+  assert.equal(response.status,200);
+  assert.equal(downloads,1);
+  assert.equal(audit.length,1);
+  assert.equal(audit[0].action,"preview");
+  acting=users.admin; role="admin";
+  body=await (await call("list")).json();
+  assert.equal(body.is_admin,true);
+  assert.equal(body.documents.length,2);
+  response=await call("preview",docB,"edital autorizado");
+  assert.equal(response.status,200);
+  assert.equal(audit.length,2);
+  acting=users.a;role="editor";
+  assert.equal((await (await call("list")).json()).is_admin,false);
+  acting=null;
+  response=await call("preview",docA,"edital autorizado");
+  assert.equal(response.status,401);
+});
