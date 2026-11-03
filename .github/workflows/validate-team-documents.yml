@@ -5,7 +5,7 @@ on:
       - 'src/app/pages/admin/AdminEquipeForm.tsx'
       - 'src/app/pages/admin/TeamDocuments.tsx'
       - 'supabase/functions/team-documents/**'
-      - 'supabase/migrations/*team_private_documents.sql'
+      - 'supabase/migrations/*team_private_documents*.sql'
       - 'tests/team-documents.test.mjs'
       - 'tsconfig.equipe.json'
       - '.github/workflows/validate-team-documents.yml'
