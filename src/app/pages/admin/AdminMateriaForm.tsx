@@ -14,6 +14,8 @@ import {
 } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 
+type MateriaEditorSection = "principal" | "conteudo" | "publicacao" | "capa" | "banner" | "seo";
+
 type EquipeOption = {
   id: string;
   nome: string;
@@ -363,6 +365,30 @@ export function AdminMateriaForm() {
   const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
   const [activeBlock, setActiveBlock] = useState<number | null>(0);
   const [activeTab, setActiveTab] = useState<"conteudo" | "galeria">("conteudo");
+  // Mantém os campos montados enquanto a seção fica recolhida, preservando o formulário.
+  const [expandedSections, setExpandedSections] = useState<Record<MateriaEditorSection, boolean>>({
+    principal: true,
+    conteudo: !isEditing,
+    publicacao: !isEditing,
+    capa: false,
+    banner: false,
+    seo: false,
+  });
+
+  function toggleSection(section: MateriaEditorSection) {
+    setExpandedSections((current) => ({ ...current, [section]: !current[section] }));
+  }
+
+  function goToSection(section: MateriaEditorSection) {
+    if (section === "conteudo") setActiveTab("conteudo");
+    setExpandedSections((current) => ({ ...current, [section]: true }));
+    requestAnimationFrame(() => {
+      document.getElementById(`materia-section-${section}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
   // Local, low-resolution thumbnails are presentation-only; never saved as CMS URLs.
   const [blockPreviews, setBlockPreviews] = useState<Record<string, string>>({});
@@ -1024,10 +1050,35 @@ export function AdminMateriaForm() {
         </div>
       </div>
 
+      <nav aria-label="Acesso rápido às seções da matéria" className="sticky top-2 z-20 rounded-xl border bg-background/95 backdrop-blur shadow-sm px-3 py-2 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground mr-1">Ir para:</span>
+        {([
+          ["principal", "Informações"],
+          ["conteudo", "Conteúdo"],
+          ["publicacao", "Publicação"],
+          ["capa", "Capa"],
+          ["banner", "Banner"],
+          ["seo", "SEO"],
+        ] as const).map(([section, label]) => (
+          <button
+            key={section}
+            type="button"
+            onClick={() => goToSection(section)}
+            className="px-3 py-1.5 rounded-md border bg-card text-xs font-medium hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Informações Principais</h3>
+          <div id="materia-section-principal" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
+            <button type="button" aria-expanded={expandedSections.principal} aria-controls="materia-principal-body" onClick={() => toggleSection("principal")} className="flex w-full items-center justify-between gap-2 text-left border-b pb-4">
+              <h3 className="font-semibold text-lg">Informações Principais</h3>
+              {expandedSections.principal ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+            </button>
+            <div id="materia-principal-body" hidden={!expandedSections.principal} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Título</label>
               <input {...register("title", { required: "Título é obrigatório" })} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="Digite o título da matéria" />
@@ -1042,6 +1093,7 @@ export function AdminMateriaForm() {
                 <label className="text-sm font-medium">Data de Publicação</label>
                 <input type="date" {...register("date")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
               </div>
+            </div>
             </div>
           </div>
 
@@ -1063,7 +1115,15 @@ export function AdminMateriaForm() {
           </div>
 
           {activeTab === "conteudo" && (
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+          <div id="materia-section-conteudo" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
+            <button type="button" aria-expanded={expandedSections.conteudo} aria-controls="materia-conteudo-body" onClick={() => toggleSection("conteudo")} className="flex w-full items-center justify-between gap-3 text-left border-b pb-4">
+              <span>
+                <span className="block font-semibold text-lg">Conteúdo da Matéria</span>
+                <span className="block text-xs text-muted-foreground">{blocks.length} {blocks.length === 1 ? "bloco" : "blocos"} · clique para {expandedSections.conteudo ? "recolher" : "expandir"}</span>
+              </span>
+              {expandedSections.conteudo ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+            </button>
+            <div id="materia-conteudo-body" hidden={!expandedSections.conteudo} className="space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <div>
                 <h3 className="font-semibold text-lg">Conteúdo em blocos</h3>
@@ -1243,6 +1303,7 @@ export function AdminMateriaForm() {
               </div>
             )}
 
+            </div>
           </div>
           )}
 
@@ -1296,8 +1357,12 @@ export function AdminMateriaForm() {
         </div>
 
         <div className="space-y-6">
-          <section className="bg-card border rounded-xl p-4 shadow-sm space-y-3" aria-label="SEO e compartilhamento">
-            <h3 className="font-semibold text-base">SEO e compartilhamento</h3>
+          <section id="materia-section-seo" className="bg-card border rounded-xl p-4 shadow-sm space-y-3 scroll-mt-24" aria-label="SEO e compartilhamento">
+            <button type="button" aria-expanded={expandedSections.seo} aria-controls="materia-seo-body" onClick={() => toggleSection("seo")} className="flex w-full items-center justify-between gap-2 text-left">
+              <h3 className="font-semibold text-base">SEO e compartilhamento</h3>
+              {expandedSections.seo ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+            </button>
+            <div id="materia-seo-body" hidden={!expandedSections.seo} className="space-y-3">
             <label className="block text-sm">URL da matéria (slug)
               <input {...register("customSlug")} className="mt-1 w-full h-9 rounded-md border bg-background px-2 text-sm" placeholder="automaticamente pelo título" />
             </label>
@@ -1315,9 +1380,17 @@ export function AdminMateriaForm() {
               {(watch("seoDescription") || "").length}/300 caracteres. Uma descrição específica com cerca de 120 a 160 caracteres costuma caber melhor na prévia.
             </p>
             <p className="text-xs text-muted-foreground">Se os campos ficarem vazios, o site usa o título e o resumo da matéria. Imagem: banner; se não houver, capa.</p>
+            </div>
           </section>
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
+          <div id="materia-section-publicacao" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
+            <button type="button" aria-expanded={expandedSections.publicacao} aria-controls="materia-publicacao-body" onClick={() => toggleSection("publicacao")} className="flex w-full items-center justify-between gap-2 text-left border-b pb-4">
+              <span>
+                <span className="block font-semibold text-lg">Publicação</span>
+                <span className="block text-xs text-muted-foreground">{watch("status") === "published" ? "Publicado" : watch("status") === "archived" ? "Arquivado" : "Rascunho"}{selectedCategory ? ` · ${selectedCategory}` : ""}</span>
+              </span>
+              {expandedSections.publicacao ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+            </button>
+            <div id="materia-publicacao-body" hidden={!expandedSections.publicacao} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Autor</label>
                 <select {...register("authorId")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
@@ -1376,11 +1449,18 @@ export function AdminMateriaForm() {
               </label>
               {!!selectedAudioFileName && <p className="text-xs text-muted-foreground">Arquivo selecionado: {selectedAudioFileName}</p>}
             </div>
+            </div>
           </div>
 
-          <div className="bg-card border rounded-xl p-3 shadow-sm space-y-2">
+          <div id="materia-section-capa" className="bg-card border rounded-xl p-3 shadow-sm space-y-2 scroll-mt-24">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold text-lg">Capa da Matéria</h3>
+              <button type="button" aria-expanded={expandedSections.capa} aria-controls="materia-capa-body" onClick={() => toggleSection("capa")} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <span>
+                  <span className="block font-semibold text-lg">Capa da Matéria</span>
+                  <span className="block text-xs text-muted-foreground">{coverUrl ? "Capa configurada" : "Sem capa"}</span>
+                </span>
+                {expandedSections.capa ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+              </button>
 
               <input ref={coverInputRef} type="file" accept="image/*" className="hidden" id="cover-input" onChange={(e) => handleCoverUpload(e.target.files?.[0])} />
               <label htmlFor="cover-input" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors">
@@ -1389,6 +1469,7 @@ export function AdminMateriaForm() {
               </label>
             </div>
 
+            <div id="materia-capa-body" hidden={!expandedSections.capa} className="space-y-2">
             {coverUrl ? <div className="flex items-center justify-between rounded-md bg-muted p-2 text-xs"><span>✓ Capa carregada</span><button type="button" className="text-destructive underline" onClick={() => { setValue("coverImage", ""); setCoverDriveFileId(null); setCoverThumbDriveFileId(null); setCoverThumbUrl(null); }}>Remover</button></div> : <p className="text-xs text-muted-foreground">Sem capa</p>}
             <p className="text-xs text-muted-foreground">
               Usada na listagem e nos cards. Recomendado: formato quadrado 1:1 (ex.: 800x800 ou 960x960).
@@ -1397,11 +1478,18 @@ export function AdminMateriaForm() {
               <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
               <input {...register("coverImage", { onChange: () => { setCoverDriveFileId(null); setCoverThumbDriveFileId(null); setCoverThumbUrl(null); } })} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
             </div>
+            </div>
           </div>
 
-          <div className="bg-card border rounded-xl p-3 shadow-sm space-y-2">
+          <div id="materia-section-banner" className="bg-card border rounded-xl p-3 shadow-sm space-y-2 scroll-mt-24">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold text-lg">Banner da Matéria</h3>
+              <button type="button" aria-expanded={expandedSections.banner} aria-controls="materia-banner-body" onClick={() => toggleSection("banner")} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <span>
+                  <span className="block font-semibold text-lg">Banner da Matéria</span>
+                  <span className="block text-xs text-muted-foreground">{bannerUrl ? "Banner configurado" : "Sem banner"}</span>
+                </span>
+                {expandedSections.banner ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+              </button>
 
               <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" id="banner-input" onChange={(e) => handleBannerUpload(e.target.files?.[0])} />
               <label htmlFor="banner-input" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors">
@@ -1410,6 +1498,7 @@ export function AdminMateriaForm() {
               </label>
             </div>
 
+            <div id="materia-banner-body" hidden={!expandedSections.banner} className="space-y-2">
             {bannerUrl ? <div className="flex items-center justify-between rounded-md bg-muted p-2 text-xs"><span>✓ Banner carregado</span><button type="button" className="text-destructive underline" onClick={() => { setValue("bannerImage", ""); setBannerDriveFileId(null); }}>Remover</button></div> : <p className="text-xs text-muted-foreground">Sem banner</p>}
             <p className="text-xs text-muted-foreground">
               Usado no topo da matéria publicada. Recomendado: formato horizontal (ex.: 1600x900, 1440x810 ou 1280x720).
@@ -1417,6 +1506,7 @@ export function AdminMateriaForm() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
               <input {...register("bannerImage", { onChange: () => setBannerDriveFileId(null) })} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
+            </div>
             </div>
           </div>
         </div>
