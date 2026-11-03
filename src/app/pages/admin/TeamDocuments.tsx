@@ -109,7 +109,8 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
     });
     setBusy(false);
     if(callError || !(data instanceof Blob)) {setError(await getError(callError,data));return;}
-    const url=URL.createObjectURL(data);
+    const typedBlob=new Blob([data],{type:doc.mime_type});
+    const url=URL.createObjectURL(typedBlob);
     setPreview({document:doc,url});
   }
 
