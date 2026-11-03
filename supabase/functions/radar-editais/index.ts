@@ -1,7 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 const URL_BASE = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const client = createClient(URL_BASE, KEY, {auth:{persistSession:false}});
 const SOURCES = [
  {nome:"Secult Goiás — PNAB 2026",url:"https://goias.gov.br/cultura/pnab/edital-2026-pnab/",kind:"goias"},
  {nome:"MinC — Editais abertos",url:"https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-abertas",kind:"federal"},
@@ -149,6 +148,22 @@ export async function collectPages(
   }
 }
 
+// The Supabase gateway verifies the Authorization JWT signature before this handler.
+// Keep verify_jwt=true when deploying; NEVER use decoded claims without that gateway check.
+// A service_role JWT may be valid after key rotation without matching the injected env key.
+function verifiedGatewayServiceRole(token:string,apiKey:string|null):boolean {
+  if(!token||apiKey!==token)return false;
+  try {
+    const parts=token.split(".");
+    if(parts.length!==3)return false;
+    const claims=JSON.parse(atob(parts[1].replace(/-/g,"+").replace(/_/g,"/")));
+    const projectRef=new URL(URL_BASE).hostname.split(".")[0];
+    return claims?.role==="service_role" &&
+      (!claims.ref||claims.ref===projectRef) &&
+      (typeof claims.exp!=="number"||claims.exp*1000>Date.now());
+  } catch {return false;}
+}
+
 Deno.serve(async(req)=>{
  const deadline=Date.now()+SCAN_BUDGET_MS;
  if(req.method==="OPTIONS")return new Response(null,{headers});
@@ -156,13 +171,16 @@ Deno.serve(async(req)=>{
  const bearer=req.headers.get("authorization")?.replace(/^Bearer\s+/i,"")||"";
  if(!bearer)return response({error:"Authorization required"},401);
  // Only logged-in captação staff or service-role automation may trigger scans.
- if(bearer!==KEY){
+ const gatewayServiceRole = verifiedGatewayServiceRole(bearer,req.headers.get("apikey"));
+ if(bearer!==KEY && !gatewayServiceRole){
    const userClient=createClient(URL_BASE,Deno.env.get("SUPABASE_ANON_KEY")!,{global:{headers:{Authorization:"Bearer "+bearer}},auth:{persistSession:false}});
    const {data:user,error:authError}=await userClient.auth.getUser();
    if(authError||!user.user)return response({error:"Invalid user"},401);
    const {data:allowed,error:aclError}=await userClient.rpc("can_access_captacao");
    if(aclError||allowed!==true)return response({error:"Access denied"},403);
  }
+ // Use the currently gateway-verified service-role JWT for an automation call.
+ const client=createClient(URL_BASE,gatewayServiceRole?bearer:KEY,{auth:{persistSession:false}});
  const {data:log,error:logError}=await client.from("captacao_radar_sincronizacoes").insert({status:"executando"}).select("id").single();
  if(logError)return response({error:"Unable to start sync"},500);
  let found=0,created=0;const errors:string[]=[];
