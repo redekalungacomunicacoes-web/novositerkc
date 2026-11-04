@@ -171,8 +171,8 @@ test("cadastro sem anexo continua restrito e prévia exige arquivo",()=>{
   assert.match(source,/if\(!doc.storage_path \|\| !doc.mime_type\) fail/);
   assert.match(source,/has_file:Boolean\(row.storage_path\)/);
   assert.match(frontend,/Adicionar PDF ou imagem/);
-  assert.match(frontend,/anexo salvo/);
-  assert.match(frontend,/sem anexo/);
+  assert.match(frontend,/Anexo salvo/);
+  assert.match(frontend,/Dados sem anexo/);
 });
 test("perfil de todos os papéis incluindo admin master",async()=>{
   const { readFile }=await import("node:fs/promises");
