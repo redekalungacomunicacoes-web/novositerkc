@@ -43,13 +43,43 @@ function fieldsOf(raw:unknown):Record<string,string> {
   }
   return fields;
 }
+const REQUIRED_FIELDS: Record<string,string[]> = {
+  rg: ["numero","orgao","emissao"],
+  cpf: ["numero"],
+  cnh: ["numero","categoria","validade"],
+  comprovante: ["endereco","referencia"],
+  curriculo: ["versao"],
+  certificado: ["instituicao","curso"],
+  contrato: ["referencia","partes"],
+  declaracao: ["finalidade"],
+  autenticado: ["referencia","autenticacao"],
+  outro: ["descricao"],
+};
+function validateRequiredFields(kind:string, values:Record<string,string>) {
+  for(const key of REQUIRED_FIELDS[kind] || []) {
+    if(!values[key]?.trim()) fail(`Informe o campo obrigatório: ${key.replaceAll("_"," ")}.`);
+  }
+  if(kind==="cpf") {
+    const digits=values.numero.replace(/\D/g,"");
+    if(digits.length!==11 || /^(\d)\1{10}$/.test(digits)) fail("CPF inválido. Informe os 11 dígitos.");
+    const check=(length:number)=> {
+      const sum=digits.slice(0,length).split("").reduce((n,d,i)=>n+Number(d)*(length+1-i),0);
+      return ((sum*10)%11)%10;
+    };
+    if(check(9)!==Number(digits[9])||check(10)!==Number(digits[10])) fail("Número de CPF inválido.");
+  }
+  if(kind==="rg") {
+    if(values.numero.replace(/[^a-z0-9]/gi,"").length<4) fail("Informe um número de RG válido.");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(values.emissao)) fail("Informe uma data de emissão válida.");
+  }
+}
 function publicDocument(row:any, ownerName:string) {
   return {
     id:row.id, member_id:row.member_id, member_name:ownerName,
     document_type:row.document_type,title:row.title,
     field_names:Object.keys(row.fields||{}),
     expires_on:row.expires_on,signed_copy:row.signed_copy,
-    mime_type:row.mime_type,created_at:row.created_at,
+    mime_type:row.mime_type,has_file:Boolean(row.storage_path),created_at:row.created_at,
   };
 }
 function fileName(title:string, mime:string) {
@@ -106,7 +136,7 @@ Deno.serve(async (req:Request) => {
       const {data:members,error:memberError}=await memberQuery;
       if(memberError) fail("Falha ao listar integrantes.",503);
       let docsQuery=admin.from("team_private_documents")
-        .select("id,member_id,document_type,title,fields,expires_on,signed_copy,mime_type,created_at")
+        .select("id,member_id,document_type,title,fields,expires_on,signed_copy,mime_type,storage_path,created_at")
         .eq("status","active").order("created_at",{ascending:false});
       if(!isAdmin) docsQuery=docsQuery.eq("member_id",ownMember.id);
       const {data:docs,error:docError}=await docsQuery.limit(500);
@@ -125,24 +155,30 @@ Deno.serve(async (req:Request) => {
       if(title.length<3||title.length>160) fail("Título deve ter entre 3 e 160 caracteres.");
       const member=await admin.from("equipe").select("id").eq("id",memberId).eq("ativo",true).maybeSingle();
       if(member.error||!member.data) fail("Integrante indisponível.",404);
-      const file=input.file;
-      if(!(file instanceof File)||file.size<1||file.size>MAX_SIZE) fail("Anexe um documento de até 10 MB.");
-      const bytes=new Uint8Array(await file.arrayBuffer());
-      const kind=mimeOf(bytes);
-      const fields=fieldsOf(JSON.parse(String(input.fields||"{}")));
+      const file=input.file instanceof File ? input.file : null;
+      if(file && (file.size<1 || file.size>MAX_SIZE)) fail("O arquivo deve ter até 10 MB.");
+      const bytes=file ? new Uint8Array(await file.arrayBuffer()) : null;
+      const fileKind=bytes ? mimeOf(bytes) : null;
+      let fields:Record<string,string>;
+      try { fields=fieldsOf(JSON.parse(String(input.fields||"{}"))); }
+      catch(err) { fail("Verifique os campos do formulário."); }
+      validateRequiredFields(documentType,fields);
+      if(!fileKind && input.signed_copy==="true") fail("Para marcar uma cópia assinada, anexe o arquivo.");
       const expires=String(input.expires_on||"").trim();
       if(expires && !/^\d{4}-\d{2}-\d{2}$/.test(expires)) fail("Data de validade inválida.");
       const documentId=crypto.randomUUID();
-      const path=`${memberId}/${documentId}.${kind.ext}`;
-      const {error:uploadError}=await admin.storage.from(BUCKET).upload(path,new Blob([bytes],{type:kind.mime}),{
-        contentType:kind.mime,cacheControl:"0",upsert:false,
-      });
-      if(uploadError) fail("Falha ao armazenar o arquivo privado.",503);
+      const path=fileKind ? `${memberId}/${documentId}.${fileKind.ext}` : null;
+      if(path && bytes && fileKind) {
+        const {error:uploadError}=await admin.storage.from(BUCKET).upload(path,new Blob([bytes],{type:fileKind.mime}),{
+          contentType:fileKind.mime,cacheControl:"0",upsert:false,
+        });
+        if(uploadError) fail("Falha ao armazenar o arquivo privado.",503);
+      }
       let inserted=false;
       try {
         const {error}=await admin.from("team_private_documents").insert({
           id:documentId,member_id:memberId,document_type:documentType,title,fields,
-          storage_path:path,mime_type:kind.mime,size_bytes:bytes.length,
+          storage_path:path,mime_type:fileKind?.mime ?? null,size_bytes:bytes?.length ?? null,
           expires_on:expires||null,signed_copy:input.signed_copy==="true",created_by:userId,
         });
         if(error) fail("Falha ao registrar o documento.",503);
@@ -151,7 +187,7 @@ Deno.serve(async (req:Request) => {
       } catch(err) {
         if(inserted) await admin.from("team_private_document_access").delete().eq("document_id",documentId);
         if(inserted) await admin.from("team_private_documents").delete().eq("id",documentId);
-        await admin.storage.from(BUCKET).remove([path]);
+        if(path) await admin.storage.from(BUCKET).remove([path]);
         throw err;
       }
       return json({ok:true,id:documentId},201);
@@ -167,6 +203,7 @@ Deno.serve(async (req:Request) => {
     if(!isAdmin && ownMember?.id!==doc.member_id) fail("Acesso ao documento não autorizado.",403);
     if(action==="preview") {
       const purpose=validPurpose(input.purpose);
+      if(!doc.storage_path || !doc.mime_type) fail("Este cadastro não tem arquivo anexado.",404);
       const {data:file,error:storageError}=await admin.storage.from(BUCKET).download(doc.storage_path);
       if(storageError||!file) fail("Arquivo indisponível.",503);
       await audit(id,"preview",purpose);
