@@ -182,3 +182,20 @@ test("perfil de todos os papéis incluindo admin master",async()=>{
   assert.match(sidebar,/allow: \["admin_alfa", "admin", "editor", "autor", "financeiro"\]/);
   assert.match(routes,/path: "perfil", loader: requireRoles\(\["admin_alfa", "admin", "editor", "autor", "financeiro"\]\)/);
 });
+
+test("painel de documentos possui contraste invertido e cards responsivos", async()=>{
+  const ui=await readFile("src/app/pages/admin/TeamDocuments.tsx","utf8");
+  assert.match(ui,/from-\[#064638\]/);
+  assert.match(ui,/grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3/);
+  assert.match(ui,/<article key=\{doc.id\}/);
+  assert.match(ui,/Anexo salvo/);
+  assert.match(ui,/Dados sem anexo/);
+});
+test("CPF recebe máscara automática e salvamento sem anexo", async()=>{
+  const ui=await readFile("src/app/pages/admin/TeamDocuments.tsx","utf8");
+  assert.match(ui,/function formatCpf\(value: string\)/);
+  assert.match(ui,/formatCpf\(e.target.value\)/);
+  assert.match(ui,/if\(file\) body.set\("file",file\)/);
+  assert.match(ui,/O anexo é opcional/);
+  assert.match(ui,/bg-emerald-600 px-4 py-2/);
+});
