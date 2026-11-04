@@ -296,10 +296,8 @@ try {
     fullPage: true,
   });
   await page.getByRole("link", { name: "Acessar curso", exact: true }).click();
-  await page.getByRole("button", { name: /Módulos e aulas/ }).click();
-  await page
-    .getByRole("link", { name: "Aula de leitura (opcional)", exact: true })
-    .click();
+  await page.getByRole("heading", { name: "Módulos e aulas", exact: true }).waitFor();
+  await page.getByRole("link", { name: /Aula de leitura/ }).click();
   await page.getByTitle("Aula de leitura").waitFor();
   assert.equal(
     await page.getByRole("button", { name: "Editar", exact: true }).count(),
