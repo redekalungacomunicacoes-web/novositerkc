@@ -29,8 +29,8 @@ function documentValidation(kind: DocType, fields: Record<string,string>): strin
     if(required && !fields[key]?.trim()) return `Preencha o campo obrigatório: ${label}.`;
   }
   if(kind==="cpf") {
-    const digits=(fields.numero || "").replace(/\\D/g,"");
-    if(digits.length !== 11 || /^(\\d)\\1{10}$/.test(digits)) return "Informe um CPF válido com 11 dígitos.";
+    const digits=(fields.numero || "").replace(/\D/g,"");
+    if(digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return "Informe um CPF válido com 11 dígitos.";
     const check=(length:number)=> ((digits.slice(0,length).split("").reduce((sum,d,i)=>sum+Number(d)*(length+1-i),0)*10)%11)%10;
     if(check(9)!==Number(digits[9])||check(10)!==Number(digits[10])) return "Número de CPF inválido.";
   }
@@ -108,7 +108,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
     body.set("document_type",kind); body.set("title",title.trim());
     body.set("fields",JSON.stringify(fields));
     body.set("expires_on",expiresOn);
-    body.set("signed_copy",signedCopy?"true":"false");
+    body.set("signed_copy",file && signedCopy?"true":"false");
     if(file) body.set("file",file);
     const result = await supabase.functions.invoke<{ok:boolean;error?:string}>("team-documents",{body});
     setBusy(false);
@@ -222,7 +222,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
                 className="rounded border bg-background px-3 py-2 text-sm font-medium">Adicionar PDF ou imagem</button>
               {file ? <div className="rounded border bg-muted/40 p-2 flex items-center justify-between gap-2" role="status">
                 <span className="min-w-0 truncate"><FileText className="h-4 w-4 inline mr-1" />{file.name} ({(file.size/1024).toFixed(0)} KB) — selecionado, aguardando salvar</span>
-                <button type="button" className="shrink-0 underline" onClick={()=>{setFile(null);if(fileInputRef.current)fileInputRef.current.value="";}}>Remover</button>
+                <button type="button" className="shrink-0 underline" onClick={()=>{setFile(null);setSignedCopy(false);if(fileInputRef.current)fileInputRef.current.value="";}}>Remover</button>
               </div> : <p className="text-xs text-muted-foreground">Nenhum arquivo selecionado. É possível salvar apenas os dados do documento.</p>}
             </div>
           </div>
