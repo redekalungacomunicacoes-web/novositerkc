@@ -51,9 +51,9 @@ export const adminLinks: SidebarLink[] = [
   },
   {
     href: "/admin/perfil",
-    label: "Perfil",
+    label: "Meu Perfil",
     icon: Users,
-    allow: ["autor"],
+    allow: ["admin_alfa", "admin", "editor", "autor", "financeiro"],
   },
   {
     href: "/admin/projetos",
