@@ -170,12 +170,12 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
   }
 
   return (
-    <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5" aria-label="Documentos internos da equipe">
+    <section className="rounded-2xl border border-emerald-950 bg-gradient-to-br from-[#064638] via-[#075544] to-[#06392f] p-5 sm:p-6 text-white shadow-xl space-y-5" aria-label="Documentos internos da equipe">
       <div className="flex items-start gap-3">
-        <ShieldCheck className="h-6 w-6 text-primary shrink-0" />
+        <ShieldCheck className="h-6 w-6 text-emerald-200 shrink-0" />
         <div>
           <h2 className="text-lg font-semibold">Documentos internos da equipe</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-emerald-100/90 mt-1">
             Área privada. Cada integrante consulta apenas os próprios documentos; administradores autorizados podem consultar documentos da equipe.
             Toda prévia e consulta de dado fica registrada. Não use a área pública de portfólio para documentos pessoais.
           </p>
@@ -183,7 +183,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
       </div>
       {error && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
 
-      <details className="border rounded-lg p-4" open={undefined}>
+      <details className="rounded-xl border border-white/20 bg-white p-4 text-slate-900 shadow-sm" open={undefined}>
         <summary className="font-medium cursor-pointer flex items-center gap-2"><Plus className="w-4 h-4"/> Adicionar documento</summary>
         <div className="space-y-3 mt-4">
           {isAdmin && (
@@ -240,62 +240,63 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h3 className="font-medium flex-1">Documentos cadastrados</h3>
+          <h3 className="font-semibold flex-1">Documentos cadastrados <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">{filtered.length}</span></h3>
           {isAdmin && <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={showAll} onChange={e=>setShowAll(e.target.checked)} /> Ver toda a equipe</label>}
         </div>
-        <label className="block text-sm">Finalidade da consulta (obrigatória para abrir arquivo ou revelar um dado)
+        <label className="block text-sm text-emerald-50">Finalidade da consulta (obrigatória para abrir arquivo ou revelar um dado)
           <input value={purpose} maxLength={400} onChange={e=>setPurpose(e.target.value)}
             placeholder="Ex.: preencher requisitos do edital RKC-2026-05"
-            className="block w-full mt-1 rounded border p-2 bg-background" />
+            className="block w-full mt-1 rounded-lg border border-white/30 bg-white p-2 text-slate-900" />
         </label>
         <label className="relative block">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar documentos ou integrante"
-            className="rounded border w-full bg-background pl-9 pr-3 py-2 text-sm" />
+            className="rounded-lg border border-white/30 w-full bg-white pl-9 pr-3 py-2 text-sm text-slate-900" />
         </label>
-        {loading && <p className="text-sm text-muted-foreground">Carregando documentos...</p>}
-        {!loading && filtered.length===0 && <p className="text-sm text-muted-foreground rounded border p-3">Nenhum documento encontrado.</p>}
-        <div className="space-y-2">
+        {loading && <p className="text-sm text-emerald-100">Carregando documentos...</p>}
+        {!loading && filtered.length===0 && <p className="text-sm text-emerald-100 rounded-lg border border-white/25 bg-white/10 p-3">Nenhum documento encontrado.</p>}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map(doc=>(
-            <div key={doc.id} className="border rounded-lg p-3 space-y-2">
+            <article key={doc.id} className="min-w-0 rounded-xl border border-emerald-100 bg-white p-4 text-slate-900 shadow-sm transition-shadow hover:shadow-lg space-y-3">
               <div className="flex gap-3 items-start">
-                <FileText className="h-5 w-5 text-muted-foreground mt-1 shrink-0" />
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800"><FileText className="h-5 w-5" /></span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm break-words">{doc.title}</p>
-                  <p className="text-xs text-muted-foreground">{doc.member_name} · {categories[doc.document_type]?.label||doc.document_type}
+                  <p className="font-semibold text-sm text-slate-900 break-words">{doc.title}</p>
+                  <p className="text-xs text-slate-600">{doc.member_name} · {categories[doc.document_type]?.label||doc.document_type}
                     {doc.expires_on?` · validade: ${new Date(doc.expires_on+"T12:00:00").toLocaleDateString("pt-BR")}`:""}
                     {doc.signed_copy?" · arquivo informado como assinado":""}
-                    {doc.has_file?" · anexo salvo":" · sem anexo"}
+                    
                   </p>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-2 text-xs"><span className={`rounded-full px-2 py-1 font-semibold ${doc.has_file ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{doc.has_file ? "Anexo salvo" : "Dados sem anexo"}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">{new Date(doc.created_at).toLocaleDateString("pt-BR")}</span></div>
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
                 {doc.has_file && <button type="button" disabled={busy||purpose.trim().length<3} onClick={()=>void openDocument(doc)}
-                  className="inline-flex items-center gap-1 border rounded px-3 py-1.5 text-xs disabled:opacity-50"><Eye className="w-3.5 h-3.5" /> Pré-visualizar anexo</button>}
+                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-900 disabled:opacity-50 hover:bg-emerald-100"><Eye className="w-3.5 h-3.5" /> Pré-visualizar anexo</button>}
                 {doc.field_names.length>0 && <>
                   <select aria-label="Campo do documento" value={fieldSelection[doc.id]||doc.field_names[0]}
                     onChange={e=>setFieldSelection(prev=>({...prev,[doc.id]:e.target.value}))}
-                    className="border bg-background rounded px-2 py-1.5 text-xs">
+                    className="min-w-0 max-w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900">
                     {doc.field_names.map(key=><option key={key} value={key}>{key.replaceAll("_"," ")}</option>)}
                   </select>
                   <button type="button" disabled={busy||purpose.trim().length<3} onClick={()=>void readField(doc)}
-                    className="border rounded px-3 py-1.5 text-xs disabled:opacity-50">Consultar dado</button>
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 disabled:opacity-50 hover:bg-slate-50">Consultar dado</button>
                 </>}
                 {(isAdmin||ownMemberId===doc.member_id) && <>
                   <button type="button" disabled={busy} onClick={()=>void loadHistory(doc)}
-                    className="inline-flex gap-1 items-center border rounded px-3 py-1.5 text-xs"><History className="w-3 h-3"/> Histórico</button>
+                    className="inline-flex gap-1 items-center rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"><History className="w-3 h-3"/> Histórico</button>
                   <button type="button" disabled={busy} onClick={()=>void archiveDocument(doc)}
-                    className="inline-flex gap-1 items-center border rounded px-3 py-1.5 text-xs text-red-600"><Archive className="w-3 h-3"/> Arquivar</button>
+                    className="inline-flex gap-1 items-center rounded-lg border border-red-200 px-3 py-2 text-xs text-red-700 hover:bg-red-50"><Archive className="w-3 h-3"/> Arquivar</button>
                 </>}
               </div>
               {fieldResult?.id===doc.id && (
-                <div className="bg-muted rounded p-3 text-sm" role="status">
+                <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-900" role="status">
                   <strong>{fieldResult.key.replaceAll("_"," ")}:</strong> {fieldResult.value}
                   <p className="text-xs text-muted-foreground mt-1">Consulta registrada no histórico.</p>
                 </div>
               )}
               {history?.docId===doc.id && (
-                <div className="rounded bg-muted p-3 space-y-2 text-xs">
+                <div className="rounded-lg bg-slate-50 p-3 space-y-2 text-xs text-slate-900">
                   <div className="flex justify-between"><strong>Histórico de acessos</strong><button type="button" onClick={()=>setHistory(null)} aria-label="Fechar histórico"><X className="w-4 h-4"/></button></div>
                   {history.events.length===0&&<p>Sem eventos.</p>}
                   {history.events.map((ev,i)=><p key={i} className="border-t pt-2">
@@ -305,7 +306,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
                   </p>)}
                 </div>
               )}
-            </div>
+            </article>
           ))}
         </div>
       </div>
