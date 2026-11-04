@@ -203,7 +203,8 @@ try {
   for (const role of ["admin_alfa", "admin", "editor", "autor", "financeiro"]) {
     const { page, context, errors, artwork, artworkRequests } = await setup(role, role === "autor");
     const links = page.locator("aside nav a");
-    assert.equal(await links.last().textContent(), "Academia");
+    // A ordem do menu varia com novos módulos (ex.: Pop-ups).
+    assert.equal(await links.filter({hasText:/^Academia$/}).count(), 1);
     assert.ok(
       await page
         .getByRole("heading", { name: "Curso da equipe", exact: true })
@@ -294,12 +295,10 @@ try {
     path: "/tmp/rkc-academia-qa/mobile-library.png",
     fullPage: true,
   });
-  await page.getByRole("link", { name: "Conhecer curso", exact: true }).click();
-  await page.getByRole("button", { name: /Módulos e aulas/ }).click();
-  await page
-    .getByRole("link", { name: "Aula de leitura (opcional)", exact: true })
-    .click();
-  await page.getByTitle("Aula de leitura").waitFor();
+  await page.getByRole("link", { name: "Acessar curso", exact: true }).click();
+  await page.getByRole("heading", { name: "Módulos e aulas", exact: true }).waitFor();
+  await page.getByRole("link", { name: /Aula de leitura/ }).click();
+  await page.getByRole("heading", { name: "Aula de leitura", exact: true }).waitFor();
   assert.equal(
     await page.getByRole("button", { name: "Editar", exact: true }).count(),
     0,

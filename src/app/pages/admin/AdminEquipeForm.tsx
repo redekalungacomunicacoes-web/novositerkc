@@ -8,6 +8,7 @@ import { slugify } from "@/lib/cms";
 import { downloadRkcDriveFile } from "@/services/driveFiles";
 import { createThumbnail } from "@/lib/imageThumbnail";
 import { driveMediaUrl, driveSlug } from "@/lib/teamAvatar";
+import { TeamDocuments } from "@/app/pages/admin/TeamDocuments";
 
 const TEAM_AVATARS_BUCKET = "team-avatars";
 
@@ -522,6 +523,7 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
           </div>
         </div>
       </div>
+      {isEditing && resolvedId && <TeamDocuments initialMemberId={resolvedId} />}
     </div>
   );
 }

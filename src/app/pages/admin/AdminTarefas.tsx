@@ -34,7 +34,7 @@ function DayAgenda({ open, onClose, onNewTask, onOpenTask }: { open: boolean; on
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/25 backdrop-blur-[2px]" onClick={onClose}>
-      <aside className="h-full w-full max-w-md overflow-y-auto border-l border-emerald-100 bg-white shadow-2xl dark:border-emerald-800 dark:bg-[#062f28]" onClick={(event) => event.stopPropagation()}>
+      <aside role="dialog" aria-modal="true" aria-label="Agenda do dia" className="h-full w-full max-w-md overflow-y-auto border-l border-emerald-100 bg-white shadow-2xl dark:border-emerald-800 dark:bg-[#062f28]" onClick={(event) => event.stopPropagation()}>
         <header className="sticky top-0 z-10 border-b border-emerald-100 bg-white/95 p-5 backdrop-blur-xl dark:border-emerald-800 dark:bg-[#062f28]/95">
           <div className="flex items-start justify-between gap-3">
             <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Agenda do dia</p><h2 className="mt-1 text-xl font-bold capitalize text-slate-950 dark:text-white">{title}</h2><p className="mt-1 text-sm text-slate-500 dark:text-emerald-100/65">{dayTasks.length} {dayTasks.length === 1 ? "tarefa" : "tarefas"}</p></div>
