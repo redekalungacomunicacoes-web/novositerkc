@@ -24,6 +24,12 @@ const categories: Record<DocType, { label: string; fields: DocumentField[] }> = 
   autenticado: { label: "Documento autenticado / assinado", fields: [["referencia","Referência",true],["autenticacao","Informações de autenticação",true]] },
   outro: { label: "Outro documento", fields: [["descricao","Descrição",true],["referencia","Referência",false]] },
 };
+function formatCpf(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  return digits.replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1-$2");
+}
 function documentValidation(kind: DocType, fields: Record<string,string>): string {
   for(const [key,label,required] of categories[kind].fields) {
     if(required && !fields[key]?.trim()) return `Preencha o campo obrigatório: ${label}.`;
@@ -62,7 +68,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
   const [query, setQuery] = useState("");
   const [ownerId, setOwnerId] = useState(initialMemberId);
   const [kind, setKind] = useState<DocType>("rg");
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState("RG / Identidade");
   const [fields, setFields] = useState<Record<string,string>>({});
   const [expiresOn, setExpiresOn] = useState("");
   const [signedCopy, setSignedCopy] = useState(false);
@@ -113,7 +119,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
     const result = await supabase.functions.invoke<{ok:boolean;error?:string}>("team-documents",{body});
     setBusy(false);
     if(result.error || !result.data?.ok) { setError(await getError(result.error,result.data)); return; }
-    setTitle(""); setFields({}); setExpiresOn(""); setSignedCopy(false); setFile(null);
+    setTitle(categories[kind].label); setFields({}); setExpiresOn(""); setSignedCopy(false); setFile(null);
     if(fileInputRef.current) fileInputRef.current.value="";
     await refresh();
   }
@@ -196,7 +202,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
           {!isAdmin && ownMemberId !== ownerId && <p className="text-sm text-muted-foreground">Somente o titular pode cadastrar seus próprios documentos.</p>}
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="text-sm">Tipo de documento
-              <select value={kind} onChange={e=>{setKind(e.target.value as DocType);setFields({});}} className="block w-full mt-1 rounded border bg-background p-2">
+              <select value={kind} onChange={e=>{const next=e.target.value as DocType;setKind(next);setFields({});setTitle(categories[next].label);}} className="block w-full mt-1 rounded border bg-background p-2">
                 {(Object.keys(categories) as DocType[]).map(k=><option key={k} value={k}>{categories[k].label}</option>)}
               </select>
             </label>
@@ -206,7 +212,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
             {categories[kind].fields.map(([key,label,required])=>(
               <label className="text-sm" key={key}>{label} <span className="text-muted-foreground">{required?"(obrigatório)":"(opcional)"}</span>
                 <input type={["emissao","validade"].includes(key)?"date":"text"} required={required}
-                  value={fields[key]||""} maxLength={400} onChange={e=>setFields(prev=>({...prev,[key]:e.target.value}))}
+                  value={fields[key]||""} maxLength={key==="numero" && kind==="cpf"?14:400} inputMode={key==="numero" && kind==="cpf"?"numeric":undefined} onChange={e=>setFields(prev=>({...prev,[key]:kind==="cpf" && key==="numero" ? formatCpf(e.target.value) : e.target.value}))}
                   className="block w-full mt-1 rounded border bg-background p-2" autoComplete="off" />
               </label>
             ))}
@@ -231,8 +237,9 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
             Este arquivo contém uma assinatura / autenticação pré-existente (não verificada pela RKC)
           </label>}
           {missingRequired && <p className="text-xs text-amber-700" role="status">{missingRequired}</p>}
+          <p className="text-xs text-slate-600">O anexo é opcional. Preencha os dados obrigatórios para salvar.</p>
           <button type="button" disabled={busy||!canCreate||Boolean(missingRequired)||title.trim().length<3}
-            onClick={()=>void upload()} className="rounded bg-primary px-4 py-2 text-primary-foreground text-sm disabled:opacity-50">
+            onClick={()=>void upload()} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none">
             {busy?"Salvando...":"Salvar documento privado"}
           </button>
         </div>
