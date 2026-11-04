@@ -159,14 +159,13 @@ test("política restritiva impede alterações diretas no bucket privado por usu
 
 test("campos essenciais por categoria e CPF com dígitos verificadores",()=>{
   assert.equal(helpers.validateRequiredFields("cpf",{numero:"529.982.247-25"}),undefined);
-  assert.throws(()=>helpers.validateRequiredFields("cpf",{numero:"529.982.247-24"}),/CPF/);
-  assert.throws(()=>helpers.validateRequiredFields("cpf",{}),/numero/);
-  assert.throws(()=>helpers.validateRequiredFields("rg",{numero:"123456"}),/orgao/);
-  assert.throws(()=>helpers.validateRequiredFields("rg",{numero:"123456",orgao:"SSP",emissao:"03/05/2021"}),/data de emissão/);
+  assert.throws(()=>helpers.validateRequiredFields("cpf",{numero:"529.982.247-24"}),{message:/CPF/});
+  assert.throws(()=>helpers.validateRequiredFields("cpf",{}),{message:/numero/});
+  assert.throws(()=>helpers.validateRequiredFields("rg",{numero:"123456"}),{message:/orgao/});
+  assert.throws(()=>helpers.validateRequiredFields("rg",{numero:"123456",orgao:"SSP",emissao:"03/05/2021"}),{message:/data de emissão/});
   assert.equal(helpers.validateRequiredFields("rg",{numero:"123456",orgao:"SSP",emissao:"2021-05-03"}),undefined);
 });
 test("cadastro sem anexo continua restrito e prévia exige arquivo",()=>{
-  const optional=awaitMigration=>awaitMigration;
   assert.match(source,/const file=input.file instanceof File \? input.file : null/);
   assert.match(source,/const path=fileKind \?/);
   assert.match(source,/if\(!doc.storage_path \|\| !doc.mime_type\) fail/);
