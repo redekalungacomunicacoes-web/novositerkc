@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileText, Eye, Plus, ShieldCheck, Search, Archive, History, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -7,23 +7,36 @@ type Member = { id: string; nome: string };
 type InternalDoc = {
   id: string; member_id: string; member_name: string; document_type: DocType; title: string;
   field_names: string[]; expires_on: string | null; signed_copy: boolean;
-  mime_type: string; created_at: string;
+  mime_type: string | null; has_file: boolean; created_at: string;
 };
 type Event = { actor_user_id: string; action: string; field_name: string | null; purpose: string; created_at: string };
 type ApiList = { ok: boolean; error?: string; members: Member[]; documents: InternalDoc[]; own_member_id: string | null; is_admin: boolean };
-const categories: Record<DocType, { label: string; fields: [string, string][] }> = {
-  rg: { label: "RG / Identidade", fields: [["numero","Número do RG"],["orgao","Órgão emissor"],["uf","UF"],["emissao","Data de emissão"]] },
-  cpf: { label: "CPF", fields: [["numero","Número do CPF"]] },
-  cnh: { label: "CNH", fields: [["numero","Número da CNH"],["categoria","Categoria"],["validade","Validade"]] },
-  comprovante: { label: "Comprovante de residência", fields: [["endereco","Endereço"],["referencia","Mês de referência"]] },
-  curriculo: { label: "Currículo", fields: [["versao","Versão / referência"]] },
-  certificado: { label: "Certificado", fields: [["instituicao","Instituição"],["curso","Curso / atividade"],["carga_horaria","Carga horária"]] },
-  contrato: { label: "Contrato", fields: [["referencia","Número / referência"],["partes","Partes"]] },
-  declaracao: { label: "Declaração", fields: [["finalidade","Finalidade"],["emissao","Data de emissão"]] },
-  autenticado: { label: "Documento autenticado / assinado", fields: [["referencia","Referência"],["autenticacao","Informações de autenticação"]] },
-  outro: { label: "Outro documento", fields: [["descricao","Descrição"],["referencia","Referência"]] },
+type DocumentField = [key: string, label: string, required: boolean];
+const categories: Record<DocType, { label: string; fields: DocumentField[] }> = {
+  rg: { label: "RG / Identidade", fields: [["numero","Número do RG",true],["orgao","Órgão emissor",true],["emissao","Data de emissão",true],["uf","UF",false]] },
+  cpf: { label: "CPF", fields: [["numero","Número do CPF",true]] },
+  cnh: { label: "CNH", fields: [["numero","Número da CNH",true],["categoria","Categoria",true],["validade","Validade",true]] },
+  comprovante: { label: "Comprovante de residência", fields: [["endereco","Endereço",true],["referencia","Mês de referência",true]] },
+  curriculo: { label: "Currículo", fields: [["versao","Versão / referência",true]] },
+  certificado: { label: "Certificado", fields: [["instituicao","Instituição",true],["curso","Curso / atividade",true],["carga_horaria","Carga horária",false]] },
+  contrato: { label: "Contrato", fields: [["referencia","Número / referência",true],["partes","Partes",true]] },
+  declaracao: { label: "Declaração", fields: [["finalidade","Finalidade",true],["emissao","Data de emissão",false]] },
+  autenticado: { label: "Documento autenticado / assinado", fields: [["referencia","Referência",true],["autenticacao","Informações de autenticação",true]] },
+  outro: { label: "Outro documento", fields: [["descricao","Descrição",true],["referencia","Referência",false]] },
 };
-
+function documentValidation(kind: DocType, fields: Record<string,string>): string {
+  for(const [key,label,required] of categories[kind].fields) {
+    if(required && !fields[key]?.trim()) return `Preencha o campo obrigatório: ${label}.`;
+  }
+  if(kind==="cpf") {
+    const digits=(fields.numero || "").replace(/\D/g,"");
+    if(digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return "Informe um CPF válido com 11 dígitos.";
+    const check=(length:number)=> ((digits.slice(0,length).split("").reduce((sum,d,i)=>sum+Number(d)*(length+1-i),0)*10)%11)%10;
+    if(check(9)!==Number(digits[9])||check(10)!==Number(digits[10])) return "Número de CPF inválido.";
+  }
+  if(kind==="rg" && (fields.numero || "").replace(/[^a-z0-9]/gi,"").length<4) return "Informe um número de RG válido.";
+  return "";
+}
 async function getError(error: unknown, data: unknown) {
   const payload = data as { error?: string } | null;
   if (payload?.error) return payload.error;
@@ -54,6 +67,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
   const [expiresOn, setExpiresOn] = useState("");
   const [signedCopy, setSignedCopy] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [purpose, setPurpose] = useState("");
   const [preview, setPreview] = useState<{ document: InternalDoc; url: string } | null>(null);
   const [fieldResult, setFieldResult] = useState<{ id: string; key: string; value: string } | null>(null);
@@ -82,26 +96,30 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
     (d.title+" "+d.member_name+" "+categories[d.document_type]?.label).toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR"))
   ), [documents,initialMemberId,showAll,query]);
   const canCreate = isAdmin || ownMemberId === ownerId;
+  const missingRequired = documentValidation(kind,fields);
 
   async function upload() {
-    if (!file || !canCreate || title.trim().length < 3) { setError("Selecione o arquivo e informe um título válido."); return; }
-    if (file.size > 10*1024*1024) { setError("O arquivo deve ter no máximo 10 MB."); return; }
+    if (!canCreate || title.trim().length < 3) { setError("Informe um título válido e verifique as permissões."); return; }
+    if (missingRequired) { setError(missingRequired); return; }
+    if (file && file.size > 10*1024*1024) { setError("O arquivo deve ter no máximo 10 MB."); return; }
     setBusy(true); setError("");
     const body = new FormData();
     body.set("action","upload"); body.set("member_id",ownerId);
     body.set("document_type",kind); body.set("title",title.trim());
     body.set("fields",JSON.stringify(fields));
     body.set("expires_on",expiresOn);
-    body.set("signed_copy",signedCopy?"true":"false");
-    body.set("file",file);
+    body.set("signed_copy",file && signedCopy?"true":"false");
+    if(file) body.set("file",file);
     const result = await supabase.functions.invoke<{ok:boolean;error?:string}>("team-documents",{body});
     setBusy(false);
     if(result.error || !result.data?.ok) { setError(await getError(result.error,result.data)); return; }
     setTitle(""); setFields({}); setExpiresOn(""); setSignedCopy(false); setFile(null);
+    if(fileInputRef.current) fileInputRef.current.value="";
     await refresh();
   }
 
   async function openDocument(doc:InternalDoc) {
+    if (!doc.has_file) { setError("Este documento não tem arquivo anexado."); return; }
     if (purpose.trim().length<3) { setError("Informe primeiro a finalidade da consulta."); return; }
     setBusy(true);setError("");setFieldResult(null);
     const {data,error:callError}=await supabase.functions.invoke<Blob>("team-documents",{
@@ -109,7 +127,7 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
     });
     setBusy(false);
     if(callError || !(data instanceof Blob)) {setError(await getError(callError,data));return;}
-    const typedBlob=new Blob([data],{type:doc.mime_type});
+    const typedBlob=new Blob([data],{type:doc.mime_type || "application/octet-stream"});
     const url=URL.createObjectURL(typedBlob);
     setPreview({document:doc,url});
   }
@@ -185,9 +203,10 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
             <label className="text-sm">Título
               <input value={title} maxLength={160} onChange={e=>setTitle(e.target.value)} className="block w-full mt-1 rounded border bg-background p-2" placeholder="Ex.: RG atualizado" />
             </label>
-            {categories[kind].fields.map(([key,label])=>(
-              <label className="text-sm" key={key}>{label} <span className="text-muted-foreground">(opcional)</span>
-                <input value={fields[key]||""} maxLength={400} onChange={e=>setFields(prev=>({...prev,[key]:e.target.value}))}
+            {categories[kind].fields.map(([key,label,required])=>(
+              <label className="text-sm" key={key}>{label} <span className="text-muted-foreground">{required?"(obrigatório)":"(opcional)"}</span>
+                <input type={["emissao","validade"].includes(key)?"date":"text"} required={required}
+                  value={fields[key]||""} maxLength={400} onChange={e=>setFields(prev=>({...prev,[key]:e.target.value}))}
                   className="block w-full mt-1 rounded border bg-background p-2" autoComplete="off" />
               </label>
             ))}
@@ -195,16 +214,24 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
               <input type="date" value={expiresOn} onChange={e=>setExpiresOn(e.target.value)}
                 className="block w-full mt-1 rounded border bg-background p-2" />
             </label>
-            <label className="text-sm">Arquivo PDF ou imagem (máximo 10 MB)
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                onChange={e=>setFile(e.target.files?.[0]||null)} className="block w-full mt-1 text-sm" />
-            </label>
+            <div className="space-y-2 text-sm">
+              <p>Arquivo PDF ou imagem <span className="text-muted-foreground">(opcional, até 10 MB)</span></p>
+              <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                onChange={e=>setFile(e.target.files?.[0]||null)} className="sr-only" aria-label="Selecionar arquivo do documento" />
+              <button type="button" onClick={()=>fileInputRef.current?.click()}
+                className="rounded border bg-background px-3 py-2 text-sm font-medium">Adicionar PDF ou imagem</button>
+              {file ? <div className="rounded border bg-muted/40 p-2 flex items-center justify-between gap-2" role="status">
+                <span className="min-w-0 truncate"><FileText className="h-4 w-4 inline mr-1" />{file.name} ({(file.size/1024).toFixed(0)} KB) — selecionado, aguardando salvar</span>
+                <button type="button" className="shrink-0 underline" onClick={()=>{setFile(null);setSignedCopy(false);if(fileInputRef.current)fileInputRef.current.value="";}}>Remover</button>
+              </div> : <p className="text-xs text-muted-foreground">Nenhum arquivo selecionado. É possível salvar apenas os dados do documento.</p>}
+            </div>
           </div>
-          <label className="flex items-center gap-2 text-sm">
+          {file && <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={signedCopy} onChange={e=>setSignedCopy(e.target.checked)} />
             Este arquivo contém uma assinatura / autenticação pré-existente (não verificada pela RKC)
-          </label>
-          <button type="button" disabled={busy||!canCreate||!file||title.trim().length<3}
+          </label>}
+          {missingRequired && <p className="text-xs text-amber-700" role="status">{missingRequired}</p>}
+          <button type="button" disabled={busy||!canCreate||Boolean(missingRequired)||title.trim().length<3}
             onClick={()=>void upload()} className="rounded bg-primary px-4 py-2 text-primary-foreground text-sm disabled:opacity-50">
             {busy?"Salvando...":"Salvar documento privado"}
           </button>
@@ -238,12 +265,13 @@ export function TeamDocuments({ initialMemberId }: { initialMemberId: string }) 
                   <p className="text-xs text-muted-foreground">{doc.member_name} · {categories[doc.document_type]?.label||doc.document_type}
                     {doc.expires_on?` · validade: ${new Date(doc.expires_on+"T12:00:00").toLocaleDateString("pt-BR")}`:""}
                     {doc.signed_copy?" · arquivo informado como assinado":""}
+                    {doc.has_file?" · anexo salvo":" · sem anexo"}
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" disabled={busy||purpose.trim().length<3} onClick={()=>void openDocument(doc)}
-                  className="inline-flex items-center gap-1 border rounded px-3 py-1.5 text-xs disabled:opacity-50"><Eye className="w-3.5 h-3.5" /> Pré-visualizar</button>
+                {doc.has_file && <button type="button" disabled={busy||purpose.trim().length<3} onClick={()=>void openDocument(doc)}
+                  className="inline-flex items-center gap-1 border rounded px-3 py-1.5 text-xs disabled:opacity-50"><Eye className="w-3.5 h-3.5" /> Pré-visualizar anexo</button>}
                 {doc.field_names.length>0 && <>
                   <select aria-label="Campo do documento" value={fieldSelection[doc.id]||doc.field_names[0]}
                     onChange={e=>setFieldSelection(prev=>({...prev,[doc.id]:e.target.value}))}
