@@ -148,7 +148,7 @@ test("servidor bloqueia vazamento entre integrantes e mantém auditoria no acess
 
 test("prévia binária preserva os bytes de PDFs e imagens com MIME correto",()=>{
   assert.ok(source.includes('"Content-Type":"application/octet-stream"'));
-  assert.ok(frontend.includes("new Blob([data],{type:doc.mime_type})"));
+  assert.ok(frontend.includes('new Blob([data],{type:doc.mime_type || "application/octet-stream"})'));
 });
 
 test("política restritiva impede alterações diretas no bucket privado por usuários autenticados",()=>{
