@@ -298,7 +298,7 @@ try {
   await page.getByRole("link", { name: "Acessar curso", exact: true }).click();
   await page.getByRole("heading", { name: "Módulos e aulas", exact: true }).waitFor();
   await page.getByRole("link", { name: /Aula de leitura/ }).click();
-  await page.getByTitle("Aula de leitura").waitFor();
+  await page.getByRole("heading", { name: "Aula de leitura", exact: true }).waitFor();
   assert.equal(
     await page.getByRole("button", { name: "Editar", exact: true }).count(),
     0,
