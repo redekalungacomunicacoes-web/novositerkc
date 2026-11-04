@@ -12,7 +12,7 @@ const code = ts.transpileModule(source.replace(/import \{ createClient \} from [
   compilerOptions: { target:ts.ScriptTarget.ES2022, module:ts.ModuleKind.None }
 }).outputText;
 const sandbox = { Deno:{serve:()=>{}}, console, Uint8Array, Set, Object, RegExp, Error };
-const helpers = vm.runInNewContext(code+"\n({mimeOf,fieldsOf,validPurpose,publicDocument})",sandbox);
+const helpers = vm.runInNewContext(code+"\n({mimeOf,fieldsOf,validPurpose,publicDocument,validateRequiredFields})",sandbox);
 
 test("somente PDFs ou imagens reconhecidas pelo conteúdo são aceitos",()=>{
   assert.equal(helpers.mimeOf(new Uint8Array([37,80,68,70,45,49])).mime,"application/pdf");
@@ -155,4 +155,31 @@ test("política restritiva impede alterações diretas no bucket privado por usu
   assert.match(hardening,/as restrictive for update to authenticated/);
   assert.match(hardening,/as restrictive for delete to authenticated/);
   assert.ok(hardening.includes("bucket_id <> 'team-internal-docs'"));
+});
+
+test("campos essenciais por categoria e CPF com dígitos verificadores",()=>{
+  assert.equal(helpers.validateRequiredFields("cpf",{numero:"529.982.247-25"}),undefined);
+  assert.throws(()=>helpers.validateRequiredFields("cpf",{numero:"529.982.247-24"}),/CPF/);
+  assert.throws(()=>helpers.validateRequiredFields("cpf",{}),/numero/);
+  assert.throws(()=>helpers.validateRequiredFields("rg",{numero:"123456"}),/orgao/);
+  assert.throws(()=>helpers.validateRequiredFields("rg",{numero:"123456",orgao:"SSP",emissao:"03/05/2021"}),/data de emissão/);
+  assert.equal(helpers.validateRequiredFields("rg",{numero:"123456",orgao:"SSP",emissao:"2021-05-03"}),undefined);
+});
+test("cadastro sem anexo continua restrito e prévia exige arquivo",()=>{
+  const optional=awaitMigration=>awaitMigration;
+  assert.match(source,/const file=input.file instanceof File \? input.file : null/);
+  assert.match(source,/const path=fileKind \?/);
+  assert.match(source,/if\(!doc.storage_path \|\| !doc.mime_type\) fail/);
+  assert.match(source,/has_file:Boolean\(row.storage_path\)/);
+  assert.match(frontend,/Adicionar PDF ou imagem/);
+  assert.match(frontend,/anexo salvo/);
+  assert.match(frontend,/sem anexo/);
+});
+test("perfil de todos os papéis incluindo admin master",async()=>{
+  const { readFile }=await import("node:fs/promises");
+  const sidebar=await readFile("src/app/components/admin/AdminSidebar.tsx","utf8");
+  const routes=await readFile("src/app/routes.tsx","utf8");
+  assert.match(sidebar,/label: "Meu Perfil"/);
+  assert.match(sidebar,/allow: \["admin_alfa", "admin", "editor", "autor", "financeiro"\]/);
+  assert.match(routes,/path: "perfil", loader: requireRoles\(\["admin_alfa", "admin", "editor", "autor", "financeiro"\]\)/);
 });
