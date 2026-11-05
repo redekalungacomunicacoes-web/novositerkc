@@ -192,7 +192,7 @@ Deno.serve(async (req:Request) => {
       }
       return json({ok:true,id:documentId},201);
     }
-    if(!["preview","field","history","archive"].includes(action)) fail("Operação desconhecida.");
+    if(!["preview","detail","field","history","archive","delete"].includes(action)) fail("Operação desconhecida.");
     const id=String(input.id||"");
     if(!UUID.test(id)) fail("Documento inválido.");
     const {data:doc,error}=await admin.from("team_private_documents").select("*")
@@ -201,6 +201,11 @@ Deno.serve(async (req:Request) => {
     if(!doc) fail("Documento não encontrado.",404);
     // Verificar propriedade ANTES de fazer download, revelar campos ou histórico.
     if(!isAdmin && ownMember?.id!==doc.member_id) fail("Acesso ao documento não autorizado.",403);
+    if(action==="detail") {
+      const purpose=validPurpose(input.purpose);
+      await audit(id,"preview",purpose);
+      return json({ok:true, document:{id:doc.id,title:doc.title,document_type:doc.document_type,fields:doc.fields||{},member_id:doc.member_id,expires_on:doc.expires_on,has_file:Boolean(doc.storage_path),created_at:doc.created_at}});
+    }
     if(action==="preview") {
       const purpose=validPurpose(input.purpose);
       if(!doc.storage_path || !doc.mime_type) fail("Este cadastro não tem arquivo anexado.",404);
@@ -232,8 +237,23 @@ Deno.serve(async (req:Request) => {
       if(historyError) fail("Falha ao consultar histórico.",503);
       return json({ok:true,events:events||[]});
     }
-    if(!isAdmin && ownMember?.id!==doc.member_id) fail("Somente o titular ou a administração podem arquivar.",403);
+    if(!isAdmin && ownMember?.id!==doc.member_id) fail("Somente o titular ou a administração podem alterar este documento.",403);
     const purpose=validPurpose(input.purpose);
+    if(action==="delete") {
+      // Exclusão solicitada expressamente: limpar campos sensíveis e remover anexo.
+      // Manter somente o registro técnico sem dados pessoais para preservar a auditoria.
+      await audit(id,"delete",purpose);
+      if(doc.storage_path) {
+        const {error:removeError}=await admin.storage.from(BUCKET).remove([doc.storage_path]);
+        if(removeError) fail("Não foi possível excluir o anexo. Tente novamente.",503);
+      }
+      const {error:deleteError}=await admin.from("team_private_documents").update({
+        title:"Documento excluído",fields:{},storage_path:null,mime_type:null,size_bytes:null,
+        signed_copy:false,expires_on:null,status:"deleted",updated_at:new Date().toISOString()
+      }).eq("id",id).eq("status","active");
+      if(deleteError) fail("Falha ao concluir exclusão dos dados. Tente novamente.",503);
+      return json({ok:true});
+    }
     await audit(id,"archive",purpose);
     const {error:archiveError}=await admin.from("team_private_documents").update({
       status:"archived",updated_at:new Date().toISOString()
