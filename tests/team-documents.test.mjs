@@ -199,3 +199,32 @@ test("CPF recebe máscara automática e salvamento sem anexo", async()=>{
   assert.match(ui,/O anexo é opcional/);
   assert.match(ui,/bg-emerald-600 px-4 py-2/);
 });
+
+test("prévia de dados somente após finalidade e auditoria, sem expor valores na listagem",()=>{
+  assert.match(source,/if\(action==="detail"\)/);
+  assert.match(source,/await audit\(id,"preview",purpose\)/);
+  assert.match(source,/document:\{id:doc.id,title:doc.title,document_type:doc.document_type,fields:doc.fields/);
+  assert.match(frontend,/action:"detail"/);
+  assert.match(frontend,/Pré-visualização ilustrativa dos dados informados/);
+  assert.match(frontend,/Não é documento emitido pelo governo/);
+});
+test("exclusão autorizada apaga dados e anexo e preserva trilha auditável",async()=>{
+  const sql=await readFile("supabase/migrations/20261105000442_team_private_documents_audited_delete.sql","utf8");
+  assert.match(sql,/status in \('active','archived','deleted'\)/);
+  assert.match(sql,/action in \('upload','preview','field_read','archive','delete'\)/);
+  assert.match(source,/if\(action==="delete"\)/);
+  assert.match(source,/await audit\(id,"delete",purpose\)/);
+  assert.match(source,/admin.storage.from\(BUCKET\).remove\(\[doc.storage_path\]\)/);
+  assert.match(source,/title:"Documento excluído",fields:\{\},storage_path:null,mime_type:null,size_bytes:null/);
+  assert.match(frontend,/action:"delete"/);
+  assert.match(frontend,/Excluir definitivamente os dados/);
+});
+test("perfil possui seções recolhíveis independentes e currículo próprio",async()=>{
+  const form=await readFile("src/app/pages/admin/AdminEquipeForm.tsx","utf8");
+  for(const heading of ["Dados principais","Currículo","Matérias vinculadas","Portfólio","Publicação","Avatar","Documentos internos"]){
+    assert.ok(form.includes(heading),heading);
+  }
+  assert.ok((form.match(/<details className="group rounded-xl border/g)||[]).length>=7);
+  assert.match(form,/group-open:rotate-180/);
+  assert.match(form,/TeamDocuments initialMemberId/);
+});
