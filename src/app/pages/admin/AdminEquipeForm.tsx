@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Save, Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowLeft, Save, Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
 import { TeamAvatarImage } from "@/app/components/TeamAvatarImage";
 import { supabase } from "@/lib/supabase";
 import { slugify } from "@/lib/cms";
@@ -419,18 +419,17 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Dados principais</h3>
+          <details className="group rounded-xl border bg-card shadow-sm" open>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-lg font-semibold marker:hidden">
+              Dados principais<ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 px-5 pb-5">
             <input {...register("nome", { required: "Nome é obrigatório" })} placeholder="Nome" className="w-full h-10 px-3 rounded-md border" />
             {errors.nome && <span className="text-destructive text-xs">{errors.nome.message}</span>}
             <input {...register("slug", { required: "Slug obrigatório" })} onChange={(e) => { setSlugTouched(true); setValue("slug", slugify(e.target.value)); }} placeholder="slug-do-perfil" className="w-full h-10 px-3 rounded-md border" />
             <input {...register("cargo")} placeholder="Profissão/Cargo" className="w-full h-10 px-3 rounded-md border" />
             <textarea {...register("bio")} placeholder="Bio curta" className="w-full min-h-[90px] p-3 rounded-md border" />
-            <textarea {...register("curriculo_md")} placeholder="Currículo detalhado em markdown" className="w-full min-h-[180px] p-3 rounded-md border font-mono text-sm" />
-            <details>
-              <summary className="cursor-pointer text-sm">Preview do currículo</summary>
-              <pre className="bg-muted p-3 rounded text-xs whitespace-pre-wrap">{curriculoMd || "Sem conteúdo"}</pre>
-            </details>
+
             <div className="grid md:grid-cols-2 gap-3">
               <input {...register("instagram")} placeholder="Instagram" className="w-full h-10 px-3 rounded-md border" />
               <input {...register("whatsapp")} placeholder="WhatsApp" className="w-full h-10 px-3 rounded-md border" />
@@ -439,10 +438,27 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
               <input {...register("website_url")} placeholder="Website URL" className="w-full h-10 px-3 rounded-md border md:col-span-2" />
             </div>
           </div>
+          </details>
+
+          <details className="group rounded-xl border bg-card shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-lg font-semibold marker:hidden">
+              Currículo<ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 px-5 pb-5">
+            <textarea {...register("curriculo_md")} placeholder="Currículo detalhado em markdown" className="w-full min-h-[180px] p-3 rounded-md border font-mono text-sm" />
+            <details>
+              <summary className="cursor-pointer text-sm">Preview do currículo</summary>
+              <pre className="bg-muted p-3 rounded text-xs whitespace-pre-wrap">{curriculoMd || "Sem conteúdo"}</pre>
+            </details>
+            </div>
+          </details>
 
           {!isSelfMode && (
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Matérias vinculadas</h3>
+          <details className="group rounded-xl border bg-card shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-lg font-semibold marker:hidden">
+              Matérias vinculadas<ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 px-5 pb-5">
             {postsError && <p className="text-xs text-amber-600">{postsError}</p>}
             <div className="max-h-52 overflow-auto border rounded-md p-3 space-y-2">
               {postsByStatus.map((p) => (
@@ -458,11 +474,15 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
               {!postsByStatus.length && <p className="text-xs text-muted-foreground">Nenhuma matéria disponível.</p>}
             </div>
           </div>
+          </details>
           )}
 
           {!isSelfMode && (
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Portfólio</h3>
+          <details className="group rounded-xl border bg-card shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-lg font-semibold marker:hidden">
+              Portfólio<ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 px-5 pb-5">
             {!isEditing && <p className="text-xs text-muted-foreground">Salve o integrante para liberar upload do portfólio.</p>}
             {isEditing && (
               <AddPortfolioItem onAdd={handlePortfolioUpload} />
@@ -486,32 +506,44 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
               {portfolio.length === 0 && <p className="text-xs text-muted-foreground">Sem itens no portfólio.</p>}
             </div>
           </div>
+          </details>
           )}
 
           {!isSelfMode && (
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Acesso ao Painel</h3>
+          <details className="group rounded-xl border bg-card shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-lg font-semibold marker:hidden">
+              Acesso ao Painel<ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 px-5 pb-5">
             <input type="email" {...register("email_login")} className="w-full h-10 px-3 rounded-md border" placeholder="email@dominio.com" />
             <input type="password" {...register("senha_login")} className="w-full h-10 px-3 rounded-md border" placeholder="Senha (opcional na edição)" />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("permissoes.admin")} />Admin</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("permissoes.editor")} />Editor</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("permissoes.autor")} />Autor</label>
           </div>
+          </details>
           )}
         </div>
 
         <div className="space-y-6">
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
+          <details className="group rounded-xl border bg-card shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-lg font-semibold marker:hidden">
+              Publicação<ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 px-5 pb-5">
             {!isSelfMode && <label className="flex items-center justify-between text-sm">Ativo <input type="checkbox" {...register("ativo")} /></label>}
             <label className="flex items-center justify-between text-sm">Publicar perfil <input type="checkbox" {...register("is_public")} /></label>
             {!isSelfMode && <input type="number" min={1} {...register("order_index", { setValueAs: (value) => (value === "" || value == null ? undefined : Number(value)), validate: (value) => value == null || (Number.isInteger(value) && value >= 1) || "Ordem deve ser um inteiro >= 1" })} className="w-full h-10 px-3 rounded-md border" placeholder="Ordem" />}
             {!isSelfMode && errors.order_index && <span className="text-destructive text-xs">{errors.order_index.message}</span>}
             <a href={`/equipe/${watch("slug") || ""}`} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">Abrir perfil público</a>
           </div>
+          </details>
 
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Avatar</h3>
+          <details className="group rounded-xl border bg-card shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-lg font-semibold marker:hidden">
+              Avatar<ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 px-5 pb-5">
             <label className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center text-center cursor-pointer">
               <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePickFile(e.target.files?.[0])} />
               <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
@@ -521,9 +553,17 @@ export function AdminEquipeForm({ mode = "admin", memberId }: AdminEquipeFormPro
             {(avatarPreviewUrl || savedAvatarPreviewUrl || fotoUrl) && <button type="button" className="text-xs text-red-600" onClick={() => { setRemoveAvatar(true); setPendingAvatarFile(null); if (avatarPreviewUrl) { URL.revokeObjectURL(avatarPreviewUrl); setAvatarPreviewUrl(null); } setSavedAvatarPreviewUrl(""); setValue("foto_url", "", { shouldDirty: true }); }}>Remover avatar</button>}
             <input {...register("foto_url")} className="w-full h-10 px-3 rounded-md border" readOnly placeholder="O avatar deve ser enviado pelo upload acima" />
           </div>
+          </details>
         </div>
       </div>
-      {isEditing && resolvedId && <TeamDocuments initialMemberId={resolvedId} />}
+      {isEditing && resolvedId && (
+        <details className="group rounded-xl border border-emerald-200 bg-card shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 text-lg font-semibold marker:hidden">
+            Documentos internos<ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="px-4 pb-4 sm:px-5 sm:pb-5"><TeamDocuments initialMemberId={resolvedId} /></div>
+        </details>
+      )}
     </div>
   );
 }
