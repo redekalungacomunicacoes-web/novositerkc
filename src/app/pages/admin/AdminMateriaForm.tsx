@@ -1554,7 +1554,7 @@ export function AdminMateriaForm() {
           )}
         </div>
 
-        <div className="space-y-6">
+        {activeTab === "materia" && <div className="space-y-6">
           <section id="materia-section-seo" className="bg-card border rounded-xl p-4 shadow-sm space-y-3 scroll-mt-24" aria-label="SEO e compartilhamento">
             <button type="button" aria-expanded={expandedSections.seo} aria-controls="materia-seo-body" onClick={() => toggleSection("seo")} className="flex w-full items-center justify-between gap-2 text-left">
               <span className="font-semibold text-base">SEO e compartilhamento</span>
@@ -1707,7 +1707,7 @@ export function AdminMateriaForm() {
             </div>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
       {showPreview && (() => {
         const previewData = watch();
