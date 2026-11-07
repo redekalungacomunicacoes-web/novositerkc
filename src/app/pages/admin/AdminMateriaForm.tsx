@@ -13,6 +13,7 @@ import {
   updateMateria
 } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
+import { YouTubeVideoPicker } from "./YouTubeVideoPicker";
 
 type MateriaEditorSection = "principal" | "conteudo" | "publicacao" | "capa" | "banner" | "seo";
 
@@ -1352,7 +1353,14 @@ export function AdminMateriaForm() {
                   <div className="flex items-center justify-between gap-2"><h3 className="font-medium">Entrevista {interviewIndex + 1}</h3><button type="button" className="rounded-md border px-3 py-1.5 text-sm text-destructive" onClick={() => setInterviews((items) => items.filter((item) => item.id !== interview.id))}>Remover</button></div>
                   <input aria-label="Título da entrevista" value={interview.title} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, title: event.target.value } : item))} className="h-10 w-full rounded-md border px-3" placeholder="Ex.: Entrevista com Maria Kalunga" />
                   <label className="block text-sm font-medium">Formato<select value={interview.format} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, format: event.target.value as MateriaInterview["format"] } : item))} className="mt-1 h-10 w-full rounded-md border px-3"><option value="text">Texto, com perguntas e respostas</option><option value="youtube">Vídeo do YouTube</option></select></label>
-                  {interview.format === "youtube" ? <input type="url" aria-label="Link do YouTube" value={interview.youtubeUrl} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: event.target.value } : item))} className="h-10 w-full rounded-md border px-3" placeholder="https://www.youtube.com/watch?v=..." /> : (
+                  {interview.format === "youtube" ? (
+                    <div className="space-y-3">
+                      <YouTubeVideoPicker value={interview.youtubeUrl} onSelect={(url) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: url } : item))} />
+                      <label className="block text-sm">Ou cole o link de um vídeo externo do YouTube
+                        <input type="url" value={interview.youtubeUrl} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: event.target.value } : item))} className="mt-1 h-10 w-full rounded-md border px-3" placeholder="https://www.youtube.com/watch?v=..." />
+                      </label>
+                    </div>
+                  ) : (
                     <div className="space-y-3">
                       {interview.questions.map((pair, pairIndex) => <div key={interview.id + "-" + pairIndex} className="grid gap-2 rounded-md bg-muted/30 p-3">
                         <input value={pair.question} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: item.questions.map((entry, index) => index === pairIndex ? { ...entry, question: event.target.value } : entry) } : item))} className="h-10 rounded-md border px-3" placeholder="Pergunta do repórter" />
