@@ -702,7 +702,7 @@ export function AdminMateriaForm() {
         category: "cover",
         folder: "capas",
         file,
-        thumbnailFile: await makeCoverThumbnail(file),
+        thumbnailFile: (await makeCoverThumbnail(file)) || undefined,
       });
       setValue("coverImage", uploaded.publicUrl, { shouldDirty: true, shouldValidate: true });
       setCoverDriveFileId(uploaded.id);
