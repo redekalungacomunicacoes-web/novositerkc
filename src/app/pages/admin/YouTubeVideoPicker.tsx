@@ -32,7 +32,7 @@ export function YouTubeVideoPicker({ value, onSelect }: Props) {
     youtubeApi("playlists")
       .then((result) => {
         if (!active) return;
-        const interviewPlaylist = (result.items || []).find((item: Playlist) => item.title.trim().toLocaleLowerCase("pt-BR") === "entrevistas");
+        const interviewPlaylist = (result.items || []).find((item: { title: string }) => item.title.trim().toLocaleLowerCase("pt-BR") === "entrevistas");
         if (!interviewPlaylist) {
           setError("A playlist “Entrevistas” ainda não foi encontrada no canal RKC.");
           return;
