@@ -22,6 +22,7 @@ type MateriaUI = {
   categoria: string;
   conteudo: string;
   contentBlocks: MateriaContentBlock[];
+  interviews: Array<{ id: string; title: string; format: "text" | "youtube"; youtubeUrl: string; questions: Array<{ question: string; answer: string }> }>;
   hashtags: string[];
   audioUrl: string;
   photoCredits: string;
@@ -317,6 +318,7 @@ export function MateriaDetalhes() {
     categoria: "",
     conteudo: "",
     contentBlocks: [],
+    interviews: [],
     hashtags: [],
     audioUrl: "",
     photoCredits: "",
@@ -453,6 +455,7 @@ export function MateriaDetalhes() {
         categoria: (found.tags && found.tags[0]) ? found.tags[0] : "Geral",
         conteudo: found.conteudo || "",
         contentBlocks: normalizeBlocks(found.content_blocks),
+        interviews: Array.isArray(found.content_blocks) ? (found.content_blocks.find((block: any) => block?.type === "interview_collection")?.interviews || []) : [],
         hashtags: Array.isArray(found.hashtags) ? found.hashtags.filter(Boolean) : [],
         audioUrl: found.audio_url || "",
         photoCredits: found.photo_credits || "",
@@ -662,6 +665,22 @@ export function MateriaDetalhes() {
                     Seu navegador não suporta áudio.
                   </audio>
                 </div>
+              )}
+
+              {m.interviews.length > 0 && (
+                <section className="mt-10 rounded-xl border border-green-200 bg-green-50/50 p-5 sm:p-7">
+                  <h2 className="mb-4 text-xl font-bold text-[#0F7A3E]">Entrevistas</h2>
+                  <div className="space-y-5">{m.interviews.map((interview) => {
+                    const videoId = interview.format === "youtube" ? interview.youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/)?.[1] : null;
+                    return <details key={interview.id} className="rounded-lg border bg-white p-4">
+                      <summary className="cursor-pointer font-semibold text-[#0F7A3E]">{interview.title || "Ver entrevista"}</summary>
+                      {interview.format === "youtube" ? (videoId
+                        ? <div className="mt-4 aspect-video overflow-hidden rounded-lg"><iframe className="h-full w-full" src={"https://www.youtube-nocookie.com/embed/" + videoId} title={interview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
+                        : <p className="mt-3 text-sm text-red-700">Link do YouTube inválido ou não reconhecido.</p>)
+                        : <div className="mt-4 space-y-4">{interview.questions?.map((pair, index) => <div key={index}><h3 className="font-semibold text-gray-900">{pair.question}</h3><p className="mt-1 whitespace-pre-wrap text-gray-700">{pair.answer}</p></div>)}</div>}
+                    </details>;
+                  })}</div>
+                </section>
               )}
 
               <div className="mt-12 pt-8 border-t border-gray-200">

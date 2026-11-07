@@ -13,6 +13,7 @@ import {
   updateMateria
 } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
+import { YouTubeVideoPicker } from "./YouTubeVideoPicker";
 
 type MateriaEditorSection = "principal" | "conteudo" | "publicacao" | "capa" | "banner" | "seo";
 
@@ -42,6 +43,14 @@ type MateriaFormData = {
   seoTitle: string;
   seoDescription: string;
   status: "published" | "draft" | "archived";
+};
+
+type MateriaInterview = {
+  id: string;
+  title: string;
+  format: "text" | "youtube";
+  youtubeUrl: string;
+  questions: Array<{ question: string; answer: string }>;
 };
 
 type MateriaGaleriaItem = {
@@ -367,6 +376,7 @@ export function AdminMateriaForm() {
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
   const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
+  const [interviews, setInterviews] = useState<MateriaInterview[]>([]);
   const [activeBlock, setActiveBlock] = useState<number | null>(0);
   const [activeTab, setActiveTab] = useState<"conteudo" | "galeria">("conteudo");
   // Mantém os campos montados enquanto a seção fica recolhida, preservando o formulário.
@@ -530,7 +540,12 @@ export function AdminMateriaForm() {
       }
 
       const d: any = data;
-      const parsedBlocks = normalizeBlocks(d.content_blocks || d.contentBlocks);
+      const rawContentBlocks = d.content_blocks || d.contentBlocks;
+      const parsedBlocks = normalizeBlocks(rawContentBlocks);
+      const interviewCollection = Array.isArray(rawContentBlocks)
+        ? rawContentBlocks.find((block: any) => block?.type === "interview_collection")
+        : null;
+      setInterviews(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews : []);
 
       [d.capa_drive_file_id, d.capa_thumb_drive_file_id, d.banner_drive_file_id, d.audio_drive_file_id,
         ...parsedBlocks.map((block: any) => block.drive_file_id)]
@@ -992,7 +1007,9 @@ export function AdminMateriaForm() {
         seo_title: data.seoTitle.trim() || null,
         seo_description: data.seoDescription.trim() || null,
         conteudo: legacyContent,
-        content_blocks: sanitizedBlocks.length ? sanitizedBlocks : null,
+        content_blocks: sanitizedBlocks.length || interviews.length
+          ? [...sanitizedBlocks, ...(interviews.length ? [{ type: "interview_collection", interviews }] : [])]
+          : null,
         hashtags: normalizeHashtags(data.hashtags),
         audio_url: data.audioUrl || null,
         photo_credits: data.photoCredits || null,
@@ -1323,6 +1340,40 @@ export function AdminMateriaForm() {
 
             </div>
           </div>
+          )}
+
+          {activeTab === "conteudo" && (
+            <section className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold">Entrevistas da matéria</h2>
+                <p className="text-sm text-muted-foreground">Adicione entrevistas em texto ou com link do YouTube. O título será exibido no botão da matéria.</p>
+              </div>
+              {interviews.map((interview, interviewIndex) => (
+                <div key={interview.id} className="space-y-3 rounded-lg border p-4">
+                  <div className="flex items-center justify-between gap-2"><h3 className="font-medium">Entrevista {interviewIndex + 1}</h3><button type="button" className="rounded-md border px-3 py-1.5 text-sm text-destructive" onClick={() => setInterviews((items) => items.filter((item) => item.id !== interview.id))}>Remover</button></div>
+                  <input aria-label="Título da entrevista" value={interview.title} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, title: event.target.value } : item))} className="h-10 w-full rounded-md border px-3" placeholder="Ex.: Entrevista com Maria Kalunga" />
+                  <label className="block text-sm font-medium">Formato<select value={interview.format} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, format: event.target.value as MateriaInterview["format"] } : item))} className="mt-1 h-10 w-full rounded-md border px-3"><option value="text">Texto, com perguntas e respostas</option><option value="youtube">Vídeo do YouTube</option></select></label>
+                  {interview.format === "youtube" ? (
+                    <div className="space-y-3">
+                      <YouTubeVideoPicker value={interview.youtubeUrl} onSelect={(url) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: url } : item))} />
+                      <label className="block text-sm">Ou cole o link de um vídeo externo do YouTube
+                        <input type="url" value={interview.youtubeUrl} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: event.target.value } : item))} className="mt-1 h-10 w-full rounded-md border px-3" placeholder="https://www.youtube.com/watch?v=..." />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {interview.questions.map((pair, pairIndex) => <div key={interview.id + "-" + pairIndex} className="grid gap-2 rounded-md bg-muted/30 p-3">
+                        <input value={pair.question} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: item.questions.map((entry, index) => index === pairIndex ? { ...entry, question: event.target.value } : entry) } : item))} className="h-10 rounded-md border px-3" placeholder="Pergunta do repórter" />
+                        <textarea value={pair.answer} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: item.questions.map((entry, index) => index === pairIndex ? { ...entry, answer: event.target.value } : entry) } : item))} className="min-h-20 rounded-md border p-3" placeholder="Resposta da pessoa entrevistada" />
+                        <button type="button" className="justify-self-start text-sm text-destructive" onClick={() => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: item.questions.filter((_, index) => index !== pairIndex) } : item))}>Remover pergunta e resposta</button>
+                      </div>)}
+                      <button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={() => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: [...item.questions, { question: "", answer: "" }] } : item))}>Adicionar pergunta e resposta</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <button type="button" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => setInterviews((items) => [...items, { id: uid("interview"), title: "", format: "text", youtubeUrl: "", questions: [{ question: "", answer: "" }] }])}>Adicionar entrevista</button>
+            </section>
           )}
 
           {activeTab === "galeria" && (
