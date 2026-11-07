@@ -332,7 +332,7 @@ export function AdminMateriaForm() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, dirtyFields },
     reset,
     setValue,
     watch,
@@ -382,6 +382,8 @@ export function AdminMateriaForm() {
 
   const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
   const [interviews, setInterviews] = useState<MateriaInterview[]>([]);
+  const originalBlocks = useRef<MateriaContentBlock[]>([]);
+  const originalInterviews = useRef<MateriaInterview[]>([]);
   const [activeBlock, setActiveBlock] = useState<number | null>(0);
   const [activeTab, setActiveTab] = useState<"materia" | "entrevistas">("materia");
   const [editorMode, setEditorMode] = useState<"traditional" | "preview">("traditional");
@@ -562,6 +564,16 @@ export function AdminMateriaForm() {
         thumbnailUrl: interview.thumbnailUrl || "",
         questions: Array.isArray(interview.questions) ? interview.questions : [{ question: "", answer: "" }],
       })) : []);
+      originalInterviews.current = Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.map((interview: any) => ({
+        ...interview,
+        format: interview.format === "youtube" || interview.format === "audio" ? interview.format : "text",
+        youtubeUrl: interview.youtubeUrl || "",
+        audioUrl: interview.audioUrl || "",
+        audioDriveFileId: interview.audioDriveFileId || null,
+        transcript: interview.transcript || "",
+        thumbnailUrl: interview.thumbnailUrl || "",
+        questions: Array.isArray(interview.questions) ? interview.questions : [{ question: "", answer: "" }],
+      })) : [];
 
       [d.capa_drive_file_id, d.capa_thumb_drive_file_id, d.banner_drive_file_id, d.audio_drive_file_id,
         ...(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.map((item: any) => item?.audioDriveFileId) : []),
@@ -570,6 +582,7 @@ export function AdminMateriaForm() {
         .forEach((value) => cleanupCandidateIds.current.add(value));
 
       setBlocks(parsedBlocks);
+      originalBlocks.current = parsedBlocks;
       setCoverDriveFileId(d.capa_drive_file_id || null);
       setCoverThumbDriveFileId(d.capa_thumb_drive_file_id || null);
       setCoverThumbUrl(d.capa_thumb_url || null);
@@ -1073,7 +1086,52 @@ export function AdminMateriaForm() {
         autor_nome,
       };
 
-      const res = await submitWithCompat(payload);
+      let payloadToSave = payload;
+      if (isEditing) {
+        const partial: Record<string, unknown> = {};
+        if (dirtyFields.title) partial.titulo = payload.titulo;
+        if (dirtyFields.subtitle) partial.resumo = payload.resumo;
+        if (dirtyFields.seoTitle) partial.seo_title = payload.seo_title;
+        if (dirtyFields.seoDescription) partial.seo_description = payload.seo_description;
+        if (dirtyFields.title || dirtyFields.customSlug) partial.slug = payload.slug;
+        const blocksChanged = JSON.stringify(sanitizedBlocks) !== JSON.stringify(originalBlocks.current);
+        const interviewsChanged = JSON.stringify(interviews) !== JSON.stringify(originalInterviews.current);
+        if (dirtyFields.content || blocksChanged || interviewsChanged) {
+          partial.conteudo = legacyContent;
+          partial.content_blocks = payload.content_blocks;
+        }
+        if (dirtyFields.hashtags) partial.hashtags = payload.hashtags;
+        if (dirtyFields.audioUrl) {
+          partial.audio_url = payload.audio_url;
+          partial.audio_drive_file_id = payload.audio_drive_file_id;
+        }
+        if (dirtyFields.photoCredits) partial.photo_credits = payload.photo_credits;
+        if (dirtyFields.coverImage) {
+          partial.capa_url = payload.capa_url;
+          partial.capa_drive_file_id = payload.capa_drive_file_id;
+          partial.capa_thumb_drive_file_id = payload.capa_thumb_drive_file_id;
+          partial.capa_thumb_url = payload.capa_thumb_url;
+        }
+        if (dirtyFields.bannerImage) {
+          partial.banner_url = payload.banner_url;
+          partial.banner_drive_file_id = payload.banner_drive_file_id;
+        }
+        if (dirtyFields.authorId) {
+          partial.autor_equipe_id = payload.autor_equipe_id;
+          partial.autor_id = payload.autor_id;
+          partial.autor_nome = payload.autor_nome;
+        }
+        if (dirtyFields.category) partial.tags = payload.tags;
+        if (dirtyFields.status || dirtyFields.date) {
+          partial.status = payload.status;
+          partial.published_at = payload.published_at;
+        }
+        payloadToSave = partial;
+      }
+
+      const res = Object.keys(payloadToSave).length > 0
+        ? await submitWithCompat(payloadToSave)
+        : { data: { id }, error: null };
       if (res.error) return alert(res.error.message);
 
       const savedId = res.data?.id || id;
@@ -1085,6 +1143,10 @@ export function AdminMateriaForm() {
           alert("A matéria foi salva. A limpeza de arquivos substituídos ficou pendente e será retomada ao salvar novamente.");
         }
       }
+
+      originalBlocks.current = sanitizedBlocks;
+      originalInterviews.current = interviews;
+      if (isEditing) reset(data);
 
       if (!id && savedId) {
         navigate(`/admin/materias/editar/${savedId}`, { replace: true });
