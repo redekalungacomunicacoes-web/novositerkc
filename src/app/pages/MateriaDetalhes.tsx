@@ -22,7 +22,7 @@ type MateriaUI = {
   categoria: string;
   conteudo: string;
   contentBlocks: MateriaContentBlock[];
-  interviews: Array<{ id: string; title: string; format: "text" | "youtube"; youtubeUrl: string; questions: Array<{ question: string; answer: string }> }>;
+  interviews: Array<{ id: string; title: string; format: "text" | "youtube" | "audio"; youtubeUrl: string; audioUrl?: string; transcript?: string; thumbnailUrl?: string; questions: Array<{ question: string; answer: string }> }>;
   hashtags: string[];
   audioUrl: string;
   photoCredits: string;
@@ -300,6 +300,7 @@ function renderBlock(block: MateriaContentBlock) {
 export function MateriaDetalhes() {
   const params = useParams();
   const paramValue = (params as any).slug || (params as any).id;
+  const interviewId = (params as any).interviewId as string | undefined;
 
   const [loading, setLoading] = useState(true);
   const [materia, setMateria] = useState<MateriaUI | null>(null);
@@ -327,9 +328,11 @@ export function MateriaDetalhes() {
 
   useEffect(() => {
     if (!materia) return;
-    const title = materia.seoTitle || materia.titulo;
-    const description = materia.seoDescription || materia.resumo || "";
-    const url = `https://kalungacomunicacoes.org/materias/${encodeURIComponent(materia.slug)}`;
+    const interview = interviewId ? materia.interviews.find((item) => item.id === interviewId) : null;
+    const title = interview?.title || materia.seoTitle || materia.titulo;
+    const description = interview?.transcript || materia.seoDescription || materia.resumo || "";
+    const articlePath = `/materias/${encodeURIComponent(materia.slug)}`;
+    const url = `https://kalungacomunicacoes.org${interview ? `${articlePath}/entrevistas/${encodeURIComponent(interview.id)}` : articlePath}`;
     const upsert = (attribute: "name" | "property", key: string, value: string) => {
       let tag = document.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
       if (!tag) {
@@ -350,7 +353,7 @@ export function MateriaDetalhes() {
     upsert("name", "twitter:title", title);
     upsert("name", "twitter:description", description);
     if (materia.imagem) upsert("name", "twitter:image", materia.imagem);
-  }, [materia]);
+  }, [materia, interviewId]);
 
   useEffect(() => {
     if (!paramValue) return;
@@ -455,7 +458,15 @@ export function MateriaDetalhes() {
         categoria: (found.tags && found.tags[0]) ? found.tags[0] : "Geral",
         conteudo: found.conteudo || "",
         contentBlocks: normalizeBlocks(found.content_blocks),
-        interviews: Array.isArray(found.content_blocks) ? (found.content_blocks.find((block: any) => block?.type === "interview_collection")?.interviews || []) : [],
+        interviews: Array.isArray(found.content_blocks) ? (found.content_blocks.find((block: any) => block?.type === "interview_collection")?.interviews || []).map((interview: any) => ({
+          ...interview,
+          format: interview.format === "youtube" || interview.format === "audio" ? interview.format : "text",
+          youtubeUrl: interview.youtubeUrl || "",
+          audioUrl: interview.audioUrl || "",
+          transcript: interview.transcript || "",
+          thumbnailUrl: interview.thumbnailUrl || "",
+          questions: Array.isArray(interview.questions) ? interview.questions : [],
+        })) : [],
         hashtags: Array.isArray(found.hashtags) ? found.hashtags.filter(Boolean) : [],
         audioUrl: found.audio_url || "",
         photoCredits: found.photo_credits || "",
@@ -476,7 +487,7 @@ export function MateriaDetalhes() {
 
       await trackPageView({
         pageType: "materia",
-        path: `/materias/${mapped.slug || mapped.id}`,
+        path: interviewId ? `/materias/${mapped.slug || mapped.id}/entrevistas/${encodeURIComponent(interviewId)}` : `/materias/${mapped.slug || mapped.id}`,
         contentId: mapped.id,
         contentSlug: mapped.slug,
       });
@@ -507,6 +518,7 @@ export function MateriaDetalhes() {
   }, [paramValue]);
 
   const m = materia || fallbackMateria;
+  const selectedInterview = interviewId ? m.interviews.find((interview) => interview.id === interviewId) : null;
   const hasBlocks = m.contentBlocks.length > 0;
   const hasGallery = galeria.length > 0;
   const normalizedAudioUrl = (m.audioUrl || "").trim();
@@ -544,6 +556,26 @@ export function MateriaDetalhes() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeGalleryIndex, galeria.length]);
+
+  if (interviewId) {
+    const videoId = selectedInterview?.format === "youtube" ? selectedInterview.youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/)?.[1] : null;
+    return <main className="min-h-screen bg-white py-12 sm:py-16">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        <Link to={`/materias/${encodeURIComponent(m.slug || m.id)}`} className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-[#0F7A3E] hover:underline"><ArrowLeft className="h-4 w-4" />Voltar à matéria</Link>
+        {loading ? <p className="text-gray-500">Carregando entrevista…</p> : !materia || !selectedInterview ? <p className="text-gray-500">Entrevista não encontrada.</p> : <article>
+          <p className="mb-2 text-sm font-semibold text-[#0F7A3E]">Entrevista · {m.titulo}</p>
+          <h1 className="mb-6 text-3xl font-bold leading-tight text-gray-950 sm:text-4xl">{selectedInterview.title || "Entrevista"}</h1>
+          {selectedInterview.thumbnailUrl ? <img src={selectedInterview.thumbnailUrl} alt={selectedInterview.title || "Imagem da entrevista"} className="mb-6 max-h-[32rem] w-full rounded-xl object-cover" /> : null}
+          {selectedInterview.format === "youtube" ? (videoId
+            ? <div className="aspect-video overflow-hidden rounded-xl"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${videoId}`} title={selectedInterview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
+            : <p className="text-red-700">Link do YouTube inválido ou não reconhecido.</p>) : null}
+          {selectedInterview.format === "audio" && selectedInterview.audioUrl ? <section className="rounded-xl border bg-gray-50 p-4"><h2 className="mb-3 font-semibold">Ouça a entrevista</h2><audio controls preload="none" className="w-full"><source src={selectedInterview.audioUrl} />Seu navegador não suporta áudio.</audio></section> : null}
+          {selectedInterview.transcript ? <details className="mt-5 rounded-xl border p-4"><summary className="cursor-pointer font-semibold text-[#0F7A3E]">Ler transcrição</summary><div className="mt-3 whitespace-pre-wrap leading-relaxed text-gray-700">{selectedInterview.transcript}</div></details> : null}
+          {selectedInterview.format === "text" ? <div className="mt-6 space-y-6">{selectedInterview.questions.map((pair, index) => <section key={index}><h2 className="font-semibold text-gray-950">{pair.question}</h2><p className="mt-2 whitespace-pre-wrap leading-relaxed text-gray-700">{pair.answer}</p></section>)}</div> : null}
+        </article>}
+      </div>
+    </main>;
+  }
 
   return (
     <div>
@@ -613,6 +645,22 @@ export function MateriaDetalhes() {
                 )}
               </div>
 
+              {m.interviews.length > 0 && (
+                <section className="mt-10 border-t border-gray-200 pt-6" aria-labelledby="article-interviews-title">
+                  <h2 id="article-interviews-title" className="mb-4 text-xl font-bold text-[#0F7A3E]">Entrevistas</h2>
+                  <div className="grid grid-cols-4 gap-2 sm:gap-4">
+                    {m.interviews.map((interview, index) => <Link
+                      key={interview.id}
+                      to={`/materias/${encodeURIComponent(m.slug || m.id)}/entrevistas/${encodeURIComponent(interview.id)}`}
+                      className="group min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white transition hover:border-[#0F7A3E] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E]"
+                    >
+                      <img src={interview.thumbnailUrl || m.imagem} alt={interview.title || `Entrevista ${index + 1}`} loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
+                      <span className="block truncate p-2 text-center text-xs font-semibold leading-tight text-gray-900 group-hover:text-[#0F7A3E] sm:p-3 sm:text-sm">{interview.title || `Entrevista ${index + 1}`}</span>
+                    </Link>)}
+                  </div>
+                </section>
+              )}
+
               {m.hashtags.length > 0 && (
                 <div className="mt-10 pt-6 border-t border-gray-200">
                   <h3 className="font-semibold text-base text-[#2E2E2E] mb-3">Hashtags</h3>
@@ -665,22 +713,6 @@ export function MateriaDetalhes() {
                     Seu navegador não suporta áudio.
                   </audio>
                 </div>
-              )}
-
-              {m.interviews.length > 0 && (
-                <section className="mt-10 rounded-xl border border-green-200 bg-green-50/50 p-5 sm:p-7">
-                  <h2 className="mb-4 text-xl font-bold text-[#0F7A3E]">Entrevistas</h2>
-                  <div className="space-y-5">{m.interviews.map((interview) => {
-                    const videoId = interview.format === "youtube" ? interview.youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/)?.[1] : null;
-                    return <details key={interview.id} className="rounded-lg border bg-white p-4">
-                      <summary className="cursor-pointer font-semibold text-[#0F7A3E]">{interview.title || "Ver entrevista"}</summary>
-                      {interview.format === "youtube" ? (videoId
-                        ? <div className="mt-4 aspect-video overflow-hidden rounded-lg"><iframe className="h-full w-full" src={"https://www.youtube-nocookie.com/embed/" + videoId} title={interview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
-                        : <p className="mt-3 text-sm text-red-700">Link do YouTube inválido ou não reconhecido.</p>)
-                        : <div className="mt-4 space-y-4">{interview.questions?.map((pair, index) => <div key={index}><h3 className="font-semibold text-gray-900">{pair.question}</h3><p className="mt-1 whitespace-pre-wrap text-gray-700">{pair.answer}</p></div>)}</div>}
-                    </details>;
-                  })}</div>
-                </section>
               )}
 
               <div className="mt-12 pt-8 border-t border-gray-200">

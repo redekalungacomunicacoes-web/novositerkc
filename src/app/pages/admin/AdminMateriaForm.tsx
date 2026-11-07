@@ -48,8 +48,12 @@ type MateriaFormData = {
 type MateriaInterview = {
   id: string;
   title: string;
-  format: "text" | "youtube";
+  format: "text" | "youtube" | "audio";
   youtubeUrl: string;
+  audioUrl?: string;
+  audioDriveFileId?: string | null;
+  transcript?: string;
+  thumbnailUrl?: string;
   questions: Array<{ question: string; answer: string }>;
 };
 
@@ -354,6 +358,7 @@ export function AdminMateriaForm() {
 
   const [loading, setLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [previewInterviewId, setPreviewInterviewId] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [previewEditField, setPreviewEditField] = useState<string | null>(null);
   const [previewImageField, setPreviewImageField] = useState<"coverImage" | "bannerImage">("bannerImage");
@@ -378,7 +383,9 @@ export function AdminMateriaForm() {
   const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
   const [interviews, setInterviews] = useState<MateriaInterview[]>([]);
   const [activeBlock, setActiveBlock] = useState<number | null>(0);
-  const [activeTab, setActiveTab] = useState<"conteudo" | "galeria">("conteudo");
+  const [activeTab, setActiveTab] = useState<"materia" | "entrevistas">("materia");
+  const [editorMode, setEditorMode] = useState<"traditional" | "preview">("traditional");
+  const [uploadingInterviewAudioId, setUploadingInterviewAudioId] = useState<string | null>(null);
   // Mantém os campos montados enquanto a seção fica recolhida, preservando o formulário.
   const [expandedSections, setExpandedSections] = useState<Record<MateriaEditorSection, boolean>>({
     principal: true,
@@ -394,10 +401,10 @@ export function AdminMateriaForm() {
   }
 
   function goToSection(section: MateriaEditorSection) {
-    if (section === "conteudo") setActiveTab("conteudo");
+    if (section === "conteudo") setActiveTab("materia");
     setExpandedSections((current) => ({ ...current, [section]: true }));
     requestAnimationFrame(() => {
-      document.getElementById(`materia-section-${section}`)?.scrollIntoView({
+      document.getElementById(section === "conteudo" ? "materia-panel" : `materia-section-${section}`)?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
@@ -545,9 +552,19 @@ export function AdminMateriaForm() {
       const interviewCollection = Array.isArray(rawContentBlocks)
         ? rawContentBlocks.find((block: any) => block?.type === "interview_collection")
         : null;
-      setInterviews(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews : []);
+      setInterviews(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.map((interview: any) => ({
+        ...interview,
+        format: interview.format === "youtube" || interview.format === "audio" ? interview.format : "text",
+        youtubeUrl: interview.youtubeUrl || "",
+        audioUrl: interview.audioUrl || "",
+        audioDriveFileId: interview.audioDriveFileId || null,
+        transcript: interview.transcript || "",
+        thumbnailUrl: interview.thumbnailUrl || "",
+        questions: Array.isArray(interview.questions) ? interview.questions : [{ question: "", answer: "" }],
+      })) : []);
 
       [d.capa_drive_file_id, d.capa_thumb_drive_file_id, d.banner_drive_file_id, d.audio_drive_file_id,
+        ...(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.map((item: any) => item?.audioDriveFileId) : []),
         ...parsedBlocks.map((block: any) => block.drive_file_id)]
         .filter((value): value is string => typeof value === "string" && value.length > 0)
         .forEach((value) => cleanupCandidateIds.current.add(value));
@@ -794,6 +811,32 @@ export function AdminMateriaForm() {
     }
   };
 
+  const handleInterviewAudioUpload = async (interviewId: string, file?: File) => {
+    if (!file || !id) {
+      alert("Salve a matéria como rascunho antes de anexar o áudio da entrevista.");
+      return;
+    }
+    const allowedAudioTypes = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/mp4", "audio/x-m4a"]);
+    if (!allowedAudioTypes.has(file.type)) {
+      alert("Formato de áudio não suportado. Use MP3, WAV, OGG ou M4A.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      alert("Arquivo muito grande. O tamanho máximo permitido é 20 MB.");
+      return;
+    }
+    setUploadingInterviewAudioId(interviewId);
+    try {
+      const uploaded = await uploadToDrive({ materiaId: id, category: "audio", folder: `entrevistas/${interviewId}`, file, timeoutMs: 45000 });
+      cleanupCandidateIds.current.add(uploaded.id);
+      setInterviews((items) => items.map((item) => item.id === interviewId ? { ...item, format: "audio", audioUrl: uploaded.publicUrl, audioDriveFileId: uploaded.id } : item));
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar áudio da entrevista.");
+    } finally {
+      setUploadingInterviewAudioId(null);
+    }
+  };
+
   const handleBannerUpload = async (file?: File) => {
     if (!file) return;
 
@@ -817,7 +860,7 @@ export function AdminMateriaForm() {
     }
   };
 
-  const addBlock = (type: MateriaTextBlockType | "image" | "image-text") => {
+  const addBlock = (type: MateriaTextBlockType | "image" | "image-text", position = blocks.length) => {
     if (!isMounted.current) return;
     setBlocks((prev) => {
       if (!isMounted.current) return prev;
@@ -832,7 +875,9 @@ export function AdminMateriaForm() {
       }
 
       // Adicionar vários blocos deve ser rápido: não abre o novo bloco nem move a página.
-      return [...prev, newBlock];
+      const next = [...prev];
+      next.splice(Math.max(0, Math.min(position, next.length)), 0, newBlock);
+      return next;
     });
   };
 
@@ -1067,9 +1112,9 @@ export function AdminMateriaForm() {
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={() => setShowPreview(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>
-            <Eye className="h-4 w-4" />
-            Pré-visualizar
+          <button type="button" aria-pressed={editorMode === "traditional"} onClick={() => { setEditorMode("traditional"); setShowPreview(false); }} className={`px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "traditional" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>Editor tradicional</button>
+          <button type="button" aria-pressed={editorMode === "preview"} onClick={() => { setEditorMode("preview"); setPreviewInterviewId(null); setShowPreview(true); }} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "preview" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>
+            <Eye className="h-4 w-4" /> Editor com prévia
           </button>
           <button type="button" onClick={async () => { if (id) { try { await cleanupUnreferencedMateriaFiles(id); } catch (cleanupError) { console.warn("[materia-drive] cancelamento com limpeza pendente", cleanupError); } } navigate("/admin/materias"); }} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
           <button type="button" onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
@@ -1132,25 +1177,33 @@ export function AdminMateriaForm() {
             </div>
           </div>
 
-          <div className="tabs-menu flex gap-2 mb-2">
+          <div className="tabs-menu grid grid-cols-2 gap-2 mb-2" role="tablist" aria-label="Seções da edição da matéria">
             <button
               type="button"
-              className={`px-3 py-2 rounded-md text-sm transition-colors ${activeTab === "conteudo" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
-              onClick={() => setActiveTab("conteudo")}
+              role="tab"
+              id="materia-tab"
+              aria-controls="materia-panel"
+              aria-selected={activeTab === "materia"}
+              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === "materia" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
+              onClick={() => setActiveTab("materia")}
             >
-              Conteúdo
+              Matéria
             </button>
             <button
               type="button"
-              className={`px-3 py-2 rounded-md text-sm transition-colors ${activeTab === "galeria" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
-              onClick={() => setActiveTab("galeria")}
+              role="tab"
+              id="entrevistas-tab"
+              aria-controls="entrevistas-panel"
+              aria-selected={activeTab === "entrevistas"}
+              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === "entrevistas" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
+              onClick={() => setActiveTab("entrevistas")}
             >
-              Galeria de Fotos
+              Entrevistas {interviews.length > 0 ? `(${interviews.length})` : ""}
             </button>
           </div>
 
-          {activeTab === "conteudo" && (
-          <div id="materia-section-conteudo" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
+          {activeTab === "materia" && (
+          <div id="materia-panel" role="tabpanel" aria-labelledby="materia-tab" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
             <button type="button" aria-expanded={expandedSections.conteudo} aria-controls="materia-conteudo-body" onClick={() => toggleSection("conteudo")} className="flex w-full items-center justify-between gap-3 text-left border-b pb-4">
               <span>
                 <span className="block font-semibold text-lg">Conteúdo da Matéria</span>
@@ -1342,22 +1395,36 @@ export function AdminMateriaForm() {
           </div>
           )}
 
-          {activeTab === "conteudo" && (
-            <section className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+          {activeTab === "entrevistas" && (
+            <section id="entrevistas-panel" role="tabpanel" aria-labelledby="entrevistas-tab" className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">Entrevistas da matéria</h2>
-                <p className="text-sm text-muted-foreground">Adicione entrevistas em texto ou com link do YouTube. O título será exibido no botão da matéria.</p>
+                <p className="text-sm text-muted-foreground">Adicione entrevistas em texto, vídeo do canal/YouTube ou áudio. Cada título terá uma página própria.</p>
               </div>
               {interviews.map((interview, interviewIndex) => (
                 <div key={interview.id} className="space-y-3 rounded-lg border p-4">
                   <div className="flex items-center justify-between gap-2"><h3 className="font-medium">Entrevista {interviewIndex + 1}</h3><button type="button" className="rounded-md border px-3 py-1.5 text-sm text-destructive" onClick={() => setInterviews((items) => items.filter((item) => item.id !== interview.id))}>Remover</button></div>
                   <input aria-label="Título da entrevista" value={interview.title} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, title: event.target.value } : item))} className="h-10 w-full rounded-md border px-3" placeholder="Ex.: Entrevista com Maria Kalunga" />
-                  <label className="block text-sm font-medium">Formato<select value={interview.format} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, format: event.target.value as MateriaInterview["format"] } : item))} className="mt-1 h-10 w-full rounded-md border px-3"><option value="text">Texto, com perguntas e respostas</option><option value="youtube">Vídeo do YouTube</option></select></label>
+                  <label className="block text-sm font-medium">Formato<select value={interview.format} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, format: event.target.value as MateriaInterview["format"] } : item))} className="mt-1 h-10 w-full rounded-md border px-3"><option value="text">Texto, com perguntas e respostas</option><option value="youtube">Vídeo do YouTube</option><option value="audio">Áudio anexado</option></select></label>
+                  <label className="block text-sm">Miniatura ou foto da pessoa entrevistada (URL)
+                    <input type="url" value={interview.thumbnailUrl || ""} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, thumbnailUrl: event.target.value } : item))} className="mt-1 h-10 w-full rounded-md border px-3" placeholder="https://..." />
+                  </label>
                   {interview.format === "youtube" ? (
                     <div className="space-y-3">
                       <YouTubeVideoPicker value={interview.youtubeUrl} onSelect={(url) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: url } : item))} />
                       <label className="block text-sm">Ou cole o link de um vídeo externo do YouTube
                         <input type="url" value={interview.youtubeUrl} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: event.target.value } : item))} className="mt-1 h-10 w-full rounded-md border px-3" placeholder="https://www.youtube.com/watch?v=..." />
+                      </label>
+                    </div>
+                  ) : interview.format === "audio" ? (
+                    <div className="space-y-3 rounded-md bg-muted/30 p-3">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
+                        <input type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/x-m4a" className="sr-only" disabled={uploadingInterviewAudioId === interview.id} onChange={(event) => handleInterviewAudioUpload(interview.id, event.target.files?.[0])} />
+                        {uploadingInterviewAudioId === interview.id ? "Enviando áudio…" : interview.audioUrl ? "Substituir áudio" : "Anexar áudio"}
+                      </label>
+                      {interview.audioUrl ? <audio controls preload="none" className="w-full"><source src={interview.audioUrl} />Seu navegador não suporta áudio.</audio> : <p className="text-xs text-muted-foreground">MP3, WAV, OGG ou M4A, até 20 MB. A matéria precisa estar salva como rascunho para anexar o arquivo.</p>}
+                      <label className="block text-sm">Transcrição do áudio (opcional)
+                        <textarea value={interview.transcript || ""} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, transcript: event.target.value } : item))} className="mt-1 min-h-28 w-full rounded-md border p-3" placeholder="Inclua aqui a transcrição para facilitar o acesso ao conteúdo." />
                       </label>
                     </div>
                   ) : (
@@ -1372,11 +1439,11 @@ export function AdminMateriaForm() {
                   )}
                 </div>
               ))}
-              <button type="button" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => setInterviews((items) => [...items, { id: uid("interview"), title: "", format: "text", youtubeUrl: "", questions: [{ question: "", answer: "" }] }])}>Adicionar entrevista</button>
+              <button type="button" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => setInterviews((items) => [...items, { id: uid("interview"), title: "", format: "text", youtubeUrl: "", audioUrl: "", audioDriveFileId: null, transcript: "", thumbnailUrl: "", questions: [{ question: "", answer: "" }] }])}>Adicionar entrevista</button>
             </section>
           )}
 
-          {activeTab === "galeria" && (
+          {activeTab === "materia" && (
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <div>
@@ -1598,16 +1665,24 @@ export function AdminMateriaForm() {
             {previewEditField === key ? "Concluir" : "Editar"}
           </button>
         );
+        const previewAddBlockMenu = (position: number) => (
+          <details className="my-3 rounded-lg border border-dashed border-green-700/40 bg-green-50/40 p-2">
+            <summary className="cursor-pointer list-none text-center text-sm font-medium text-green-800">＋ Adicionar bloco</summary>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
+              {([["paragraph", "Parágrafo"], ["heading", "Subtítulo"], ["quote", "Citação"], ["highlight", "Destaque"], ["image", "Imagem"], ["image-text", "Imagem + texto"]] as const).map(([type, label]) => <button key={type} type="button" onClick={() => addBlock(type, position)} className="rounded-md border bg-white px-3 py-1.5 text-xs hover:border-green-700">{label}</button>)}
+            </div>
+          </details>
+        );
 
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3 sm:p-6" onClick={() => setShowPreview(false)}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3 sm:p-6" onClick={() => { setShowPreview(false); setEditorMode("traditional"); setPreviewInterviewId(null); }}>
             <section role="dialog" aria-modal="true" aria-labelledby="materia-preview-title" className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
               <div className="z-10 flex shrink-0 items-center justify-between border-b bg-white px-4 py-3">
                 <div>
                   <h2 id="materia-preview-title" className="font-semibold">Pré-visualização editável</h2>
                   <p className="text-xs text-muted-foreground">Use os lápis para alterar o conteúdo sem fechar a prévia.</p>
                 </div>
-                <button type="button" onClick={() => setShowPreview(false)} aria-label="Fechar pré-visualização" className="rounded-md p-2 hover:bg-muted"><X className="h-5 w-5" /></button>
+                <button type="button" onClick={() => { setShowPreview(false); setEditorMode("traditional"); setPreviewInterviewId(null); }} aria-label="Fechar pré-visualização" className="rounded-md p-2 hover:bg-muted"><X className="h-5 w-5" /></button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="relative">
@@ -1673,7 +1748,7 @@ export function AdminMateriaForm() {
                   {previewEditField === "author" ? <select value={previewData.authorId || ""} onChange={(event) => setValue("authorId", event.target.value, { shouldDirty: true })} className="mt-2 h-10 rounded-md border px-3"><option value="">Selecione um autor</option>{equipe.map((person) => <option key={person.id} value={person.id}>{person.nome}</option>)}</select> : null}
 
                   <div className="mt-8 space-y-6 text-lg leading-relaxed text-gray-700">
-                    {blocks.length > 0 ? blocks.map((block) => {
+                    {blocks.length > 0 ? blocks.map((block, blockIndex) => {
                       const editKey = `block:${block.id}`;
                       const editing = previewEditField === editKey;
                       if (block.type === "image") return (
@@ -1703,6 +1778,7 @@ export function AdminMateriaForm() {
                             {previewEditButton(editKey, "bloco de texto")}
                           </div>
                           {editing && block.type === "quote" ? <input value={block.author || ""} onChange={(event) => updateBlock(block.id, { author: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Autoria da citação" /> : null}
+                          {previewAddBlockMenu(blockIndex + 1)}
                         </section>
                       );
                     }) : (
@@ -1711,6 +1787,7 @@ export function AdminMateriaForm() {
                           {previewEditField === "legacyContent" ? <textarea autoFocus value={previewData.content || ""} onChange={(event) => setValue("content", event.target.value, { shouldDirty: true })} rows={10} className="w-full rounded-md border p-3" /> : <div className="flex-1 whitespace-pre-wrap">{previewData.content || "O conteúdo da matéria aparecerá aqui."}</div>}
                           {previewEditButton("legacyContent", "conteúdo")}
                         </div>
+                        {previewAddBlockMenu(0)}
                       </section>
                     )}
                   </div>
@@ -1723,12 +1800,26 @@ export function AdminMateriaForm() {
                   {previewEditField === "photoCredits" ? <input value={previewData.photoCredits || ""} onChange={(event) => setValue("photoCredits", event.target.value, { shouldDirty: true })} className="mt-2 h-10 w-full rounded-md border px-3" placeholder="Créditos das fotos" /> : null}
                   {previewData.audioUrl ? <div className="mt-5 flex items-center gap-3 text-sm"><a href={previewData.audioUrl} target="_blank" rel="noreferrer" className="text-green-800 underline">Ouvir áudio da matéria</a>{previewEditButton("audioUrl", "áudio")}</div> : null}
                   {previewEditField === "audioUrl" ? <input value={previewData.audioUrl || ""} onChange={(event) => setValue("audioUrl", event.target.value, { shouldDirty: true })} className="mt-2 h-10 w-full rounded-md border px-3" placeholder="URL do áudio" /> : null}
+                  {interviews.length > 0 ? <section className="mt-8 border-t pt-6">
+                    <h2 className="mb-4 text-xl font-bold text-green-800">Entrevistas</h2>
+                    <div className="grid grid-cols-4 gap-2 sm:gap-3">{interviews.map((interview) => <button key={interview.id} type="button" onClick={() => setPreviewInterviewId(interview.id)} className={`overflow-hidden rounded-lg border bg-white text-left hover:border-green-700 ${previewInterviewId === interview.id ? "ring-2 ring-green-700" : ""}`}>
+                      {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" className="aspect-square w-full object-cover" /> : <div className="flex aspect-square items-center justify-center bg-green-50 text-xs text-green-800">{interview.format === "audio" ? "Áudio" : interview.format === "youtube" ? "Vídeo" : "Texto"}</div>}
+                      <span className="block truncate p-2 text-xs font-semibold">{interview.title || "Entrevista sem título"}</span>
+                    </button>)}</div>
+                    {previewInterviewId ? (() => { const interview = interviews.find((item) => item.id === previewInterviewId); if (!interview) return null; return <div className="mt-4 rounded-lg border bg-gray-50 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">{interview.title || "Prévia da entrevista"}</h3><button type="button" onClick={() => setPreviewInterviewId(null)} className="text-sm text-green-800 underline">Voltar às entrevistas</button></div>
+                      {interview.format === "audio" && interview.audioUrl ? <audio controls preload="none" className="w-full"><source src={interview.audioUrl} />Seu navegador não suporta áudio.</audio> : null}
+                      {interview.format === "youtube" && interview.youtubeUrl ? (() => { const videoId = interview.youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/)?.[1]; return videoId ? <div className="aspect-video overflow-hidden rounded-lg"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${videoId}`} title={interview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div> : <p className="text-sm text-red-700">Confira o link do YouTube.</p>; })() : null}
+                      {interview.format === "text" ? <div className="space-y-3">{interview.questions.map((pair, index) => <div key={index}><p className="font-semibold">{pair.question || "Pergunta do repórter"}</p><p className="mt-1 whitespace-pre-wrap text-gray-700">{pair.answer || "Resposta da pessoa entrevistada"}</p></div>)}</div> : null}
+                      {interview.transcript ? <details className="mt-3"><summary className="cursor-pointer font-medium">Ler transcrição</summary><p className="mt-2 whitespace-pre-wrap text-gray-700">{interview.transcript}</p></details> : null}
+                    </div>; })() : null}
+                  </section> : null}
                   {previewData.hashtags ? <div className="mt-6 flex items-center gap-3 text-sm text-gray-500"><p>{previewData.hashtags}</p>{previewEditButton("hashtags", "hashtags")}</div> : null}
                   {previewEditField === "hashtags" ? <input value={previewData.hashtags || ""} onChange={(event) => setValue("hashtags", event.target.value, { shouldDirty: true })} className="mt-2 h-10 w-full rounded-md border px-3" placeholder="Hashtags separadas por vírgula" /> : null}
                 </article>
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t bg-white px-4 py-3">
-                <button type="button" onClick={() => setShowPreview(false)} className="rounded-md border px-4 py-2 text-sm hover:bg-muted">Fechar prévia</button>
+                <button type="button" onClick={() => { setShowPreview(false); setEditorMode("traditional"); setPreviewInterviewId(null); }} className="rounded-md border px-4 py-2 text-sm hover:bg-muted">Fechar prévia</button>
                 <button type="button" onClick={handleSubmit(onSubmit)} disabled={loading} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">{loading ? "Salvando..." : "Salvar alterações"}</button>
               </div>
             </section>

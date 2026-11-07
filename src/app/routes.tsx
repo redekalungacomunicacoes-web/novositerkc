@@ -144,6 +144,7 @@ export const router = createBrowserRouter([
       { path: "projetos", element: <Projetos /> },
       { path: "projetos/:id", element: <ProjetoDetalhes /> },
       { path: "materias", element: <Materias /> },
+      { path: "materias/:id/entrevistas/:interviewId", element: <MateriaDetalhes /> },
       { path: "materias/:id", element: <MateriaDetalhes /> },
       { path: "newsletter", element: <Newsletter /> },
       { path: "contato", element: <Contato /> },
