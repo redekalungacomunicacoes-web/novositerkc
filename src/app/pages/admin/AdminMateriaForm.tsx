@@ -1060,6 +1060,12 @@ export function AdminMateriaForm() {
         </div>
       </div>
 
+      {saveMessage && (
+        <p role="status" aria-live="polite" className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {saveMessage}
+        </p>
+      )}
+
       <nav aria-label="Acesso rápido às seções da matéria" className="sticky top-2 z-20 rounded-xl border bg-background/95 backdrop-blur shadow-sm px-3 py-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap">
         <span className="text-xs font-medium text-muted-foreground mr-1">Ir para:</span>
         {([
@@ -1521,12 +1527,6 @@ export function AdminMateriaForm() {
           </div>
         </div>
       </div>
-      {saveMessage && (
-        <p role="status" aria-live="polite" className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          {saveMessage}
-        </p>
-      )}
-
       {showPreview && (() => {
         const previewData = watch();
         const previewDate = previewData.date
