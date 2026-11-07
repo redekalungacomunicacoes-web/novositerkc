@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Bold, Italic, Pilcrow, Heading2, Quote, Highlighter, Rows3 } from "lucide-react";
+import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Bold, Italic, Pilcrow, Heading2, Quote, Highlighter, Rows3, Eye, X } from "lucide-react";
 import {
   createMateria,
   createMateriaCategoria,
@@ -344,6 +344,8 @@ export function AdminMateriaForm() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
   const [equipe, setEquipe] = useState<EquipeOption[]>([]);
   const [loadingEquipe, setLoadingEquipe] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -700,7 +702,7 @@ export function AdminMateriaForm() {
         category: "cover",
         folder: "capas",
         file,
-        thumbnailFile: await makeCoverThumbnail(file),
+        thumbnailFile: (await makeCoverThumbnail(file)) || undefined,
       });
       setValue("coverImage", uploaded.publicUrl, { shouldDirty: true, shouldValidate: true });
       setCoverDriveFileId(uploaded.id);
@@ -969,6 +971,7 @@ export function AdminMateriaForm() {
   };
 
   const onSubmit = async (data: MateriaFormData) => {
+    setSaveMessage("");
     setLoading(true);
     try {
       const tags = data.category ? [data.category] : [];
@@ -1019,7 +1022,10 @@ export function AdminMateriaForm() {
         }
       }
 
-      navigate("/admin/materias");
+      if (!id && savedId) {
+        navigate(`/admin/materias/editar/${savedId}`, { replace: true });
+      }
+      setSaveMessage("Matéria salva com sucesso.");
     } catch (err: any) {
       alert(err?.message || "Erro ao salvar matéria.");
     } finally {
@@ -1041,14 +1047,24 @@ export function AdminMateriaForm() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={() => setShowPreview(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>
+            <Eye className="h-4 w-4" />
+            Pré-visualizar
+          </button>
           <button type="button" onClick={async () => { if (id) { try { await cleanupUnreferencedMateriaFiles(id); } catch (cleanupError) { console.warn("[materia-drive] cancelamento com limpeza pendente", cleanupError); } } navigate("/admin/materias"); }} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
-          <button onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
+          <button type="button" onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
             <Save className="h-4 w-4" />
             {loading ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </div>
+
+      {saveMessage && (
+        <p role="status" aria-live="polite" className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {saveMessage}
+        </p>
+      )}
 
       <nav aria-label="Acesso rápido às seções da matéria" className="sticky top-2 z-20 rounded-xl border bg-background/95 backdrop-blur shadow-sm px-3 py-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap">
         <span className="text-xs font-medium text-muted-foreground mr-1">Ir para:</span>
@@ -1511,6 +1527,52 @@ export function AdminMateriaForm() {
           </div>
         </div>
       </div>
+      {showPreview && (() => {
+        const previewData = watch();
+        const previewDate = previewData.date
+          ? new Date(`${previewData.date}T12:00:00`).toLocaleDateString("pt-BR")
+          : "";
+        const articleImage = previewData.bannerImage || previewData.coverImage;
+
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3 sm:p-6" onClick={() => setShowPreview(false)}>
+            <section role="dialog" aria-modal="true" aria-labelledby="materia-preview-title" className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white/95 px-4 py-3 backdrop-blur">
+                <div>
+                  <h2 id="materia-preview-title" className="font-semibold">Pré-visualização da matéria</h2>
+                  <p className="text-xs text-muted-foreground">Prévia dos campos atuais, inclusive alterações ainda não salvas.</p>
+                </div>
+                <button type="button" onClick={() => setShowPreview(false)} aria-label="Fechar pré-visualização" className="rounded-md p-2 hover:bg-muted"><X className="h-5 w-5" /></button>
+              </div>
+              {articleImage ? <img src={articleImage} alt="" className="max-h-[420px] w-full bg-gray-100 object-cover" /> : null}
+              <article className="mx-auto max-w-3xl px-5 py-8 sm:px-10">
+                <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                  {previewData.category ? <span className="rounded-full bg-green-50 px-3 py-1 font-medium text-green-800">{previewData.category}</span> : null}
+                  {previewDate ? <time>{previewDate}</time> : null}
+                </div>
+                <h1 className="text-3xl font-bold leading-tight text-gray-950 sm:text-5xl">{previewData.title || "Título da matéria"}</h1>
+                {previewData.subtitle ? <p className="mt-4 text-xl leading-relaxed text-gray-600">{previewData.subtitle}</p> : null}
+                {previewData.authorId ? <p className="mt-5 text-sm text-gray-600">{equipe.find((person) => person.id === previewData.authorId)?.nome || "Autor"}</p> : null}
+                <div className="mt-8 space-y-6 text-lg leading-relaxed text-gray-700">
+                  {blocks.length > 0 ? blocks.map((block) => {
+                    if (block.type === "image") return <figure key={block.id}><img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[640px] rounded-lg object-contain" />{block.caption ? <figcaption className="mt-2 text-center text-sm text-gray-500">{block.caption}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption> : null}</figure>;
+                    if (block.type === "image-text") return <figure key={block.id} className="space-y-2"><img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[500px] rounded-lg object-contain" />{block.caption || block.credit ? <figcaption className="text-center text-sm text-gray-500">{block.caption}{block.caption && block.credit ? " • " : ""}{block.credit ? `Crédito: ${block.credit}` : ""}</figcaption> : null}<p className="whitespace-pre-wrap">{block.text || ""}</p></figure>;
+                    const plainText = (block.text || "").replace(/<[^>]*>/g, "");
+                    if (block.type === "heading") return <h2 key={block.id} className="pt-4 text-2xl font-bold text-gray-900">{plainText}</h2>;
+                    if (block.type === "quote") return <blockquote key={block.id} className="border-l-4 border-green-700 pl-5 italic">{plainText}{block.author ? <cite className="mt-2 block text-sm not-italic text-gray-500">{block.author}</cite> : null}</blockquote>;
+                    if (block.type === "highlight") return <aside key={block.id} className="rounded-lg bg-amber-50 p-5">{plainText}</aside>;
+                    return <p key={block.id} className="whitespace-pre-wrap">{plainText}</p>;
+                  }) : <div className="whitespace-pre-wrap">{previewData.content || "O conteúdo da matéria aparecerá aqui."}</div>}
+                </div>
+                {galeria.length > 0 ? <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3">{galeria.map((item) => <figure key={item.id}><img src={item.url} alt={item.legenda || "Foto da matéria"} className="h-40 w-full rounded-lg object-cover" />{item.legenda ? <figcaption className="mt-1 text-xs text-gray-500">{item.legenda}</figcaption> : null}</figure>)}</div> : null}
+                {previewData.photoCredits ? <p className="mt-6 text-sm text-gray-500">Créditos das fotos: {previewData.photoCredits}</p> : null}
+                {previewData.audioUrl ? <p className="mt-5 text-sm"><a href={previewData.audioUrl} target="_blank" rel="noreferrer" className="text-green-800 underline">Ouvir áudio da matéria</a></p> : null}
+                {previewData.hashtags ? <p className="mt-6 text-sm text-gray-500">{previewData.hashtags}</p> : null}
+              </article>
+            </section>
+          </div>
+        );
+      })()}
     </div>
   );
 }
