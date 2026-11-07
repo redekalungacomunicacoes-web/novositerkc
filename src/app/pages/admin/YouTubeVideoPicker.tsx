@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+type Playlist = { id: string; title: string; count: number };
 type Video = { id: string; title: string; thumbnail: string; visibility: string };
 
 async function youtubeApi(action: string, params: Record<string, unknown> = {}) {
@@ -20,8 +21,8 @@ type Props = {
 };
 
 export function YouTubeVideoPicker({ value, onSelect }: Props) {
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [playlistId, setPlaylistId] = useState("");
-  const [playlistFound, setPlaylistFound] = useState(false);
   const [videos, setVideos] = useState<Video[]>([]);
   const [loadingPlaylists, setLoadingPlaylists] = useState(true);
   const [loadingVideos, setLoadingVideos] = useState(false);
@@ -32,13 +33,10 @@ export function YouTubeVideoPicker({ value, onSelect }: Props) {
     youtubeApi("playlists")
       .then((result) => {
         if (!active) return;
-        const interviewPlaylist = (result.items || []).find((item: { title: string }) => item.title.trim().toLocaleLowerCase("pt-BR") === "entrevistas");
-        if (!interviewPlaylist) {
-          setError("A playlist “Entrevistas” ainda não foi encontrada no canal RKC.");
-          return;
-        }
-        setPlaylistFound(true);
-        void selectPlaylist(interviewPlaylist.id);
+        const availablePlaylists = (result.items || []) as Playlist[];
+        setPlaylists(availablePlaylists);
+        const interviewPlaylist = availablePlaylists.find((item) => item.title.trim().toLocaleLowerCase("pt-BR") === "entrevistas");
+        if (interviewPlaylist) void selectPlaylist(interviewPlaylist.id);
       })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Falha ao carregar o canal."); })
       .finally(() => { if (active) setLoadingPlaylists(false); });
@@ -64,7 +62,13 @@ export function YouTubeVideoPicker({ value, onSelect }: Props) {
   return (
     <div className="space-y-3 rounded-md border bg-muted/20 p-3">
       <p className="text-sm font-medium">Selecionar do canal RKC</p>
-      <p className="text-sm text-muted-foreground">{loadingPlaylists ? "Procurando a playlist “Entrevistas”..." : playlistFound ? "Playlist selecionada: Entrevistas" : "A lista fica restrita à playlist Entrevistas."}</p>
+      <label className="block text-sm">Playlist do canal
+        <select value={playlistId} onChange={(event) => void selectPlaylist(event.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3">
+          <option value="">{loadingPlaylists ? "Carregando biblioteca..." : playlists.length ? "Escolha uma playlist" : "Nenhuma playlist encontrada"}</option>
+          {playlists.map((playlist) => <option key={playlist.id} value={playlist.id}>{playlist.title}{playlist.count ? " (" + playlist.count + ")" : ""}</option>)}
+        </select>
+      </label>
+      <p className="text-xs text-muted-foreground">A playlist “Entrevistas” será pré-selecionada se já existir. Você também pode escolher outra playlist do canal.</p>
       {loadingVideos && <p className="text-sm text-muted-foreground">Carregando vídeos...</p>}
       {playlistId && !loadingVideos && videos.length === 0 && !error && <p className="text-sm text-muted-foreground">Nenhum vídeo encontrado nesta playlist.</p>}
       {videos.length > 0 && (
