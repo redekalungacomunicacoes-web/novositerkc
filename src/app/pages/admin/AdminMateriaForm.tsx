@@ -1783,6 +1783,19 @@ export function AdminMateriaForm() {
             {previewEditField === key ? "Concluir" : "Editar"}
           </button>
         );
+        const previewBlockActions = (block: MateriaContentBlock, index: number, label: string) => (
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            {previewEditButton(`block:${block.id}`, label)}
+            <button type="button" disabled={index === 0} onClick={() => moveBlock(index, -1)} aria-label={`Mover ${label} para cima`} title="Mover para cima" className="rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35">↑</button>
+            <button type="button" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)} aria-label={`Mover ${label} para baixo`} title="Mover para baixo" className="rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35">↓</button>
+            <button type="button" onClick={() => {
+              if (window.confirm("Deseja excluir este bloco da matéria?")) {
+                removeBlock(block.id);
+                setPreviewEditField(null);
+              }
+            }} className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 shadow-sm hover:bg-red-50">Excluir</button>
+          </div>
+        );
         const previewAddBlockMenu = (position: number) => (
           <details className="my-3 rounded-lg border border-dashed border-green-700/40 bg-green-50/40 p-2">
             <summary className="cursor-pointer list-none text-center text-sm font-medium text-green-800">＋ Adicionar bloco</summary>
@@ -1872,14 +1885,14 @@ export function AdminMateriaForm() {
                       if (block.type === "image") return (
                         <figure key={block.id} className="space-y-3">
                           {blockPreviews[block.id] || block.url ? <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[640px] rounded-lg object-contain" /> : null}
-                          <div className="flex justify-end">{previewEditButton(editKey, "imagem e legenda")}</div>
+                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div>
                           {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} aria-label="URL da imagem" className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} aria-label="Legenda da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} aria-label="Crédito da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Crédito" /></div> : block.caption ? <figcaption className="mt-2 text-center text-sm text-gray-500">{block.caption}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption> : null}
                         </figure>
                       );
                       if (block.type === "image-text") return (
                         <figure key={block.id} className="space-y-3">
                           <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[500px] rounded-lg object-contain" />
-                          <div className="flex justify-end">{previewEditButton(editKey, "imagem e texto")}</div>
+                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div>
                           {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" placeholder="Texto ao lado da imagem" /></div> : <><figcaption className="text-center text-sm text-gray-500">{block.caption || ""}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption><p className="whitespace-pre-wrap">{block.text || ""}</p></>}
                         </figure>
                       );
@@ -1893,7 +1906,7 @@ export function AdminMateriaForm() {
                               : block.type === "highlight" ? <aside className="flex-1 rounded-lg bg-amber-50 p-5">{plainText}</aside>
                               : <p className="flex-1 whitespace-pre-wrap">{plainText}</p>
                             )}
-                            {previewEditButton(editKey, "bloco de texto")}
+                            {previewBlockActions(block, blockIndex, "bloco de texto")}
                           </div>
                           {editing && block.type === "quote" ? <input value={block.author || ""} onChange={(event) => updateBlock(block.id, { author: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Autoria da citação" /> : null}
                           {previewAddBlockMenu(blockIndex + 1)}
