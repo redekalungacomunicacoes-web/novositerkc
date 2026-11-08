@@ -575,6 +575,7 @@ export function AdminMateriaForm() {
         audioDriveFileId: interview.audioDriveFileId || null,
         transcript: interview.transcript || "",
         thumbnailUrl: interview.thumbnailUrl || "",
+        thumbnailDriveFileId: interview.thumbnailDriveFileId || null,
         questions: Array.isArray(interview.questions) ? interview.questions : [{ question: "", answer: "" }],
       })) : [];
 
