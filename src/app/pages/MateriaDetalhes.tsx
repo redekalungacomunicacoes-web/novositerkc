@@ -588,10 +588,7 @@ export function MateriaDetalhes() {
         <Link to={`/materias/${encodeURIComponent(m.slug || m.id)}`} className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-[#0F7A3E] hover:underline"><ArrowLeft className="h-4 w-4" />Voltar à matéria</Link>
         {loading ? <p className="text-gray-500">Carregando entrevista…</p> : !materia || !selectedInterview ? <p className="text-gray-500">Entrevista não encontrada.</p> : <article>
           <p className="mb-4 text-sm font-semibold text-[#0F7A3E]">Entrevista · {m.titulo}</p>
-          <div className="mb-7 flex items-center gap-4">
-            {selectedInterview.thumbnailUrl ? <img src={selectedInterview.thumbnailUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-50 text-sm font-semibold text-[#0F7A3E]">RK</div>}
-            <h1 className="text-2xl font-bold leading-tight text-gray-950 sm:text-3xl">{/^entrevista\s+com\s+/i.test(selectedInterview.title || "") ? selectedInterview.title : `Entrevista com ${selectedInterview.title || "entrevistado(a)"}`}</h1>
-          </div>
+          <h1 className="mb-7 text-2xl font-bold leading-tight text-gray-950 sm:text-3xl">{/^entrevista\s+com\s+/i.test(selectedInterview.title || "") ? selectedInterview.title : `Entrevista com ${selectedInterview.title || "entrevistado(a)"}`}</h1>
           {selectedInterview.format === "youtube" ? (videoId
             ? <div className="aspect-video overflow-hidden rounded-xl"><iframe className="h-full w-full" src={`https://www.youtube.com/embed/${videoId}?rel=0`} title={selectedInterview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
             : <p className="text-red-700">Link do YouTube inválido ou não reconhecido.</p>) : null}
@@ -662,15 +659,17 @@ export function MateriaDetalhes() {
             <a href="#materia-conteudo" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0d6633] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2">
               Matéria
             </a>
-            {m.interviews.length > 0 && (
+            {m.interviews.map((interview, index) => (
               <Link
-                to={`/materias/${encodeURIComponent(m.slug || m.id)}/entrevistas/${encodeURIComponent(m.interviews[0].id)}`}
-                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#0F7A3E] px-4 py-2 text-sm font-semibold text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
+                key={interview.id}
+                to={`/materias/${encodeURIComponent(m.slug || m.id)}/entrevistas/${encodeURIComponent(interview.id)}`}
+                aria-label={/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#0F7A3E] px-3 py-2 text-sm font-semibold text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
               >
-                Entrevistas
-                <span className="rounded-full bg-[#0F7A3E]/10 px-2 py-0.5 text-xs">{m.interviews.length}</span>
+                {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0F7A3E]/10 text-xs">{index + 1}</span>}
+                <span>{/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
               </Link>
-            )}
+            ))}
           </div>
         </nav>
       )}
