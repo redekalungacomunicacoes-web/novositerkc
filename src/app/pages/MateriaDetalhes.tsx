@@ -58,8 +58,7 @@ function getYouTubeVideoId(input?: string | null) {
     }
     return /^[\w-]{11}$/.test(candidate) ? candidate : null;
   } catch {
-    const match = input.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/i);
-    return match?.[1] || null;
+    return null;
   }
 }
 
