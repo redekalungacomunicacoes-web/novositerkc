@@ -669,23 +669,23 @@ export function MateriaDetalhes() {
         </div>
       </section>
 
-      {!!materia && (
-        <nav aria-label="Navegação da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
-          <div className="mx-auto flex max-w-5xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
-            <a href="#materia-conteudo" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0d6633] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2">
-              Matéria
-            </a>
-            {m.interviews.map((interview, index) => (
+      {!!materia && m.interviews.length > 0 && (
+        <nav aria-label="Navegação das entrevistas" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-2 px-4 py-3 sm:px-6 lg:px-8">
+            {m.interviews.slice(0, 3).map((interview, index) => (
               <Link
                 key={interview.id}
                 to={`/materias/${encodeURIComponent(m.slug || m.id)}/entrevistas/${encodeURIComponent(interview.id)}`}
                 aria-label={/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}
-                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#0F7A3E] px-3 py-2 text-sm font-semibold text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
+                className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-[#0F7A3E] px-3 py-2 text-xs font-semibold text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2 sm:text-sm"
               >
                 {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0F7A3E]/10 text-xs">{index + 1}</span>}
-                <span>{/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
+                <span className="min-w-0 break-words">{/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
               </Link>
             ))}
+            {m.interviews.length > 3 && (
+              <a href="#entrevistas" aria-label={`Ver todas as ${m.interviews.length} entrevistas`} title="Ver todas as entrevistas" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#0F7A3E] text-xl font-medium text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2">+</a>
+            )}
           </div>
         </nav>
       )}
