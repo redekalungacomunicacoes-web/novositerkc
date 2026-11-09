@@ -96,6 +96,22 @@ function hasHtmlContent(text?: string | null) {
   return /<\/?[a-z][\s\S]*>/i.test(text);
 }
 
+function renderLinkedText(text: string) {
+  const parts: React.ReactNode[] = [];
+  const pattern = /https?:\/\/[^\s<>"]+/g;
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    parts.push(text.slice(cursor, index));
+    const url = match[0].replace(/[.,;!?)]*$/, "");
+    parts.push(<a key={index} href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 break-all hover:text-[#0F7A3E]">{url}</a>);
+    parts.push(match[0].slice(url.length));
+    cursor = index + match[0].length;
+  }
+  parts.push(text.slice(cursor));
+  return parts;
+}
+
 function renderTextWithParagraphs(text?: string | null) {
   if (!text) return null;
   const normalized = String(text).replace(/\r\n/g, "\n").trim();
@@ -108,7 +124,7 @@ function renderTextWithParagraphs(text?: string | null) {
     <p key={`p-${index}`} className="text-lg text-gray-700 leading-relaxed mb-6">
       {paragraph.split("\n").map((line, lineIndex, lines) => (
         <Fragment key={`l-${lineIndex}`}>
-          {line}
+          {renderLinkedText(line)}
           {lineIndex < lines.length - 1 ? <br /> : null}
         </Fragment>
       ))}
@@ -273,7 +289,7 @@ function renderBlock(block: MateriaContentBlock) {
     if (!hasHtmlContent(block.text || "")) {
       return (
         <blockquote key={block.id} className="my-6 border-l-4 border-[#0F7A3E] pl-4 italic text-gray-700">
-          <p className={`${textSizeClass(block.size)} whitespace-pre-line`}>{block.text || ""}</p>
+          <p className={`${textSizeClass(block.size)} whitespace-pre-line`}>{renderLinkedText(block.text || "")}</p>
           {block.author ? <cite className="block mt-2 text-sm not-italic text-gray-500">— {block.author}</cite> : null}
         </blockquote>
       );
