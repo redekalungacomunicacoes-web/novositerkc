@@ -654,7 +654,26 @@ export function MateriaDetalhes() {
         </div>
       </section>
 
-      <article className="py-16 md:py-24 bg-white">
+      {!!materia && (
+        <nav aria-label="Navegação da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
+            <a href="#materia-conteudo" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0d6633] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2">
+              Matéria
+            </a>
+            {m.interviews.length > 0 && (
+              <Link
+                to={`/materias/${encodeURIComponent(m.slug || m.id)}/entrevistas/${encodeURIComponent(m.interviews[0].id)}`}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#0F7A3E] px-4 py-2 text-sm font-semibold text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2"
+              >
+                Entrevistas
+                <span className="rounded-full bg-[#0F7A3E]/10 px-2 py-0.5 text-xs">{m.interviews.length}</span>
+              </Link>
+            )}
+          </div>
+        </nav>
+      )}
+
+      <article id="materia-conteudo" className="scroll-mt-20 py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           {loading && <div className="text-sm text-gray-500 mb-8">Carregando matéria...</div>}
           {!loading && !materia && <div className="text-sm text-gray-500 mb-8">Matéria não encontrada ou não publicada.</div>}
@@ -670,7 +689,7 @@ export function MateriaDetalhes() {
               </div>
 
               {m.interviews.length > 0 && (
-                <section className="mt-10 border-t border-gray-200 pt-6" aria-labelledby="article-interviews-title">
+                <section id="entrevistas" className="mt-10 scroll-mt-24 border-t border-gray-200 pt-6" aria-labelledby="article-interviews-title">
                   <h2 id="article-interviews-title" className="mb-4 text-xl font-bold text-[#0F7A3E]">Entrevistas</h2>
                   <div className="grid grid-cols-4 gap-2 sm:gap-4">
                     {m.interviews.map((interview, index) => <Link
