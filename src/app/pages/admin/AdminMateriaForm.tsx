@@ -1067,6 +1067,31 @@ export function AdminMateriaForm() {
     updateBlock(blockId, { text: next });
   };
 
+  const applyInlineLink = (blockId: string) => {
+    const el = document.getElementById(`block-text-${blockId}`) as HTMLTextAreaElement | null;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const value = el.value || "";
+    const selected = value.slice(start, end);
+    const address = window.prompt("Cole o endereço do link (https://...):", selected.startsWith("https://") ? selected : "https://");
+    if (address === null) return;
+    let url: URL;
+    try {
+      url = new URL(address.trim());
+      if (!["https:", "http:"].includes(url.protocol)) throw new Error("Protocolo inválido");
+    } catch {
+      window.alert("Informe um endereço válido iniciado por https:// ou http://.");
+      return;
+    }
+    const label = selected || window.prompt("Texto que aparecerá no link:", "Acessar link") || "";
+    if (!label.trim()) return;
+    const safeLabel = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeUrl = url.href.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+    const markup = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`;
+    updateBlock(blockId, { text: value.slice(0, start) + markup + value.slice(end) });
+  };
+
   const submitWithCompat = async (payload: any) => {
     const response = isEditing && id
       ? await updateMateria(id, payload)
@@ -1460,6 +1485,7 @@ export function AdminMateriaForm() {
                         <div className="flex flex-wrap items-center gap-2">
                           <button type="button" onClick={() => applyInlineTag(block.id, "strong")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Bold className="w-3 h-3" /> Negrito</button>
                           <button type="button" onClick={() => applyInlineTag(block.id, "em")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Italic className="w-3 h-3" /> Itálico</button>
+                          <button type="button" onClick={() => applyInlineLink(block.id)} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted" title="Selecione o texto no campo e clique aqui">🔗 Inserir link</button>
                           <select value={block.size || "md"} onChange={(e) => updateBlock(block.id, { size: e.target.value as TextBlock["size"] })} className="h-8 px-2 rounded-md border text-xs">
                             <option value="sm">Texto pequeno</option>
                             <option value="md">Texto normal</option>
