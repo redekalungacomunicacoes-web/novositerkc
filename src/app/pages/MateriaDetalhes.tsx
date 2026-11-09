@@ -587,9 +587,11 @@ export function MateriaDetalhes() {
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <Link to={`/materias/${encodeURIComponent(m.slug || m.id)}`} className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-[#0F7A3E] hover:underline"><ArrowLeft className="h-4 w-4" />Voltar à matéria</Link>
         {loading ? <p className="text-gray-500">Carregando entrevista…</p> : !materia || !selectedInterview ? <p className="text-gray-500">Entrevista não encontrada.</p> : <article>
-          <p className="mb-2 text-sm font-semibold text-[#0F7A3E]">Entrevista · {m.titulo}</p>
-          <h1 className="mb-6 text-3xl font-bold leading-tight text-gray-950 sm:text-4xl">{selectedInterview.title || "Entrevista"}</h1>
-          {selectedInterview.thumbnailUrl ? <img src={selectedInterview.thumbnailUrl} alt={selectedInterview.title || "Imagem da entrevista"} className="mb-6 max-h-[32rem] w-full rounded-xl object-cover" /> : null}
+          <p className="mb-4 text-sm font-semibold text-[#0F7A3E]">Entrevista · {m.titulo}</p>
+          <div className="mb-7 flex items-center gap-4">
+            {selectedInterview.thumbnailUrl ? <img src={selectedInterview.thumbnailUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-50 text-sm font-semibold text-[#0F7A3E]">RK</div>}
+            <h1 className="text-2xl font-bold leading-tight text-gray-950 sm:text-3xl">{/^entrevista\\s+com\\s+/i.test(selectedInterview.title || "") ? selectedInterview.title : `Entrevista com ${selectedInterview.title || "entrevistado(a)"}`}</h1>
+          </div>
           {selectedInterview.format === "youtube" ? (videoId
             ? <div className="aspect-video overflow-hidden rounded-xl"><iframe className="h-full w-full" src={`https://www.youtube.com/embed/${videoId}?rel=0`} title={selectedInterview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
             : <p className="text-red-700">Link do YouTube inválido ou não reconhecido.</p>) : null}
@@ -691,14 +693,14 @@ export function MateriaDetalhes() {
               {m.interviews.length > 0 && (
                 <section id="entrevistas" className="mt-10 scroll-mt-24 border-t border-gray-200 pt-6" aria-labelledby="article-interviews-title">
                   <h2 id="article-interviews-title" className="mb-4 text-xl font-bold text-[#0F7A3E]">Entrevistas</h2>
-                  <div className="grid grid-cols-4 gap-2 sm:gap-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {m.interviews.map((interview, index) => <Link
                       key={interview.id}
                       to={`/materias/${encodeURIComponent(m.slug || m.id)}/entrevistas/${encodeURIComponent(interview.id)}`}
-                      className="group min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white transition hover:border-[#0F7A3E] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E]"
+                      className="group flex min-w-0 items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-[#0F7A3E] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E]"
                     >
-                      <img src={interview.thumbnailUrl || m.imagem} alt={interview.title || `Entrevista ${index + 1}`} loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
-                      <span className="block truncate p-2 text-center text-xs font-semibold leading-tight text-gray-900 group-hover:text-[#0F7A3E] sm:p-3 sm:text-sm">{interview.title || `Entrevista ${index + 1}`}</span>
+                      {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-50 text-xs font-semibold text-[#0F7A3E]">{index + 1}</div>}
+                      <span className="min-w-0 text-sm font-semibold leading-tight text-gray-900 group-hover:text-[#0F7A3E]">{/^entrevista\\s+com\\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
                     </Link>)}
                   </div>
                 </section>
