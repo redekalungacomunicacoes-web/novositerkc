@@ -49,16 +49,16 @@ function getYouTubeVideoId(input?: string | null) {
   if (!input) return null;
   try {
     const url = new URL(input.trim());
-    const host = url.hostname.toLowerCase().replace(/^www\\./, "");
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
     let candidate = "";
     if (host === "youtu.be") candidate = url.pathname.split("/").filter(Boolean)[0] || "";
     else if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com"].includes(host)) {
       if (url.pathname === "/watch") candidate = url.searchParams.get("v") || "";
-      else if (/^\\/(embed|shorts|live|v)\\//.test(url.pathname)) candidate = url.pathname.split("/").filter(Boolean)[1] || "";
+      else if (/^\/(embed|shorts|live|v)\//.test(url.pathname)) candidate = url.pathname.split("/").filter(Boolean)[1] || "";
     }
-    return /^[\\w-]{11}$/.test(candidate) ? candidate : null;
+    return /^[\w-]{11}$/.test(candidate) ? candidate : null;
   } catch {
-    const match = input.match(/(?:youtu\\.be\\/|youtube(?:-nocookie)?\\.com\\/(?:watch\\?(?:[^#]*&)?v=|embed\\/|shorts\\/|live\\/))([\\w-]{11})/i);
+    const match = input.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/i);
     return match?.[1] || null;
   }
 }
