@@ -492,9 +492,19 @@ export function MateriaDetalhes() {
         conteudo: found.conteudo || "",
         contentBlocks: normalizeBlocks(found.content_blocks),
         interviews: (() => {
-          const rawBlocks = Array.isArray(found.content_blocks) ? found.content_blocks : [];
+          // Supabase may return content_blocks as an array or as serialized JSON.
+          // Read the interview collection independently of the visible article blocks.
+          let storedBlocks = found.content_blocks;
+          if (typeof storedBlocks === "string") {
+            try { storedBlocks = JSON.parse(storedBlocks); } catch { storedBlocks = []; }
+          }
+          const rawBlocks = Array.isArray(storedBlocks) ? storedBlocks : [];
           const collection = rawBlocks.find((block: any) => block?.type === "interview_collection");
-          const rawInterviews = Array.isArray(collection?.interviews) ? collection.interviews : [];
+          let storedInterviews = collection?.interviews;
+          if (typeof storedInterviews === "string") {
+            try { storedInterviews = JSON.parse(storedInterviews); } catch { storedInterviews = []; }
+          }
+          const rawInterviews = Array.isArray(storedInterviews) ? storedInterviews : [];
           return rawInterviews.filter((interview: any) => interview && typeof interview === "object").map((interview: any, index: number) => ({
             ...interview,
             id: String(interview.id || `interview-${index + 1}`),
