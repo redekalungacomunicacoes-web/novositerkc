@@ -1229,6 +1229,8 @@ export function AdminMateriaForm() {
         </p>
       )}
 
+      {editorMode === "traditional" && (
+        <>
       <nav aria-label="Acesso rápido às seções da matéria" className="sticky top-2 z-20 rounded-xl border bg-background/95 backdrop-blur shadow-sm px-3 py-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap">
         <span className="text-xs font-medium text-muted-foreground mr-1">Ir para:</span>
         {([
@@ -1765,6 +1767,8 @@ export function AdminMateriaForm() {
           </div>
         </div>}
       </div>
+        </>
+      )}
       {showPreview && (() => {
         const previewData = watch();
         const previewDate = previewData.date
@@ -1806,20 +1810,44 @@ export function AdminMateriaForm() {
         );
 
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3 sm:p-6" onClick={() => { setShowPreview(false); setEditorMode("traditional"); setPreviewInterviewId(null); }}>
-            <section role="dialog" aria-modal="true" aria-labelledby="materia-preview-title" className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-              <div className="z-10 flex shrink-0 items-center justify-between border-b bg-white px-4 py-3">
+          <div className="w-full overflow-hidden rounded-xl border bg-white shadow-sm">
+            <section aria-labelledby="materia-preview-title" className="w-full bg-white">
+              <div className="flex items-center justify-between gap-3 border-b bg-white px-4 py-3">
                 <div>
-                  <h2 id="materia-preview-title" className="font-semibold">Pré-visualização editável</h2>
-                  <p className="text-xs text-muted-foreground">Use os lápis para alterar o conteúdo sem fechar a prévia.</p>
+                  <h2 id="materia-preview-title" className="font-semibold">Editor com prévia</h2>
+                  <p className="text-xs text-muted-foreground">Visualização da página da matéria. Edite os elementos diretamente nesta página.</p>
                 </div>
-                <button type="button" onClick={() => { setShowPreview(false); setEditorMode("traditional"); setPreviewInterviewId(null); }} aria-label="Fechar pré-visualização" className="rounded-md p-2 hover:bg-muted"><X className="h-5 w-5" /></button>
+                
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <div className="relative">
-                  {articleImage ? <img src={articleImage} alt="" className="max-h-[420px] w-full bg-gray-100 object-cover" /> : <div className="flex h-52 items-center justify-center bg-gray-100 text-sm text-gray-500">Sem imagem principal</div>}
-                  <div className="absolute right-3 top-3">{previewEditButton("image", "imagem principal")}</div>
-                </div>
+              <div className="w-full">
+                <section className="relative flex min-h-[32rem] items-stretch overflow-hidden sm:min-h-[36rem] md:min-h-[40rem]">
+                  <div className="absolute inset-0">
+                    {articleImage ? <img src={articleImage} alt="" className="h-full w-full bg-gray-100 object-cover" /> : <div className="h-full w-full bg-gray-800" />}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/70 to-black/35" />
+                  </div>
+                  <div className="relative z-10 w-full">
+                    <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:px-6 sm:py-10 md:px-8 md:py-12">
+                      <div className="mb-6 flex justify-end">{previewEditButton("image", "imagem principal")}</div>
+                      {previewEditField === "image" ? <div className="mb-4 rounded-lg bg-white/95 p-3 text-gray-900">{/* Os controles de imagem permanecem logo abaixo do banner. */}Editar imagem principal</div> : null}
+                      <div className="flex items-start justify-between gap-3">
+                        {previewEditField === "title" ? <input autoFocus value={previewData.title || ""} onChange={(event) => setValue("title", event.target.value, { shouldDirty: true, shouldValidate: true })} className="w-full rounded-md border px-3 py-2 text-3xl font-bold text-gray-950 sm:text-5xl" /> : <h1 className="max-w-4xl break-words text-3xl font-bold leading-[1.1] text-white sm:text-5xl">{previewData.title || "Título da matéria"}</h1>}
+                        {previewEditField !== "title" ? previewEditButton("title", "título") : null}
+                      </div>
+                      <div className="mt-4 flex items-start gap-3">
+                        {previewEditField === "subtitle" ? <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl text-gray-950" /> : <p className="max-w-3xl flex-1 text-lg leading-relaxed text-white/90 sm:text-xl">{previewData.subtitle || ""}</p>}
+                        {previewEditField !== "subtitle" ? previewEditButton("subtitle", "subtítulo") : null}
+                      </div>
+                      <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-white/90">
+                        <div className="flex items-center gap-2 text-sm">{previewData.authorId ? equipe.find((person) => person.id === previewData.authorId)?.nome || "Autor" : "Sem autor"}{previewEditButton("author", "autor")}</div>
+                        <div className="flex items-center gap-2 text-sm">{previewDate || "Sem data"}{previewEditButton("date", "data")}</div>
+                        <div className="flex items-center gap-2"><span className="rounded-full bg-[#F2B705] px-3 py-1 text-sm font-semibold text-gray-950">{previewData.category || "Geral"}</span>{previewEditButton("category", "categoria")}</div>
+                      </div>
+                      {previewEditField === "author" ? <select value={previewData.authorId || ""} onChange={(event) => setValue("authorId", event.target.value, { shouldDirty: true })} className="mt-3 h-10 max-w-sm rounded-md border px-3 text-gray-900"><option value="">Selecione um autor</option>{equipe.map((person) => <option key={person.id} value={person.id}>{person.nome}</option>)}</select> : null}
+                      {previewEditField === "date" ? <input type="date" value={previewData.date || ""} onChange={(event) => setValue("date", event.target.value, { shouldDirty: true })} className="mt-3 h-10 max-w-sm rounded-md border px-3 text-gray-900" /> : null}
+                      {previewEditField === "category" ? <select value={previewData.category || ""} onChange={(event) => setValue("category", event.target.value, { shouldDirty: true })} className="mt-3 h-10 max-w-sm rounded-md border px-3 text-gray-900">{categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}
+                    </div>
+                  </div>
+                </section>
                 {previewEditField === "image" ? (
                   <div className="mx-auto flex max-w-3xl flex-col gap-2 px-5 pt-4 sm:flex-row sm:items-end sm:px-10">
                     <label className="flex-1 text-sm">
@@ -1839,7 +1867,7 @@ export function AdminMateriaForm() {
                   </div>
                 ) : null}
 
-                <article className="mx-auto max-w-3xl px-5 py-8 sm:px-10">
+                <article className="mx-auto max-w-4xl bg-white px-4 py-16 sm:px-6 md:py-24 lg:px-8">
                   <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2">
                       {previewData.category ? <span className="rounded-full bg-green-50 px-3 py-1 font-medium text-green-800">{previewData.category}</span> : <span>Sem categoria</span>}
@@ -1878,7 +1906,7 @@ export function AdminMateriaForm() {
                   </div>
                   {previewEditField === "author" ? <select value={previewData.authorId || ""} onChange={(event) => setValue("authorId", event.target.value, { shouldDirty: true })} className="mt-2 h-10 rounded-md border px-3"><option value="">Selecione um autor</option>{equipe.map((person) => <option key={person.id} value={person.id}>{person.nome}</option>)}</select> : null}
 
-                  <div className="mt-8 space-y-6 text-lg leading-relaxed text-gray-700">
+                  <div className="prose prose-lg mt-8 max-w-none text-gray-700"><div className="article-content space-y-6">
                     {blocks.length > 0 ? blocks.map((block, blockIndex) => {
                       const editKey = `block:${block.id}`;
                       const editing = previewEditField === editKey;
@@ -1921,7 +1949,7 @@ export function AdminMateriaForm() {
                         {previewAddBlockMenu(0)}
                       </section>
                     )}
-                  </div>
+                  </div></div>
 
                   {galeria.length > 0 ? <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3">{galeria.map((item) => <figure key={item.id}><img src={item.url} alt={item.legenda || "Foto da matéria"} className="h-40 w-full rounded-lg object-cover" />{item.legenda ? <figcaption className="mt-1 text-xs text-gray-500">{item.legenda}</figcaption> : null}</figure>)}</div> : null}
                   <div className="mt-6 flex items-center justify-between gap-3">
@@ -1949,8 +1977,7 @@ export function AdminMateriaForm() {
                   {previewEditField === "hashtags" ? <input value={previewData.hashtags || ""} onChange={(event) => setValue("hashtags", event.target.value, { shouldDirty: true })} className="mt-2 h-10 w-full rounded-md border px-3" placeholder="Hashtags separadas por vírgula" /> : null}
                 </article>
               </div>
-              <div className="flex shrink-0 justify-end gap-2 border-t bg-white px-4 py-3">
-                <button type="button" onClick={() => { setShowPreview(false); setEditorMode("traditional"); setPreviewInterviewId(null); }} className="rounded-md border px-4 py-2 text-sm hover:bg-muted">Fechar prévia</button>
+              <div className="flex justify-end border-t bg-white px-4 py-3">
                 <button type="button" onClick={handleSubmit(onSubmit)} disabled={loading} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">{loading ? "Salvando..." : "Salvar alterações"}</button>
               </div>
             </section>
