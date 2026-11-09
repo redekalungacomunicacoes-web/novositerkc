@@ -90,7 +90,7 @@ export async function cleanupUnreferencedMateriaFiles(materiaId: string, driveFi
     ...(Array.isArray(materia.content_blocks) ? materia.content_blocks.flatMap((block: any) => [
       block?.drive_file_id,
       ...(block?.type === "interview_collection" && Array.isArray(block.interviews)
-        ? block.interviews.map((interview: any) => interview?.audioDriveFileId)
+        ? block.interviews.flatMap((interview: any) => [interview?.audioDriveFileId, interview?.thumbnailDriveFileId])
         : []),
     ]) : []),
     ...(Array.isArray(gallery) ? gallery.map((item: any) => item.drive_file_id) : []),
