@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Bold, Italic, Pilcrow, Heading2, Quote, Highlighter, Rows3, Eye, X, PenLine } from "lucide-react";
+import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Copy, Bold, Italic, Pilcrow, Heading2, Quote, Highlighter, Rows3, Eye, X, PenLine } from "lucide-react";
 import {
   createMateria,
   createMateriaCategoria,
@@ -931,6 +931,22 @@ export function AdminMateriaForm() {
     });
   };
 
+  const duplicateBlock = (blockId: string) => {
+    if (!isMounted.current) return;
+    const sourceIndex = blocks.findIndex((block) => block.id === blockId);
+    if (sourceIndex < 0) return;
+    const source = blocks[sourceIndex];
+    const duplicate = { ...source, id: uid(source.type === "image" ? "img" : source.type === "image-text" ? "imgtxt" : "txt") } as MateriaContentBlock;
+    setBlocks((previous) => {
+      const currentIndex = previous.findIndex((block) => block.id === blockId);
+      if (currentIndex < 0) return previous;
+      const next = [...previous];
+      next.splice(currentIndex + 1, 0, duplicate);
+      return next;
+    });
+    setActiveBlock((current) => current === -1 ? -1 : sourceIndex + 1);
+  };
+
   const changeBlockType = (blockId: string, nextType: BlockType) => {
     if (!isMounted.current) return;
 
@@ -1411,6 +1427,7 @@ export function AdminMateriaForm() {
                           ))}
                         </select>
                         <input key={`${block.id}-${index}`} type="number" min={1} max={blocks.length} defaultValue={index + 1} aria-label={`Mover bloco ${index + 1} para posição`} title="Digite a posição e pressione Enter" className="h-8 w-14 rounded border bg-background text-center text-xs" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); moveBlockTo(block.id, Number(e.currentTarget.value)); } }} onBlur={(e) => {if(Number(e.currentTarget.value)!==index+1)moveBlockTo(block.id,Number(e.currentTarget.value));}} />
+                        <button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-muted" title={`Duplicar bloco ${index + 1} logo abaixo`} aria-label={`Duplicar bloco ${index + 1}`} onClick={() => duplicateBlock(block.id)}><Copy className="h-3.5 w-3.5" /> Duplicar</button>
                         <button type="button" className="p-1 rounded border hover:bg-destructive/10" onClick={() => removeBlock(block.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
                       </div>
                     </div>
@@ -1816,6 +1833,7 @@ export function AdminMateriaForm() {
         const previewBlockActions = (block: MateriaContentBlock, index: number, label: string) => (
           <div className="flex flex-wrap items-center justify-end gap-1">
             {previewEditButton(`block:${block.id}`, label)}
+            <button type="button" onClick={() => duplicateBlock(block.id)} aria-label={`Duplicar ${label}`} title="Duplicar logo abaixo" className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50"><Copy className="h-3.5 w-3.5" /> Duplicar</button>
             <button type="button" disabled={index === 0} onClick={() => moveBlock(index, -1)} aria-label={`Mover ${label} para cima`} title="Mover para cima" className="rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35">↑</button>
             <button type="button" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)} aria-label={`Mover ${label} para baixo`} title="Mover para baixo" className="rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35">↓</button>
             <button type="button" onClick={() => {
