@@ -45,6 +45,24 @@ type MateriaGaleriaItem = {
   created_at: string | null;
 };
 
+function getYouTubeVideoId(input?: string | null) {
+  if (!input) return null;
+  try {
+    const url = new URL(input.trim());
+    const host = url.hostname.toLowerCase().replace(/^www\\./, "");
+    let candidate = "";
+    if (host === "youtu.be") candidate = url.pathname.split("/").filter(Boolean)[0] || "";
+    else if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com"].includes(host)) {
+      if (url.pathname === "/watch") candidate = url.searchParams.get("v") || "";
+      else if (/^\\/(embed|shorts|live|v)\\//.test(url.pathname)) candidate = url.pathname.split("/").filter(Boolean)[1] || "";
+    }
+    return /^[\\w-]{11}$/.test(candidate) ? candidate : null;
+  } catch {
+    const match = input.match(/(?:youtu\\.be\\/|youtube(?:-nocookie)?\\.com\\/(?:watch\\?(?:[^#]*&)?v=|embed\\/|shorts\\/|live\\/))([\\w-]{11})/i);
+    return match?.[1] || null;
+  }
+}
+
 function getEquipeHref(author: MateriaUI["autorPerfil"]) {
   if (!author) return "";
   return author.slug ? `/equipe/${author.slug}` : `/equipe/id/${author.id}`;
@@ -458,15 +476,22 @@ export function MateriaDetalhes() {
         categoria: (found.tags && found.tags[0]) ? found.tags[0] : "Geral",
         conteudo: found.conteudo || "",
         contentBlocks: normalizeBlocks(found.content_blocks),
-        interviews: Array.isArray(found.content_blocks) ? (found.content_blocks.find((block: any) => block?.type === "interview_collection")?.interviews || []).map((interview: any) => ({
-          ...interview,
-          format: interview.format === "youtube" || interview.format === "audio" ? interview.format : "text",
-          youtubeUrl: interview.youtubeUrl || "",
-          audioUrl: interview.audioUrl || "",
-          transcript: interview.transcript || "",
-          thumbnailUrl: interview.thumbnailUrl || "",
-          questions: Array.isArray(interview.questions) ? interview.questions : [],
-        })) : [],
+        interviews: (() => {
+          const rawBlocks = Array.isArray(found.content_blocks) ? found.content_blocks : [];
+          const collection = rawBlocks.find((block: any) => block?.type === "interview_collection");
+          const rawInterviews = Array.isArray(collection?.interviews) ? collection.interviews : [];
+          return rawInterviews.filter((interview: any) => interview && typeof interview === "object").map((interview: any, index: number) => ({
+            ...interview,
+            id: String(interview.id || `interview-${index + 1}`),
+            title: String(interview.title || ""),
+            format: interview.format === "youtube" || interview.format === "audio" ? interview.format : "text",
+            youtubeUrl: String(interview.youtubeUrl || interview.youtube_url || ""),
+            audioUrl: String(interview.audioUrl || interview.audio_url || ""),
+            transcript: String(interview.transcript || ""),
+            thumbnailUrl: String(interview.thumbnailUrl || interview.thumbnail_url || ""),
+            questions: Array.isArray(interview.questions) ? interview.questions : [],
+          }));
+        })(),
         hashtags: Array.isArray(found.hashtags) ? found.hashtags.filter(Boolean) : [],
         audioUrl: found.audio_url || "",
         photoCredits: found.photo_credits || "",
@@ -558,7 +583,7 @@ export function MateriaDetalhes() {
   }, [activeGalleryIndex, galeria.length]);
 
   if (interviewId) {
-    const videoId = selectedInterview?.format === "youtube" ? selectedInterview.youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/)?.[1] : null;
+    const videoId = selectedInterview?.format === "youtube" ? getYouTubeVideoId(selectedInterview.youtubeUrl) : null;
     return <main className="min-h-screen bg-white py-12 sm:py-16">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <Link to={`/materias/${encodeURIComponent(m.slug || m.id)}`} className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-[#0F7A3E] hover:underline"><ArrowLeft className="h-4 w-4" />Voltar à matéria</Link>
@@ -567,7 +592,7 @@ export function MateriaDetalhes() {
           <h1 className="mb-6 text-3xl font-bold leading-tight text-gray-950 sm:text-4xl">{selectedInterview.title || "Entrevista"}</h1>
           {selectedInterview.thumbnailUrl ? <img src={selectedInterview.thumbnailUrl} alt={selectedInterview.title || "Imagem da entrevista"} className="mb-6 max-h-[32rem] w-full rounded-xl object-cover" /> : null}
           {selectedInterview.format === "youtube" ? (videoId
-            ? <div className="aspect-video overflow-hidden rounded-xl"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${videoId}`} title={selectedInterview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
+            ? <div className="aspect-video overflow-hidden rounded-xl"><iframe className="h-full w-full" src={`https://www.youtube.com/embed/${videoId}?rel=0`} title={selectedInterview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
             : <p className="text-red-700">Link do YouTube inválido ou não reconhecido.</p>) : null}
           {selectedInterview.format === "audio" && selectedInterview.audioUrl ? <section className="rounded-xl border bg-gray-50 p-4"><h2 className="mb-3 font-semibold">Ouça a entrevista</h2><audio controls preload="none" className="w-full"><source src={selectedInterview.audioUrl} />Seu navegador não suporta áudio.</audio></section> : null}
           {selectedInterview.transcript ? <details className="mt-5 rounded-xl border p-4"><summary className="cursor-pointer font-semibold text-[#0F7A3E]">Ler transcrição</summary><div className="mt-3 whitespace-pre-wrap leading-relaxed text-gray-700">{selectedInterview.transcript}</div></details> : null}
