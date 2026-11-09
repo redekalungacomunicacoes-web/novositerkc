@@ -1828,7 +1828,7 @@ export function AdminMateriaForm() {
                   <div className="relative z-10 w-full">
                     <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:px-6 sm:py-10 md:px-8 md:py-12">
                       <div className="mb-6 flex justify-end">{previewEditButton("image", "imagem principal")}</div>
-                      {previewEditField === "image" ? <div className="mb-4 rounded-lg bg-white/95 p-3 text-gray-900">{/* Os controles de imagem permanecem logo abaixo do banner. */}Editar imagem principal</div> : null}
+                      
                       <div className="flex items-start justify-between gap-3">
                         {previewEditField === "title" ? <input autoFocus value={previewData.title || ""} onChange={(event) => setValue("title", event.target.value, { shouldDirty: true, shouldValidate: true })} className="w-full rounded-md border px-3 py-2 text-3xl font-bold text-gray-950 sm:text-5xl" /> : <h1 className="max-w-4xl break-words text-3xl font-bold leading-[1.1] text-white sm:text-5xl">{previewData.title || "Título da matéria"}</h1>}
                         {previewEditField !== "title" ? previewEditButton("title", "título") : null}
@@ -1867,45 +1867,13 @@ export function AdminMateriaForm() {
                   </div>
                 ) : null}
 
-                <article className="mx-auto max-w-4xl bg-white px-4 py-16 sm:px-6 md:py-24 lg:px-8">
-                  <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      {previewData.category ? <span className="rounded-full bg-green-50 px-3 py-1 font-medium text-green-800">{previewData.category}</span> : <span>Sem categoria</span>}
-                      {previewEditButton("category", "categoria")}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {previewDate ? <time>{previewDate}</time> : <span>Sem data</span>}
-                      {previewEditButton("date", "data")}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-gray-100 px-2 py-1">{previewData.status === "published" ? "Publicado" : previewData.status === "archived" ? "Arquivado" : "Rascunho"}</span>
-                      {previewEditButton("status", "status")}
-                    </div>
+                <nav aria-label="Navegação da prévia da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
+                  <div className="mx-auto flex max-w-5xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
+                    <a href="#materia-conteudo-preview" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white">Matéria</a>
+                    {interviews.length > 0 ? <a href="#entrevistas-preview" className="shrink-0 rounded-full border border-[#0F7A3E] px-4 py-2 text-sm font-semibold text-[#0F7A3E]">Entrevistas <span className="ml-1 rounded-full bg-[#0F7A3E]/10 px-2 py-0.5 text-xs">{interviews.length}</span></a> : null}
                   </div>
-                  {previewEditField === "category" ? <select value={previewData.category || ""} onChange={(event) => setValue("category", event.target.value, { shouldDirty: true })} className="mb-4 h-10 rounded-md border px-3">{categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}
-                  {previewEditField === "date" ? <input type="date" value={previewData.date || ""} onChange={(event) => setValue("date", event.target.value, { shouldDirty: true })} className="mb-4 h-10 rounded-md border px-3" /> : null}
-                  {previewEditField === "status" ? <select value={previewData.status} onChange={(event) => setValue("status", event.target.value as MateriaFormData["status"], { shouldDirty: true })} className="mb-4 h-10 rounded-md border px-3"><option value="draft">Rascunho</option><option value="published">Publicado</option><option value="archived">Arquivado</option></select> : null}
-
-                  <div className="flex items-start justify-between gap-3">
-                    {previewEditField === "title" ? (
-                      <input autoFocus value={previewData.title || ""} onChange={(event) => setValue("title", event.target.value, { shouldDirty: true, shouldValidate: true })} className="w-full rounded-md border px-3 py-2 text-3xl font-bold sm:text-5xl" />
-                    ) : <h1 className="text-3xl font-bold leading-tight text-gray-950 sm:text-5xl">{previewData.title || "Título da matéria"}</h1>}
-                    {previewEditButton("title", "título")}
-                  </div>
-
-                  <div className="mt-4 flex items-start gap-3">
-                    {previewEditField === "subtitle" ? (
-                      <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl" />
-                    ) : previewData.subtitle ? <p className="flex-1 text-xl leading-relaxed text-gray-600">{previewData.subtitle}</p> : <p className="flex-1 text-base text-gray-400">Adicione uma linha fina</p>}
-                    {previewEditButton("subtitle", "subtítulo")}
-                  </div>
-
-                  <div className="mt-5 flex items-center gap-2 text-sm text-gray-600">
-                    <span>{previewData.authorId ? equipe.find((person) => person.id === previewData.authorId)?.nome || "Autor" : "Sem autor"}</span>
-                    {previewEditButton("author", "autor")}
-                  </div>
-                  {previewEditField === "author" ? <select value={previewData.authorId || ""} onChange={(event) => setValue("authorId", event.target.value, { shouldDirty: true })} className="mt-2 h-10 rounded-md border px-3"><option value="">Selecione um autor</option>{equipe.map((person) => <option key={person.id} value={person.id}>{person.nome}</option>)}</select> : null}
-
+                </nav>
+                <article id="materia-conteudo-preview" className="mx-auto max-w-4xl bg-white px-4 py-16 sm:px-6 md:py-24 lg:px-8">
                   <div className="prose prose-lg mt-8 max-w-none text-gray-700"><div className="article-content space-y-6">
                     {blocks.length > 0 ? blocks.map((block, blockIndex) => {
                       const editKey = `block:${block.id}`;
