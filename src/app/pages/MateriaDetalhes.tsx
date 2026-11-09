@@ -590,7 +590,7 @@ export function MateriaDetalhes() {
           <p className="mb-4 text-sm font-semibold text-[#0F7A3E]">Entrevista · {m.titulo}</p>
           <div className="mb-7 flex items-center gap-4">
             {selectedInterview.thumbnailUrl ? <img src={selectedInterview.thumbnailUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-50 text-sm font-semibold text-[#0F7A3E]">RK</div>}
-            <h1 className="text-2xl font-bold leading-tight text-gray-950 sm:text-3xl">{/^entrevista\\s+com\\s+/i.test(selectedInterview.title || "") ? selectedInterview.title : `Entrevista com ${selectedInterview.title || "entrevistado(a)"}`}</h1>
+            <h1 className="text-2xl font-bold leading-tight text-gray-950 sm:text-3xl">{/^entrevista\s+com\s+/i.test(selectedInterview.title || "") ? selectedInterview.title : `Entrevista com ${selectedInterview.title || "entrevistado(a)"}`}</h1>
           </div>
           {selectedInterview.format === "youtube" ? (videoId
             ? <div className="aspect-video overflow-hidden rounded-xl"><iframe className="h-full w-full" src={`https://www.youtube.com/embed/${videoId}?rel=0`} title={selectedInterview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
@@ -700,7 +700,7 @@ export function MateriaDetalhes() {
                       className="group flex min-w-0 items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-[#0F7A3E] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E]"
                     >
                       {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-50 text-xs font-semibold text-[#0F7A3E]">{index + 1}</div>}
-                      <span className="min-w-0 text-sm font-semibold leading-tight text-gray-900 group-hover:text-[#0F7A3E]">{/^entrevista\\s+com\\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
+                      <span className="min-w-0 text-sm font-semibold leading-tight text-gray-900 group-hover:text-[#0F7A3E]">{/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
                     </Link>)}
                   </div>
                 </section>
