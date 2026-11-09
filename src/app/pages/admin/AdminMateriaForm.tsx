@@ -54,6 +54,7 @@ type MateriaInterview = {
   audioDriveFileId?: string | null;
   transcript?: string;
   thumbnailUrl?: string;
+  thumbnailDriveFileId?: string | null;
   questions: Array<{ question: string; answer: string }>;
 };
 
@@ -388,6 +389,7 @@ export function AdminMateriaForm() {
   const [activeTab, setActiveTab] = useState<"materia" | "entrevistas">("materia");
   const [editorMode, setEditorMode] = useState<"traditional" | "preview">("traditional");
   const [uploadingInterviewAudioId, setUploadingInterviewAudioId] = useState<string | null>(null);
+  const [uploadingInterviewCoverId, setUploadingInterviewCoverId] = useState<string | null>(null);
   // Mantém os campos montados enquanto a seção fica recolhida, preservando o formulário.
   const [expandedSections, setExpandedSections] = useState<Record<MateriaEditorSection, boolean>>({
     principal: true,
@@ -562,6 +564,7 @@ export function AdminMateriaForm() {
         audioDriveFileId: interview.audioDriveFileId || null,
         transcript: interview.transcript || "",
         thumbnailUrl: interview.thumbnailUrl || "",
+        thumbnailDriveFileId: interview.thumbnailDriveFileId || null,
         questions: Array.isArray(interview.questions) ? interview.questions : [{ question: "", answer: "" }],
       })) : []);
       originalInterviews.current = Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.map((interview: any) => ({
@@ -572,11 +575,12 @@ export function AdminMateriaForm() {
         audioDriveFileId: interview.audioDriveFileId || null,
         transcript: interview.transcript || "",
         thumbnailUrl: interview.thumbnailUrl || "",
+        thumbnailDriveFileId: interview.thumbnailDriveFileId || null,
         questions: Array.isArray(interview.questions) ? interview.questions : [{ question: "", answer: "" }],
       })) : [];
 
       [d.capa_drive_file_id, d.capa_thumb_drive_file_id, d.banner_drive_file_id, d.audio_drive_file_id,
-        ...(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.map((item: any) => item?.audioDriveFileId) : []),
+        ...(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.flatMap((item: any) => [item?.audioDriveFileId, item?.thumbnailDriveFileId]) : []),
         ...parsedBlocks.map((block: any) => block.drive_file_id)]
         .filter((value): value is string => typeof value === "string" && value.length > 0)
         .forEach((value) => cleanupCandidateIds.current.add(value));
@@ -821,6 +825,39 @@ export function AdminMateriaForm() {
     } finally {
       setUploadingAudio(false);
       if (audioInputRef.current) audioInputRef.current.value = "";
+    }
+  };
+
+  const handleInterviewCoverUpload = async (interviewId: string, file?: File) => {
+    if (!file) return;
+    if (!id) {
+      alert("Salve a matéria como rascunho antes de enviar a capa da entrevista.");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      alert("Selecione um arquivo de imagem.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("A imagem deve ter no máximo 10 MB.");
+      return;
+    }
+    setUploadingInterviewCoverId(interviewId);
+    try {
+      const uploaded = await uploadToDrive({
+        materiaId: id,
+        category: "content",
+        folder: `entrevistas/${interviewId}/capa`,
+        file,
+      });
+      cleanupCandidateIds.current.add(uploaded.id);
+      setInterviews((items) => items.map((item) => item.id === interviewId
+        ? { ...item, thumbnailUrl: uploaded.publicUrl, thumbnailDriveFileId: uploaded.id }
+        : item));
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar a capa da entrevista.");
+    } finally {
+      setUploadingInterviewCoverId(null);
     }
   };
 
@@ -1468,9 +1505,28 @@ export function AdminMateriaForm() {
                   <div className="flex items-center justify-between gap-2"><h3 className="font-medium">Entrevista {interviewIndex + 1}</h3><button type="button" className="rounded-md border px-3 py-1.5 text-sm text-destructive" onClick={() => setInterviews((items) => items.filter((item) => item.id !== interview.id))}>Remover</button></div>
                   <input aria-label="Título da entrevista" value={interview.title} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, title: event.target.value } : item))} className="h-10 w-full rounded-md border px-3" placeholder="Ex.: Entrevista com Maria Kalunga" />
                   <label className="block text-sm font-medium">Formato<select value={interview.format} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, format: event.target.value as MateriaInterview["format"] } : item))} className="mt-1 h-10 w-full rounded-md border px-3"><option value="text">Texto, com perguntas e respostas</option><option value="youtube">Vídeo do YouTube</option><option value="audio">Áudio anexado</option></select></label>
-                  <label className="block text-sm">Miniatura ou foto da pessoa entrevistada (URL)
-                    <input type="url" value={interview.thumbnailUrl || ""} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, thumbnailUrl: event.target.value } : item))} className="mt-1 h-10 w-full rounded-md border px-3" placeholder="https://..." />
-                  </label>
+                  <div className="space-y-2">
+                    <span className="block text-sm font-medium">Capa da entrevista</span>
+                    {interview.thumbnailUrl ? (
+                      <div className="flex flex-wrap items-start gap-3 rounded-md border bg-muted/20 p-3">
+                        <img src={interview.thumbnailUrl} alt="Prévia da capa da entrevista" className="h-28 w-28 rounded-md object-cover" />
+                        <div className="flex flex-wrap gap-2">
+                          <label className="inline-flex cursor-pointer items-center rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted">
+                            {uploadingInterviewCoverId === interview.id ? "Enviando…" : "Substituir capa"}
+                            <input type="file" accept="image/*" className="sr-only" disabled={uploadingInterviewCoverId === interview.id} onChange={(event) => handleInterviewCoverUpload(interview.id, event.target.files?.[0])} />
+                          </label>
+                          <button type="button" onClick={() => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, thumbnailUrl: "", thumbnailDriveFileId: null } : item))} className="rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">Remover capa</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-5 text-sm hover:border-green-600 hover:bg-muted/30">
+                        <ImageIcon className="h-4 w-4" />
+                        {uploadingInterviewCoverId === interview.id ? "Enviando capa…" : "Adicionar capa por upload"}
+                        <input type="file" accept="image/*" className="sr-only" disabled={uploadingInterviewCoverId === interview.id} onChange={(event) => handleInterviewCoverUpload(interview.id, event.target.files?.[0])} />
+                      </label>
+                    )}
+                    <p className="text-xs text-muted-foreground">Imagem JPG, PNG ou WebP, até 10 MB. A matéria precisa estar salva como rascunho para liberar o envio.</p>
+                  </div>
                   {interview.format === "youtube" ? (
                     <div className="space-y-3">
                       <YouTubeVideoPicker value={interview.youtubeUrl} onSelect={(url) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: url } : item))} />
@@ -1501,7 +1557,7 @@ export function AdminMateriaForm() {
                   )}
                 </div>
               ))}
-              <button type="button" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => setInterviews((items) => [...items, { id: uid("interview"), title: "", format: "text", youtubeUrl: "", audioUrl: "", audioDriveFileId: null, transcript: "", thumbnailUrl: "", questions: [{ question: "", answer: "" }] }])}>Adicionar entrevista</button>
+              <button type="button" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => setInterviews((items) => [...items, { id: uid("interview"), title: "", format: "text", youtubeUrl: "", audioUrl: "", audioDriveFileId: null, transcript: "", thumbnailUrl: "", thumbnailDriveFileId: null, questions: [{ question: "", answer: "" }] }])}>Adicionar entrevista</button>
             </section>
           )}
 
@@ -1727,6 +1783,19 @@ export function AdminMateriaForm() {
             {previewEditField === key ? "Concluir" : "Editar"}
           </button>
         );
+        const previewBlockActions = (block: MateriaContentBlock, index: number, label: string) => (
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            {previewEditButton(`block:${block.id}`, label)}
+            <button type="button" disabled={index === 0} onClick={() => moveBlock(index, -1)} aria-label={`Mover ${label} para cima`} title="Mover para cima" className="rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35">↑</button>
+            <button type="button" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)} aria-label={`Mover ${label} para baixo`} title="Mover para baixo" className="rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35">↓</button>
+            <button type="button" onClick={() => {
+              if (window.confirm("Deseja excluir este bloco da matéria?")) {
+                removeBlock(block.id);
+                setPreviewEditField(null);
+              }
+            }} className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 shadow-sm hover:bg-red-50">Excluir</button>
+          </div>
+        );
         const previewAddBlockMenu = (position: number) => (
           <details className="my-3 rounded-lg border border-dashed border-green-700/40 bg-green-50/40 p-2">
             <summary className="cursor-pointer list-none text-center text-sm font-medium text-green-800">＋ Adicionar bloco</summary>
@@ -1816,14 +1885,14 @@ export function AdminMateriaForm() {
                       if (block.type === "image") return (
                         <figure key={block.id} className="space-y-3">
                           {blockPreviews[block.id] || block.url ? <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[640px] rounded-lg object-contain" /> : null}
-                          <div className="flex justify-end">{previewEditButton(editKey, "imagem e legenda")}</div>
+                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div>
                           {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} aria-label="URL da imagem" className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} aria-label="Legenda da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} aria-label="Crédito da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Crédito" /></div> : block.caption ? <figcaption className="mt-2 text-center text-sm text-gray-500">{block.caption}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption> : null}
                         </figure>
                       );
                       if (block.type === "image-text") return (
                         <figure key={block.id} className="space-y-3">
                           <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[500px] rounded-lg object-contain" />
-                          <div className="flex justify-end">{previewEditButton(editKey, "imagem e texto")}</div>
+                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div>
                           {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" placeholder="Texto ao lado da imagem" /></div> : <><figcaption className="text-center text-sm text-gray-500">{block.caption || ""}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption><p className="whitespace-pre-wrap">{block.text || ""}</p></>}
                         </figure>
                       );
@@ -1837,7 +1906,7 @@ export function AdminMateriaForm() {
                               : block.type === "highlight" ? <aside className="flex-1 rounded-lg bg-amber-50 p-5">{plainText}</aside>
                               : <p className="flex-1 whitespace-pre-wrap">{plainText}</p>
                             )}
-                            {previewEditButton(editKey, "bloco de texto")}
+                            {previewBlockActions(block, blockIndex, "bloco de texto")}
                           </div>
                           {editing && block.type === "quote" ? <input value={block.author || ""} onChange={(event) => updateBlock(block.id, { author: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Autoria da citação" /> : null}
                           {previewAddBlockMenu(blockIndex + 1)}
