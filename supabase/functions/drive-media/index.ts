@@ -132,10 +132,20 @@ Deno.serve(async (req) => {
       if (file.category === "cover") linked = materia.capa_drive_file_id === file.id;
       else if (file.category === "cover_thumb") linked = materia.capa_thumb_drive_file_id === file.id;
       else if (file.category === "banner") linked = materia.banner_drive_file_id === file.id;
-      else if (file.category === "audio") linked = materia.audio_drive_file_id === file.id;
+      else if (file.category === "audio") {
+        const blocks = Array.isArray(materia.content_blocks) ? materia.content_blocks : [];
+        linked = materia.audio_drive_file_id === file.id || blocks.some((block: any) =>
+          block?.type === "interview_collection" && Array.isArray(block.interviews) &&
+          block.interviews.some((interview: any) => interview?.audioDriveFileId === file.id)
+        );
+      }
       else if (file.category === "content") {
         const blocks = Array.isArray(materia.content_blocks) ? materia.content_blocks : [];
-        linked = blocks.some((block: any) => block?.drive_file_id === file.id);
+        linked = blocks.some((block: any) =>
+          block?.drive_file_id === file.id ||
+          (block?.type === "interview_collection" && Array.isArray(block.interviews) &&
+            block.interviews.some((interview: any) => interview?.thumbnailDriveFileId === file.id))
+        );
       } else if (file.category === "gallery") {
         const { data: item } = await admin.from("materia_galeria").select("id")
           .eq("materia_id", file.entity_id).eq("drive_file_id", file.id).maybeSingle();
