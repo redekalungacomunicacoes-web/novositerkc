@@ -26,6 +26,7 @@ export type MateriaRow = {
   tags: string[];
   status: "draft" | "published" | "archived";
   published_at: string | null;
+  scheduled_at?: string | null;
 };
 
 export type MateriaTextBlockType = "paragraph" | "heading" | "quote" | "highlight";
