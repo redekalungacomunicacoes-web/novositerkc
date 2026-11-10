@@ -48,7 +48,7 @@ export function AdminCaptacao() {
   const [radarSync,setRadarSync] = useState<{finalizada_em:string|null;status:string;erro:string|null}|null>(null);
   const [radarError,setRadarError] = useState<string|null>(null);
   const [radarLoading,setRadarLoading] = useState(false);
-  async function refreshRadar() {
+  async function refreshRadar(preserveError = false) {
     setRadarLoading(true);
     try {
       const [items,sync] = await Promise.all([
@@ -57,7 +57,8 @@ export function AdminCaptacao() {
       ]);
       if(items.error) throw items.error;
       if(sync.error) throw sync.error;
-      setRadarItems(items.data||[]);setRadarSync(sync.data?.[0]||null);setRadarError(null);
+      setRadarItems(items.data||[]);setRadarSync(sync.data?.[0]||null);
+      if (!preserveError) setRadarError(null);
     } catch(e) {setRadarError((e as Error).message);}
     finally {setRadarLoading(false);}
   }
@@ -65,12 +66,32 @@ export function AdminCaptacao() {
     setRadarLoading(true);setRadarError(null);
     try {
       const {data,error}=await supabase.functions.invoke("radar-editais",{method:"POST",body:{}});
-      if(error) throw error;
-      if(data?.error) throw new Error(data.error);
-      if(data?.status==="erro") toast.info("Atualização parcial. As oportunidades já cadastradas continuam disponíveis. Detalhes em Gestão.");
-      else toast.success(`Pesquisa concluída: ${data?.novas??0} nova(s) oportunidade(s).`);
-    } catch(e) {setRadarError((e as Error).message);toast.error("Não foi possível executar a pesquisa.");}
-    finally {await refreshRadar();}
+      if (error) {
+        const response=(error as {context?: Response}).context;
+        if (response?.status===401) throw new Error("Sessão expirada ou credencial inválida. Entre novamente para pesquisar.");
+        if (response?.status===403) throw new Error("Sua conta não possui permissão para executar o Radar de Editais.");
+        let detail:string|null=null;
+        if(response && typeof response.clone==="function"){
+          const payload=await response.clone().json().catch(()=>null);
+          detail=typeof payload?.error==="string"?payload.error:null;
+        }
+        throw new Error(detail ? `Pesquisa indisponível (HTTP ${response?.status||"?"}): ${detail}` : error.message||"Falha na conexão com o Radar.");
+      }
+      if(data?.error) throw new Error(String(data.error));
+      if(data?.status==="erro"){
+        const details=Array.isArray(data.erros)?data.erros.filter((item:unknown)=>typeof item==="string").slice(0,2).join(" | "):"";
+        setRadarError(details?`Atualização parcial: ${details}`:"Atualização parcial. Consulte o histórico em Gestão.");
+        toast.info("Coleta parcial: as oportunidades e triagens existentes foram preservadas.");
+      } else {
+        toast.success(`Pesquisa concluída: ${data?.novas??0} nova(s) oportunidade(s).`);
+      }
+    } catch(e) {
+      const raw=(e as Error).message||"Erro inesperado ao executar a pesquisa.";
+      const message=/Failed to (send|fetch)|NetworkError|Failed to fetch/i.test(raw)
+        ?"Não foi possível conectar à pesquisa. Verifique a conexão e tente novamente; se persistir, consulte os logs da função."
+        :raw;
+      setRadarError(message);toast.error(message);
+    } finally {await refreshRadar(true);}
   }
   useEffect(()=>{if(!routeId)void refreshRadar();},[routeId]);
 
