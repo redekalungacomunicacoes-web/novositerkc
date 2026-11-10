@@ -34,7 +34,7 @@ function warmArticleHero(url?: string | null) {
 function formatDateBR(iso?: string | null) {
   if (!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: 'long', year: 'numeric' });
 }
 
 export function Materias() {
