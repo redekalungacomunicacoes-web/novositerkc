@@ -3,9 +3,10 @@ import { Link } from "react-router-dom";
 import { Plus, Search, Edit, Trash2, Eye, Image as ImageIcon } from "lucide-react";
 import { createMateriaCategoria, deleteMateria, listMateriaCategoryNames, listMaterias, MateriaRow } from "@/lib/cms";
 
-function statusLabel(status: MateriaRow["status"]) {
-  if (status === "published") return "Publicado";
-  if (status === "archived") return "Arquivado";
+function statusLabel(materia: Pick<MateriaRow, "status" | "scheduled_at">) {
+  if (materia.status === "draft" && materia.scheduled_at) return "Agendada";
+  if (materia.status === "published") return "Publicado";
+  if (materia.status === "archived") return "Arquivado";
   return "Rascunho";
 }
 
@@ -209,9 +210,11 @@ export function AdminMaterias() {
               ) : (
                 filtered.map((m) => {
                   const category = (m.tags && m.tags[0]) ? m.tags[0] : "—";
-                  const dateSrc = m.published_at || m.created_at;
-                  const date = dateSrc ? new Date(dateSrc).toLocaleDateString("pt-BR") : "—";
-                  const status = statusLabel(m.status);
+                  const dateSrc = m.scheduled_at || m.published_at || m.created_at;
+                  const date = m.scheduled_at
+                    ? new Date(m.scheduled_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                    : dateSrc ? new Date(dateSrc).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—";
+                  const status = statusLabel(m);
                   return (
                     <tr key={m.id} className="hover:bg-muted/50 transition-colors">
                       <td className="px-3 sm:px-6 py-3 font-medium text-foreground">
