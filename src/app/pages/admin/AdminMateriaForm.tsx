@@ -323,6 +323,18 @@ async function ensureUniqueMateriaSlug(baseSlug: string, currentId?: string) {
   }
 }
 
+function saoPauloDateTimeParts(value: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || "";
+  return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
+}
+
+function saoPauloDateTimeToIso(date: string, time: string) {
+  const value = new Date(`${date}T${time}:00-03:00`);
+  if (!Number.isFinite(value.getTime())) throw new Error("Informe uma data e um horário válidos.");
+  return value.toISOString();
+}
+
 export function AdminMateriaForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -361,6 +373,9 @@ export function AdminMateriaForm() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewInterviewId, setPreviewInterviewId] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
+  const [schedulePublication, setSchedulePublication] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const originalScheduledAt = useRef<string | null>(null);
   const [previewEditField, setPreviewEditField] = useState<string | null>(null);
   const [previewImageField, setPreviewImageField] = useState<"coverImage" | "bannerImage">("bannerImage");
   const [equipe, setEquipe] = useState<EquipeOption[]>([]);
@@ -597,7 +612,7 @@ export function AdminMateriaForm() {
         subtitle: d.resumo || "",
         authorId: d.autor_equipe_id || d.autor_id || "",
         category: (d.tags && d.tags[0]) ? d.tags[0] : (categoryOptions[0] || ""),
-        date: (d.published_at ? new Date(d.published_at) : new Date(d.created_at)).toISOString().split("T")[0],
+        date: d.scheduled_at ? saoPauloDateTimeParts(d.scheduled_at).date : (d.published_at ? new Date(d.published_at) : new Date(d.created_at)).toISOString().split("T")[0],
         content: d.conteudo || "",
         coverImage: d.capa_url || "",
         bannerImage: d.banner_url || "",
@@ -609,6 +624,9 @@ export function AdminMateriaForm() {
         seoTitle: d.seo_title || "",
         seoDescription: d.seo_description || "",
       });
+      originalScheduledAt.current = d.scheduled_at || null;
+      setSchedulePublication(!!d.scheduled_at);
+      setScheduleTime(d.scheduled_at ? saoPauloDateTimeParts(d.scheduled_at).time : "09:00");
 
       await loadGaleria(id);
     })();
@@ -1127,6 +1145,12 @@ export function AdminMateriaForm() {
     setSaveMessage("");
     setLoading(true);
     try {
+      const scheduledAt = schedulePublication ? saoPauloDateTimeToIso(data.date, scheduleTime) : null;
+      if (scheduledAt && new Date(scheduledAt).getTime() <= Date.now()) {
+        alert("Escolha uma data e um horário futuros para programar a publicação.");
+        return;
+      }
+      const publicationStatus = schedulePublication ? "draft" : data.status;
       const tags = data.category ? [data.category] : [];
       const baseSlug = slugify(data.customSlug.trim() || data.title);
       const uniqueSlug = await ensureUniqueMateriaSlug(baseSlug, id);
@@ -1157,8 +1181,9 @@ export function AdminMateriaForm() {
         banner_drive_file_id: bannerDriveFileId,
         audio_drive_file_id: audioDriveFileId,
         tags,
-        status: data.status,
-        published_at: data.status === "published" ? new Date(data.date).toISOString() : null,
+        status: publicationStatus,
+        published_at: publicationStatus === "published" ? new Date(data.date).toISOString() : null,
+        scheduled_at: scheduledAt,
         autor_equipe_id: data.authorId || null,
         autor_id: data.authorId || null,
         autor_nome,
@@ -1200,9 +1225,10 @@ export function AdminMateriaForm() {
           partial.autor_nome = payload.autor_nome;
         }
         if (dirtyFields.category) partial.tags = payload.tags;
-        if (dirtyFields.status || dirtyFields.date) {
+        if (dirtyFields.status || dirtyFields.date || scheduledAt !== originalScheduledAt.current) {
           partial.status = payload.status;
           partial.published_at = payload.published_at;
+          partial.scheduled_at = payload.scheduled_at;
         }
         payloadToSave = partial;
       }
@@ -1224,6 +1250,7 @@ export function AdminMateriaForm() {
 
       originalBlocks.current = sanitizedBlocks;
       originalInterviews.current = interviews;
+      originalScheduledAt.current = scheduledAt;
       if (isEditing) reset(data);
 
       if (!id && savedId) {
@@ -1312,7 +1339,7 @@ export function AdminMateriaForm() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Data de Publicação</label>
+                <label className="text-sm font-medium">Data de publicação ou agendamento</label>
                 <input type="date" {...register("date")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
               </div>
             </div>
@@ -1685,7 +1712,7 @@ export function AdminMateriaForm() {
             <button type="button" aria-expanded={expandedSections.publicacao} aria-controls="materia-publicacao-body" onClick={() => toggleSection("publicacao")} className="flex w-full items-center justify-between gap-2 text-left border-b pb-4">
               <span>
                 <span className="block font-semibold text-lg">Publicação</span>
-                <span className="block text-xs text-muted-foreground">{watch("status") === "published" ? "Publicado" : watch("status") === "archived" ? "Arquivado" : "Rascunho"}{selectedCategory ? ` · ${selectedCategory}` : ""}</span>
+                <span className="block text-xs text-muted-foreground">{schedulePublication ? "Agendada" : watch("status") === "published" ? "Publicado" : watch("status") === "archived" ? "Arquivado" : "Rascunho"}{selectedCategory ? ` · ${selectedCategory}` : ""}</span>
               </span>
               {expandedSections.publicacao ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
             </button>
@@ -1701,11 +1728,30 @@ export function AdminMateriaForm() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
-              <select {...register("status")} className="w-full h-10 px-3 rounded-md border bg-background">
+              <select {...register("status", { onChange: (event) => { if (event.target.value !== "draft") setSchedulePublication(false); } })} className="w-full h-10 px-3 rounded-md border bg-background">
                 <option value="draft">Rascunho</option>
                 <option value="published">Publicado</option>
                 <option value="archived">Arquivado</option>
               </select>
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <input type="checkbox" checked={schedulePublication} onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setSchedulePublication(enabled);
+                  if (enabled) setValue("status", "draft", { shouldDirty: true });
+                }} className="h-4 w-4 rounded border-input" />
+                Agendar publicação
+              </label>
+              {schedulePublication ? (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium" htmlFor="materia-schedule-time">Horário de publicação</label>
+                  <input id="materia-schedule-time" type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} required className="w-full h-10 px-3 rounded-md border bg-background" />
+                  <p className="text-xs text-muted-foreground">A matéria ficará como rascunho até ser publicada automaticamente. Horário de Brasília (UTC−03:00).</p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Marque esta opção para escolher o horário em que a matéria será publicada automaticamente.</p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Categoria</label>
