@@ -1,5 +1,9 @@
 name: Radar RKC - Coleta diaria de editais
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/radar-editais-diario.yml'
   schedule:
     # 09:15 UTC = 06:15 Brasilia (UTC-3), de segunda a sexta-feira
     - cron: '15 9 * * 1-5'
@@ -22,15 +26,36 @@ jobs:
             echo "::error::Configure RKC_SUPABASE_SERVICE_ROLE_KEY em Settings > Secrets and variables > Actions."
             exit 1
           fi
+      - name: Validar formato do JWT de automacao
+        env:
+          RKC_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RKC_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node - <<'NODE'
+          const token = process.env.RKC_SUPABASE_SERVICE_ROLE_KEY || '';
+          const fail = (reason) => { console.error('::error::' + reason); process.exit(1); };
+          const parts = token.split('.');
+          if (parts.length !== 3) fail('O segredo deve conter o JWT legado service_role; sb_secret_ nao serve como Bearer com verify_jwt habilitado.');
+          let claims;
+          try { claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')); }
+          catch { fail('O segredo nao contem um JWT legivel. Confira Legacy API Keys > service_role no projeto RKC.'); }
+          if (claims.role !== 'service_role') fail('O JWT configurado nao possui o papel service_role.');
+          if (typeof claims.exp === 'number' && claims.exp * 1000 <= Date.now()) fail('O JWT service_role esta expirado.');
+          if (claims.ref && claims.ref !== 'yycfqeymdsjyulexwrlb') fail('A credencial pertence a outro projeto Supabase.');
+          console.log('Formato e papel do JWT validados, sem expor segredo.');
+          NODE
       - name: Pesquisar oportunidades oficiais
         env:
           RKC_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RKC_SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl --fail-with-body --show-error --silent --max-time 180 --retry 2 \
+          if ! curl --fail-with-body --show-error --silent --max-time 180 --retry 2 \
             --request POST \
             --header "Authorization: Bearer $RKC_SUPABASE_SERVICE_ROLE_KEY" \
+            --header "apikey: $RKC_SUPABASE_SERVICE_ROLE_KEY" \
             --header "Content-Type: application/json" \
             --data '{}' \
             "https://yycfqeymdsjyulexwrlb.supabase.co/functions/v1/radar-editais" \
-            -o radar-response.json
+            -o radar-response.json; then
+            node -e 'const fs=require("fs");let message="Resposta não identificada";try{const x=JSON.parse(fs.readFileSync("radar-response.json","utf8"));message=String(x.message||x.error||x.msg||x.code||message)}catch{}const secret=process.env.RKC_SUPABASE_SERVICE_ROLE_KEY||"";if(secret)message=message.replaceAll(secret,"[redacted]");console.error("::error::Resposta do Supabase: "+message.slice(0,150));'
+            exit 1
+          fi
           node -e 'const r=require("./radar-response.json"); if(r.status!=="sucesso"){console.error("Falha na coleta:",r.erros||r.error);process.exit(1)} console.log("Radar RKC:",r.encontradas,"links encontrados,",r.novas,"novas oportunidades")'

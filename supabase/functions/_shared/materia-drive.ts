@@ -87,7 +87,12 @@ export async function cleanupUnreferencedMateriaFiles(materiaId: string, driveFi
   if (galleryError) throw galleryError;
   const referenced = new Set<string>([
     materia.capa_drive_file_id, materia.capa_thumb_drive_file_id, materia.banner_drive_file_id, materia.audio_drive_file_id,
-    ...(Array.isArray(materia.content_blocks) ? materia.content_blocks.map((block: any) => block?.drive_file_id) : []),
+    ...(Array.isArray(materia.content_blocks) ? materia.content_blocks.flatMap((block: any) => [
+      block?.drive_file_id,
+      ...(block?.type === "interview_collection" && Array.isArray(block.interviews)
+        ? block.interviews.flatMap((interview: any) => [interview?.audioDriveFileId, interview?.thumbnailDriveFileId])
+        : []),
+    ]) : []),
     ...(Array.isArray(gallery) ? gallery.map((item: any) => item.drive_file_id) : []),
   ].filter((value): value is string => typeof value === "string" && value.length > 0));
   if (!candidates.length) return { retained: 0, archived: 0, trashed: 0, pending: 0 };

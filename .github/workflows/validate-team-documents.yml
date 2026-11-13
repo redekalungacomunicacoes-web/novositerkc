@@ -1,0 +1,26 @@
+name: Validate RKC internal documents
+on:
+  pull_request:
+    paths:
+      - 'src/app/pages/admin/AdminEquipeForm.tsx'
+      - 'src/app/pages/admin/TeamDocuments.tsx'
+      - 'supabase/functions/team-documents/**'
+      - 'supabase/migrations/*team_private_documents*.sql'
+      - 'tests/team-documents.test.mjs'
+      - 'tsconfig.equipe.json'
+      - '.github/workflows/validate-team-documents.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/team-documents.test.mjs
+      - run: npx tsc -p tsconfig.equipe.json
+      - run: npm run build
