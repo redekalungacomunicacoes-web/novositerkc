@@ -1,4 +1,4 @@
-name: Validate Materias # Final CI on current-main rebased branch
+name: Validate Materias # Re-run smoke test after syntax correction
 on:
   pull_request:
     paths:
