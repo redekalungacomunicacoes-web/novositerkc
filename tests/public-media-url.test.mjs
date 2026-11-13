@@ -35,3 +35,10 @@ test("rewrites inline article HTML image URLs while preserving unrelated URLs", 
     '<img src="https://worker.example/media?id=materia-abc"><img src="https://external.example/photo.jpg">',
   );
 });
+
+test("team and site Drive images are not rewritten by the public article/project cache helper", () => {
+  for (const id of ["team-avatar-abc", "site-banner-abc"]) {
+    const url = `https://project.supabase.co/functions/v1/drive-media?id=${id}`;
+    assert.equal(helper.resolvePublicDriveImageUrl(url, supabase, worker), url);
+  }
+});
