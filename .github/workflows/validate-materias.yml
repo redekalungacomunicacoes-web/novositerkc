@@ -1,4 +1,4 @@
-name: Validate Materias # Includes latest interview-capable editor and gallery revocation tests
+name: Validate Materias # Rerun after syncing YouTube picker and interview media validation
 on:
   pull_request:
     paths:
