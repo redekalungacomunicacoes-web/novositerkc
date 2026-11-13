@@ -7,7 +7,7 @@ test("public JPEG, PNG and WebP responses are eligible for shared edge caching",
   try {
     for (const contentType of ["image/jpeg", "image/png", "image/webp"]) {
       globalThis.fetch = async () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "Content-Type": contentType } });
-      const response = await worker.fetch(new Request("https://worker.example/media?id=materia-abc"), { SUPABASE_URL: "https://project.supabase.co" }, {});
+      const response = await worker.fetch(new Request("https://worker.example/media?id=projetos-abc"), { SUPABASE_URL: "https://project.supabase.co" }, {});
       assert.equal(response.status, 200);
       assert.equal(response.headers.get("Cache-Control"), "public, max-age=60, s-maxage=60");
       assert.equal(response.headers.get("X-RKC-Media-Origin"), "drive-media");
@@ -30,7 +30,7 @@ test("non-image, non-200 and Range responses are never cacheable", async () => {
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = async () => new Response("not an image", { status: 200, headers: { "Content-Type": "text/plain" } });
-    let response = await worker.fetch(new Request("https://worker.example/media?id=materia-abc"), { SUPABASE_URL: "https://project.supabase.co" }, {});
+    let response = await worker.fetch(new Request("https://worker.example/media?id=projetos-abc"), { SUPABASE_URL: "https://project.supabase.co" }, {});
     assert.equal(response.headers.get("Cache-Control"), "no-store");
 
     globalThis.fetch = async () => new Response("not found", { status: 404, headers: { "Content-Type": "image/jpeg" } });
