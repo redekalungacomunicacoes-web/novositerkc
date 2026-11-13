@@ -12,6 +12,18 @@ on:
       - 'supabase/functions/_shared/materia-drive.ts'
       - 'supabase/functions/drive-media/index.ts'
       - 'tests/materia*.test.mjs'
+      - 'tests/cloudflare-public-media-cache.test.mjs'
+      - 'tests/public-media-url.test.mjs'
+      - 'cloudflare/workers/rkc-public-materias-cache/**'
+      - 'src/lib/publicMediaUrl.ts'
+      - 'src/lib/publicMediaCache.ts'
+      - 'src/app/pages/MateriaDetalhes.tsx'
+      - 'src/app/pages/ProjetoDetalhes.tsx'
+      - 'src/app/repositories/projectRepository.ts'
+      - 'src/app/pages/admin/AdminProjetoForm.tsx'
+      - 'supabase/functions/cloudflare-cache-purge/**'
+      - 'supabase/config.toml'
+      - 'scripts/test-cloudflare-public-media.mjs'
       - 'scripts/generate-article-seo.mjs'
       - '.github/workflows/pages.yml'
       - 'scripts/generate-pilot-seo.mjs'
@@ -31,5 +43,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc -p tsconfig.materias.json
-      - run: node --test tests/materia*.test.mjs tests/team-drive.test.mjs
+      - run: node --test tests/materia*.test.mjs tests/team-drive.test.mjs tests/cloudflare-public-media-cache.test.mjs tests/public-media-url.test.mjs
       - run: npm run build
+      - name: Smoke test real Cloudflare media cache
+        if: github.event_name == 'pull_request' && github.head_ref == 'codex/rkc-public-media-cache'
+        run: node scripts/test-cloudflare-public-media.mjs
