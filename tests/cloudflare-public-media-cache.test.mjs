@@ -15,14 +15,13 @@ test("public JPEG, PNG and WebP responses are eligible for shared edge caching",
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("unknown media slugs are rejected before origin access", async () => {
+test("private or unknown media is rejected by the origin and never cached", async () => {
   const originalFetch = globalThis.fetch;
-  let originCalls = 0;
-  globalThis.fetch = async () => { originCalls++; throw new Error("must not fetch"); };
+  globalThis.fetch = async () => new Response("not found", { status: 404, headers: { "Content-Type": "text/plain" } });
   try {
     const response = await worker.fetch(new Request("https://worker.example/media?id=private-file-123"), { SUPABASE_URL: "https://project.supabase.co" }, {});
     assert.equal(response.status, 404);
-    assert.equal(originCalls, 0);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
   } finally { globalThis.fetch = originalFetch; }
 });
 
