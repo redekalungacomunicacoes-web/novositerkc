@@ -7,7 +7,7 @@ function json(body, status = 200, cacheControl = "no-store", extraHeaders = {}) 
     status,
     headers: {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Range",
       "Cache-Control": cacheControl,
       "Content-Type": "application/json; charset=utf-8",
@@ -46,7 +46,7 @@ async function servePublicMedia(request, url, env) {
   if (url.searchParams.size !== 1 || !PUBLIC_MEDIA_ID.test(id || "")) {
     return json({ error: "Mídia pública não encontrada." }, 404);
   }
-  if (request.method !== "GET") {
+  if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("Method not allowed", { status: 405, headers: { "Cache-Control": "no-store" } });
   }
 
@@ -65,7 +65,7 @@ async function servePublicMedia(request, url, env) {
   }
 
   const contentType = (upstream.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
-  const cacheable = upstream.status === 200 && IMAGE_TYPES.has(contentType);
+  const cacheable = request.method === "GET" && upstream.status === 200 && IMAGE_TYPES.has(contentType);
   const responseHeaders = new Headers(upstream.headers);
   responseHeaders.set("Access-Control-Allow-Origin", "*");
   responseHeaders.set("X-Content-Type-Options", "nosniff");
@@ -73,7 +73,7 @@ async function servePublicMedia(request, url, env) {
   if (cacheable) responseHeaders.set("Cache-Tag", `rkc-public-media,media-${id}`);
   responseHeaders.set("X-RKC-Media-Origin", "drive-media");
 
-  return new Response(upstream.body, {
+  return new Response(request.method === "HEAD" ? null : upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: responseHeaders,
@@ -134,7 +134,7 @@ export default {
       return purgePublicCache(request, env, ctx);
     }
 
-    if (url.pathname === "/media" && request.method === "GET") {
+    if (url.pathname === "/media" && (request.method === "GET" || request.method === "HEAD")) {
       return servePublicMedia(request, url, env);
     }
 
