@@ -12,6 +12,8 @@ for (const item of cases) {
   const url = \`\${worker}/media?id=\${encodeURIComponent(item.id)}\`;
   const first = await fetch(url, { headers: { Accept: "image/*" } });
   const firstBytes = Buffer.from(await first.arrayBuffer());
+  const firstCacheStatus = first.headers.get("cf-cache-status")?.toUpperCase();
+  assert.ok(["MISS", "EXPIRED", "REVALIDATED"].includes(firstCacheStatus), `first request should reach origin for ${item.id}: ${firstCacheStatus || "header missing"}`);
   assert.equal(first.status, 200, \`first request failed for \${item.id}: \${first.status}\`);
   assert.ok(first.headers.get("content-type")?.toLowerCase().includes(item.type), \`wrong MIME for \${item.id}\`);
 
