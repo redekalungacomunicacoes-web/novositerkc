@@ -5,15 +5,17 @@ This Worker source is the cache implementation proposed for the RKC public artic
 ## Behavior
 
 - Accepts only GET requests to `/media?id=materia-...`.
-- Calls the existing Supabase `drive-media` function on a cache miss. That function remains the authority that verifies public visibility and linkage to a published article.
-- Stores only HTTP 200 JPEG, PNG, and WebP responses using the Workers Cache API.
-- Uses a 60-second edge TTL as a conservative revocation window while an explicit global invalidation hook is not yet wired into the publishing workflow.
-- Does not cache private IDs, non-image responses, HEAD, or Range responses.
-- Adds `X-RKC-Media-Cache: HIT|MISS` for validation and monitoring.
+- Calls the existing Supabase `drive-media` function on an edge-cache miss. That function remains authoritative for public visibility and linkage to a published article.
+- Only HTTP 200 JPEG, PNG, and WebP responses are cacheable, with a 60-second shared TTL.
+- Uses the existing Worker's **Workers Cache** response caching, which is enabled on the Cloudflare account resource. It deliberately does not use `caches.default`; Cloudflare documents that Cache API behavior differs from Workers Cache and does not provide the same workers.dev support.
+- Range, non-image, non-200, non-public-looking IDs and HEAD are not cacheable.
+- `CF-Cache-Status` and `Age` from the platform are the authoritative indicators for edge HIT/MISS. The Worker does not forge those headers.
 
 ## Important limitation
 
-A Cache API hit does not re-run the Supabase visibility check until the 60-second TTL expires. Therefore this is not immediate revocation. Before production rollout, connect article unpublish/media replacement events to a server-side invalidation mechanism, or keep the TTL at 60 seconds and explicitly accept that bounded window. Never cache private Drive media.
+- The 60-second TTL bounds the stale-publication window. It is not instantaneous global invalidation. Before extending TTL, connect unpublish/media-replacement events to a verified purge mechanism across Cloudflare edge locations.
+- The current list route rewrites cover, thumbnail and banner fields. Article body/gallery image URLs must be audited and routed separately if they account for material `drive-media` traffic.
+- Never cache private Drive media.
 
 ## Tests
 
