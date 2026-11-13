@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Bold, Italic, Pilcrow, Heading2, Quote, Highlighter, Rows3 } from "lucide-react";
+import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Copy, Bold, Italic, Pilcrow, Heading2, Quote, Highlighter, Rows3, Eye, X, PenLine } from "lucide-react";
 import {
   createMateria,
   createMateriaCategoria,
@@ -14,6 +14,9 @@ import {
 } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 import { purgeRkcPublicMediaCache } from "@/lib/publicMediaCache";
+import { YouTubeVideoPicker } from "./YouTubeVideoPicker";
+
+type MateriaEditorSection = "principal" | "conteudo" | "publicacao" | "capa" | "banner" | "seo";
 
 type EquipeOption = {
   id: string;
@@ -41,6 +44,19 @@ type MateriaFormData = {
   seoTitle: string;
   seoDescription: string;
   status: "published" | "draft" | "archived";
+};
+
+type MateriaInterview = {
+  id: string;
+  title: string;
+  format: "text" | "youtube" | "audio";
+  youtubeUrl: string;
+  audioUrl?: string;
+  audioDriveFileId?: string | null;
+  transcript?: string;
+  thumbnailUrl?: string;
+  thumbnailDriveFileId?: string | null;
+  questions: Array<{ question: string; answer: string }>;
 };
 
 type MateriaGaleriaItem = {
@@ -308,6 +324,18 @@ async function ensureUniqueMateriaSlug(baseSlug: string, currentId?: string) {
   }
 }
 
+function saoPauloDateTimeParts(value: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || "";
+  return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
+}
+
+function saoPauloDateTimeToIso(date: string, time: string) {
+  const value = new Date(`${date}T${time}:00-03:00`);
+  if (!Number.isFinite(value.getTime())) throw new Error("Informe uma data e um horário válidos.");
+  return value.toISOString();
+}
+
 export function AdminMateriaForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -318,7 +346,7 @@ export function AdminMateriaForm() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, dirtyFields },
     reset,
     setValue,
     watch,
@@ -343,6 +371,14 @@ export function AdminMateriaForm() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewInterviewId, setPreviewInterviewId] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [schedulePublication, setSchedulePublication] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const originalScheduledAt = useRef<string | null>(null);
+  const [previewEditField, setPreviewEditField] = useState<string | null>(null);
+  const [previewImageField, setPreviewImageField] = useState<"coverImage" | "bannerImage">("bannerImage");
   const [equipe, setEquipe] = useState<EquipeOption[]>([]);
   const [loadingEquipe, setLoadingEquipe] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -362,8 +398,38 @@ export function AdminMateriaForm() {
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
   const [blocks, setBlocks] = useState<MateriaContentBlock[]>([]);
+  const [interviews, setInterviews] = useState<MateriaInterview[]>([]);
+  const originalBlocks = useRef<MateriaContentBlock[]>([]);
+  const originalInterviews = useRef<MateriaInterview[]>([]);
   const [activeBlock, setActiveBlock] = useState<number | null>(0);
-  const [activeTab, setActiveTab] = useState<"conteudo" | "galeria">("conteudo");
+  const [activeTab, setActiveTab] = useState<"materia" | "entrevistas">("materia");
+  const [editorMode, setEditorMode] = useState<"traditional" | "preview">("traditional");
+  const [uploadingInterviewAudioId, setUploadingInterviewAudioId] = useState<string | null>(null);
+  const [uploadingInterviewCoverId, setUploadingInterviewCoverId] = useState<string | null>(null);
+  // Mantém os campos montados enquanto a seção fica recolhida, preservando o formulário.
+  const [expandedSections, setExpandedSections] = useState<Record<MateriaEditorSection, boolean>>({
+    principal: true,
+    conteudo: !isEditing,
+    publicacao: !isEditing,
+    capa: false,
+    banner: false,
+    seo: false,
+  });
+
+  function toggleSection(section: MateriaEditorSection) {
+    setExpandedSections((current) => ({ ...current, [section]: !current[section] }));
+  }
+
+  function goToSection(section: MateriaEditorSection) {
+    if (section === "conteudo") setActiveTab("materia");
+    setExpandedSections((current) => ({ ...current, [section]: true }));
+    requestAnimationFrame(() => {
+      document.getElementById(section === "conteudo" ? "materia-panel" : `materia-section-${section}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<string | null>(null);
   // Local, low-resolution thumbnails are presentation-only; never saved as CMS URLs.
   const [blockPreviews, setBlockPreviews] = useState<Record<string, string>>({});
@@ -501,14 +567,42 @@ export function AdminMateriaForm() {
       }
 
       const d: any = data;
-      const parsedBlocks = normalizeBlocks(d.content_blocks || d.contentBlocks);
+      const rawContentBlocks = d.content_blocks || d.contentBlocks;
+      const parsedBlocks = normalizeBlocks(rawContentBlocks);
+      const interviewCollection = Array.isArray(rawContentBlocks)
+        ? rawContentBlocks.find((block: any) => block?.type === "interview_collection")
+        : null;
+      setInterviews(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.map((interview: any) => ({
+        ...interview,
+        format: interview.format === "youtube" || interview.format === "audio" ? interview.format : "text",
+        youtubeUrl: interview.youtubeUrl || "",
+        audioUrl: interview.audioUrl || "",
+        audioDriveFileId: interview.audioDriveFileId || null,
+        transcript: interview.transcript || "",
+        thumbnailUrl: interview.thumbnailUrl || "",
+        thumbnailDriveFileId: interview.thumbnailDriveFileId || null,
+        questions: Array.isArray(interview.questions) ? interview.questions : [{ question: "", answer: "" }],
+      })) : []);
+      originalInterviews.current = Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.map((interview: any) => ({
+        ...interview,
+        format: interview.format === "youtube" || interview.format === "audio" ? interview.format : "text",
+        youtubeUrl: interview.youtubeUrl || "",
+        audioUrl: interview.audioUrl || "",
+        audioDriveFileId: interview.audioDriveFileId || null,
+        transcript: interview.transcript || "",
+        thumbnailUrl: interview.thumbnailUrl || "",
+        thumbnailDriveFileId: interview.thumbnailDriveFileId || null,
+        questions: Array.isArray(interview.questions) ? interview.questions : [{ question: "", answer: "" }],
+      })) : [];
 
       [d.capa_drive_file_id, d.capa_thumb_drive_file_id, d.banner_drive_file_id, d.audio_drive_file_id,
+        ...(Array.isArray(interviewCollection?.interviews) ? interviewCollection.interviews.flatMap((item: any) => [item?.audioDriveFileId, item?.thumbnailDriveFileId]) : []),
         ...parsedBlocks.map((block: any) => block.drive_file_id)]
         .filter((value): value is string => typeof value === "string" && value.length > 0)
         .forEach((value) => cleanupCandidateIds.current.add(value));
 
       setBlocks(parsedBlocks);
+      originalBlocks.current = parsedBlocks;
       setCoverDriveFileId(d.capa_drive_file_id || null);
       setCoverThumbDriveFileId(d.capa_thumb_drive_file_id || null);
       setCoverThumbUrl(d.capa_thumb_url || null);
@@ -519,7 +613,7 @@ export function AdminMateriaForm() {
         subtitle: d.resumo || "",
         authorId: d.autor_equipe_id || d.autor_id || "",
         category: (d.tags && d.tags[0]) ? d.tags[0] : (categoryOptions[0] || ""),
-        date: (d.published_at ? new Date(d.published_at) : new Date(d.created_at)).toISOString().split("T")[0],
+        date: d.scheduled_at ? saoPauloDateTimeParts(d.scheduled_at).date : (d.published_at ? new Date(d.published_at) : new Date(d.created_at)).toISOString().split("T")[0],
         content: d.conteudo || "",
         coverImage: d.capa_url || "",
         bannerImage: d.banner_url || "",
@@ -531,6 +625,9 @@ export function AdminMateriaForm() {
         seoTitle: d.seo_title || "",
         seoDescription: d.seo_description || "",
       });
+      originalScheduledAt.current = d.scheduled_at || null;
+      setSchedulePublication(!!d.scheduled_at);
+      setScheduleTime(d.scheduled_at ? saoPauloDateTimeParts(d.scheduled_at).time : "09:00");
 
       await loadGaleria(id);
     })();
@@ -662,6 +759,7 @@ export function AdminMateriaForm() {
       alert("A foto foi removida da matéria, mas a cópia substituída ainda precisa ser movida para a lixeira do Drive.");
     }
 
+    await purgeRkcPublicMediaCache();
     await loadGaleria(id);
   };
 
@@ -675,7 +773,7 @@ export function AdminMateriaForm() {
         category: "cover",
         folder: "capas",
         file,
-        thumbnailFile: (await makeCoverThumbnail(file)) ?? undefined,
+        thumbnailFile: (await makeCoverThumbnail(file)) || undefined,
       });
       setValue("coverImage", uploaded.publicUrl, { shouldDirty: true, shouldValidate: true });
       setCoverDriveFileId(uploaded.id);
@@ -750,6 +848,65 @@ export function AdminMateriaForm() {
     }
   };
 
+  const handleInterviewCoverUpload = async (interviewId: string, file?: File) => {
+    if (!file) return;
+    if (!id) {
+      alert("Salve a matéria como rascunho antes de enviar a capa da entrevista.");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      alert("Selecione um arquivo de imagem.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("A imagem deve ter no máximo 10 MB.");
+      return;
+    }
+    setUploadingInterviewCoverId(interviewId);
+    try {
+      const uploaded = await uploadToDrive({
+        materiaId: id,
+        category: "content",
+        folder: `entrevistas/${interviewId}/capa`,
+        file,
+      });
+      cleanupCandidateIds.current.add(uploaded.id);
+      setInterviews((items) => items.map((item) => item.id === interviewId
+        ? { ...item, thumbnailUrl: uploaded.publicUrl, thumbnailDriveFileId: uploaded.id }
+        : item));
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar a capa da entrevista.");
+    } finally {
+      setUploadingInterviewCoverId(null);
+    }
+  };
+
+  const handleInterviewAudioUpload = async (interviewId: string, file?: File) => {
+    if (!file || !id) {
+      alert("Salve a matéria como rascunho antes de anexar o áudio da entrevista.");
+      return;
+    }
+    const allowedAudioTypes = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/mp4", "audio/x-m4a"]);
+    if (!allowedAudioTypes.has(file.type)) {
+      alert("Formato de áudio não suportado. Use MP3, WAV, OGG ou M4A.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      alert("Arquivo muito grande. O tamanho máximo permitido é 20 MB.");
+      return;
+    }
+    setUploadingInterviewAudioId(interviewId);
+    try {
+      const uploaded = await uploadToDrive({ materiaId: id, category: "audio", folder: `entrevistas/${interviewId}`, file, timeoutMs: 45000 });
+      cleanupCandidateIds.current.add(uploaded.id);
+      setInterviews((items) => items.map((item) => item.id === interviewId ? { ...item, format: "audio", audioUrl: uploaded.publicUrl, audioDriveFileId: uploaded.id } : item));
+    } catch (err: any) {
+      alert(err?.message || "Erro ao enviar áudio da entrevista.");
+    } finally {
+      setUploadingInterviewAudioId(null);
+    }
+  };
+
   const handleBannerUpload = async (file?: File) => {
     if (!file) return;
 
@@ -773,7 +930,7 @@ export function AdminMateriaForm() {
     }
   };
 
-  const addBlock = (type: MateriaTextBlockType | "image" | "image-text") => {
+  const addBlock = (type: MateriaTextBlockType | "image" | "image-text", position = blocks.length) => {
     if (!isMounted.current) return;
     setBlocks((prev) => {
       if (!isMounted.current) return prev;
@@ -788,8 +945,26 @@ export function AdminMateriaForm() {
       }
 
       // Adicionar vários blocos deve ser rápido: não abre o novo bloco nem move a página.
-      return [...prev, newBlock];
+      const next = [...prev];
+      next.splice(Math.max(0, Math.min(position, next.length)), 0, newBlock);
+      return next;
     });
+  };
+
+  const duplicateBlock = (blockId: string) => {
+    if (!isMounted.current) return;
+    const sourceIndex = blocks.findIndex((block) => block.id === blockId);
+    if (sourceIndex < 0) return;
+    const source = blocks[sourceIndex];
+    const duplicate = { ...source, id: uid(source.type === "image" ? "img" : source.type === "image-text" ? "imgtxt" : "txt") } as MateriaContentBlock;
+    setBlocks((previous) => {
+      const currentIndex = previous.findIndex((block) => block.id === blockId);
+      if (currentIndex < 0) return previous;
+      const next = [...previous];
+      next.splice(currentIndex + 1, 0, duplicate);
+      return next;
+    });
+    setActiveBlock((current) => current === -1 ? -1 : sourceIndex + 1);
   };
 
   const changeBlockType = (blockId: string, nextType: BlockType) => {
@@ -928,6 +1103,31 @@ export function AdminMateriaForm() {
     updateBlock(blockId, { text: next });
   };
 
+  const applyInlineLink = (blockId: string) => {
+    const el = document.getElementById(`block-text-${blockId}`) as HTMLTextAreaElement | null;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const value = el.value || "";
+    const selected = value.slice(start, end);
+    const address = window.prompt("Cole o endereço do link (https://...):", selected.startsWith("https://") ? selected : "https://");
+    if (address === null) return;
+    let url: URL;
+    try {
+      url = new URL(address.trim());
+      if (!["https:", "http:"].includes(url.protocol)) throw new Error("Protocolo inválido");
+    } catch {
+      window.alert("Informe um endereço válido iniciado por https:// ou http://.");
+      return;
+    }
+    const label = selected || window.prompt("Texto que aparecerá no link:", "Acessar link") || "";
+    if (!label.trim()) return;
+    const safeLabel = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeUrl = url.href.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+    const markup = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`;
+    updateBlock(blockId, { text: value.slice(0, start) + markup + value.slice(end) });
+  };
+
   const submitWithCompat = async (payload: any) => {
     const response = isEditing && id
       ? await updateMateria(id, payload)
@@ -944,8 +1144,15 @@ export function AdminMateriaForm() {
   };
 
   const onSubmit = async (data: MateriaFormData) => {
+    setSaveMessage("");
     setLoading(true);
     try {
+      const scheduledAt = schedulePublication ? saoPauloDateTimeToIso(data.date, scheduleTime) : null;
+      if (scheduledAt && new Date(scheduledAt).getTime() <= Date.now()) {
+        alert("Escolha uma data e um horário futuros para programar a publicação.");
+        return;
+      }
+      const publicationStatus = schedulePublication ? "draft" : data.status;
       const tags = data.category ? [data.category] : [];
       const baseSlug = slugify(data.customSlug.trim() || data.title);
       const uniqueSlug = await ensureUniqueMateriaSlug(baseSlug, id);
@@ -962,7 +1169,9 @@ export function AdminMateriaForm() {
         seo_title: data.seoTitle.trim() || null,
         seo_description: data.seoDescription.trim() || null,
         conteudo: legacyContent,
-        content_blocks: sanitizedBlocks.length ? sanitizedBlocks : null,
+        content_blocks: sanitizedBlocks.length || interviews.length
+          ? [...sanitizedBlocks, ...(interviews.length ? [{ type: "interview_collection", interviews }] : [])]
+          : null,
         hashtags: normalizeHashtags(data.hashtags),
         audio_url: data.audioUrl || null,
         photo_credits: data.photoCredits || null,
@@ -974,14 +1183,61 @@ export function AdminMateriaForm() {
         banner_drive_file_id: bannerDriveFileId,
         audio_drive_file_id: audioDriveFileId,
         tags,
-        status: data.status,
-        published_at: data.status === "published" ? new Date(data.date).toISOString() : null,
+        status: publicationStatus,
+        published_at: publicationStatus === "published" ? new Date(data.date).toISOString() : null,
+        scheduled_at: scheduledAt,
         autor_equipe_id: data.authorId || null,
         autor_id: data.authorId || null,
         autor_nome,
       };
 
-      const res = await submitWithCompat(payload);
+      let payloadToSave = payload;
+      if (isEditing) {
+        const partial: Record<string, unknown> = {};
+        if (dirtyFields.title) partial.titulo = payload.titulo;
+        if (dirtyFields.subtitle) partial.resumo = payload.resumo;
+        if (dirtyFields.seoTitle) partial.seo_title = payload.seo_title;
+        if (dirtyFields.seoDescription) partial.seo_description = payload.seo_description;
+        if (dirtyFields.title || dirtyFields.customSlug) partial.slug = payload.slug;
+        const blocksChanged = JSON.stringify(sanitizedBlocks) !== JSON.stringify(originalBlocks.current);
+        const interviewsChanged = JSON.stringify(interviews) !== JSON.stringify(originalInterviews.current);
+        if (dirtyFields.content || blocksChanged || interviewsChanged) {
+          partial.conteudo = legacyContent;
+          partial.content_blocks = payload.content_blocks;
+        }
+        if (dirtyFields.hashtags) partial.hashtags = payload.hashtags;
+        if (dirtyFields.audioUrl) {
+          partial.audio_url = payload.audio_url;
+          partial.audio_drive_file_id = payload.audio_drive_file_id;
+        }
+        if (dirtyFields.photoCredits) partial.photo_credits = payload.photo_credits;
+        if (dirtyFields.coverImage) {
+          partial.capa_url = payload.capa_url;
+          partial.capa_drive_file_id = payload.capa_drive_file_id;
+          partial.capa_thumb_drive_file_id = payload.capa_thumb_drive_file_id;
+          partial.capa_thumb_url = payload.capa_thumb_url;
+        }
+        if (dirtyFields.bannerImage) {
+          partial.banner_url = payload.banner_url;
+          partial.banner_drive_file_id = payload.banner_drive_file_id;
+        }
+        if (dirtyFields.authorId) {
+          partial.autor_equipe_id = payload.autor_equipe_id;
+          partial.autor_id = payload.autor_id;
+          partial.autor_nome = payload.autor_nome;
+        }
+        if (dirtyFields.category) partial.tags = payload.tags;
+        if (dirtyFields.status || dirtyFields.date || scheduledAt !== originalScheduledAt.current) {
+          partial.status = payload.status;
+          partial.published_at = payload.published_at;
+          partial.scheduled_at = payload.scheduled_at;
+        }
+        payloadToSave = partial;
+      }
+
+      const res = Object.keys(payloadToSave).length > 0
+        ? await submitWithCompat(payloadToSave)
+        : { data: { id }, error: null };
       if (res.error) return alert(res.error.message);
 
       const savedId = res.data?.id || id;
@@ -995,7 +1251,15 @@ export function AdminMateriaForm() {
       }
 
       await purgeRkcPublicMediaCache();
-      navigate("/admin/materias");
+      originalBlocks.current = sanitizedBlocks;
+      originalInterviews.current = interviews;
+      originalScheduledAt.current = scheduledAt;
+      if (isEditing) reset(data);
+
+      if (!id && savedId) {
+        navigate(`/admin/materias/editar/${savedId}`, { replace: true });
+      }
+      setSaveMessage("Matéria salva com sucesso.");
     } catch (err: any) {
       alert(err?.message || "Erro ao salvar matéria.");
     } finally {
@@ -1017,19 +1281,56 @@ export function AdminMateriaForm() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" aria-pressed={editorMode === "traditional"} onClick={() => { setEditorMode("traditional"); setShowPreview(false); }} className={`px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "traditional" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>Editor tradicional</button>
+          <button type="button" aria-pressed={editorMode === "preview"} onClick={() => { setEditorMode("preview"); setPreviewInterviewId(null); setShowPreview(true); }} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "preview" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>
+            <Eye className="h-4 w-4" /> Editor com prévia
+          </button>
           <button type="button" onClick={async () => { if (id) { try { await cleanupUnreferencedMateriaFiles(id); } catch (cleanupError) { console.warn("[materia-drive] cancelamento com limpeza pendente", cleanupError); } } navigate("/admin/materias"); }} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
-          <button onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
+          <button type="button" onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
             <Save className="h-4 w-4" />
             {loading ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </div>
 
+      {saveMessage && (
+        <p role="status" aria-live="polite" className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {saveMessage}
+        </p>
+      )}
+
+      {editorMode === "traditional" && (
+        <>
+      <nav aria-label="Acesso rápido às seções da matéria" className="sticky top-2 z-20 rounded-xl border bg-background/95 backdrop-blur shadow-sm px-3 py-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+        <span className="text-xs font-medium text-muted-foreground mr-1">Ir para:</span>
+        {([
+          ["principal", "Informações"],
+          ["conteudo", "Conteúdo"],
+          ["publicacao", "Publicação"],
+          ["capa", "Capa"],
+          ["banner", "Banner"],
+          ["seo", "SEO"],
+        ] as const).map(([section, label]) => (
+          <button
+            key={section}
+            type="button"
+            onClick={() => goToSection(section)}
+            className="shrink-0 px-3 py-1.5 rounded-md border bg-card text-xs font-medium hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Informações Principais</h3>
+          <div id="materia-section-principal" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
+            <button type="button" aria-expanded={expandedSections.principal} aria-controls="materia-principal-body" onClick={() => toggleSection("principal")} className="flex w-full items-center justify-between gap-2 text-left border-b pb-4">
+              <span className="font-semibold text-lg">Informações Principais</span>
+              {expandedSections.principal ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+            </button>
+            <div id="materia-principal-body" hidden={!expandedSections.principal} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Título</label>
               <input {...register("title", { required: "Título é obrigatório" })} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="Digite o título da matéria" />
@@ -1041,31 +1342,48 @@ export function AdminMateriaForm() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Data de Publicação</label>
+                <label className="text-sm font-medium">Data de publicação ou agendamento</label>
                 <input type="date" {...register("date")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" />
               </div>
             </div>
+            </div>
           </div>
 
-          <div className="tabs-menu flex gap-2 mb-2">
+          <div className="tabs-menu grid grid-cols-2 gap-2 mb-2" role="tablist" aria-label="Seções da edição da matéria">
             <button
               type="button"
-              className={`px-3 py-2 rounded-md text-sm transition-colors ${activeTab === "conteudo" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
-              onClick={() => setActiveTab("conteudo")}
+              role="tab"
+              id="materia-tab"
+              aria-controls="materia-panel"
+              aria-selected={activeTab === "materia"}
+              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === "materia" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
+              onClick={() => setActiveTab("materia")}
             >
-              Conteúdo
+              Matéria
             </button>
             <button
               type="button"
-              className={`px-3 py-2 rounded-md text-sm transition-colors ${activeTab === "galeria" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
-              onClick={() => setActiveTab("galeria")}
+              role="tab"
+              id="entrevistas-tab"
+              aria-controls="entrevistas-panel"
+              aria-selected={activeTab === "entrevistas"}
+              className={`px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === "entrevistas" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}
+              onClick={() => setActiveTab("entrevistas")}
             >
-              Galeria de Fotos
+              Entrevistas {interviews.length > 0 ? `(${interviews.length})` : ""}
             </button>
           </div>
 
-          {activeTab === "conteudo" && (
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
+          {activeTab === "materia" && (
+          <div id="materia-panel" role="tabpanel" aria-labelledby="materia-tab" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
+            <button type="button" aria-expanded={expandedSections.conteudo} aria-controls="materia-conteudo-body" onClick={() => toggleSection("conteudo")} className="flex w-full items-center justify-between gap-3 text-left border-b pb-4">
+              <span>
+                <span className="block font-semibold text-lg">Conteúdo da Matéria</span>
+                <span className="block text-xs text-muted-foreground">{blocks.length} {blocks.length === 1 ? "bloco" : "blocos"} · clique para {expandedSections.conteudo ? "recolher" : "expandir"}</span>
+              </span>
+              {expandedSections.conteudo ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+            </button>
+            <div id="materia-conteudo-body" hidden={!expandedSections.conteudo} className="space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <div>
                 <h3 className="font-semibold text-lg">Conteúdo em blocos</h3>
@@ -1139,6 +1457,7 @@ export function AdminMateriaForm() {
                           ))}
                         </select>
                         <input key={`${block.id}-${index}`} type="number" min={1} max={blocks.length} defaultValue={index + 1} aria-label={`Mover bloco ${index + 1} para posição`} title="Digite a posição e pressione Enter" className="h-8 w-14 rounded border bg-background text-center text-xs" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); moveBlockTo(block.id, Number(e.currentTarget.value)); } }} onBlur={(e) => {if(Number(e.currentTarget.value)!==index+1)moveBlockTo(block.id,Number(e.currentTarget.value));}} />
+                        <button type="button" className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-muted" title={`Duplicar bloco ${index + 1} logo abaixo`} aria-label={`Duplicar bloco ${index + 1}`} onClick={() => duplicateBlock(block.id)}><Copy className="h-3.5 w-3.5" /> Duplicar</button>
                         <button type="button" className="p-1 rounded border hover:bg-destructive/10" onClick={() => removeBlock(block.id)}><Trash2 className="w-3 h-3 text-destructive" /></button>
                       </div>
                     </div>
@@ -1213,6 +1532,7 @@ export function AdminMateriaForm() {
                         <div className="flex flex-wrap items-center gap-2">
                           <button type="button" onClick={() => applyInlineTag(block.id, "strong")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Bold className="w-3 h-3" /> Negrito</button>
                           <button type="button" onClick={() => applyInlineTag(block.id, "em")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Italic className="w-3 h-3" /> Itálico</button>
+                          <button type="button" onClick={() => applyInlineLink(block.id)} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted" title="Selecione o texto no campo e clique aqui">🔗 Inserir link</button>
                           <select value={block.size || "md"} onChange={(e) => updateBlock(block.id, { size: e.target.value as TextBlock["size"] })} className="h-8 px-2 rounded-md border text-xs">
                             <option value="sm">Texto pequeno</option>
                             <option value="md">Texto normal</option>
@@ -1245,10 +1565,78 @@ export function AdminMateriaForm() {
               </div>
             )}
 
+            </div>
           </div>
           )}
 
-          {activeTab === "galeria" && (
+          {activeTab === "entrevistas" && (
+            <section id="entrevistas-panel" role="tabpanel" aria-labelledby="entrevistas-tab" className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold">Entrevistas da matéria</h2>
+                <p className="text-sm text-muted-foreground">Adicione entrevistas em texto, vídeo do canal/YouTube ou áudio. Cada título terá uma página própria.</p>
+              </div>
+              {interviews.map((interview, interviewIndex) => (
+                <div key={interview.id} className="space-y-3 rounded-lg border p-4">
+                  <div className="flex items-center justify-between gap-2"><h3 className="font-medium">Entrevista {interviewIndex + 1}</h3><button type="button" className="rounded-md border px-3 py-1.5 text-sm text-destructive" onClick={() => setInterviews((items) => items.filter((item) => item.id !== interview.id))}>Remover</button></div>
+                  <input aria-label="Título da entrevista" value={interview.title} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, title: event.target.value } : item))} className="h-10 w-full rounded-md border px-3" placeholder="Ex.: Entrevista com Maria Kalunga" />
+                  <label className="block text-sm font-medium">Formato<select value={interview.format} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, format: event.target.value as MateriaInterview["format"] } : item))} className="mt-1 h-10 w-full rounded-md border px-3"><option value="text">Texto, com perguntas e respostas</option><option value="youtube">Vídeo do YouTube</option><option value="audio">Áudio anexado</option></select></label>
+                  <div className="space-y-2">
+                    <span className="block text-sm font-medium">Capa da entrevista</span>
+                    {interview.thumbnailUrl ? (
+                      <div className="flex flex-wrap items-start gap-3 rounded-md border bg-muted/20 p-3">
+                        <img src={interview.thumbnailUrl} alt="Prévia da capa da entrevista" className="h-28 w-28 rounded-md object-cover" />
+                        <div className="flex flex-wrap gap-2">
+                          <label className="inline-flex cursor-pointer items-center rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted">
+                            {uploadingInterviewCoverId === interview.id ? "Enviando…" : "Substituir capa"}
+                            <input type="file" accept="image/*" className="sr-only" disabled={uploadingInterviewCoverId === interview.id} onChange={(event) => handleInterviewCoverUpload(interview.id, event.target.files?.[0])} />
+                          </label>
+                          <button type="button" onClick={() => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, thumbnailUrl: "", thumbnailDriveFileId: null } : item))} className="rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">Remover capa</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-5 text-sm hover:border-green-600 hover:bg-muted/30">
+                        <ImageIcon className="h-4 w-4" />
+                        {uploadingInterviewCoverId === interview.id ? "Enviando capa…" : "Adicionar capa por upload"}
+                        <input type="file" accept="image/*" className="sr-only" disabled={uploadingInterviewCoverId === interview.id} onChange={(event) => handleInterviewCoverUpload(interview.id, event.target.files?.[0])} />
+                      </label>
+                    )}
+                    <p className="text-xs text-muted-foreground">Imagem JPG, PNG ou WebP, até 10 MB. A matéria precisa estar salva como rascunho para liberar o envio.</p>
+                  </div>
+                  {interview.format === "youtube" ? (
+                    <div className="space-y-3">
+                      <YouTubeVideoPicker value={interview.youtubeUrl} onSelect={(url) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: url } : item))} />
+                      <label className="block text-sm">Ou cole o link de um vídeo externo do YouTube
+                        <input type="url" value={interview.youtubeUrl} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, youtubeUrl: event.target.value } : item))} className="mt-1 h-10 w-full rounded-md border px-3" placeholder="https://www.youtube.com/watch?v=..." />
+                      </label>
+                    </div>
+                  ) : interview.format === "audio" ? (
+                    <div className="space-y-3 rounded-md bg-muted/30 p-3">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
+                        <input type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/x-m4a" className="sr-only" disabled={uploadingInterviewAudioId === interview.id} onChange={(event) => handleInterviewAudioUpload(interview.id, event.target.files?.[0])} />
+                        {uploadingInterviewAudioId === interview.id ? "Enviando áudio…" : interview.audioUrl ? "Substituir áudio" : "Anexar áudio"}
+                      </label>
+                      {interview.audioUrl ? <audio controls preload="none" className="w-full"><source src={interview.audioUrl} />Seu navegador não suporta áudio.</audio> : <p className="text-xs text-muted-foreground">MP3, WAV, OGG ou M4A, até 20 MB. A matéria precisa estar salva como rascunho para anexar o arquivo.</p>}
+                      <label className="block text-sm">Transcrição do áudio (opcional)
+                        <textarea value={interview.transcript || ""} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, transcript: event.target.value } : item))} className="mt-1 min-h-28 w-full rounded-md border p-3" placeholder="Inclua aqui a transcrição para facilitar o acesso ao conteúdo." />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {interview.questions.map((pair, pairIndex) => <div key={interview.id + "-" + pairIndex} className="grid gap-2 rounded-md bg-muted/30 p-3">
+                        <input value={pair.question} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: item.questions.map((entry, index) => index === pairIndex ? { ...entry, question: event.target.value } : entry) } : item))} className="h-10 rounded-md border px-3" placeholder="Pergunta do repórter" />
+                        <textarea value={pair.answer} onChange={(event) => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: item.questions.map((entry, index) => index === pairIndex ? { ...entry, answer: event.target.value } : entry) } : item))} className="min-h-20 rounded-md border p-3" placeholder="Resposta da pessoa entrevistada" />
+                        <button type="button" className="justify-self-start text-sm text-destructive" onClick={() => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: item.questions.filter((_, index) => index !== pairIndex) } : item))}>Remover pergunta e resposta</button>
+                      </div>)}
+                      <button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={() => setInterviews((items) => items.map((item) => item.id === interview.id ? { ...item, questions: [...item.questions, { question: "", answer: "" }] } : item))}>Adicionar pergunta e resposta</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <button type="button" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => setInterviews((items) => [...items, { id: uid("interview"), title: "", format: "text", youtubeUrl: "", audioUrl: "", audioDriveFileId: null, transcript: "", thumbnailUrl: "", thumbnailDriveFileId: null, questions: [{ question: "", answer: "" }] }])}>Adicionar entrevista</button>
+            </section>
+          )}
+
+          {activeTab === "materia" && (
           <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <div>
@@ -1297,9 +1685,13 @@ export function AdminMateriaForm() {
           )}
         </div>
 
-        <div className="space-y-6">
-          <section className="bg-card border rounded-xl p-4 shadow-sm space-y-3" aria-label="SEO e compartilhamento">
-            <h3 className="font-semibold text-base">SEO e compartilhamento</h3>
+        {activeTab === "materia" && <div className="space-y-6">
+          <section id="materia-section-seo" className="bg-card border rounded-xl p-4 shadow-sm space-y-3 scroll-mt-24" aria-label="SEO e compartilhamento">
+            <button type="button" aria-expanded={expandedSections.seo} aria-controls="materia-seo-body" onClick={() => toggleSection("seo")} className="flex w-full items-center justify-between gap-2 text-left">
+              <span className="font-semibold text-base">SEO e compartilhamento</span>
+              {expandedSections.seo ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+            </button>
+            <div id="materia-seo-body" hidden={!expandedSections.seo} className="space-y-3">
             <label className="block text-sm">URL da matéria (slug)
               <input {...register("customSlug")} className="mt-1 w-full h-9 rounded-md border bg-background px-2 text-sm" placeholder="automaticamente pelo título" />
             </label>
@@ -1317,9 +1709,17 @@ export function AdminMateriaForm() {
               {(watch("seoDescription") || "").length}/300 caracteres. Uma descrição específica com cerca de 120 a 160 caracteres costuma caber melhor na prévia.
             </p>
             <p className="text-xs text-muted-foreground">Se os campos ficarem vazios, o site usa o título e o resumo da matéria. Imagem: banner; se não houver, capa.</p>
+            </div>
           </section>
-          <div className="bg-card border rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="font-semibold text-lg border-b pb-4 mb-4">Publicação</h3>
+          <div id="materia-section-publicacao" className="bg-card border rounded-xl p-6 shadow-sm space-y-4 scroll-mt-24">
+            <button type="button" aria-expanded={expandedSections.publicacao} aria-controls="materia-publicacao-body" onClick={() => toggleSection("publicacao")} className="flex w-full items-center justify-between gap-2 text-left border-b pb-4">
+              <span>
+                <span className="block font-semibold text-lg">Publicação</span>
+                <span className="block text-xs text-muted-foreground">{schedulePublication ? "Agendada" : watch("status") === "published" ? "Publicado" : watch("status") === "archived" ? "Arquivado" : "Rascunho"}{selectedCategory ? ` · ${selectedCategory}` : ""}</span>
+              </span>
+              {expandedSections.publicacao ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+            </button>
+            <div id="materia-publicacao-body" hidden={!expandedSections.publicacao} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Autor</label>
                 <select {...register("authorId")} className="w-full h-10 px-3 rounded-md border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
@@ -1331,11 +1731,30 @@ export function AdminMateriaForm() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
-              <select {...register("status")} className="w-full h-10 px-3 rounded-md border bg-background">
+              <select {...register("status", { onChange: (event) => { if (event.target.value !== "draft") setSchedulePublication(false); } })} className="w-full h-10 px-3 rounded-md border bg-background">
                 <option value="draft">Rascunho</option>
                 <option value="published">Publicado</option>
                 <option value="archived">Arquivado</option>
               </select>
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <input type="checkbox" checked={schedulePublication} onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setSchedulePublication(enabled);
+                  if (enabled) setValue("status", "draft", { shouldDirty: true });
+                }} className="h-4 w-4 rounded border-input" />
+                Agendar publicação
+              </label>
+              {schedulePublication ? (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium" htmlFor="materia-schedule-time">Horário de publicação</label>
+                  <input id="materia-schedule-time" type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} required className="w-full h-10 px-3 rounded-md border bg-background" />
+                  <p className="text-xs text-muted-foreground">A matéria ficará como rascunho até ser publicada automaticamente. Horário de Brasília (UTC−03:00).</p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Marque esta opção para escolher o horário em que a matéria será publicada automaticamente.</p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Categoria</label>
@@ -1378,11 +1797,18 @@ export function AdminMateriaForm() {
               </label>
               {!!selectedAudioFileName && <p className="text-xs text-muted-foreground">Arquivo selecionado: {selectedAudioFileName}</p>}
             </div>
+            </div>
           </div>
 
-          <div className="bg-card border rounded-xl p-3 shadow-sm space-y-2">
+          <div id="materia-section-capa" className="bg-card border rounded-xl p-3 shadow-sm space-y-2 scroll-mt-24">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold text-lg">Capa da Matéria</h3>
+              <button type="button" aria-expanded={expandedSections.capa} aria-controls="materia-capa-body" onClick={() => toggleSection("capa")} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <span>
+                  <span className="block font-semibold text-lg">Capa da Matéria</span>
+                  <span className="block text-xs text-muted-foreground">{coverUrl ? "Capa configurada" : "Sem capa"}</span>
+                </span>
+                {expandedSections.capa ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+              </button>
 
               <input ref={coverInputRef} type="file" accept="image/*" className="hidden" id="cover-input" onChange={(e) => handleCoverUpload(e.target.files?.[0])} />
               <label htmlFor="cover-input" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors">
@@ -1391,6 +1817,7 @@ export function AdminMateriaForm() {
               </label>
             </div>
 
+            <div id="materia-capa-body" hidden={!expandedSections.capa} className="space-y-2">
             {coverUrl ? <div className="flex items-center justify-between rounded-md bg-muted p-2 text-xs"><span>✓ Capa carregada</span><button type="button" className="text-destructive underline" onClick={() => { setValue("coverImage", ""); setCoverDriveFileId(null); setCoverThumbDriveFileId(null); setCoverThumbUrl(null); }}>Remover</button></div> : <p className="text-xs text-muted-foreground">Sem capa</p>}
             <p className="text-xs text-muted-foreground">
               Usada na listagem e nos cards. Recomendado: formato quadrado 1:1 (ex.: 800x800 ou 960x960).
@@ -1399,11 +1826,18 @@ export function AdminMateriaForm() {
               <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
               <input {...register("coverImage", { onChange: () => { setCoverDriveFileId(null); setCoverThumbDriveFileId(null); setCoverThumbUrl(null); } })} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
             </div>
+            </div>
           </div>
 
-          <div className="bg-card border rounded-xl p-3 shadow-sm space-y-2">
+          <div id="materia-section-banner" className="bg-card border rounded-xl p-3 shadow-sm space-y-2 scroll-mt-24">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-semibold text-lg">Banner da Matéria</h3>
+              <button type="button" aria-expanded={expandedSections.banner} aria-controls="materia-banner-body" onClick={() => toggleSection("banner")} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <span>
+                  <span className="block font-semibold text-lg">Banner da Matéria</span>
+                  <span className="block text-xs text-muted-foreground">{bannerUrl ? "Banner configurado" : "Sem banner"}</span>
+                </span>
+                {expandedSections.banner ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+              </button>
 
               <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" id="banner-input" onChange={(e) => handleBannerUpload(e.target.files?.[0])} />
               <label htmlFor="banner-input" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted transition-colors">
@@ -1412,6 +1846,7 @@ export function AdminMateriaForm() {
               </label>
             </div>
 
+            <div id="materia-banner-body" hidden={!expandedSections.banner} className="space-y-2">
             {bannerUrl ? <div className="flex items-center justify-between rounded-md bg-muted p-2 text-xs"><span>✓ Banner carregado</span><button type="button" className="text-destructive underline" onClick={() => { setValue("bannerImage", ""); setBannerDriveFileId(null); }}>Remover</button></div> : <p className="text-xs text-muted-foreground">Sem banner</p>}
             <p className="text-xs text-muted-foreground">
               Usado no topo da matéria publicada. Recomendado: formato horizontal (ex.: 1600x900, 1440x810 ou 1280x720).
@@ -1420,9 +1855,197 @@ export function AdminMateriaForm() {
               <label className="text-sm font-medium text-muted-foreground">Ou cole a URL</label>
               <input {...register("bannerImage", { onChange: () => setBannerDriveFileId(null) })} className="w-full h-10 px-3 rounded-md border bg-background" placeholder="https://..." />
             </div>
+            </div>
           </div>
-        </div>
+        </div>}
       </div>
+        </>
+      )}
+      {showPreview && (() => {
+        const previewData = watch();
+        const previewDate = previewData.date
+          ? new Date(`${previewData.date}T12:00:00`).toLocaleDateString("pt-BR")
+          : "";
+        const articleImage = previewData.bannerImage || previewData.coverImage;
+        const previewEditButton = (key: string, label: string) => (
+          <button
+            type="button"
+            onClick={() => setPreviewEditField((current) => current === key ? null : key)}
+            aria-label={`Editar ${label}`}
+            title={`Editar ${label}`}
+            className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-xs text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            <PenLine className="h-3.5 w-3.5" />
+            {previewEditField === key ? "Concluir" : "Editar"}
+          </button>
+        );
+        const previewBlockActions = (block: MateriaContentBlock, index: number, label: string) => (
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            {previewEditButton(`block:${block.id}`, label)}
+            <button type="button" onClick={() => duplicateBlock(block.id)} aria-label={`Duplicar ${label}`} title="Duplicar logo abaixo" className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50"><Copy className="h-3.5 w-3.5" /> Duplicar</button>
+            <button type="button" disabled={index === 0} onClick={() => moveBlock(index, -1)} aria-label={`Mover ${label} para cima`} title="Mover para cima" className="rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35">↑</button>
+            <button type="button" disabled={index === blocks.length - 1} onClick={() => moveBlock(index, 1)} aria-label={`Mover ${label} para baixo`} title="Mover para baixo" className="rounded-md border bg-white px-2 py-1 text-xs shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35">↓</button>
+            <button type="button" onClick={() => {
+              if (window.confirm("Deseja excluir este bloco da matéria?")) {
+                removeBlock(block.id);
+                setPreviewEditField(null);
+              }
+            }} className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 shadow-sm hover:bg-red-50">Excluir</button>
+          </div>
+        );
+        const previewAddBlockMenu = (position: number) => (
+          <details className="my-3 rounded-lg border border-dashed border-green-700/40 bg-green-50/40 p-2">
+            <summary className="cursor-pointer list-none text-center text-sm font-medium text-green-800">＋ Adicionar bloco</summary>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
+              {([["paragraph", "Parágrafo"], ["heading", "Subtítulo"], ["quote", "Citação"], ["highlight", "Destaque"], ["image", "Imagem"], ["image-text", "Imagem + texto"]] as const).map(([type, label]) => <button key={type} type="button" onClick={() => addBlock(type, position)} className="rounded-md border bg-white px-3 py-1.5 text-xs hover:border-green-700">{label}</button>)}
+            </div>
+          </details>
+        );
+
+        return (
+          <div className="w-full overflow-hidden rounded-xl border bg-white shadow-sm">
+            <section aria-labelledby="materia-preview-title" className="w-full bg-white">
+              <div className="flex items-center justify-between gap-3 border-b bg-white px-4 py-3">
+                <div>
+                  <h2 id="materia-preview-title" className="font-semibold">Editor com prévia</h2>
+                  <p className="text-xs text-muted-foreground">Visualização da página da matéria. Edite os elementos diretamente nesta página.</p>
+                </div>
+                
+              </div>
+              <div className="w-full">
+                <section className="relative flex min-h-[32rem] items-stretch overflow-hidden sm:min-h-[36rem] md:min-h-[40rem]">
+                  <div className="absolute inset-0">
+                    {articleImage ? <img src={articleImage} alt="" className="h-full w-full bg-gray-100 object-cover" /> : <div className="h-full w-full bg-gray-800" />}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/70 to-black/35" />
+                  </div>
+                  <div className="relative z-10 w-full">
+                    <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-8 sm:px-6 sm:py-10 md:px-8 md:py-12">
+                      <div className="mb-6 flex justify-end">{previewEditButton("image", "imagem principal")}</div>
+                      
+                      <div className="flex items-start justify-between gap-3">
+                        {previewEditField === "title" ? <input autoFocus value={previewData.title || ""} onChange={(event) => setValue("title", event.target.value, { shouldDirty: true, shouldValidate: true })} className="w-full rounded-md border px-3 py-2 text-3xl font-bold text-gray-950 sm:text-5xl" /> : <h1 className="max-w-4xl break-words text-3xl font-bold leading-[1.1] text-white sm:text-5xl">{previewData.title || "Título da matéria"}</h1>}
+                        {previewEditField !== "title" ? previewEditButton("title", "título") : null}
+                      </div>
+                      <div className="mt-4 flex items-start gap-3">
+                        {previewEditField === "subtitle" ? <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl text-gray-950" /> : <p className="max-w-3xl flex-1 text-lg leading-relaxed text-white/90 sm:text-xl">{previewData.subtitle || ""}</p>}
+                        {previewEditField !== "subtitle" ? previewEditButton("subtitle", "subtítulo") : null}
+                      </div>
+                      <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-white/90">
+                        <div className="flex items-center gap-2 text-sm">{previewData.authorId ? equipe.find((person) => person.id === previewData.authorId)?.nome || "Autor" : "Sem autor"}{previewEditButton("author", "autor")}</div>
+                        <div className="flex items-center gap-2 text-sm">{previewDate || "Sem data"}{previewEditButton("date", "data")}</div>
+                        <div className="flex items-center gap-2"><span className="rounded-full bg-[#F2B705] px-3 py-1 text-sm font-semibold text-gray-950">{previewData.category || "Geral"}</span>{previewEditButton("category", "categoria")}</div>
+                      </div>
+                      {previewEditField === "author" ? <select value={previewData.authorId || ""} onChange={(event) => setValue("authorId", event.target.value, { shouldDirty: true })} className="mt-3 h-10 max-w-sm rounded-md border px-3 text-gray-900"><option value="">Selecione um autor</option>{equipe.map((person) => <option key={person.id} value={person.id}>{person.nome}</option>)}</select> : null}
+                      {previewEditField === "date" ? <input type="date" value={previewData.date || ""} onChange={(event) => setValue("date", event.target.value, { shouldDirty: true })} className="mt-3 h-10 max-w-sm rounded-md border px-3 text-gray-900" /> : null}
+                      {previewEditField === "category" ? <select value={previewData.category || ""} onChange={(event) => setValue("category", event.target.value, { shouldDirty: true })} className="mt-3 h-10 max-w-sm rounded-md border px-3 text-gray-900">{categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}
+                    </div>
+                  </div>
+                </section>
+                {previewEditField === "image" ? (
+                  <div className="mx-auto flex max-w-3xl flex-col gap-2 px-5 pt-4 sm:flex-row sm:items-end sm:px-10">
+                    <label className="flex-1 text-sm">
+                      Imagem para editar
+                      <select value={previewImageField} onChange={(event) => setPreviewImageField(event.target.value as "coverImage" | "bannerImage")} className="mt-1 h-10 w-full rounded-md border px-3">
+                        <option value="bannerImage">Banner</option>
+                        <option value="coverImage">Capa</option>
+                      </select>
+                    </label>
+                    <label className="flex-1 text-sm">
+                      URL da imagem
+                      <input value={previewData[previewImageField] || ""} onChange={(event) => setValue(previewImageField, event.target.value, { shouldDirty: true, shouldValidate: true })} className="mt-1 h-10 w-full rounded-md border px-3" />
+                    </label>
+                    <button type="button" onClick={() => (previewImageField === "bannerImage" ? bannerInputRef : coverInputRef).current?.click()} className="h-10 rounded-md border px-3 text-sm hover:bg-muted">
+                      Enviar arquivo
+                    </button>
+                  </div>
+                ) : null}
+
+                <nav aria-label="Navegação da prévia da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
+                  <div className="mx-auto flex max-w-5xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
+                    <a href="#materia-conteudo-preview" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white">Matéria</a>
+                    {interviews.length > 0 ? <a href="#entrevistas-preview" className="shrink-0 rounded-full border border-[#0F7A3E] px-4 py-2 text-sm font-semibold text-[#0F7A3E]">Entrevistas <span className="ml-1 rounded-full bg-[#0F7A3E]/10 px-2 py-0.5 text-xs">{interviews.length}</span></a> : null}
+                  </div>
+                </nav>
+                <article id="materia-conteudo-preview" className="mx-auto max-w-4xl bg-white px-4 py-16 sm:px-6 md:py-24 lg:px-8">
+                  <div className="prose prose-lg mt-8 max-w-none text-gray-700"><div className="article-content space-y-6">
+                    {blocks.length > 0 ? blocks.map((block, blockIndex) => {
+                      const editKey = `block:${block.id}`;
+                      const editing = previewEditField === editKey;
+                      if (block.type === "image") return (
+                        <figure key={block.id} className="space-y-3">
+                          {blockPreviews[block.id] || block.url ? <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[640px] rounded-lg object-contain" /> : null}
+                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div>
+                          {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} aria-label="URL da imagem" className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} aria-label="Legenda da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} aria-label="Crédito da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Crédito" /></div> : block.caption ? <figcaption className="mt-2 text-center text-sm text-gray-500">{block.caption}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption> : null}
+                        </figure>
+                      );
+                      if (block.type === "image-text") return (
+                        <figure key={block.id} className="space-y-3">
+                          <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[500px] rounded-lg object-contain" />
+                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div>
+                          {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" placeholder="Texto ao lado da imagem" /></div> : <><figcaption className="text-center text-sm text-gray-500">{block.caption || ""}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption><p className="whitespace-pre-wrap">{block.text || ""}</p></>}
+                        </figure>
+                      );
+                      const plainText = (block.text || "").replace(/<[^>]*>/g, "");
+                      return (
+                        <section key={block.id} className="space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            {editing ? <textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" /> : (
+                              block.type === "heading" ? <h2 className="flex-1 pt-4 text-2xl font-bold text-gray-900">{plainText}</h2>
+                              : block.type === "quote" ? <blockquote className="flex-1 border-l-4 border-green-700 pl-5 italic">{plainText}{block.author ? <cite className="mt-2 block text-sm not-italic text-gray-500">{block.author}</cite> : null}</blockquote>
+                              : block.type === "highlight" ? <aside className="flex-1 rounded-lg bg-amber-50 p-5">{plainText}</aside>
+                              : <p className="flex-1 whitespace-pre-wrap">{plainText}</p>
+                            )}
+                            {previewBlockActions(block, blockIndex, "bloco de texto")}
+                          </div>
+                          {editing && block.type === "quote" ? <input value={block.author || ""} onChange={(event) => updateBlock(block.id, { author: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Autoria da citação" /> : null}
+                          {previewAddBlockMenu(blockIndex + 1)}
+                        </section>
+                      );
+                    }) : (
+                      <section className="space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          {previewEditField === "legacyContent" ? <textarea autoFocus value={previewData.content || ""} onChange={(event) => setValue("content", event.target.value, { shouldDirty: true })} rows={10} className="w-full rounded-md border p-3" /> : <div className="flex-1 whitespace-pre-wrap">{previewData.content || "O conteúdo da matéria aparecerá aqui."}</div>}
+                          {previewEditButton("legacyContent", "conteúdo")}
+                        </div>
+                        {previewAddBlockMenu(0)}
+                      </section>
+                    )}
+                  </div></div>
+
+                  {galeria.length > 0 ? <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3">{galeria.map((item) => <figure key={item.id}><img src={item.url} alt={item.legenda || "Foto da matéria"} className="h-40 w-full rounded-lg object-cover" />{item.legenda ? <figcaption className="mt-1 text-xs text-gray-500">{item.legenda}</figcaption> : null}</figure>)}</div> : null}
+                  <div className="mt-6 flex items-center justify-between gap-3">
+                    {previewData.photoCredits ? <p className="text-sm text-gray-500">Créditos das fotos: {previewData.photoCredits}</p> : <span />}
+                    {previewEditButton("photoCredits", "créditos das fotos")}
+                  </div>
+                  {previewEditField === "photoCredits" ? <input value={previewData.photoCredits || ""} onChange={(event) => setValue("photoCredits", event.target.value, { shouldDirty: true })} className="mt-2 h-10 w-full rounded-md border px-3" placeholder="Créditos das fotos" /> : null}
+                  {previewData.audioUrl ? <div className="mt-5 flex items-center gap-3 text-sm"><a href={previewData.audioUrl} target="_blank" rel="noreferrer" className="text-green-800 underline">Ouvir áudio da matéria</a>{previewEditButton("audioUrl", "áudio")}</div> : null}
+                  {previewEditField === "audioUrl" ? <input value={previewData.audioUrl || ""} onChange={(event) => setValue("audioUrl", event.target.value, { shouldDirty: true })} className="mt-2 h-10 w-full rounded-md border px-3" placeholder="URL do áudio" /> : null}
+                  {interviews.length > 0 ? <section id="entrevistas-preview" className="mt-8 scroll-mt-24 border-t pt-6">
+                    <h2 className="mb-4 text-xl font-bold text-green-800">Entrevistas</h2>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{interviews.map((interview, index) => <button key={interview.id} type="button" onClick={() => setPreviewInterviewId(interview.id)} className={`flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 text-left hover:border-green-700 ${previewInterviewId === interview.id ? "ring-2 ring-green-700" : ""}`}>
+                      {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-50 text-xs text-green-800">{index + 1}</div>}
+                      <span className="min-w-0 text-sm font-semibold">{/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
+                    </button>)}</div>
+                    {previewInterviewId ? (() => { const interview = interviews.find((item) => item.id === previewInterviewId); if (!interview) return null; return <div className="mt-4 rounded-lg border bg-gray-50 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">{interview.title || "Prévia da entrevista"}</h3><button type="button" onClick={() => setPreviewInterviewId(null)} className="text-sm text-green-800 underline">Voltar às entrevistas</button></div>
+                      {interview.format === "audio" && interview.audioUrl ? <audio controls preload="none" className="w-full"><source src={interview.audioUrl} />Seu navegador não suporta áudio.</audio> : null}
+                      {interview.format === "youtube" && interview.youtubeUrl ? (() => { const videoId = interview.youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/)?.[1]; return videoId ? <div className="aspect-video overflow-hidden rounded-lg"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${videoId}`} title={interview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div> : <p className="text-sm text-red-700">Confira o link do YouTube.</p>; })() : null}
+                      {interview.format === "text" ? <div className="space-y-3">{interview.questions.map((pair, index) => <div key={index}><p className="font-semibold">{pair.question || "Pergunta do repórter"}</p><p className="mt-1 whitespace-pre-wrap text-gray-700">{pair.answer || "Resposta da pessoa entrevistada"}</p></div>)}</div> : null}
+                      {interview.transcript ? <details className="mt-3"><summary className="cursor-pointer font-medium">Ler transcrição</summary><p className="mt-2 whitespace-pre-wrap text-gray-700">{interview.transcript}</p></details> : null}
+                    </div>; })() : null}
+                  </section> : null}
+                  {previewData.hashtags ? <div className="mt-6 flex items-center gap-3 text-sm text-gray-500"><p>{previewData.hashtags}</p>{previewEditButton("hashtags", "hashtags")}</div> : null}
+                  {previewEditField === "hashtags" ? <input value={previewData.hashtags || ""} onChange={(event) => setValue("hashtags", event.target.value, { shouldDirty: true })} className="mt-2 h-10 w-full rounded-md border px-3" placeholder="Hashtags separadas por vírgula" /> : null}
+                </article>
+              </div>
+              <div className="flex justify-end border-t bg-white px-4 py-3">
+                <button type="button" onClick={handleSubmit(onSubmit)} disabled={loading} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">{loading ? "Salvando..." : "Salvar alterações"}</button>
+              </div>
+            </section>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }
