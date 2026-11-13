@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 const worker = "https://rkc-public-materias-cache.redekalungacomunicacoes.workers.dev";
 const cases = [
   { id: "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe", type: "image/jpeg" },
-  { id: "materia-857ef543-5512-42dd-b9dc-e1c7e634f26a", type: "image/png" },
+  { id: "materia-1f8zr8fWpoZz30ipp0aJfaCggeO6WxDhT", type: "image/png" },
   { id: "materia-03437a4c-44e6-4185-84cd-2544e5d6f39c", type: "image/webp" },
 ];
 
