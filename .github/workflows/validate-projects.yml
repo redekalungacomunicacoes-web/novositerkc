@@ -1,4 +1,4 @@
-name: Validate Projects
+name: Validate Projects # Also type-checks the authenticated Cloudflare purge bridge
 on:
   pull_request:
     paths:
