@@ -1,4 +1,4 @@
-name: Validate Materias # Rerun after syncing YouTube picker and interview media validation
+name: Validate Materias # Final CI on current-main rebased branch
 on:
   pull_request:
     paths:
