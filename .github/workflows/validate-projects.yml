@@ -1,4 +1,4 @@
-name: Validate Projects # Rerun after syncing current shared Drive validation code
+name: Validate Projects # Final Deno check on current-main rebased branch
 on:
   pull_request:
     paths:
