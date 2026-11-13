@@ -1,4 +1,5 @@
 import { TEAM_DRIVE_AVATAR_SELECT, teamAvatarUrl } from "@/lib/teamAvatar";
+import { resolvePublicDriveImageUrl, rewritePublicDriveImageUrlsInHtml } from "@/lib/publicMediaUrl";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
@@ -8,7 +9,6 @@ import { ArrowLeft, Calendar, User, Share2, Facebook, Instagram, Mail, ChevronLe
 import { MateriaContentBlock } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 import { trackPageView } from "@/lib/analytics";
-import { resolvePublicDriveImageUrl, rewritePublicDriveImageUrlsInHtml } from "@/lib/publicMediaUrl";
 
 type MateriaUI = {
   id: string;
@@ -23,6 +23,7 @@ type MateriaUI = {
   categoria: string;
   conteudo: string;
   contentBlocks: MateriaContentBlock[];
+  interviews: Array<{ id: string; title: string; format: "text" | "youtube" | "audio"; youtubeUrl: string; audioUrl?: string; transcript?: string; thumbnailUrl?: string; questions: Array<{ question: string; answer: string }> }>;
   hashtags: string[];
   audioUrl: string;
   photoCredits: string;
@@ -44,6 +45,23 @@ type MateriaGaleriaItem = {
   ordem: number | null;
   created_at: string | null;
 };
+
+function getYouTubeVideoId(input?: string | null) {
+  if (!input) return null;
+  try {
+    const url = new URL(input.trim());
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    let candidate = "";
+    if (host === "youtu.be") candidate = url.pathname.split("/").filter(Boolean)[0] || "";
+    else if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com"].includes(host)) {
+      if (url.pathname === "/watch") candidate = url.searchParams.get("v") || "";
+      else if (/^\/(embed|shorts|live|v)\//.test(url.pathname)) candidate = url.pathname.split("/").filter(Boolean)[1] || "";
+    }
+    return /^[\w-]{11}$/.test(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
 
 function getEquipeHref(author: MateriaUI["autorPerfil"]) {
   if (!author) return "";
@@ -79,6 +97,22 @@ function hasHtmlContent(text?: string | null) {
   return /<\/?[a-z][\s\S]*>/i.test(text);
 }
 
+function renderLinkedText(text: string) {
+  const parts: React.ReactNode[] = [];
+  const pattern = /https?:\/\/[^\s<>"]+/g;
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    parts.push(text.slice(cursor, index));
+    const url = match[0].replace(/[.,;!?)]*$/, "");
+    parts.push(<a key={index} href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 break-all hover:text-[#0F7A3E]">{url}</a>);
+    parts.push(match[0].slice(url.length));
+    cursor = index + match[0].length;
+  }
+  parts.push(text.slice(cursor));
+  return parts;
+}
+
 function renderTextWithParagraphs(text?: string | null) {
   if (!text) return null;
   const normalized = String(text).replace(/\r\n/g, "\n").trim();
@@ -91,7 +125,7 @@ function renderTextWithParagraphs(text?: string | null) {
     <p key={`p-${index}`} className="text-lg text-gray-700 leading-relaxed mb-6">
       {paragraph.split("\n").map((line, lineIndex, lines) => (
         <Fragment key={`l-${lineIndex}`}>
-          {line}
+          {renderLinkedText(line)}
           {lineIndex < lines.length - 1 ? <br /> : null}
         </Fragment>
       ))}
@@ -256,7 +290,7 @@ function renderBlock(block: MateriaContentBlock) {
     if (!hasHtmlContent(block.text || "")) {
       return (
         <blockquote key={block.id} className="my-6 border-l-4 border-[#0F7A3E] pl-4 italic text-gray-700">
-          <p className={`${textSizeClass(block.size)} whitespace-pre-line`}>{block.text || ""}</p>
+          <p className={`${textSizeClass(block.size)} whitespace-pre-line`}>{renderLinkedText(block.text || "")}</p>
           {block.author ? <cite className="block mt-2 text-sm not-italic text-gray-500">— {block.author}</cite> : null}
         </blockquote>
       );
@@ -300,6 +334,7 @@ function renderBlock(block: MateriaContentBlock) {
 export function MateriaDetalhes() {
   const params = useParams();
   const paramValue = (params as any).slug || (params as any).id;
+  const interviewId = (params as any).interviewId as string | undefined;
 
   const [loading, setLoading] = useState(true);
   const [materia, setMateria] = useState<MateriaUI | null>(null);
@@ -318,6 +353,7 @@ export function MateriaDetalhes() {
     categoria: "",
     conteudo: "",
     contentBlocks: [],
+    interviews: [],
     hashtags: [],
     audioUrl: "",
     photoCredits: "",
@@ -326,9 +362,11 @@ export function MateriaDetalhes() {
 
   useEffect(() => {
     if (!materia) return;
-    const title = materia.seoTitle || materia.titulo;
-    const description = materia.seoDescription || materia.resumo || "";
-    const url = `https://kalungacomunicacoes.org/materias/${encodeURIComponent(materia.slug)}`;
+    const interview = interviewId ? materia.interviews.find((item) => item.id === interviewId) : null;
+    const title = interview?.title || materia.seoTitle || materia.titulo;
+    const description = interview?.transcript || materia.seoDescription || materia.resumo || "";
+    const articlePath = `/materias/${encodeURIComponent(materia.slug)}`;
+    const url = `https://kalungacomunicacoes.org${interview ? `${articlePath}/entrevistas/${encodeURIComponent(interview.id)}` : articlePath}`;
     const upsert = (attribute: "name" | "property", key: string, value: string) => {
       let tag = document.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
       if (!tag) {
@@ -349,7 +387,7 @@ export function MateriaDetalhes() {
     upsert("name", "twitter:title", title);
     upsert("name", "twitter:description", description);
     if (materia.imagem) upsert("name", "twitter:image", materia.imagem);
-  }, [materia]);
+  }, [materia, interviewId]);
 
   useEffect(() => {
     if (!paramValue) return;
@@ -435,7 +473,7 @@ export function MateriaDetalhes() {
             nome: authorData.nome || found.autor_nome || "",
             cargo: authorData.cargo || null,
             bio: authorData.bio || null,
-            foto: teamAvatarUrl(authorData) || getTeamAvatarThumbUrl((authorData as any).avatar_thumb_path),
+            foto: resolvePublicDriveImageUrl(teamAvatarUrl(authorData) || getTeamAvatarThumbUrl((authorData as any).avatar_thumb_path)),
           };
         }
       }
@@ -454,6 +492,32 @@ export function MateriaDetalhes() {
         categoria: (found.tags && found.tags[0]) ? found.tags[0] : "Geral",
         conteudo: rewritePublicDriveImageUrlsInHtml(found.conteudo || ""),
         contentBlocks: normalizeBlocks(found.content_blocks),
+        interviews: (() => {
+          // Supabase may return content_blocks as an array or as serialized JSON.
+          // Read the interview collection independently of the visible article blocks.
+          let storedBlocks = found.content_blocks;
+          if (typeof storedBlocks === "string") {
+            try { storedBlocks = JSON.parse(storedBlocks); } catch { storedBlocks = []; }
+          }
+          const rawBlocks = Array.isArray(storedBlocks) ? storedBlocks : [];
+          const collection = rawBlocks.find((block: any) => block?.type === "interview_collection");
+          let storedInterviews = collection?.interviews;
+          if (typeof storedInterviews === "string") {
+            try { storedInterviews = JSON.parse(storedInterviews); } catch { storedInterviews = []; }
+          }
+          const rawInterviews = Array.isArray(storedInterviews) ? storedInterviews : [];
+          return rawInterviews.filter((interview: any) => interview && typeof interview === "object").map((interview: any, index: number) => ({
+            ...interview,
+            id: String(interview.id || `interview-${index + 1}`),
+            title: String(interview.title || ""),
+            format: interview.format === "youtube" || interview.format === "audio" ? interview.format : "text",
+            youtubeUrl: String(interview.youtubeUrl || interview.youtube_url || ""),
+            audioUrl: String(interview.audioUrl || interview.audio_url || ""),
+            transcript: String(interview.transcript || ""),
+            thumbnailUrl: resolvePublicDriveImageUrl(String(interview.thumbnailUrl || interview.thumbnail_url || "")),
+            questions: Array.isArray(interview.questions) ? interview.questions : [],
+          }));
+        })(),
         hashtags: Array.isArray(found.hashtags) ? found.hashtags.filter(Boolean) : [],
         audioUrl: found.audio_url || "",
         photoCredits: found.photo_credits || "",
@@ -474,7 +538,7 @@ export function MateriaDetalhes() {
 
       await trackPageView({
         pageType: "materia",
-        path: `/materias/${mapped.slug || mapped.id}`,
+        path: interviewId ? `/materias/${mapped.slug || mapped.id}/entrevistas/${encodeURIComponent(interviewId)}` : `/materias/${mapped.slug || mapped.id}`,
         contentId: mapped.id,
         contentSlug: mapped.slug,
       });
@@ -505,6 +569,7 @@ export function MateriaDetalhes() {
   }, [paramValue]);
 
   const m = materia || fallbackMateria;
+  const selectedInterview = interviewId ? m.interviews.find((interview) => interview.id === interviewId) : null;
   const hasBlocks = m.contentBlocks.length > 0;
   const hasGallery = galeria.length > 0;
   const normalizedAudioUrl = (m.audioUrl || "").trim();
@@ -542,6 +607,25 @@ export function MateriaDetalhes() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeGalleryIndex, galeria.length]);
+
+  if (interviewId) {
+    const videoId = selectedInterview?.format === "youtube" ? getYouTubeVideoId(selectedInterview.youtubeUrl) : null;
+    return <main className="min-h-screen bg-white py-12 sm:py-16">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        <Link to={`/materias/${encodeURIComponent(m.slug || m.id)}`} className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-[#0F7A3E] hover:underline"><ArrowLeft className="h-4 w-4" />Voltar à matéria</Link>
+        {loading ? <p className="text-gray-500">Carregando entrevista…</p> : !materia || !selectedInterview ? <p className="text-gray-500">Entrevista não encontrada.</p> : <article>
+          <p className="mb-4 text-sm font-semibold text-[#0F7A3E]">Entrevista · {m.titulo}</p>
+          <h1 className="mb-7 text-2xl font-bold leading-tight text-gray-950 sm:text-3xl">{/^entrevista\s+com\s+/i.test(selectedInterview.title || "") ? selectedInterview.title : `Entrevista com ${selectedInterview.title || "entrevistado(a)"}`}</h1>
+          {selectedInterview.format === "youtube" ? (videoId
+            ? <div className="aspect-video overflow-hidden rounded-xl"><iframe className="h-full w-full" src={`https://www.youtube.com/embed/${videoId}?rel=0`} title={selectedInterview.title || "Entrevista no YouTube"} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
+            : <p className="text-red-700">Link do YouTube inválido ou não reconhecido.</p>) : null}
+          {selectedInterview.format === "audio" && selectedInterview.audioUrl ? <section className="rounded-xl border bg-gray-50 p-4"><h2 className="mb-3 font-semibold">Ouça a entrevista</h2><audio controls preload="none" className="w-full"><source src={selectedInterview.audioUrl} />Seu navegador não suporta áudio.</audio></section> : null}
+          {selectedInterview.transcript ? <details className="mt-5 rounded-xl border p-4"><summary className="cursor-pointer font-semibold text-[#0F7A3E]">Ler transcrição</summary><div className="mt-3 whitespace-pre-wrap leading-relaxed text-gray-700">{selectedInterview.transcript}</div></details> : null}
+          {selectedInterview.format === "text" ? <div className="mt-6 space-y-6">{selectedInterview.questions.map((pair, index) => <section key={index}><h2 className="font-semibold text-gray-950">{pair.question}</h2><p className="mt-2 whitespace-pre-wrap leading-relaxed text-gray-700">{pair.answer}</p></section>)}</div> : null}
+        </article>}
+      </div>
+    </main>;
+  }
 
   return (
     <div>
@@ -596,7 +680,28 @@ export function MateriaDetalhes() {
         </div>
       </section>
 
-      <article className="py-16 md:py-24 bg-white">
+      {!!materia && m.interviews.length > 0 && (
+        <nav aria-label="Navegação das entrevistas" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-2 px-4 py-3 sm:px-6 lg:px-8">
+            {m.interviews.slice(0, 3).map((interview, index) => (
+              <Link
+                key={interview.id}
+                to={`/materias/${encodeURIComponent(m.slug || m.id)}/entrevistas/${encodeURIComponent(interview.id)}`}
+                aria-label={/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}
+                className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-[#0F7A3E] px-3 py-2 text-xs font-semibold text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2 sm:text-sm"
+              >
+                {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0F7A3E]/10 text-xs">{index + 1}</span>}
+                <span className="min-w-0 break-words">{/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
+              </Link>
+            ))}
+            {m.interviews.length > 3 && (
+              <a href="#entrevistas" aria-label={`Ver todas as ${m.interviews.length} entrevistas`} title="Ver todas as entrevistas" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#0F7A3E] text-xl font-medium text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E] focus-visible:ring-offset-2">+</a>
+            )}
+          </div>
+        </nav>
+      )}
+
+      <article id="materia-conteudo" className="scroll-mt-20 py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           {loading && <div className="text-sm text-gray-500 mb-8">Carregando matéria...</div>}
           {!loading && !materia && <div className="text-sm text-gray-500 mb-8">Matéria não encontrada ou não publicada.</div>}
@@ -610,6 +715,22 @@ export function MateriaDetalhes() {
                   renderLegacyContent(m.conteudo)
                 )}
               </div>
+
+              {m.interviews.length > 0 && (
+                <section id="entrevistas" className="mt-10 scroll-mt-24 border-t border-gray-200 pt-6" aria-labelledby="article-interviews-title">
+                  <h2 id="article-interviews-title" className="mb-4 text-xl font-bold text-[#0F7A3E]">Entrevistas</h2>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {m.interviews.map((interview, index) => <Link
+                      key={interview.id}
+                      to={`/materias/${encodeURIComponent(m.slug || m.id)}/entrevistas/${encodeURIComponent(interview.id)}`}
+                      className="group flex min-w-0 items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 transition hover:border-[#0F7A3E] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F7A3E]"
+                    >
+                      {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-14 w-14 shrink-0 rounded-full object-cover" /> : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-50 text-xs font-semibold text-[#0F7A3E]">{index + 1}</div>}
+                      <span className="min-w-0 text-sm font-semibold leading-tight text-gray-900 group-hover:text-[#0F7A3E]">{/^entrevista\s+com\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
+                    </Link>)}
+                  </div>
+                </section>
+              )}
 
               {m.hashtags.length > 0 && (
                 <div className="mt-10 pt-6 border-t border-gray-200">
