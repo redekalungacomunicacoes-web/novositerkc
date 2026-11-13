@@ -110,3 +110,28 @@ test("cache purge validates tags and calls Workers Cache purge", async () => {
     assert.deepEqual(purgedTags, ["rkc-public-materias", "rkc-public-media", "media-materia-abc"]);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("HEAD is supported without storing a separate empty response", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => {
+    assert.equal(init.method, "GET");
+    return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "Content-Type": "image/jpeg" } });
+  };
+  try {
+    const response = await worker.fetch(new Request("https://worker.example/media?id=materia-abc", { method: "HEAD" }), env, {});
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(await response.text(), "");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("cache purge reports a failure when Cloudflare does not confirm purge", async () => {
+  const response = await worker.fetch(new Request("https://worker.example/__cache/purge", {
+    method: "POST",
+    headers: { Authorization: "Bearer expected-secret", "Content-Type": "application/json" },
+    body: JSON.stringify({ tags: ["rkc-public-media"] }),
+  }), { ...env, RKC_CACHE_PURGE_SECRET: "expected-secret" }, {
+    cache: { purge: async () => ({ success: false, errors: [{ code: 1 }] }) },
+  });
+  assert.equal(response.status, 502);
+});
