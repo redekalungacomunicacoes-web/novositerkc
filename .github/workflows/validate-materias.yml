@@ -1,4 +1,4 @@
-name: Validate Materias # Includes live cache smoke test with validated public image IDs
+name: Validate Materias # Includes latest interview-capable editor and gallery revocation tests
 on:
   pull_request:
     paths:
