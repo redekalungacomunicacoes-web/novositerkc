@@ -9,6 +9,9 @@ const state = {
   deleted: false,
   module: "materias",
   category: "content",
+  mimeType: "image/jpeg",
+  interviewAudioLinked: false,
+  interviewThumbLinked: false,
   articleStatus: "published",
   articleContentLinked: true,
   articleGalleryLinked: true,
@@ -31,7 +34,7 @@ globalThis.__rkcTest = {
             id: "metadata-id",
             drive_file_id: "physical-drive-id",
             name: "photo.jpg",
-            mime_type: "image/jpeg",
+            mime_type: state.mimeType,
             size_bytes: 3,
             module: state.module,
             entity_id: state.module === "materias" ? "article-id" : "project-id",
@@ -48,7 +51,10 @@ globalThis.__rkcTest = {
               capa_thumb_drive_file_id: null,
               banner_drive_file_id: null,
               audio_drive_file_id: null,
-              content_blocks: state.articleContentLinked ? [{ drive_file_id: "metadata-id" }] : [],
+              content_blocks: [
+                ...(state.articleContentLinked ? [{ drive_file_id: "metadata-id" }] : []),
+                ...((state.interviewAudioLinked || state.interviewThumbLinked) ? [{ type: "interview_collection", interviews: [{ audioDriveFileId: state.interviewAudioLinked ? "metadata-id" : null, thumbnailDriveFileId: state.interviewThumbLinked ? "metadata-id" : null }] }] : []),
+              ],
             }, error: null };
           }
           if (table === "projetos") {
@@ -151,6 +157,25 @@ test("project gallery media is denied after unpublishing or removing the gallery
     const removed = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=projetos-gallery-test"));
     assert.equal(removed.status, 404);
     assert.equal(downloads(), 1);
+  });
+});
+
+test("interview audio and thumbnail files remain linked to the published article", async () => {
+  await withDriveFetch(async (downloads) => {
+    Object.assign(state, { visibility: "public", fileStatus: "active", deleted: false, module: "materias", category: "audio", mimeType: "audio/mpeg", articleStatus: "published", articleContentLinked: false, interviewAudioLinked: true, interviewThumbLinked: false });
+    const audio = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-interview-audio"));
+    assert.equal(audio.status, 200);
+    state.interviewAudioLinked = false;
+    const revokedAudio = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-interview-audio"));
+    assert.equal(revokedAudio.status, 404);
+
+    Object.assign(state, { category: "content", mimeType: "image/jpeg", interviewAudioLinked: false, interviewThumbLinked: true });
+    const thumbnail = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-interview-thumbnail"));
+    assert.equal(thumbnail.status, 200);
+    state.interviewThumbLinked = false;
+    const revokedThumbnail = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-interview-thumbnail"));
+    assert.equal(revokedThumbnail.status, 404);
+    assert.equal(downloads(), 2);
   });
 });
 
