@@ -1,4 +1,4 @@
-name: Validate Materias # Final run includes article/project gallery revocation regression tests
+name: Validate Materias # Includes live cache smoke test with validated public image IDs
 on:
   pull_request:
     paths:
