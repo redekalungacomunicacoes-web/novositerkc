@@ -39,18 +39,7 @@ function imageWorkerUrl(value, workerOrigin, supabaseOrigin) {
   }
 }
 
-function mediaCacheKey(origin, id) {
-  return new Request(new URL(`/__rkc_media_cache/${encodeURIComponent(id)}`, origin).toString(), { method: "GET" });
-}
-
-function withCacheStatus(response, status) {
-  const headers = new Headers(response.headers);
-  headers.set("X-RKC-Media-Cache", status);
-  headers.set("X-Content-Type-Options", "nosniff");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-async function servePublicMedia(request, url, env, ctx) {
+async function servePublicMedia(request, url, env) {
   const id = url.searchParams.get("id");
   if (url.searchParams.size !== 1 || !/^materia-[A-Za-z0-9_-]+$/.test(id || "")) {
     return json({ error: "Mídia pública não encontrada." }, 404);
@@ -58,22 +47,11 @@ async function servePublicMedia(request, url, env, ctx) {
   if (request.method !== "GET") {
     return new Response("Method not allowed", { status: 405, headers: { "Cache-Control": "no-store" } });
   }
-
-  const cache = caches.default;
-  const cacheKey = mediaCacheKey(url.origin, id);
   const range = request.headers.get("Range");
-
-  // Range responses are deliberately excluded from cache to avoid storing partial bodies.
-  if (!range) {
-    const cached = await cache.match(cacheKey);
-    if (cached) return withCacheStatus(cached, "HIT");
-  }
-
   const originUrl = new URL("/functions/v1/drive-media", env.SUPABASE_URL);
   originUrl.searchParams.set("id", id);
   const headers = new Headers();
   if (range) headers.set("Range", range);
-
   let upstream;
   try {
     upstream = await fetch(originUrl, { method: "GET", headers });
@@ -83,27 +61,16 @@ async function servePublicMedia(request, url, env, ctx) {
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
     });
   }
-
   const contentType = (upstream.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
   const cacheable = !range && upstream.status === 200 && IMAGE_TYPES.has(contentType);
   const responseHeaders = new Headers(upstream.headers);
   responseHeaders.set("Access-Control-Allow-Origin", "*");
   responseHeaders.set("X-Content-Type-Options", "nosniff");
+  // Workers Cache is enabled for this Worker; shared max-age lets the edge serve hits
+  // without invoking this handler or the Supabase drive-media origin again.
   responseHeaders.set("Cache-Control", cacheable ? `public, max-age=${MEDIA_TTL_SECONDS}, s-maxage=${MEDIA_TTL_SECONDS}` : "no-store");
-  responseHeaders.set("X-RKC-Media-Cache", "MISS");
-
-  const response = new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: responseHeaders,
-  });
-
-  if (cacheable) {
-    // Cache only after drive-media has revalidated that the file is public and linked to a published article.
-    const cacheCopy = response.clone();
-    ctx.waitUntil(cache.put(cacheKey, cacheCopy).catch(() => undefined));
-  }
-  return response;
+  responseHeaders.set("X-RKC-Media-Origin", "drive-media");
+  return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: responseHeaders });
 }
 
 export default {
@@ -122,7 +89,7 @@ export default {
     }
 
     if (url.pathname === "/media" && request.method === "GET") {
-      return servePublicMedia(request, url, env, ctx);
+      return servePublicMedia(request, url, env);
     }
 
     if (request.method !== "GET" || url.pathname !== "/materias" || url.search) {
