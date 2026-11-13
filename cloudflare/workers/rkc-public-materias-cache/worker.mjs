@@ -1,6 +1,6 @@
 const MEDIA_TTL_SECONDS = 60;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const PUBLIC_MEDIA_ID = /^(?:materia|projetos|projeto|kalucast|site|team)-[A-Za-z0-9_-]{2,200}$/;
+const PUBLIC_MEDIA_ID = /^(?:materia|projetos|projeto|kalucast)-[A-Za-z0-9_-]{2,200}$/;
 
 function json(body, status = 200, cacheControl = "no-store", extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
