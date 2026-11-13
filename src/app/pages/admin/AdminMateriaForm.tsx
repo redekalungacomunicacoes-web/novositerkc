@@ -13,6 +13,7 @@ import {
   updateMateria
 } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
+import { purgeRkcPublicMediaCache } from "@/lib/publicMediaCache";
 
 type EquipeOption = {
   id: string;
@@ -993,6 +994,7 @@ export function AdminMateriaForm() {
         }
       }
 
+      await purgeRkcPublicMediaCache();
       navigate("/admin/materias");
     } catch (err: any) {
       alert(err?.message || "Erro ao salvar matéria.");
