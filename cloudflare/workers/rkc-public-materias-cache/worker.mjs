@@ -32,7 +32,7 @@ function imageWorkerUrl(value, workerOrigin, supabaseOrigin) {
       imageUrl.origin === supabaseOrigin &&
       imageUrl.pathname === "/functions/v1/drive-media" &&
       imageUrl.searchParams.size === 1 &&
-      /^[A-Za-z0-9][A-Za-z0-9_-]{2,200}$/.test(id || "");
+      /^(?:materia|projetos|projeto|kalucast|site|team)-[A-Za-z0-9_-]{2,200}$/.test(id || "");
     return isPublicMateriaMedia ? `${workerOrigin}/media?id=${encodeURIComponent(id)}` : value;
   } catch {
     return value;
@@ -41,7 +41,7 @@ function imageWorkerUrl(value, workerOrigin, supabaseOrigin) {
 
 async function servePublicMedia(request, url, env) {
   const id = url.searchParams.get("id");
-  if (url.searchParams.size !== 1 || !/^[A-Za-z0-9][A-Za-z0-9_-]{2,200}$/.test(id || "")) {
+  if (url.searchParams.size !== 1 || !/^(?:materia|projetos|projeto|kalucast|site|team)-[A-Za-z0-9_-]{2,200}$/.test(id || "")) {
     return json({ error: "Mídia pública não encontrada." }, 404);
   }
   if (request.method !== "GET") {
