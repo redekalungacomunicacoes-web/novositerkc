@@ -15,7 +15,8 @@ export function resolvePublicDriveImageUrl(
       imageUrl.origin !== new URL(supabaseUrl).origin ||
       imageUrl.pathname !== "/functions/v1/drive-media" ||
       imageUrl.searchParams.size !== 1 ||
-      !PUBLIC_MEDIA_ID.test(id || "")
+      !id ||
+      !PUBLIC_MEDIA_ID.test(id)
     ) return raw;
     return `${workerOrigin}/media?id=${encodeURIComponent(id)}`;
   } catch {
