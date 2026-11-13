@@ -1,4 +1,4 @@
-name: Validate Projects # Also type-checks the authenticated Cloudflare purge bridge
+name: Validate Projects # Rerun after syncing current shared Drive validation code
 on:
   pull_request:
     paths:
