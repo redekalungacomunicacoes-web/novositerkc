@@ -36,6 +36,14 @@ node scripts/test-cloudflare-public-media.mjs
 
 The live smoke test makes read-only GET requests to three existing public article images (JPEG, PNG and WebP), checks the second response is `CF-Cache-Status: HIT`, checks `Age` and identical bytes, and confirms an unknown/private control ID returns 404 + `no-store`.
 
+## Free-tier compatibility
+
+- Workers Cache has no separate price, but every request to this Worker, including a cache HIT, counts toward the Workers request quota. Workers Free currently allows 100,000 requests/day; a HIT does not execute Worker code or consume CPU.
+- Workers Free CPU budget is 10 ms per invocation; this handler performs one origin fetch on a media MISS and simple URL/header processing.
+- The current maximum public image recorded in the database is 28.4 MB, below Cloudflare's 512 MB cacheable-object limit.
+- Workers Cache purge always uses Cloudflare's Free-tier purge limits: 5 requests/minute (burst bucket 25). The bridge sends one request containing two tags. If rate-limited or unavailable, the admin save continues and the 60-second TTL remains the fallback.
+- The Cloudflare OAuth connection does not include Billing Read, so the account's subscribed plan could not be independently confirmed. No paid product, R2 bucket, DNS zone, or paid resource was created or enabled.
+
 ## Important limits
 
 - Cache invalidation is immediate only after the authenticated bridge is deployed and its two secrets are configured. Until then, the 60-second shared TTL is the maximum Worker edge staleness window; the origin still revalidates on each MISS.
