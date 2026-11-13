@@ -4,7 +4,7 @@ This Worker source is the cache implementation proposed for the RKC public artic
 
 ## Behavior
 
-- Accepts only GET requests to `/media?id=<public_slug>`.
+- Accepts only GET requests to `/media?id=<public_slug>` whose prefix is in the current public-slug allowlist (`materia-`, `projetos-`, `projeto-`, `kalucast-`, `site-`, `team-`). The origin still validates the actual file visibility.
 - Calls the existing Supabase `drive-media` function on an edge-cache miss. That function remains authoritative for public visibility and linkage to a published article.
 - Only HTTP 200 JPEG, PNG, and WebP responses are cacheable, with a 60-second shared TTL.
 - Uses the existing Worker's **Workers Cache** response caching, which is enabled on the Cloudflare account resource. It deliberately does not use `caches.default`; Cloudflare documents that Cache API behavior differs from Workers Cache and does not provide the same workers.dev support.
