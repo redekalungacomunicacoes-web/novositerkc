@@ -444,13 +444,13 @@ test("HTTP endpoint denies anonymous access, reader writes and out-of-scope down
         )
         .replace('"../_shared/google-drive.ts"', JSON.stringify(driveUrl))
         .replace('"../_shared/academy-drive.ts"', JSON.stringify(academyUrl))
-        .replace('"../_shared/project-drive.ts"', JSON.stringify(dataModule('export const uploadProjectDrive=()=>{},getProjectPreview=()=>{};')))
-        .replace('"../_shared/site-drive.ts"', JSON.stringify(dataModule('export const uploadSiteDrive=()=>{};')))
         .replace('"../_shared/team-drive.ts"', JSON.stringify(dataModule('export const ensureTeamMemberFolder=()=>{},requireTeamEditor=()=>{},confirmTeamAvatar=()=>{},uploadTeamAvatar=()=>{},uploadTeamAvatarPair=()=>{},uploadTeamPortfolio=()=>{},removeTeamAvatar=()=>{},removeTeamPortfolio=()=>{},importLegacyTeamAvatar=()=>{};')))
         .replace('"../_shared/materia-drive.ts"', JSON.stringify(dataModule('export const uploadMateriaDrive=()=>{},cleanupUnreferencedMateriaFiles=()=>{};')))
         .replace('"../_shared/file-center.ts"', JSON.stringify(dataModule('export const createCenterFolder=()=>{},manageCenterFolder=()=>{},moveCenterFile=()=>{},uploadCenterFile=()=>{},withCenterLease=()=>{};')))
         .replace('"../_shared/task-drive.ts"', JSON.stringify(dataModule('export async function prepareTaskFolder(){ throw new Error("unused"); }')) )
-        .replace('"../_shared/task-delete.ts"', JSON.stringify(dataModule('export async function deleteTaskAndQueueCleanup(){ throw new Error("unused"); } export async function retryTaskCleanup(){ throw new Error("unused"); }'))),
+        .replace('"../_shared/task-delete.ts"', JSON.stringify(dataModule('export async function deleteTaskAndQueueCleanup(){ throw new Error("unused"); } export async function retryTaskCleanup(){ throw new Error("unused"); }')))
+        .replace('"../_shared/project-drive.ts"', JSON.stringify(dataModule('export const downloadDriveFile=async()=>new Response("unused"); export const driveHealth=async()=>({}); export const renameDriveFile=async()=>({}); export const trashDriveFile=async()=>{}; export const uploadDriveFile=async()=>({}); export const resolveAcademyFolder=async()=>({id:"academy"}); export const startDriveResumableUpload=async()=>({}); export const getDriveFileMetadata=async()=>({}); export const assertPrivateDriveFile=async()=>{}; export const uploadProjectDrive=async()=>({}); export const getProjectPreview=async()=>({});')))
+        .replace('"../_shared/site-drive.ts"', JSON.stringify(dataModule('export const uploadSiteDrive=async()=>({});'))),
     )
   );
   const send = (action) =>
