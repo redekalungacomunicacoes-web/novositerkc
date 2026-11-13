@@ -56,9 +56,9 @@ test('article uploads are optimized through the supported custom fetch hook', as
   assert.match(optimizer, /maxEdge: 1920/);
 });
 
-test('published article media uses immutable long-lived cache', async () => {
+test('published article media origin requires revalidation outside the edge cache', async () => {
   const source = await read('supabase/functions/drive-media/index.ts');
-  assert.match(source, /max-age=31536000, s-maxage=31536000, immutable/);
+  assert.match(source, /max-age=0, s-maxage=0, must-revalidate/);
   assert.match(source, /ETag/);
   assert.match(source, /Last-Modified/);
 });
