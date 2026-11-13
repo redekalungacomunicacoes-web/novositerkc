@@ -1,5 +1,5 @@
 const DEFAULT_WORKER_ORIGIN = "https://rkc-public-materias-cache.redekalungacomunicacoes.workers.dev";
-const PUBLIC_MEDIA_ID = /^(?:materia|projetos|projeto|kalucast|site|team)-[A-Za-z0-9_-]{2,200}$/;
+const PUBLIC_MEDIA_ID = /^(?:materia|projetos|projeto|kalucast)-[A-Za-z0-9_-]{2,200}$/;
 
 export function resolvePublicDriveImageUrl(
   value: string | null | undefined,
