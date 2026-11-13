@@ -473,7 +473,7 @@ export function MateriaDetalhes() {
             nome: authorData.nome || found.autor_nome || "",
             cargo: authorData.cargo || null,
             bio: authorData.bio || null,
-            foto: resolvePublicDriveImageUrl(teamAvatarUrl(authorData) || getTeamAvatarThumbUrl((authorData as any).avatar_thumb_path)),
+            foto: teamAvatarUrl(authorData) || getTeamAvatarThumbUrl((authorData as any).avatar_thumb_path),
           };
         }
       }
