@@ -8,7 +8,7 @@ Isolated source for the RKC Cloudflare Worker media route. This source is paired
 - Article detail: `src/app/pages/MateriaDetalhes.tsx` rewrites the hero, inline `content_blocks` images, legacy HTML image URLs, and `materia_galeria` image URLs.
 - Projects: `projectRepository.ts` rewrites public Drive URLs used by project covers and project galleries.
 - The URL helper only rewrites the configured Supabase origin and the exact `/functions/v1/drive-media?id=<allowlisted-public-slug>` shape. Supabase Storage URLs, external URLs and unknown IDs are left unchanged.
-- The Worker accepts only the current public slug namespaces (`materia-`, `projetos-`, `projeto-`, `kalucast-`, `site-`, `team-`). The Supabase origin still validates visibility and active status.
+- The Worker accepts only the current public slug namespaces (`materia-`, `projetos-`, `projeto-`, `kalucast-`). The Supabase origin still validates visibility and active status.
 
 ## Cache behavior
 
