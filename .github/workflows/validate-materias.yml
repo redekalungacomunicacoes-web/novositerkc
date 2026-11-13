@@ -1,4 +1,4 @@
-name: Validate Materias # Includes isolated public media cache and revocation tests
+name: Validate Materias # Includes isolated public media cache, revocation and regression tests
 on:
   pull_request:
     paths:
