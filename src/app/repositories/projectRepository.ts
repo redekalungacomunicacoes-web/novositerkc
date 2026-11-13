@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { resolvePublicDriveImageUrl } from "@/lib/publicMediaUrl";
 
 export const PROJECTS_BUCKET = "projetos";
 
@@ -34,7 +35,7 @@ export type ProjetoGaleriaRecord = {
 export function resolveProjectMediaUrl(rawValue: string | null | undefined): string {
   const raw = (rawValue || "").trim();
   if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^https?:\/\//i.test(raw)) return resolvePublicDriveImageUrl(raw);
   return supabase.storage.from(PROJECTS_BUCKET).getPublicUrl(raw).data.publicUrl;
 }
 
