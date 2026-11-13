@@ -4,31 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
-const MEDIA_CACHE_TTL = 5 * 60 * 1000;
-const MEDIA_CACHE_MAX = 500;
-
-type CachedMedia = { file: any; expiresAt: number };
-const mediaCache = new Map<string, CachedMedia>();
 let cachedToken: { value: string; expiresAt: number } | null = null;
 let tokenRefresh: Promise<string> | null = null;
-
-function getCachedMedia(slug: string) {
-  const cached = mediaCache.get(slug);
-  if (!cached) return null;
-  if (cached.expiresAt <= Date.now()) {
-    mediaCache.delete(slug);
-    return null;
-  }
-  return cached.file;
-}
-
-function cacheMedia(slug: string, file: any) {
-  if (mediaCache.size >= MEDIA_CACHE_MAX) {
-    const oldest = mediaCache.keys().next().value;
-    if (oldest) mediaCache.delete(oldest);
-  }
-  mediaCache.set(slug, { file, expiresAt: Date.now() + MEDIA_CACHE_TTL });
-}
 
 function base64Url(input: Uint8Array | string) {
   const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
@@ -115,13 +92,11 @@ Deno.serve(async (req) => {
   if (!slug) return new Response("Not found", { status: 404 });
   const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
 
-  let file = getCachedMedia(slug);
-  if (!file) {
-    const result = await admin.from("drive_files")
+  const result = await admin.from("drive_files")
       .select("id,drive_file_id,name,mime_type,size_bytes,module,entity_id,category")
       .eq("public_slug", slug).eq("visibility", "public").eq("status", "active").is("deleted_at", null).single();
-    file = result.data;
-    if (result.error || !file) return new Response("Not found", { status: 404 });
+  const file = result.data;
+  if (result.error || !file) return new Response("Not found", { status: 404 });
 
     if (file.module === "materias") {
       const { data: materia } = await admin.from("materias")
@@ -167,15 +142,13 @@ Deno.serve(async (req) => {
       } else if (![member.data.avatar_drive_file_id, member.data.avatar_thumb_drive_file_id].includes(file.id)) return new Response("Not found", { status: 404 });
     }
 
-    cacheMedia(slug, file);
-  }
 
   try {
     const drive = await downloadDriveFile(file.drive_file_id, req.headers.get("Range"));
     const headers = new Headers();
     headers.set("Content-Type", file.mime_type || drive.headers.get("Content-Type") || "application/octet-stream");
     headers.set("Cache-Control", ["materias", "projetos"].includes(file.module)
-      ? "public, max-age=31536000, s-maxage=31536000, immutable"
+      ? "public, max-age=0, s-maxage=0, must-revalidate"
       : "public, max-age=86400, s-maxage=86400");
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set("Accept-Ranges", "bytes");
