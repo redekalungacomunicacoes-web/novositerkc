@@ -1,4 +1,4 @@
-name: Validate Materias
+name: Validate Materias # Includes isolated public media cache and revocation tests
 on:
   pull_request:
     paths:
@@ -12,6 +12,7 @@ on:
       - 'supabase/functions/_shared/materia-drive.ts'
       - 'supabase/functions/drive-media/index.ts'
       - 'tests/drive-media-visibility.test.mjs'
+      - 'tests/cloudflare-cache-purge-auth.test.mjs'
       - 'tests/materia*.test.mjs'
       - 'tests/cloudflare-public-media-cache.test.mjs'
       - 'tests/public-media-url.test.mjs'
@@ -44,7 +45,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc -p tsconfig.materias.json
-      - run: node --test tests/materia*.test.mjs tests/team-drive.test.mjs tests/cloudflare-public-media-cache.test.mjs tests/public-media-url.test.mjs tests/drive-media-visibility.test.mjs
+      - run: node --test tests/materia*.test.mjs tests/team-drive.test.mjs tests/cloudflare-public-media-cache.test.mjs tests/public-media-url.test.mjs tests/drive-media-visibility.test.mjs tests/cloudflare-cache-purge-auth.test.mjs
       - run: npm run build
       - name: Smoke test real Cloudflare media cache
         if: github.event_name == 'pull_request' && github.head_ref == 'codex/rkc-public-media-cache'
