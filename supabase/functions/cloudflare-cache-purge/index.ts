@@ -20,9 +20,10 @@ Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
   const purgeSecret = Deno.env.get("RKC_CACHE_PURGE_SECRET");
-  if (!authorization || !supabaseUrl || !anonKey || !purgeSecret) {
+  if (!supabaseUrl || !anonKey || !purgeSecret) {
     return json({ error: "Cache invalidation is not configured." }, 503);
   }
+  if (!authorization) return json({ error: "Unauthorized" }, 401);
 
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authorization } },
