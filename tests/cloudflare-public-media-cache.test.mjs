@@ -135,3 +135,20 @@ test("purge endpoint authenticates, validates tags and reports Cloudflare failur
     assert.deepEqual(purged, ["rkc-public-media", "media-materia-abc"]);
   } finally { globalThis.fetch = oldFetch; }
 });
+
+test("legacy authorized HEAD response remains compatible during staged rollout", async () => {
+  const oldFetch = globalThis.fetch;
+  let imageGets = 0;
+  globalThis.fetch = async (_url, init) => {
+    if (init.method === "HEAD") {
+      return new Response(null, { status: 200, headers: { "Cache-Control": "public, max-age=0, s-maxage=0, must-revalidate" } });
+    }
+    imageGets++;
+    return new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "Content-Type": "image/jpeg", "CF-Cache-Status": "MISS" } });
+  };
+  try {
+    const response = await worker.fetch(new Request("https://worker.example/media?id=materia-legacy"), env, {});
+    assert.equal(response.status, 200);
+    assert.equal(imageGets, 1);
+  } finally { globalThis.fetch = oldFetch; }
+});
