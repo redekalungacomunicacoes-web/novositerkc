@@ -88,6 +88,42 @@ async function servePublicMedia(request, url, env) {
   responseHeaders.set("X-RKC-Media-Cache", cacheable
     ? (upstream.headers.get("CF-Cache-Status") || "UNKNOWN").toUpperCase()
     : "BYPASS");
+
+  const rangeHeader = request.headers.get("Range");
+  if (rangeHeader && cacheable) {
+    const bytes = new Uint8Array(await upstream.arrayBuffer());
+    const match = /^bytes=(\\d*)-(\\d*)$/.exec(rangeHeader.trim());
+    if (!match || (!match[1] && !match[2])) {
+      return new Response(null, { status: 416, headers: {
+        "Cache-Control": "no-store",
+        "Content-Range": `bytes */${bytes.length}`,
+        "Accept-Ranges": "bytes",
+      }});
+    }
+    let start;
+    let end;
+    if (!match[1]) {
+      const suffixLength = Number(match[2]);
+      start = Math.max(0, bytes.length - suffixLength);
+      end = bytes.length - 1;
+    } else {
+      start = Number(match[1]);
+      end = match[2] ? Math.min(Number(match[2]), bytes.length - 1) : bytes.length - 1;
+    }
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= bytes.length) {
+      return new Response(null, { status: 416, headers: {
+        "Cache-Control": "no-store",
+        "Content-Range": `bytes */${bytes.length}`,
+        "Accept-Ranges": "bytes",
+      }});
+    }
+    const partialHeaders = new Headers(responseHeaders);
+    partialHeaders.set("Content-Range", `bytes ${start}-${end}/${bytes.length}`);
+    partialHeaders.set("Content-Length", String(end - start + 1));
+    partialHeaders.set("Accept-Ranges", "bytes");
+    return new Response(bytes.slice(start, end + 1), { status: 206, headers: partialHeaders });
+  }
+
   return new Response(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
