@@ -32,9 +32,11 @@ try {
   let articleRows = [];
   for (const [name, path] of routes) {
     const { response, data, text } = await readJson(path);
-    record("Supabase REST " + name + " sem HTTP 402", response.status === 200,
+    const protectedTableDenied = name === "configurações do site" && response.status === 401 && data?.code === "42501";
+    record("Supabase REST " + name + " sem HTTP 402", response.status === 200 || protectedTableDenied,
       { status: response.status, rows: Array.isArray(data) ? data.length : null,
-        error: response.status === 200 ? undefined : text.slice(0, 160) });
+        access: protectedTableDenied ? "restricted as expected for publishable key" : undefined,
+        error: response.status === 200 || protectedTableDenied ? undefined : text.slice(0, 160) });
     if (name === "matérias") articleRows = Array.isArray(data) ? data : [];
   }
 
