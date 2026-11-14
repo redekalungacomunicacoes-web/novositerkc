@@ -25,6 +25,7 @@ const env = {
 
 function makeHarness({ mimeType = "image/jpeg", authStatus = 204, purgeSuccess = true } = {}) {
   let revoked = false;
+  let authVersion = 'v1';
   let authCalls = 0;
   let originGets = 0;
   let purgeCalls = 0;
@@ -88,7 +89,7 @@ function makeHarness({ mimeType = "image/jpeg", authStatus = 204, purgeSuccess =
         });
       }
       if (authStatus === "throw") throw new Error("authorization service unavailable");
-      return new Response(null, { status: authStatus, headers: { "Cache-Control": authStatus === 204 ? "no-store" : "no-store" } });
+      return new Response(null, { status: authStatus, headers: { "Cache-Control": "no-store", ...(authStatus === 204 ? { "X-RKC-Media-Version": authVersion } : {}) } });
     }
     originGets++;
     return new Response(new Uint8Array([0, 1, 2, 3, 4]), {
@@ -104,6 +105,7 @@ function makeHarness({ mimeType = "image/jpeg", authStatus = 204, purgeSuccess =
     get originGets() { return originGets; },
     get purgeCalls() { return purgeCalls; },
     setRevoked(value) { revoked = value; },
+    setAuthVersion(value) { authVersion = value; },
     setPurgeSuccess(value) { purgeShouldSucceed = value; },
     async fetchMedia(id = "materia-image", requestInit = {}) {
       return worker.fetch(new Request(`https://worker.example/media?id=${id}`, requestInit), env, ctx);
@@ -151,6 +153,21 @@ test("revocation blocks stale cached bytes immediately even when cache purge fai
     assert.equal(afterRevocation.headers.get("Cache-Control"), "no-store");
     assert.equal(h.originGets, 1, "the cached entrypoint is never called after failed authorization");
     assert.equal(h.entries.size, 1, "stale bytes may remain cached but are not accessible");
+  } finally { h.restoreFetch(); }
+});
+
+test("same media ID uses a new cache key when drive_files.updated_at changes", async () => {
+  const h = makeHarness();
+  try {
+    const first = await h.fetchMedia("materia-replaced");
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get("X-RKC-Media-Cache"), "MISS");
+    h.setAuthVersion("v2");
+    const replaced = await h.fetchMedia("materia-replaced");
+    assert.equal(replaced.status, 200);
+    assert.equal(replaced.headers.get("X-RKC-Media-Cache"), "MISS");
+    assert.equal(h.originGets, 2, "new version must fetch fresh bytes even if purge is unavailable");
+    assert.equal(h.entries.size, 2, "old version remains unreachable under its previous cache key");
   } finally { h.restoreFetch(); }
 });
 
