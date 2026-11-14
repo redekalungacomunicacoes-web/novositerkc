@@ -182,7 +182,14 @@ async function purgePublicCache(request, env, ctx) {
   try {
     const mediaTags = uniqueTags.filter((tag) => tag === "rkc-public-media" || tag.startsWith("media-"));
     const listTags = uniqueTags.filter((tag) => tag === "rkc-public-materias");
-    if (mediaTags.length) results.push(await ctx.exports.MediaCache.purge(mediaTags));
+    if (mediaTags.length) {
+      const purgeResponse = await ctx.exports.MediaCache.fetch(new Request("https://rkc-media-cache.internal/__purge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: mediaTags }),
+      }));
+      results.push(await purgeResponse.json());
+    }
     if (listTags.length) results.push(await ctx.cache.purge({ tags: listTags }));
     if (results.some((result) => !result?.success)) {
       return json({ error: "A Cloudflare não confirmou a invalidação.", details: results.flatMap((result) => result?.errors || []) }, 502);
@@ -216,6 +223,17 @@ function imageWorkerUrl(value, workerOrigin, supabaseOrigin) {
 export class MediaCache extends WorkerEntrypoint {
   async fetch(request) {
     const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === "/__purge") {
+      let payload;
+      try { payload = await request.json(); } catch { return json({ success: false, errors: [{ code: 400, message: "Invalid purge payload" }] }, 400); }
+      const tags = payload?.tags;
+      if (!Array.isArray(tags) || tags.length < 1 || tags.length > 20 ||
+        !tags.every((tag) => typeof tag === "string" && (tag === "rkc-public-media" || /^media-[A-Za-z0-9_-]{2,200}$/.test(tag)))) {
+        return json({ success: false, errors: [{ code: 400, message: "Invalid purge tags" }] }, 400);
+      }
+      const result = await this.ctx.cache.purge({ tags });
+      return json(result, result.success ? 200 : 502);
+    }
     const id = url.searchParams.get("id");
     const version = url.searchParams.get("v");
     if (request.method !== "GET" || url.pathname !== "/media" || url.searchParams.size !== 2 || !PUBLIC_MEDIA_ID.test(id || "") || !/^[A-Za-z0-9_.:+-]{1,80}$/.test(version || "")) {
@@ -242,9 +260,6 @@ export class MediaCache extends WorkerEntrypoint {
     return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
   }
 
-  async purge(tags) {
-    return this.ctx.cache.purge({ tags });
-  }
 }
 
 export default {
