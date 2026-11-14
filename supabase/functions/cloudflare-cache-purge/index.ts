@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff",
 };
 
 function json(body: unknown, status = 200) {
@@ -19,8 +21,7 @@ Deno.serve(async (request) => {
   const authorization = request.headers.get("Authorization");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
-  const purgeSecret = Deno.env.get("RKC_CACHE_PURGE_SECRET");
-  if (!supabaseUrl || !anonKey || !purgeSecret) {
+  if (!supabaseUrl || !anonKey) {
     return json({ error: "Cache invalidation is not configured." }, 503);
   }
   if (!authorization) return json({ error: "Unauthorized" }, 401);
@@ -36,6 +37,9 @@ Deno.serve(async (request) => {
     required: ["admin_alfa", "admin", "editor", "autor"],
   });
   if (roleError || allowed !== true) return json({ error: "Forbidden" }, 403);
+
+  const purgeSecret = Deno.env.get("RKC_CACHE_PURGE_SECRET");
+  if (!purgeSecret) return json({ error: "Cache invalidation is not configured." }, 503);
 
   try {
     const response = await fetch(`${WORKER_URL}/__cache/purge`, {
