@@ -196,10 +196,10 @@ test("private, archived and deleted media are denied before downloading from Dri
   });
 });
 
-test("HEAD authorization probe revalidates visibility without downloading original Drive bytes", async () => {
+test("GET authorization probe revalidates visibility without downloading original Drive bytes", async () => {
   await withDriveFetch(async (downloads) => {
     Object.assign(state, { visibility: "public", fileStatus: "active", deleted: false, module: "materias", category: "content", articleStatus: "published", articleContentLinked: true });
-    const response = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-head-probe", { method: "HEAD" }));
+    const response = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-head-probe&authorize=1", { method: "GET", headers: { Range: "bytes=0-0" } }));
     assert.equal(response.status, 204);
     assert.equal(response.headers.get("Cache-Control"), "no-store");
     assert.equal(downloads(), 0);
