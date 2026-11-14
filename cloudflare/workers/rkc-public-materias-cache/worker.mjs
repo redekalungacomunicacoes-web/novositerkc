@@ -17,35 +17,6 @@ function json(body, status = 200, cacheControl = "no-store", extraHeaders = {}) 
   });
 }
 
-function mediaCacheKey(requestUrl, id) {
-  const key = new URL("/__rkc_media_cache", requestUrl.origin);
-  key.searchParams.set("id", id);
-  return new Request(key.toString(), { method: "GET" });
-}
-
-function upstreamMediaUrl(env, id) {
-  const originUrl = new URL("/functions/v1/drive-media", env.SUPABASE_URL);
-  originUrl.searchParams.set("id", id);
-  return originUrl;
-}
-
-async function authorizePublicMedia(id, env) {
-  let response;
-  try {
-    response = await fetch(upstreamMediaUrl(env, id), {
-      method: "HEAD",
-      headers: { "Cache-Control": "no-cache" },
-    });
-  } catch {
-    return { ok: false, status: 502 };
-  }
-  // Only the origin's explicit authorization response permits reading cached bytes.
-  if (response.status !== 204 || response.headers.get("Cache-Control") !== "no-store") {
-    return { ok: false, status: response.status === 404 ? 404 : 503 };
-  }
-  return { ok: true };
-}
-
 async function servePublicMedia(request, url, env) {
   const id = url.searchParams.get("id");
   if (url.searchParams.size !== 1 || !PUBLIC_MEDIA_ID.test(id || "")) {
@@ -55,39 +26,44 @@ async function servePublicMedia(request, url, env) {
     return new Response("Method not allowed", { status: 405, headers: { "Cache-Control": "no-store" } });
   }
 
-  // Authorization is deliberately performed on EVERY request, before consulting cache.
-  // A stale cached object can never bypass current publication/link checks.
-  const authorization = await authorizePublicMedia(id, env);
-  if (!authorization.ok) {
-    return new Response(authorization.status === 404 ? "Not found" : "Media authorization unavailable", {
-      status: authorization.status,
+  // This lightweight origin probe runs on every request. The outer Worker response is
+  // no-store, so Workers Cache cannot bypass this authorization check on later requests.
+  let authorization;
+  try {
+    authorization = await fetch(upstreamMediaUrl(env, id), {
+      method: "HEAD",
+      headers: { "Cache-Control": "no-cache" },
+      cf: { cacheTtl: 0 },
+    });
+  } catch {
+    return new Response("Media authorization unavailable", {
+      status: 503,
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
     });
   }
-
+  if (authorization.status !== 204 || authorization.headers.get("Cache-Control") !== "no-store") {
+    return new Response(authorization.status === 404 ? "Not found" : "Media authorization unavailable", {
+      status: authorization.status === 404 ? 404 : 503,
+      headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+    });
+  }
   if (request.method === "HEAD") {
     return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   }
 
-  const cache = caches.default;
-  const key = mediaCacheKey(url, id);
-  let cached;
-  try {
-    cached = await cache.match(key);
-  } catch {
-    cached = undefined;
-  }
-  if (cached) {
-    const headers = new Headers(cached.headers);
-    headers.set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate");
-    headers.set("X-RKC-Media-Cache", "HIT");
-    headers.set("Access-Control-Allow-Origin", "*");
-    return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers });
-  }
-
   let upstream;
   try {
-    upstream = await fetch(upstreamMediaUrl(env, id), { method: "GET" });
+    // The subrequest uses Workers Caching. It is independent of the outer no-store
+    // response, so the Worker executes and authorizes every request while image bytes
+    // are served from Cloudflare after the first origin transfer.
+    upstream = await fetch(upstreamMediaUrl(env, id), {
+      method: "GET",
+      cf: {
+        cacheEverything: true,
+        cacheTtl: MEDIA_TTL_SECONDS,
+        cacheTags: ["rkc-public-media", `media-${id}`],
+      },
+    });
   } catch {
     return new Response("Mídia temporariamente indisponível.", {
       status: 502,
@@ -100,33 +76,20 @@ async function servePublicMedia(request, url, env) {
   const responseHeaders = new Headers(upstream.headers);
   responseHeaders.set("Access-Control-Allow-Origin", "*");
   responseHeaders.set("X-Content-Type-Options", "nosniff");
-  responseHeaders.set("Cache-Control", cacheable ? `public, max-age=${MEDIA_TTL_SECONDS}` : "no-store");
+  // Never cache the Worker response itself: that would bypass the authorization probe.
+  responseHeaders.set("Cache-Control", "no-store");
   responseHeaders.set("X-RKC-Media-Origin", "drive-media");
-  responseHeaders.set("X-RKC-Media-Cache", "MISS");
-
-  const response = new Response(upstream.body, {
+  responseHeaders.set("X-RKC-Media-Cache", cacheable
+    ? (upstream.headers.get("CF-Cache-Status") || "UNKNOWN").toUpperCase()
+    : "BYPASS");
+  return new Response(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: responseHeaders,
   });
-  if (cacheable) {
-    try {
-      const storedHeaders = new Headers(response.headers);
-      storedHeaders.set("Cache-Control", `public, max-age=${MEDIA_TTL_SECONDS}`);
-      await cache.put(key, new Response(response.clone().body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: storedHeaders,
-      }));
-    } catch {
-      // Cache failure must not affect the authorized origin response.
-    }
-  }
-  response.headers.set("Cache-Control", "public, max-age=0, s-maxage=0, must-revalidate");
-  return response;
 }
 
-async function purgePublicCache(request, env) {
+async function purgePublicCache(request, env, ctx) {
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
   const secret = env.RKC_CACHE_PURGE_SECRET;
   if (!secret) return json({ error: "Invalidação não configurada." }, 503);
@@ -139,14 +102,20 @@ async function purgePublicCache(request, env) {
   if (!Array.isArray(tags) || tags.length < 1 || tags.length > 20 || !tags.every(validTag)) {
     return json({ error: "Lista de tags inválida." }, 400);
   }
+  if (!ctx?.cache?.purge) return json({ error: "Workers Cache purge indisponível." }, 503);
   try {
-    const cache = caches.default;
-    const ids = [...new Set(tags.filter((tag) => tag.startsWith("media-")).map((tag) => tag.slice(6)))];
-    const deleted = await Promise.all(ids.map((id) => cache.delete(mediaCacheKey(new URL(request.url), id))));
-    return json({ purged: tags, mediaEntriesDeleted: deleted.filter(Boolean).length });
+    const result = await ctx.cache.purge({ tags: [...new Set(tags)] });
+    if (!result?.success) return json({ error: "A Cloudflare não confirmou a invalidação.", details: result?.errors || [] }, 502);
+    return json({ purged: [...new Set(tags)] });
   } catch {
     return json({ error: "Falha ao invalidar o cache." }, 502);
   }
+}
+
+function upstreamMediaUrl(env, id) {
+  const originUrl = new URL("/functions/v1/drive-media", env.SUPABASE_URL);
+  originUrl.searchParams.set("id", id);
+  return originUrl;
 }
 
 function upstreamUrl(base, select) {
