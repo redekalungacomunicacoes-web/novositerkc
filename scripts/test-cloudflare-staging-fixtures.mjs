@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 const workerUrl = (process.env.RKC_MEDIA_WORKER_URL || "").replace(/\/$/, "");
-const testRunId = process.env.GITHUB_RUN_ID || `local-${Date.now()}`;
+const testRunId = process.env.GITHUB_RUN_ID || String(Date.now());
 assert.ok(workerUrl, "RKC_MEDIA_WORKER_URL is required");
 
 const results = [];
