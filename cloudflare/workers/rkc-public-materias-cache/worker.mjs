@@ -226,6 +226,10 @@ export class MediaCache extends WorkerEntrypoint {
     if (request.method === "POST" && url.pathname === "/__purge") {
       let payload;
       try { payload = await request.json(); } catch { return json({ success: false, errors: [{ code: 400, message: "Invalid purge payload" }] }, 400); }
+      if (payload?.purgeEverything === true) {
+        const result = await this.ctx.cache.purge({ purgeEverything: true });
+        return json(result, result.success ? 200 : 502);
+      }
       const tags = payload?.tags;
       if (!Array.isArray(tags) || tags.length < 1 || tags.length > 20 ||
         !tags.every((tag) => typeof tag === "string" && (tag === "rkc-public-media" || /^media-[A-Za-z0-9_-]{2,200}$/.test(tag)))) {
@@ -277,13 +281,22 @@ export default {
       if (request.method !== "POST" || !/^\d{6,}$/.test(url.searchParams.get("testRun") || "")) {
         return json({ error: "Rota de teste indisponível." }, 404);
       }
+      const payload = await request.json().catch(() => ({}));
+      if (payload?.purgeEverything === true) {
+        const result = await ctx.exports.MediaCache.fetch(new Request("https://rkc-media-cache.internal/__purge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ purgeEverything: true }),
+        }));
+        return new Response(await result.text(), { status: result.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+      }
       const internalRequest = new Request(new URL("/__cache/purge", url), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${env.RKC_CACHE_PURGE_SECRET || ""}`,
           "Content-Type": "application/json",
         },
-        body: await request.text(),
+        body: JSON.stringify(payload),
       });
       return purgePublicCache(internalRequest, env, ctx);
     }
