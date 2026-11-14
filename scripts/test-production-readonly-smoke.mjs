@@ -140,6 +140,7 @@ try {
     for (const [label, slug] of [
       ["galeria de matéria publicada", process.env.RKC_PUBLIC_GALLERY_TEST_ID || ""],
       ["áudio de entrevista publicado", process.env.RKC_PUBLIC_AUDIO_TEST_ID || ""],
+      ["galeria de projeto publicado", process.env.RKC_PUBLIC_PROJECT_GALLERY_TEST_ID || ""],
     ]) {
       const fixtureUrl = new URL(stagingBase);
       fixtureUrl.searchParams.set("id", slug);
