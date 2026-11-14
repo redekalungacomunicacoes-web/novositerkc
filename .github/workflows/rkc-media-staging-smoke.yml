@@ -7,11 +7,6 @@ on:
     paths:
       - scripts/trigger-rkc-media-staging.txt
   workflow_dispatch:
-    inputs:
-      driver_url:
-        description: URL of an isolated staging test-runner Worker
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -21,9 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - name: Run isolated Cloudflare HTTP integration suite
         env:
-          DRIVER_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.driver_url || 'https://rkc-media-test-runner-staging-20261114.redekalungacomunicacoes.workers.dev/__rkc_staging/run-20261114-a7d9c3e1' }}
-        run: |
-          curl --silent --show-error --max-time 180 "$DRIVER_URL" | tee /tmp/rkc-staging-result.json
-          jq -e '.ok == true' /tmp/rkc-staging-result.json
+          RKC_MEDIA_WORKER_URL: https://rkc-media-cache-staging-20261114.redekalungacomunicacoes.workers.dev
+          RKC_STAGING_PURGE_SECRET: rkc-staging-only-20261114-4e6d9a8f7b2c1d0e
+        run: node scripts/test-cloudflare-staging-fixtures.mjs
