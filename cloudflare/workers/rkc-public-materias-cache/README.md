@@ -12,11 +12,11 @@ Isolated source for the RKC Cloudflare Worker media route. This source is paired
 
 ## Authorization and cache behavior
 
-- Every incoming /media request executes the Worker. Its outer response is always Cache-Control: no-store, preventing Workers Cache from serving a response before the authorization code runs.
-- Before reading media bytes from cache, the Worker makes an authorization-only GET probe to drive-media, using the authorize=1 query parameter and Range: bytes=0-0. Supabase Edge Functions support GET, not HEAD. The updated function returns 204 + no-store only after checking public visibility, active/deleted state, publication status and the media's current relationship to the published article/project. The probe does not download the original Drive file.
+- Every incoming /media request executes the default gateway. Its outer response is always Cache-Control: no-store, so the gateway response itself is never cached.
+- Before reading media bytes from cache, the gateway makes an authorization-only GET probe to drive-media, using the authorize=1 query parameter and Range: bytes=0-0. Supabase Edge Functions support GET, not HEAD. The updated function returns 204 + no-store only after checking public visibility, active/deleted state, publication status and the media's current relationship to the published article/project. The probe does not download the original Drive file.
 - During rollout only, the Worker also accepts the existing origin's exact legacy HEAD response (200 with public, max-age=0, s-maxage=0, must-revalidate). That legacy handler validates access but downloads the Drive object before suppressing the HEAD body; deploy the updated Edge Function to remove this transitional cost.
-- Only after successful authorization does the Worker make a full GET subrequest to drive-media with Workers Caching enabled, cacheEverything, a 60-second TTL and per-media/global cache tags. The subrequest cache can return image bytes without a second image transfer from the Supabase Edge Function/Google Drive.
-- The Worker response itself is never cached. A cache HIT still executes the small authorization probe, so total drive-media invocations do not necessarily decrease; the large GET/media-byte transfers do. Measure these separately in Supabase logs.
+- Only after successful authorization does the gateway call the named MediaCache entrypoint through ctx.exports. Workers Caching is enabled on that entrypoint, which fetches the full image on MISS and returns Cache-Control: public, max-age=60 plus Cache-Tag. On HIT, Cloudflare serves the cached image without invoking MediaCache.fetch or transferring the image again from Supabase/Google Drive.
+- The gateway response itself is never cached, while the inner MediaCache entrypoint is. A HIT still executes the small authorization probe, so the number of drive-media authorization invocations remains one per request; full image GETs to drive-media occur only on cache MISS. Report these two request types separately rather than claiming that total function invocations fall.
 - Only 200 JPEG, PNG and WebP origin responses are marked as cacheable. Other content and errors are returned with no-store.
 - Byte-range requests are sliced from the cached full image response and returned as 206; the origin cache key remains the full image URL.
 
@@ -24,7 +24,7 @@ Isolated source for the RKC Cloudflare Worker media route. This source is paired
 
 - If the media was removed, replaced, unpublished, marked private/deleted, or is no longer linked, the authorization probe returns 404 and the Worker stops before the cached GET subrequest. This remains true even if the cache purge fails or the stale object remains in Cloudflare.
 - If the authorization service is unavailable or returns an unexpected response, the Worker fails closed with 503. It never falls back to stale cached bytes.
-- POST /__cache/purge is protected by RKC_CACHE_PURGE_SECRET, validates allowed tags and calls ctx.cache.purge({ tags }).
+- POST /__cache/purge is protected by RKC_CACHE_PURGE_SECRET and validates allowed tags. Media tags are purged through the MediaCache entrypoint's own ctx.cache.purge({ tags }); the article-list tag is purged from the default entrypoint cache.
 - supabase/functions/cloudflare-cache-purge is the authenticated bridge. It validates the Supabase user and RKC editorial role before calling the Worker.
 - Matter save/unpublish/media replacement and project save/gallery removal invoke the bridge. Purge remains useful for cleanup/performance, but is no longer the authorization boundary.
 
@@ -39,7 +39,7 @@ The normal PR workflows run the automated unit/type/build checks. A manual GitHu
 
 ## Free-tier and operational limits
 
-- Workers Caching and tag purge use Cloudflare's Workers Cache feature. The Worker is intentionally configured without R2, KV, DNS changes or paid services.
+- Workers Caching and tag purge use Cloudflare's Workers Cache feature, with a separate named entrypoint for media delivery. Wrangler 4.107.0 or newer is required for per-entrypoint caching. The Worker is intentionally configured without R2, KV, DNS changes or paid services.
 - Workers Cache purge is subject to Cloudflare Free-tier limits (the API reports failure if rate-limited). Purge failure does not grant access to stale bytes because authorization is performed before each cache read.
 - Cache TTL is 60 seconds for performance and storage hygiene, not as a security revocation guarantee.
 - The exact subscribed Cloudflare plan still needs independent confirmation if Billing Read permission is unavailable.
