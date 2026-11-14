@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 
 const worker = process.env.RKC_MEDIA_WORKER_URL;
 if (!worker) throw new Error("RKC_MEDIA_WORKER_URL must point to an isolated staging Worker; production URLs are not accepted by default.");
+const purgeSecret = process.env.RKC_CACHE_PURGE_SECRET;
+if (!purgeSecret) throw new Error("RKC_CACHE_PURGE_SECRET is required for staging purge verification.");
 const cases = [
   { id: "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe", type: "image/jpeg" },
   { id: "materia-1f8zr8fWpoZz30ipp0aJfaCggeO6WxDhT", type: "image/png" },
@@ -22,7 +24,16 @@ for (const item of cases) {
   assert.equal(second.status, 200, `second request failed for ${item.id}: ${second.status}`);
   assert.equal(second.headers.get("x-rkc-media-cache"), "HIT", `second request was not an app-cache HIT for ${item.id}`);
   assert.equal(createHash("sha256").update(firstBytes).digest("hex"), createHash("sha256").update(secondBytes).digest("hex"));
-  console.log(JSON.stringify({ id: item.id, mime: item.type, first: "MISS", second: "HIT", bytes: secondBytes.length }));
+  const purge = await fetch(`${worker.replace(/\/$/, "")}/__cache/purge`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${purgeSecret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ tags: [`media-${item.id}`] }),
+  });
+  assert.equal(purge.status, 200, `staging purge failed for ${item.id}: ${purge.status}`);
+  const afterPurge = await fetch(url);
+  assert.equal(afterPurge.status, 200);
+  assert.equal(afterPurge.headers.get("x-rkc-media-cache"), "MISS", "purged item must miss cache");
+  console.log(JSON.stringify({ id: item.id, mime: item.type, first: "MISS", second: "HIT", afterPurge: "MISS", bytes: secondBytes.length }));
 }
 
 const negativeId = `materia-rkc-private-control-${Date.now()}`;
