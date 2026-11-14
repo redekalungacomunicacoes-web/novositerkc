@@ -31,4 +31,5 @@ jobs:
           RKC_REVOKED_MEDIA_TEST_ID: materia-b09fc90d-4e21-4fa8-8283-1bce1cf95a91
           RKC_PUBLIC_GALLERY_TEST_ID: materia-1741f929-1940-462c-8f45-9cee9f39a87c
           RKC_PUBLIC_AUDIO_TEST_ID: materia-9feab4ee-e83d-4b88-abc0-13ed190bb09d
+          RKC_PUBLIC_PROJECT_GALLERY_TEST_ID: kalucast-temporada2-episodio2-foto1
         run: node scripts/test-production-readonly-smoke.mjs
