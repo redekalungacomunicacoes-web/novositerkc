@@ -24,7 +24,7 @@ Isolated source for the RKC Cloudflare Worker media route. This source is paired
 
 - If the media was removed, replaced, unpublished, marked private/deleted, or is no longer linked, the authorization probe returns 404 and the Worker stops before the cached GET subrequest. This remains true even if the cache purge fails or the stale object remains in Cloudflare.
 - If the authorization service is unavailable or returns an unexpected response, the Worker fails closed with 503. It never falls back to stale cached bytes.
-- POST /__cache/purge is protected by RKC_CACHE_PURGE_SECRET and validates allowed tags. Media tags are purged through the MediaCache entrypoint's own ctx.cache.purge({ tags }); the article-list tag is purged from the default entrypoint cache.
+- POST /__cache/purge is protected by RKC_CACHE_PURGE_SECRET and validates allowed tags. The live staging probe showed tag-specific purge returning success without evicting the named MediaCache entrypoint. The current safe fallback purges the dedicated MediaCache entrypoint as a whole through its own ctx.cache.purge({ purgeEverything: true }); this can cause a cold media cache after content updates. The article-list tag remains scoped to the default entrypoint.
 - supabase/functions/cloudflare-cache-purge is the authenticated bridge. It validates the Supabase user and RKC editorial role before calling the Worker.
 - Matter save/unpublish/media replacement and project save/gallery removal invoke the bridge. Purge remains useful for cleanup/performance, but is no longer the authorization boundary.
 
@@ -32,17 +32,21 @@ Isolated source for the RKC Cloudflare Worker media route. This source is paired
 
 Automated tests cover JPEG/PNG/WebP cache subrequests, HIT/MISS behavior, authorization failure, private media, simulated revocation with failed purge, byte ranges and purge authentication/failure.
 
-**Execução de 14/11/2026:**
-- Workers isolados ativos para teste: `rkc-media-origin-staging-20261114` e `rkc-media-cache-staging-20261114`. A origem é sintética; nenhum arquivo original ou registro privado foi acessado.
-- Workflow `43547410842`: staging HTTPS e smoke read-only de produção concluídos com sucesso.
-- HIT/MISS: JPEG 413 bytes, PNG 69 bytes e WebP 60 bytes. Em cada par, MISS seguido de HIT; a telemetria marcou 413/69/60 bytes no MISS e 0 no HIT. Total sintético evitado: **542 bytes**.
-- Range: 206, sem nova transferência de origem. Mídia privada: 404. Revogação de imagem já cacheada: 404 mesmo com purge não autorizado (401). Seis solicitações simultâneas retornaram corpos completos.
-- O workflow não contém mais a credencial temporária em texto. O segredo de staging foi rotacionado. O valor antigo permanece apenas no histórico de commits, mas está revogado; o histórico não foi reescrito para não alterar a cadeia de commits da PR.
-- Logs de produção: nenhum HTTP 402 após 01:45 UTC de 14/11; último 402 observado às 01:41 UTC. Para `drive-media`, 49 respostas 200 e nenhuma 5xx entre 01:45 e 02:40 UTC. No recorte móvel de 24h ainda aparecem 172 respostas 502 históricas, com a última em 13/11 às 12:42 UTC.
-- O teste explícito de compatibilidade de produção identificou um bloqueio: a Edge Function atual `drive-media` v30 responde ao probe `authorize=1` com 206 e `Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable`. O Worker exige 204 + `no-store` ou o fallback legado 206 + `s-maxage=0`; portanto, falha fechado e não deve ser implantado antes da atualização da função.
-- A função `cloudflare-cache-purge` ainda não está implantada no projeto Supabase, e o Worker de produção não possui o binding secreto de purge. A revogação continua segura sem purge, mas a integração de invalidação administrativa permanece pendente.
+**Execução atualizada de 14/11/2026:**
+- Workers isolados de staging ativos: `rkc-media-origin-staging-20261114` e `rkc-media-cache-staging-20261114`. A origem é sintética e separada; nenhum arquivo original foi modificado.
+- Workflow `43571727522`: todos os testes HTTPS de staging passaram. O workflow completo ficou vermelho apenas no gate de compatibilidade da Edge Function de produção v30.
+- HIT/MISS: JPEG 413 bytes, PNG 69 bytes, WebP 60 bytes e galeria de projeto 413 bytes. Cada repetição retornou HIT com 0 bytes da origem. Economia sintética medida: **955 bytes**.
+- Range: 206 correto, sem nova transferência no HIT. Mídia privada: 404. Revogação: 404 mesmo com purge inválido (401). Seis solicitações simultâneas retornaram corpos completos.
+- Invalidação autorizada no Worker isolado: purge 200, próxima requisição MISS e nova transferência de 413 bytes. O teste mostrou que purge por tag devolvia sucesso sem esvaziar a entrada MediaCache; o fallback atual invalida toda a entrada MediaCache, mantendo a ponte autenticada e evitando servir cópias revogadas.
+- A função isolada `drive-media-staging` v2 respondeu 204 + `no-store` para imagem pública, galeria de matéria, áudio de entrevista e galeria de projeto; mídia revogada retornou 404 + `no-store`; Range de imagem retornou 206. Há 7 registros privados sem `public_slug`, sem alteração dos registros.
+- A ponte `cloudflare-cache-purge` foi implantada no projeto Supabase como v2, com `verify_jwt=true`. O endpoint rejeitou requisição sem JWT com 401. Os testes automatizados também cobrem usuários inválidos, papel não autorizado e segredo ausente.
+- O workflow não contém a credencial temporária em texto; o segredo antigo de staging foi rotacionado e revogado. O valor antigo permanece no histórico de commits, sem possibilidade de autenticar.
+- Logs de produção: zero HTTP 402 após 01:45 UTC de 14/11. A última resposta 402 encontrada foi às 01:41 UTC. Para `drive-media` v30, desde 01:45 UTC: 50 respostas 200 e 39 respostas 206, sem 5xx.
+- O teste de produção confirma matérias, projetos, equipe, configurações públicas, pop-ups, Auth e páginas públicas sem 402. A consulta anônima a configurações restritas retorna 401, esperado. O shell SPA de `/admin` foi verificado, mas não houve sessão de administrador disponível para testar o painel autenticado.
+- **Bloqueio atual:** a função de produção `drive-media` v30 ainda responde ao probe `authorize=1` com 206 e `Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable`. O teste da função isolada v2 confirma o contrato novo 204 + `no-store`; a produção ainda não foi atualizada.
+- O Worker de produção permanece na versão 4 e não possui o segredo `RKC_CACHE_PURGE_SECRET`. A função `cloudflare-cache-purge` v2 também aguarda esse segredo no Supabase.
 
-Os workflows de validação de Materias, Projects, Tasks, Academia e institutional media passaram no commit `64e0bdea`. O smoke de staging passou; o workflow geral ficou vermelho somente pelo teste de compatibilidade da função de produção, que detectou corretamente o bloqueio descrito acima.
+Os workflows de validação do commit mais recente continuam em execução; nenhum deles foi mesclado ou publicado em Pages.
 
     node --test tests/cloudflare-public-media-cache.test.mjs tests/public-media-url.test.mjs tests/drive-media-visibility.test.mjs tests/cloudflare-cache-purge-auth.test.mjs
     RKC_MEDIA_WORKER_URL=<isolated-staging-worker> node scripts/test-cloudflare-public-media.mjs
@@ -59,4 +63,4 @@ Os workflows de validação de Materias, Projects, Tasks, Academia e institution
 
 - Deploy the Worker and updated drive-media Edge Function only after automated checks, staging HTTPS tests and security checks pass.
 - Rollback by restoring the previous Worker version and previous drive-media Edge Function version. Keep the previous deployment identifiers before rollout.
-- The current production Edge Function v30 is not compatible with the authorization-only probe contract. Deploy the tested `drive-media` update first, verify 204 + no-store against a real public media slug, then deploy the Worker. The production baseline remains Worker version 4 (`166dd91f-b235-4552-bc66-092b8e1243cb`) and Edge Function version 30; restore these if a controlled rollout fails.
+- The current production Edge Function v30 is not compatible with the authorization-only probe contract. Deploy the tested `drive-media` update first, verify 204 + no-store against real public media, then deploy the Worker. The production baseline remains Worker version 4 and Edge Function version 30; restore these if a controlled rollout fails. The production Worker must receive `RKC_CACHE_PURGE_SECRET` as a secret binding before the bridge is enabled.
