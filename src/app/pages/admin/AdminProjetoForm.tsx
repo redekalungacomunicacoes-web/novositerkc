@@ -265,6 +265,7 @@ export function AdminProjetoForm() {
       }
 
       await loadFotos(projectDbId);
+      await purgeRkcPublicMediaCache();
       toast.success("Fotos adicionadas com sucesso.");
     } catch (error: any) {
       toast.error(error?.message || "Erro ao adicionar fotos.");
