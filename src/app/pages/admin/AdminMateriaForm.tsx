@@ -734,6 +734,7 @@ export function AdminMateriaForm() {
         if (insErr) throw insErr;
       }
 
+      await purgeRkcPublicMediaCache();
       await loadGaleria(id);
     } catch (err: any) {
       try { if (id && uploadedIds.length) await cleanupUnreferencedMateriaFiles(id, uploadedIds); } catch (cleanupError) { console.warn("[materia-drive] upload de galeria incompleto; limpeza pendente", cleanupError); }
