@@ -7,6 +7,16 @@ const originProbeUrl = new URL("/functions/v1/drive-media", "https://yycfqeymdsj
 originProbeUrl.searchParams.set("id", "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe");
 const originProbe = await fetch(originProbeUrl, { method: "HEAD", headers: { "Cache-Control": "no-cache" } });
 const originProbeBody = await originProbe.text();
+const originGetProbe = await fetch(originProbeUrl, {
+  method: "GET",
+  headers: { Range: "bytes=0-0", "Cache-Control": "no-cache" },
+});
+const originGetProbeBody = await originGetProbe.text();
+console.log(JSON.stringify({
+  originGetStatus: originGetProbe.status,
+  originGetErrorCode: originGetProbe.headers.get("sb-error-code"),
+  originGetBody: originGetProbeBody.slice(0, 500),
+}));
 console.log(JSON.stringify({
   originHeadStatus: originProbe.status,
   originHeadCacheControl: originProbe.headers.get("cache-control"),
