@@ -183,10 +183,12 @@ async function purgePublicCache(request, env, ctx) {
     const mediaTags = uniqueTags.filter((tag) => tag === "rkc-public-media" || tag.startsWith("media-"));
     const listTags = uniqueTags.filter((tag) => tag === "rkc-public-materias");
     if (mediaTags.length) {
+      // Purge the dedicated media entrypoint as a whole. Staging showed tag purge
+      // returned success without invalidating its named-entrypoint cache.
       const purgeResponse = await ctx.exports.MediaCache.fetch(new Request("https://rkc-media-cache.internal/__purge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tags: mediaTags }),
+        body: JSON.stringify({ purgeEverything: true }),
       }));
       results.push(await purgeResponse.json());
     }
@@ -281,22 +283,13 @@ export default {
       if (request.method !== "POST" || !/^\d{6,}$/.test(url.searchParams.get("testRun") || "")) {
         return json({ error: "Rota de teste indisponível." }, 404);
       }
-      const payload = await request.json().catch(() => ({}));
-      if (payload?.purgeEverything === true) {
-        const result = await ctx.exports.MediaCache.fetch(new Request("https://rkc-media-cache.internal/__purge", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ purgeEverything: true }),
-        }));
-        return new Response(await result.text(), { status: result.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-      }
       const internalRequest = new Request(new URL("/__cache/purge", url), {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${env.RKC_CACHE_PURGE_SECRET || ""}`,
+          Authorization: "Bearer " + (env.RKC_CACHE_PURGE_SECRET || ""),
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: await request.text(),
       });
       return purgePublicCache(internalRequest, env, ctx);
     }
