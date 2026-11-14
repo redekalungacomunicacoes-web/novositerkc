@@ -61,6 +61,37 @@ try {
       { path, status: response.status, spaFallback, bytesHtml: text.length });
   }
 
+  const driveMediaId = process.env.RKC_PUBLIC_MEDIA_TEST_ID || "";
+  if (driveMediaId) {
+    const driveMediaUrl = new URL("/functions/v1/drive-media", supabaseUrl);
+    driveMediaUrl.searchParams.set("id", driveMediaId);
+    const rangeResponse = await fetch(driveMediaUrl, { headers: { apikey: publishableKey, Range: "bytes=0-0" } });
+    const rangeStatus = rangeResponse.status;
+    const rangeType = rangeResponse.headers.get("content-type");
+    const rangeValue = rangeResponse.headers.get("content-range");
+    await rangeResponse.body?.cancel();
+    record("drive-media real entrega Range da imagem pública", rangeStatus === 206 &&
+      /^bytes 0-0\/\d+$/.test(rangeValue || "") &&
+      /^image\/(jpeg|png|webp)$/.test(rangeType || ""),
+      { status: rangeStatus, contentType: rangeType, contentRange: rangeValue });
+
+    const probeUrl = new URL(driveMediaUrl);
+    probeUrl.searchParams.set("authorize", "1");
+    const probe = await fetch(probeUrl, { headers: { apikey: publishableKey, Range: "bytes=0-0", "Cache-Control": "no-cache" } });
+    const probeStatus = probe.status;
+    const probeCacheControl = probe.headers.get("cache-control") || "";
+    const probeContentRange = probe.headers.get("content-range") || "";
+    const probeContentType = probe.headers.get("content-type") || "";
+    await probe.body?.cancel();
+    const probeSafe = probeStatus === 204 && probeCacheControl === "no-store" ||
+      probeStatus === 206 && /^bytes 0-0\/\d+$/.test(probeContentRange) &&
+      /^image\/(jpeg|png|webp)/.test(probeContentType) && probeCacheControl.includes("s-maxage=0");
+    record("drive-media probe de autorização compatível com cache seguro", probeSafe,
+      { status: probeStatus, cacheControl: probeCacheControl, contentRange: probeContentRange });
+  } else {
+    record("drive-media test id configurado", false, { reason: "RKC_PUBLIC_MEDIA_TEST_ID ausente" });
+  }
+
   const article = articleRows[0];
   const imageUrl = article?.capa_url || article?.capa_thumb_url || article?.banner_url;
   if (imageUrl) {
