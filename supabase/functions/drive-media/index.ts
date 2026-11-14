@@ -71,16 +71,79 @@ async function accessToken() {
   return await tokenRefresh;
 }
 
-async function downloadDriveFile(fileId: string, range?: string | null) {
+async function downloadDriveFile(fileId: string, range: string | null, requestSignal: AbortSignal) {
   const token = await accessToken();
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
   if (range) headers.Range = range;
-  const response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, {
-    signal: AbortSignal.timeout(30000),
-    headers,
-  });
-  if (!response.ok) throw new Error("Drive media unavailable");
+
+  // Bound the time to receive upstream headers, not the lifetime of the body stream.
+  // AbortSignal.timeout(30000) also aborts large downloads after 30 seconds, even
+  // when Google Drive is still transmitting a valid response body.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error("Google Drive response headers timed out")), 30000);
+  const abortBeforeHeaders = () => controller.abort(requestSignal.reason);
+  if (requestSignal.aborted) abortBeforeHeaders();
+  else requestSignal.addEventListener("abort", abortBeforeHeaders, { once: true });
+
+  let response: Response;
+  try {
+    response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, {
+      signal: controller.signal,
+      headers,
+    });
+  } finally {
+    clearTimeout(timeout);
+    requestSignal.removeEventListener("abort", abortBeforeHeaders);
+  }
+
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error(`Google Drive returned HTTP ${response.status}`);
+  }
+  if (!response.body) throw new Error("Google Drive returned an empty response body");
   return response;
+}
+
+function forwardDriveBody(body: ReadableStream<Uint8Array>, requestSignal: AbortSignal) {
+  const reader = body.getReader();
+  let finished = false;
+  const cleanup = () => requestSignal.removeEventListener("abort", abort);
+  const cancelReader = (reason?: unknown) => {
+    if (finished) return;
+    finished = true;
+    cleanup();
+    void reader.cancel(reason).catch(() => undefined);
+  };
+  const abort = () => cancelReader(requestSignal.reason);
+
+  if (requestSignal.aborted) abort();
+  else requestSignal.addEventListener("abort", abort, { once: true });
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (finished) return;
+      try {
+        const result = await reader.read();
+        if (result.done) {
+          finished = true;
+          cleanup();
+          controller.close();
+          return;
+        }
+        controller.enqueue(result.value);
+      } catch (error) {
+        finished = true;
+        cleanup();
+        console.error("drive-media upstream stream interrupted", {
+          name: error instanceof Error ? error.name : "UnknownError",
+        });
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      cancelReader(reason);
+    },
+  });
 }
 
 Deno.serve(async (req) => {
@@ -163,7 +226,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const drive = await downloadDriveFile(file.drive_file_id, req.headers.get("Range"));
+    const drive = await downloadDriveFile(file.drive_file_id, req.headers.get("Range"), req.signal);
     const headers = new Headers();
     headers.set("Content-Type", file.mime_type || drive.headers.get("Content-Type") || "application/octet-stream");
     headers.set("Cache-Control", ["materias", "projetos"].includes(file.module)
@@ -176,7 +239,7 @@ Deno.serve(async (req) => {
       const value = drive.headers.get(name);
       if (value) headers.set(name, value);
     }
-    return new Response(drive.body, { status: drive.status, headers });
+    return new Response(forwardDriveBody(drive.body!, req.signal), { status: drive.status, headers });
   } catch {
     return new Response("Media unavailable", { status: 502 });
   }
