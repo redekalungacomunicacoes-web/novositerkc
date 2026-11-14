@@ -12,7 +12,7 @@ test("JPEG, PNG and WebP use an authorized cacheable origin subrequest", async (
       let cachedBody = null;
       globalThis.fetch = async (_url, init) => {
         if (init.method === "HEAD") {
-          assert.equal(init.cf.cacheTtl, 0);
+          assert.equal(init.cf, undefined, "authorization probe must bypass Workers Cache options");
           return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
         }
         assert.equal(init.cf.cacheEverything, true);
