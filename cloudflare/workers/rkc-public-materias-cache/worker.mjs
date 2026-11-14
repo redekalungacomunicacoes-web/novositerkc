@@ -41,7 +41,13 @@ async function servePublicMedia(request, url, env) {
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
     });
   }
-  if (authorization.status !== 204 || authorization.headers.get("Cache-Control") !== "no-store") {
+  const authorizationHeaders = authorization.headers.get("Cache-Control") || "";
+  // During controlled rollout, accept the existing drive-media HEAD contract as well:
+  // it returns 200 only after the same visibility/link checks, with s-maxage=0.
+  // The updated function returns the preferred 204 + no-store probe without Drive download.
+  const authorized = authorization.status === 204 && authorizationHeaders === "no-store"
+    || authorization.status === 200 && authorizationHeaders === "public, max-age=0, s-maxage=0, must-revalidate";
+  if (!authorized) {
     return new Response(authorization.status === 404 ? "Not found" : "Media authorization unavailable", {
       status: authorization.status === 404 ? 404 : 503,
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
