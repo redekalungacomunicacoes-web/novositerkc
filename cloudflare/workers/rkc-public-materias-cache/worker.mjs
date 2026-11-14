@@ -26,6 +26,17 @@ function upstreamMediaUrl(env, id, authorizationProbe = false) {
   return originUrl;
 }
 
+// Optional service binding keeps synthetic staging origins inside Cloudflare's
+// service-binding path. Production continues to use the external Supabase URL.
+async function fetchSupabaseOrigin(env, input, init = {}) {
+  const url = input instanceof Request ? new URL(input.url) : new URL(input.toString());
+  if (env.MEDIA_ORIGIN && url.origin === new URL(env.SUPABASE_URL).origin) {
+    const request = input instanceof Request ? new Request(input, init) : new Request(url.toString(), init);
+    return env.MEDIA_ORIGIN.fetch(request);
+  }
+  return fetch(input, init);
+}
+
 function mediaCacheRequest(id, version) {
   const url = new URL("https://rkc-media-cache.internal/media");
   url.searchParams.set("id", id);
@@ -38,7 +49,7 @@ async function authorizePublicMedia(id, env) {
   try {
     // Supabase Edge Functions support GET, not HEAD. The updated function returns
     // 204 without downloading Drive bytes; the legacy fallback transfers one byte.
-    authorization = await fetch(upstreamMediaUrl(env, id, true), {
+    authorization = await fetchSupabaseOrigin(env, upstreamMediaUrl(env, id, true), {
       method: "GET",
       headers: { Range: "bytes=0-0", "Cache-Control": "no-cache" },
     });
@@ -207,7 +218,7 @@ export class MediaCache extends WorkerEntrypoint {
 
     let upstream;
     try {
-      upstream = await fetch(upstreamMediaUrl(this.env, id), { method: "GET" });
+      upstream = await fetchSupabaseOrigin(this.env, upstreamMediaUrl(this.env, id), { method: "GET" });
     } catch {
       return new Response("Mídia temporariamente indisponível.", {
         status: 502,
@@ -248,11 +259,11 @@ export default {
 
     const withAudio = "id,slug,titulo,resumo,capa_url,capa_thumb_url,banner_url,audio_url,autor_nome,tags,published_at,created_at,status";
     const withoutAudio = "id,slug,titulo,resumo,capa_url,capa_thumb_url,banner_url,autor_nome,tags,published_at,created_at,status";
-    let upstream = await fetch(upstreamUrl(env.SUPABASE_URL, withAudio), { headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY } });
+    let upstream = await fetchSupabaseOrigin(env, upstreamUrl(env.SUPABASE_URL, withAudio), { headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY } });
     let bodyText = await upstream.text();
     let includedAudio = true;
     if (!upstream.ok && /audio_url/i.test(bodyText) && /(does not exist|schema cache|column)/i.test(bodyText)) {
-      upstream = await fetch(upstreamUrl(env.SUPABASE_URL, withoutAudio), { headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY } });
+      upstream = await fetchSupabaseOrigin(env, upstreamUrl(env.SUPABASE_URL, withoutAudio), { headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY } });
       bodyText = await upstream.text();
       includedAudio = false;
     }
