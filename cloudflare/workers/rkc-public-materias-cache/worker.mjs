@@ -255,6 +255,10 @@ export default {
         "Cache-Control": "no-store",
       }});
     }
+    if (url.pathname.startsWith("/__test/") && env.MEDIA_ORIGIN) {
+      const fixtureUrl = new URL(url.pathname + url.search, env.SUPABASE_URL);
+      return env.MEDIA_ORIGIN.fetch(new Request(fixtureUrl.toString(), request));
+    }
     if (url.pathname === "/__cache/purge") return purgePublicCache(request, env, ctx);
     if (url.pathname === "/media") return servePublicMedia(request, url, env, ctx);
     if (request.method !== "GET" || url.pathname !== "/materias" || url.search) {
