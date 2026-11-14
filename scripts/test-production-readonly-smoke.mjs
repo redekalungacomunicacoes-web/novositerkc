@@ -92,6 +92,57 @@ try {
     record("drive-media test id configurado", false, { reason: "RKC_PUBLIC_MEDIA_TEST_ID ausente" });
   }
 
+  const stagingBase = new URL("/functions/v1/drive-media-staging", supabaseUrl);
+  const publicSlug = process.env.RKC_PUBLIC_MEDIA_TEST_ID || "";
+  const revokedSlug = process.env.RKC_REVOKED_MEDIA_TEST_ID || "";
+  if (publicSlug && revokedSlug) {
+    const publicProbeUrl = new URL(stagingBase);
+    publicProbeUrl.searchParams.set("id", publicSlug);
+    publicProbeUrl.searchParams.set("authorize", "1");
+    const publicProbe = await fetch(publicProbeUrl, { headers });
+    const publicProbeCache = publicProbe.headers.get("cache-control") || "";
+    const publicProbeVersion = publicProbe.headers.get("x-rkc-media-version") || "";
+    await publicProbe.body?.cancel();
+    record("drive-media-staging: mídia pública autoriza sem baixar (204/no-store)",
+      publicProbe.status === 204 && publicProbeCache === "no-store" && Boolean(publicProbeVersion),
+      { status: publicProbe.status, cacheControl: publicProbeCache, hasVersion: Boolean(publicProbeVersion) });
+
+    const revokedUrl = new URL(stagingBase);
+    revokedUrl.searchParams.set("id", revokedSlug);
+    revokedUrl.searchParams.set("authorize", "1");
+    const revokedProbe = await fetch(revokedUrl, { headers });
+    const revokedStatus = revokedProbe.status;
+    const revokedCache = revokedProbe.headers.get("cache-control") || "";
+    await revokedProbe.body?.cancel();
+    record("drive-media-staging: mídia revogada/na lixeira é negada",
+      revokedStatus === 404 && revokedCache === "no-store",
+      { status: revokedStatus, cacheControl: revokedCache });
+
+    const privateUrl = new URL(stagingBase);
+    privateUrl.searchParams.set("id", "private-fixture-without-public-slug");
+    privateUrl.searchParams.set("authorize", "1");
+    const privateProbe = await fetch(privateUrl, { headers });
+    const privateStatus = privateProbe.status;
+    await privateProbe.body?.cancel();
+    record("drive-media-staging: slug privado inexistente não é exposto", privateStatus === 404,
+      { status: privateStatus, note: "Os 7 arquivos privados atuais não possuem public_slug; nenhum foi alterado." });
+
+    const rangeUrl = new URL(stagingBase);
+    rangeUrl.searchParams.set("id", publicSlug);
+    const rangeResponse = await fetch(rangeUrl, { headers: { ...headers, Range: "bytes=0-0" } });
+    const rangeStatus = rangeResponse.status;
+    const rangeType = rangeResponse.headers.get("content-type") || "";
+    const rangeValue = rangeResponse.headers.get("content-range") || "";
+    const rangeLength = Number(rangeResponse.headers.get("content-length") || 0);
+    const rangeBody = await rangeResponse.arrayBuffer();
+    record("drive-media-staging: streaming de imagem Range preserva 206",
+      rangeStatus === 206 && /^image\/(jpeg|png|webp)$/.test(rangeType) &&
+      /^bytes 0-0\/\d+$/.test(rangeValue) && rangeBody.byteLength === 1,
+      { status: rangeStatus, contentType: rangeType, contentRange: rangeValue, bodyBytes: rangeBody.byteLength, declaredLength: rangeLength });
+  } else {
+    record("drive-media-staging fixtures configuradas", false, { publicSlugConfigured: Boolean(publicSlug), revokedSlugConfigured: Boolean(revokedSlug) });
+  }
+
   const article = articleRows[0];
   const imageUrl = article?.capa_url || article?.capa_thumb_url || article?.banner_url;
   if (imageUrl) {
