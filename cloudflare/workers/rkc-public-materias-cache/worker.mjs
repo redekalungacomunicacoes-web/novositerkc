@@ -262,6 +262,20 @@ export default {
       const fixtureUrl = new URL(url.pathname + url.search, env.SUPABASE_URL);
       return env.MEDIA_ORIGIN.fetch(new Request(fixtureUrl.toString(), request));
     }
+    if (url.pathname === "/__test/purge-valid" && env.MEDIA_ORIGIN) {
+      if (request.method !== "POST" || !/^\\d{6,}$/.test(url.searchParams.get("testRun") || "")) {
+        return json({ error: "Rota de teste indisponível." }, 404);
+      }
+      const internalRequest = new Request(new URL("/__cache/purge", url), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.RKC_CACHE_PURGE_SECRET || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: await request.text(),
+      });
+      return purgePublicCache(internalRequest, env, ctx);
+    }
     if (url.pathname === "/__cache/purge") return purgePublicCache(request, env, ctx);
     if (url.pathname === "/media") return servePublicMedia(request, url, env, ctx);
     if (request.method !== "GET" || url.pathname !== "/materias" || url.search) {
