@@ -107,6 +107,9 @@ async function servePublicMedia(request, url, env, ctx) {
   responseHeaders.set("X-Content-Type-Options", "nosniff");
   responseHeaders.set("Cache-Control", "no-store");
   responseHeaders.set("X-RKC-Media-Cache", (cachedResponse.headers.get("CF-Cache-Status") || "UNKNOWN").toUpperCase());
+  const cacheStatus = (cachedResponse.headers.get("CF-Cache-Status") || "UNKNOWN").toUpperCase();
+  const originTransferBytes = cacheStatus === "HIT" ? 0 : Number(cachedResponse.headers.get("Content-Length") || 0);
+  responseHeaders.set("X-RKC-Origin-Transfer-Bytes", String(Number.isFinite(originTransferBytes) ? originTransferBytes : 0));
 
   if (cachedResponse.status !== 200 || !IMAGE_TYPES.has(contentType)) {
     return new Response(cachedResponse.body, {
