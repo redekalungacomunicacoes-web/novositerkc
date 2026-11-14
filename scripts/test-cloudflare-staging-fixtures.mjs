@@ -104,8 +104,15 @@ try {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ purgeEverything: true }),
   });
-  const afterValidPurge = await media(purgeId);
-  const afterValidPurgeBytes = await body(afterValidPurge);
+  const purgePayload = await validPurge.clone().json().catch(() => ({}));
+  let afterValidPurge;
+  let afterValidPurgeBytes;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    afterValidPurge = await media(purgeId);
+    afterValidPurgeBytes = await body(afterValidPurge);
+    if (afterValidPurge.headers.get("x-rkc-media-cache") === "MISS") break;
+  }
   check("authorized purge invalidates cached media and next request is MISS",
     purgeMiss.status === 200 && purgeMiss.headers.get("x-rkc-media-cache") === "MISS" &&
     purgeHit.status === 200 && purgeHit.headers.get("x-rkc-media-cache") === "HIT" &&
@@ -113,7 +120,7 @@ try {
     afterValidPurge.headers.get("x-rkc-media-cache") === "MISS" &&
     purgeMissBytes.length === purgeHitBytes.length && afterValidPurgeBytes.length === purgeMissBytes.length,
     { first: purgeMiss.headers.get("x-rkc-media-cache"), second: purgeHit.headers.get("x-rkc-media-cache"),
-      purgeStatus: validPurge.status, afterPurge: afterValidPurge.headers.get("x-rkc-media-cache"),
+      purgeStatus: validPurge.status, purgePayload, afterPurge: afterValidPurge.headers.get("x-rkc-media-cache"),
       originBytesAfterPurge: afterValidPurge.headers.get("x-rkc-origin-transfer-bytes") });
 
   const concurrentId = fixtureId("materia-fixture-concurrent");
