@@ -54,7 +54,8 @@ async function authorizePublicMedia(id, env) {
     && cacheControl.includes("s-maxage=0");
   const authorized = authorization.status === 204 && cacheControl === "no-store" || legacyRangeAuthorized;
   if (!authorized) return { ok: false, status: authorization.status === 404 ? 404 : 503 };
-  const version = authorization.headers.get("X-RKC-Media-Version") || authorization.headers.get("ETag") || authorization.headers.get("Last-Modified") || "legacy";
+  const rawVersion = authorization.headers.get("X-RKC-Media-Version") || authorization.headers.get("ETag") || authorization.headers.get("Last-Modified") || "legacy";
+  const version = rawVersion.replace(/[^A-Za-z0-9_.:+-]/g, "").slice(0, 80) || "legacy";
   return { ok: true, version };
 }
 
