@@ -16,6 +16,7 @@ async function body(response) {
 async function media(id, init = {}) {
   return fetch(workerUrl + "/media?id=" + encodeURIComponent(id) + "&testRun=" + encodeURIComponent(testRunId), init);
 }
+function fixtureId(id) { return id + "-" + testRunId; }
 async function purge(tags, token = "invalid-staging-token") {
   return fetch(workerUrl + "/__cache/purge", {
     method: "POST",
@@ -25,10 +26,6 @@ async function purge(tags, token = "invalid-staging-token") {
 }
 
 try {
-  const reset = await fetch(workerUrl + "/__test/reset", { method: "POST" });
-  assert.equal(reset.status, 200, "isolated fixture origin reset");
-  await reset.json();
-
   const listing = await fetch(workerUrl + "/materias");
   const rows = await listing.json();
   check("public article listing rewrites cover, thumbnail and banner URLs", listing.status === 200 &&
@@ -38,9 +35,9 @@ try {
     rows[0].banner_url.includes(workerUrl + "/media?id=materia-fixture-webp"), { status: listing.status, rows: rows.length });
 
   for (const [id, mime] of [
-    ["materia-fixture-jpeg", "image/jpeg"],
-    ["materia-fixture-png", "image/png"],
-    ["materia-fixture-webp", "image/webp"],
+    [fixtureId("materia-fixture-jpeg"), "image/jpeg"],
+    [fixtureId("materia-fixture-png"), "image/png"],
+    [fixtureId("materia-fixture-webp"), "image/webp"],
   ]) {
     const first = await media(id);
     const firstStatus = first.headers.get("x-rkc-media-cache");
@@ -64,7 +61,7 @@ try {
     bytesAvoided += hitTransferBytes === 0 ? secondBytes.length : 0;
   }
 
-  const range = await media("materia-fixture-jpeg", { headers: { Range: "bytes=0-1" } });
+  const range = await media(fixtureId("materia-fixture-jpeg"), { headers: { Range: "bytes=0-1" } });
   const rangeBytes = await body(range);
   const contentRange = range.headers.get("content-range") || "";
   check("Range returns a correct 206 partial response", range.status === 206 &&
@@ -75,12 +72,12 @@ try {
     Number(range.headers.get("x-rkc-origin-transfer-bytes") || "0") === 0,
     { originTransferBytes: range.headers.get("x-rkc-origin-transfer-bytes") });
 
-  const privateResponse = await media("materia-private-file");
+  const privateResponse = await media(fixtureId("materia-private-file"));
   check("private media is denied before cache/origin delivery",
     privateResponse.status === 404,
     { status: privateResponse.status });
 
-  const revokedId = "materia-fixture-revoked";
+  const revokedId = fixtureId("materia-fixture-revoked");
   const firstRevoked = await media(revokedId);
   await body(firstRevoked);
   const revoke = await fetch(workerUrl + "/__test/revoke?id=" + encodeURIComponent(revokedId), { method: "POST" });
@@ -93,11 +90,11 @@ try {
     { firstStatus: firstRevoked.status, rejectedPurgeStatus: rejectedPurge.status,
       afterRevocationStatus: afterRevocation.status });
 
-  const rejectedPurgeOnly = await purge(["media-materia-fixture-purge"]);
+  const rejectedPurgeOnly = await purge(["media-" + fixtureId("materia-fixture-purge")]);
   check("purge endpoint rejects unauthenticated staging requests", rejectedPurgeOnly.status === 401,
     { status: rejectedPurgeOnly.status });
 
-  const concurrentId = "materia-fixture-concurrent";
+  const concurrentId = fixtureId("materia-fixture-concurrent");
   const concurrent = await Promise.all(Array.from({ length: 6 }, () => media(concurrentId)));
   const concurrentBodies = await Promise.all(concurrent.map(body));
   check("six simultaneous requests return complete image bodies",
