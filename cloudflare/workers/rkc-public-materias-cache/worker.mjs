@@ -72,7 +72,9 @@ async function authorizePublicMedia(id, env) {
 
 async function servePublicMedia(request, url, env, ctx) {
   const id = url.searchParams.get("id");
-  if (url.searchParams.size !== 1 || !PUBLIC_MEDIA_ID.test(id || "")) {
+  const testRun = url.searchParams.get("testRun");
+  const validStagingTest = Boolean(env.MEDIA_ORIGIN) && url.searchParams.size === 2 && /^[A-Za-z0-9_-]{1,80}$/.test(testRun || "");
+  if ((url.searchParams.size !== 1 && !validStagingTest) || [...url.searchParams.keys()].some((key) => key !== "id" && key !== "testRun") || !PUBLIC_MEDIA_ID.test(id || "")) {
     return json({ error: "Mídia pública não encontrada." }, 404);
   }
   if (request.method !== "GET" && request.method !== "HEAD") {
@@ -93,7 +95,8 @@ async function servePublicMedia(request, url, env, ctx) {
 
   let cachedResponse;
   try {
-    cachedResponse = await ctx.exports.MediaCache.fetch(mediaCacheRequest(id, authorization.version));
+    const cacheVersion = testRun ? `${authorization.version}-${testRun}` : authorization.version;
+    cachedResponse = await ctx.exports.MediaCache.fetch(mediaCacheRequest(id, cacheVersion));
   } catch {
     return new Response("Mídia temporariamente indisponível.", {
       status: 502,
