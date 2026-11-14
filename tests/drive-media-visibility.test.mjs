@@ -98,20 +98,24 @@ const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarg
 await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
 assert.equal(typeof handler, "function");
 
-async function withDriveFetch(run) {
+async function withDriveFetch(run, options = {}) {
   const originalFetch = globalThis.fetch;
   let downloads = 0;
-  globalThis.fetch = async (url) => {
+  let tokenRequests = 0;
+  globalThis.fetch = async (url, init = {}) => {
     if (String(url).includes("oauth2.googleapis.com/token")) {
+      tokenRequests++;
       return new Response(JSON.stringify({ access_token: "test-access-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
     }
     if (String(url).includes("googleapis.com/drive/v3/files/")) {
       downloads++;
+      if (options.onDriveRequest) await options.onDriveRequest({ url: String(url), init, downloads });
+      if (options.driveResponse) return await options.driveResponse({ url: String(url), init, downloads });
       return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "Content-Type": "image/jpeg", "Content-Length": "3" } });
     }
     throw new Error("unexpected fetch " + url);
   };
-  try { await run(() => downloads); }
+  try { await run(() => downloads, () => tokenRequests); }
   finally { globalThis.fetch = originalFetch; }
 }
 
@@ -208,5 +212,53 @@ test("GET authorization probe revalidates visibility without downloading origina
     const revoked = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-head-probe&authorize=1", { method: "GET", headers: { Range: "bytes=0-0" } }));
     assert.equal(revoked.status, 404);
     assert.equal(downloads(), 0);
+  });
+});
+
+
+test("Range responses preserve 206 status and upstream byte-range headers", async () => {
+  await withDriveFetch(async (downloads) => {
+    Object.assign(state, { visibility: "public", fileStatus: "active", deleted: false, module: "materias", category: "content", articleStatus: "published", articleContentLinked: true });
+    const response = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-range-test", { headers: { Range: "bytes=2-4" } }));
+    assert.equal(response.status, 206);
+    assert.equal(response.headers.get("Content-Range"), "bytes 2-4/5");
+    assert.equal(response.headers.get("Content-Length"), "3");
+    assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [2, 3, 4]);
+    assert.equal(downloads(), 1);
+  }, {
+    driveResponse: () => new Response(new Uint8Array([2, 3, 4]), {
+      status: 206,
+      headers: { "Content-Type": "image/jpeg", "Content-Length": "3", "Content-Range": "bytes 2-4/5" },
+    }),
+  });
+});
+
+test("stream cancellation propagates to the Google Drive reader", async () => {
+  let upstreamCancelled = false;
+  await withDriveFetch(async () => {
+    Object.assign(state, { visibility: "public", fileStatus: "active", deleted: false, module: "materias", category: "content", articleStatus: "published", articleContentLinked: true });
+    const response = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-cancel-test"));
+    assert.equal(response.status, 200);
+    await response.body.cancel("client disconnected");
+    assert.equal(upstreamCancelled, true);
+  }, {
+    driveResponse: () => new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])); },
+      cancel() { upstreamCancelled = true; },
+    }), { status: 200, headers: { "Content-Type": "image/jpeg", "Content-Length": "3" } }),
+  });
+});
+
+test("parallel media requests share one OAuth refresh and keep independent streams", async () => {
+  await withDriveFetch(async (downloads, tokenRequests) => {
+    Object.assign(state, { visibility: "public", fileStatus: "active", deleted: false, module: "materias", category: "content", articleStatus: "published", articleContentLinked: true });
+    const responses = await Promise.all(Array.from({ length: 6 }, (_, index) =>
+      handler(new Request(`https://project.supabase.co/functions/v1/drive-media?id=materia-parallel-${index}`))
+    ));
+    assert.deepEqual(responses.map((response) => response.status), [200, 200, 200, 200, 200, 200]);
+    const bodies = await Promise.all(responses.map((response) => response.arrayBuffer()));
+    assert.ok(bodies.every((body) => body.byteLength === 3));
+    assert.equal(tokenRequests(), 1);
+    assert.equal(downloads(), 6);
   });
 });
