@@ -39,6 +39,16 @@ try {
     if (name === "matérias") articleRows = Array.isArray(data) ? data : [];
   }
 
+  const purgeUrl = new URL("/functions/v1/cloudflare-cache-purge", supabaseUrl);
+  const unauthenticatedPurge = await fetch(purgeUrl, {
+    method: "POST",
+    headers: { apikey: publishableKey, "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  record("cloudflare-cache-purge exige JWT antes de executar invalidação", unauthenticatedPurge.status === 401,
+    { status: unauthenticatedPurge.status });
+  await unauthenticatedPurge.body?.cancel();
+
   const authSettings = await fetch(new URL("/auth/v1/settings", supabaseUrl), { headers });
   record("Supabase Auth settings acessível", authSettings.status === 200, { status: authSettings.status });
   const unauthenticatedUser = await fetch(new URL("/auth/v1/user", supabaseUrl), { headers });
@@ -126,6 +136,23 @@ try {
     await privateProbe.body?.cancel();
     record("drive-media-staging: slug privado inexistente não é exposto", privateStatus === 404,
       { status: privateStatus, note: "Os 7 arquivos privados atuais não possuem public_slug; nenhum foi alterado." });
+
+    for (const [label, slug] of [
+      ["galeria de matéria publicada", process.env.RKC_PUBLIC_GALLERY_TEST_ID || ""],
+      ["áudio de entrevista publicado", process.env.RKC_PUBLIC_AUDIO_TEST_ID || ""],
+    ]) {
+      const fixtureUrl = new URL(stagingBase);
+      fixtureUrl.searchParams.set("id", slug);
+      fixtureUrl.searchParams.set("authorize", "1");
+      const response = slug ? await fetch(fixtureUrl, { headers }) : null;
+      const status = response?.status ?? 0;
+      const cacheControl = response?.headers.get("cache-control") || "";
+      const hasVersion = Boolean(response?.headers.get("x-rkc-media-version"));
+      await response?.body?.cancel();
+      record("drive-media-staging: autorização sem download para " + label,
+        Boolean(slug) && status === 204 && cacheControl === "no-store" && hasVersion,
+        { status, cacheControl, hasVersion, configured: Boolean(slug) });
+    }
 
     const rangeUrl = new URL(stagingBase);
     rangeUrl.searchParams.set("id", publicSlug);
