@@ -10,7 +10,6 @@ const headers = { apikey: publishableKey, Accept: "application/json" };
 const results = [];
 function record(name, passed, detail = {}) {
   results.push({ name, passed: Boolean(passed), ...detail });
-  assert.ok(passed, name);
 }
 async function readJson(path) {
   const response = await fetch(new URL(path, supabaseUrl), { headers });
@@ -84,10 +83,11 @@ try {
   }
 
   console.log(JSON.stringify({
-    ok: true,
+    ok: results.every((item) => item.passed),
     checks: results,
     note: "Testes de produção somente GET; nenhuma gravação, exclusão, login ou alteração de dados foi executada. O endpoint /admin foi verificado apenas como shell público, sem sessão autenticada."
   }, null, 2));
+  if (results.some((item) => !item.passed)) throw new Error("Production read-only checks failed: " + results.filter((item) => !item.passed).map((item) => item.name).join(", "));
 } catch (error) {
   console.error(JSON.stringify({
     ok: false,
