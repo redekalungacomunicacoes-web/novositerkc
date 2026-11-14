@@ -5,24 +5,19 @@ const worker = process.env.RKC_MEDIA_WORKER_URL;
 if (!worker) throw new Error("RKC_MEDIA_WORKER_URL must point to an isolated staging Worker; production URLs are not accepted by default.");
 const originProbeUrl = new URL("/functions/v1/drive-media", "https://yycfqeymdsjyulexwrlb.supabase.co");
 originProbeUrl.searchParams.set("id", "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe");
-const originProbe = await fetch(originProbeUrl, { method: "HEAD", headers: { "Cache-Control": "no-cache" } });
-const originProbeBody = await originProbe.text();
-const originGetProbe = await fetch(originProbeUrl, {
+originProbeUrl.searchParams.set("authorize", "1");
+const originProbe = await fetch(originProbeUrl, {
   method: "GET",
   headers: { Range: "bytes=0-0", "Cache-Control": "no-cache" },
 });
-const originGetProbeBody = await originGetProbe.text();
+const originProbeBody = await originProbe.text();
 console.log(JSON.stringify({
-  originGetStatus: originGetProbe.status,
-  originGetErrorCode: originGetProbe.headers.get("sb-error-code"),
-  originGetBody: originGetProbeBody.slice(0, 500),
-}));
-console.log(JSON.stringify({
-  originHeadStatus: originProbe.status,
-  originHeadCacheControl: originProbe.headers.get("cache-control"),
-  originHeadContentType: originProbe.headers.get("content-type"),
-  originHeadErrorCode: originProbe.headers.get("sb-error-code"),
-  originHeadBody: originProbeBody.slice(0, 500),
+  originAuthorizationStatus: originProbe.status,
+  originAuthorizationCacheControl: originProbe.headers.get("cache-control"),
+  originAuthorizationContentType: originProbe.headers.get("content-type"),
+  originAuthorizationContentRange: originProbe.headers.get("content-range"),
+  originAuthorizationErrorCode: originProbe.headers.get("sb-error-code"),
+  originAuthorizationBody: originProbeBody.slice(0, 500),
 }));
 const cases = [
   { id: "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe", type: "image/jpeg" },
