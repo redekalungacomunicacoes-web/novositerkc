@@ -20,7 +20,6 @@ jobs:
       - name: Run isolated Cloudflare HTTP integration suite
         env:
           RKC_MEDIA_WORKER_URL: https://rkc-media-cache-staging-20261114.redekalungacomunicacoes.workers.dev
-          RKC_STAGING_PURGE_SECRET: rkc-staging-only-20261114-4e6d9a8f7b2c1d0e
         run: node scripts/test-cloudflare-staging-fixtures.mjs
       - name: Verify production site and Supabase with read-only HTTP requests
         env:
