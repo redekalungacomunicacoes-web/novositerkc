@@ -175,7 +175,6 @@ Deno.serve(async (req) => {
       const value = drive.headers.get(name);
       if (value) headers.set(name, value);
     }
-    if (req.method === "HEAD") return new Response(null, { status: drive.status, headers });
     return new Response(drive.body, { status: drive.status, headers });
   } catch {
     return new Response("Media unavailable", { status: 502 });
