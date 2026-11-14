@@ -1,4 +1,5 @@
 import { TEAM_DRIVE_AVATAR_SELECT, teamAvatarUrl } from "@/lib/teamAvatar";
+import { resolvePublicDriveImageUrl, rewritePublicDriveImageUrlsInHtml } from "@/lib/publicMediaUrl";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { RKCButton } from "@/app/components/RKCButton";
@@ -157,7 +158,7 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
         return {
           id: block.id || `image-${idx}`,
           type: "image" as const,
-          url: String(block.url),
+          url: resolvePublicDriveImageUrl(String(block.url)),
           caption: block.caption ? String(block.caption) : "",
           credit: block.credit ? String(block.credit) : "",
         };
@@ -167,7 +168,7 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
         return {
           id: block.id || `imgtxt-${idx}`,
           type: "image-text" as const,
-          url: String(block.url || ""),
+          url: resolvePublicDriveImageUrl(String(block.url || "")),
           text: String(block.text || ""),
           caption: block.caption ? String(block.caption) : "",
           credit: block.credit ? String(block.credit) : "",
@@ -477,7 +478,7 @@ export function MateriaDetalhes() {
         }
       }
 
-      const heroImage = found.banner_url || found.capa_url || "";
+      const heroImage = resolvePublicDriveImageUrl(found.banner_url || found.capa_url || "");
       const mapped: MateriaUI = {
         id: found.id,
         slug: found.slug,
@@ -489,7 +490,7 @@ export function MateriaDetalhes() {
         autor: authorProfile?.nome || found.autor_nome || "",
         data: formatDateBR(found.published_at || found.created_at),
         categoria: (found.tags && found.tags[0]) ? found.tags[0] : "Geral",
-        conteudo: found.conteudo || "",
+        conteudo: rewritePublicDriveImageUrlsInHtml(found.conteudo || ""),
         contentBlocks: normalizeBlocks(found.content_blocks),
         interviews: (() => {
           // Supabase may return content_blocks as an array or as serialized JSON.
@@ -513,7 +514,7 @@ export function MateriaDetalhes() {
             youtubeUrl: String(interview.youtubeUrl || interview.youtube_url || ""),
             audioUrl: String(interview.audioUrl || interview.audio_url || ""),
             transcript: String(interview.transcript || ""),
-            thumbnailUrl: String(interview.thumbnailUrl || interview.thumbnail_url || ""),
+            thumbnailUrl: resolvePublicDriveImageUrl(String(interview.thumbnailUrl || interview.thumbnail_url || "")),
             questions: Array.isArray(interview.questions) ? interview.questions : [],
           }));
         })(),
@@ -532,7 +533,7 @@ export function MateriaDetalhes() {
         .order("ordem", { ascending: true, nullsFirst: true })
         .order("created_at", { ascending: true });
 
-      setGaleria(!galeriaError && Array.isArray(galeriaData) ? (galeriaData as MateriaGaleriaItem[]) : []);
+      setGaleria(!galeriaError && Array.isArray(galeriaData) ? (galeriaData as MateriaGaleriaItem[]).map((item) => ({ ...item, url: resolvePublicDriveImageUrl(item.url) })) : []);
       setActiveGalleryIndex(null);
 
       await trackPageView({
@@ -557,7 +558,7 @@ export function MateriaDetalhes() {
               id: m.id,
               slug: m.slug,
               titulo: m.titulo || "",
-              imagem: m.capa_thumb_url || m.capa_url || "",
+              imagem: resolvePublicDriveImageUrl(m.capa_thumb_url || m.capa_url || ""),
               categoria: (m.tags && m.tags[0]) ? m.tags[0] : "Geral",
             }))
           : []

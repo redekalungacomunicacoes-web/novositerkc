@@ -13,6 +13,7 @@ import {
   updateMateria
 } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
+import { purgeRkcPublicMediaCache } from "@/lib/publicMediaCache";
 import { YouTubeVideoPicker } from "./YouTubeVideoPicker";
 
 type MateriaEditorSection = "principal" | "conteudo" | "publicacao" | "capa" | "banner" | "seo";
@@ -733,6 +734,7 @@ export function AdminMateriaForm() {
         if (insErr) throw insErr;
       }
 
+      await purgeRkcPublicMediaCache();
       await loadGaleria(id);
     } catch (err: any) {
       try { if (id && uploadedIds.length) await cleanupUnreferencedMateriaFiles(id, uploadedIds); } catch (cleanupError) { console.warn("[materia-drive] upload de galeria incompleto; limpeza pendente", cleanupError); }
@@ -758,6 +760,7 @@ export function AdminMateriaForm() {
       alert("A foto foi removida da matéria, mas a cópia substituída ainda precisa ser movida para a lixeira do Drive.");
     }
 
+    await purgeRkcPublicMediaCache();
     await loadGaleria(id);
   };
 
@@ -1248,6 +1251,7 @@ export function AdminMateriaForm() {
         }
       }
 
+      await purgeRkcPublicMediaCache();
       originalBlocks.current = sanitizedBlocks;
       originalInterviews.current = interviews;
       originalScheduledAt.current = scheduledAt;

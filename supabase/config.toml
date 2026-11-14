@@ -43,3 +43,8 @@ verify_jwt = false
 # Callback must be reachable without a Supabase JWT; the function authenticates admin POST actions itself.
 [functions.youtube-oauth]
 verify_jwt = false
+
+
+# Server-side bridge for authenticated public-media cache invalidation.
+[functions.cloudflare-cache-purge]
+verify_jwt = true

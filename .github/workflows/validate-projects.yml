@@ -1,4 +1,4 @@
-name: Validate Projects
+name: Validate Projects # Final Deno check on current-main rebased branch
 on:
   pull_request:
     paths:
@@ -9,6 +9,7 @@ on:
       - 'src/lib/projectDrive.ts'
       - 'supabase/functions/_shared/project-drive.ts'
       - 'supabase/functions/drive-media/index.ts'
+      - 'supabase/functions/cloudflare-cache-purge/index.ts'
       - 'supabase/functions/drive-files/index.ts'
       - 'tsconfig.projects.json'
       - '.github/workflows/validate-projects.yml'
@@ -29,4 +30,4 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno check --no-config supabase/functions/_shared/project-drive.ts supabase/functions/drive-media/index.ts
+      - run: deno check --no-config supabase/functions/_shared/project-drive.ts supabase/functions/drive-media/index.ts supabase/functions/cloudflare-cache-purge/index.ts

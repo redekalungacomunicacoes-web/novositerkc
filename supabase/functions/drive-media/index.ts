@@ -4,31 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
-const MEDIA_CACHE_TTL = 5 * 60 * 1000;
-const MEDIA_CACHE_MAX = 500;
-
-type CachedMedia = { file: any; expiresAt: number };
-const mediaCache = new Map<string, CachedMedia>();
 let cachedToken: { value: string; expiresAt: number } | null = null;
 let tokenRefresh: Promise<string> | null = null;
-
-function getCachedMedia(slug: string) {
-  const cached = mediaCache.get(slug);
-  if (!cached) return null;
-  if (cached.expiresAt <= Date.now()) {
-    mediaCache.delete(slug);
-    return null;
-  }
-  return cached.file;
-}
-
-function cacheMedia(slug: string, file: any) {
-  if (mediaCache.size >= MEDIA_CACHE_MAX) {
-    const oldest = mediaCache.keys().next().value;
-    if (oldest) mediaCache.delete(oldest);
-  }
-  mediaCache.set(slug, { file, expiresAt: Date.now() + MEDIA_CACHE_TTL });
-}
 
 function base64Url(input: Uint8Array | string) {
   const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
@@ -94,40 +71,110 @@ async function accessToken() {
   return await tokenRefresh;
 }
 
-async function downloadDriveFile(fileId: string, range?: string | null) {
+async function downloadDriveFile(fileId: string, range: string | null, requestSignal: AbortSignal) {
   const token = await accessToken();
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
   if (range) headers.Range = range;
-  const response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, {
-    signal: AbortSignal.timeout(30000),
-    headers,
-  });
-  if (!response.ok) throw new Error("Drive media unavailable");
+
+  // Bound the time to receive upstream headers, not the lifetime of the body stream.
+  // AbortSignal.timeout(30000) also aborts large downloads after 30 seconds, even
+  // when Google Drive is still transmitting a valid response body.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error("Google Drive response headers timed out")), 30000);
+  const abortBeforeHeaders = () => controller.abort(requestSignal.reason);
+  if (requestSignal.aborted) abortBeforeHeaders();
+  else requestSignal.addEventListener("abort", abortBeforeHeaders, { once: true });
+
+  let response: Response;
+  try {
+    response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, {
+      signal: controller.signal,
+      headers,
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    requestSignal.removeEventListener("abort", abortBeforeHeaders);
+    throw error;
+  }
+  clearTimeout(timeout);
+  requestSignal.removeEventListener("abort", abortBeforeHeaders);
+
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error(`Google Drive returned HTTP ${response.status}`);
+  }
+  if (!response.body) throw new Error("Google Drive returned an empty response body");
   return response;
 }
 
+function notFound() {
+  return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+}
+
+function forwardDriveBody(body: ReadableStream<Uint8Array>, requestSignal: AbortSignal) {
+  const reader = body.getReader();
+  let finished = false;
+  const cleanup = () => requestSignal.removeEventListener("abort", abort);
+  const cancelReader = (reason?: unknown) => {
+    if (finished) return;
+    finished = true;
+    cleanup();
+    void reader.cancel(reason).catch(() => undefined);
+  };
+  const abort = () => cancelReader(requestSignal.reason);
+
+  if (requestSignal.aborted) abort();
+  else requestSignal.addEventListener("abort", abort, { once: true });
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (finished) return;
+      try {
+        const result = await reader.read();
+        if (result.done) {
+          finished = true;
+          cleanup();
+          controller.close();
+          return;
+        }
+        controller.enqueue(result.value);
+      } catch (error) {
+        finished = true;
+        cleanup();
+        console.error("drive-media upstream stream interrupted", {
+          name: error instanceof Error ? error.name : "UnknownError",
+        });
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      cancelReader(reason);
+    },
+  });
+}
+
 Deno.serve(async (req) => {
-  if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
+  if (req.method !== "GET") return new Response("Method not allowed", { status: 405, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRole) return new Response("Backend configuration error", { status: 500 });
-  const slug = new URL(req.url).searchParams.get("id")?.trim();
-  if (!slug) return new Response("Not found", { status: 404 });
+  const requestUrl = new URL(req.url);
+  const slug = requestUrl.searchParams.get("id")?.trim();
+  const authorizeOnly = requestUrl.searchParams.get("authorize") === "1";
+  if (!slug) return notFound();
   const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
 
-  let file = getCachedMedia(slug);
-  if (!file) {
-    const result = await admin.from("drive_files")
-      .select("id,drive_file_id,name,mime_type,size_bytes,module,entity_id,category")
+  const result = await admin.from("drive_files")
+      .select("id,drive_file_id,name,mime_type,size_bytes,module,entity_id,category,updated_at,created_at")
       .eq("public_slug", slug).eq("visibility", "public").eq("status", "active").is("deleted_at", null).single();
-    file = result.data;
-    if (result.error || !file) return new Response("Not found", { status: 404 });
+  const file = result.data;
+  if (result.error || !file) return notFound();
 
     if (file.module === "materias") {
       const { data: materia } = await admin.from("materias")
         .select("id,status,capa_drive_file_id,capa_thumb_drive_file_id,banner_drive_file_id,audio_drive_file_id,content_blocks")
         .eq("id", file.entity_id).eq("status", "published").maybeSingle();
-      if (!materia) return new Response("Not found", { status: 404 });
+      if (!materia) return notFound();
       let linked = false;
       if (file.category === "cover") linked = materia.capa_drive_file_id === file.id;
       else if (file.category === "cover_thumb") linked = materia.capa_thumb_drive_file_id === file.id;
@@ -151,13 +198,13 @@ Deno.serve(async (req) => {
           .eq("materia_id", file.entity_id).eq("drive_file_id", file.id).maybeSingle();
         linked = !!item;
       }
-      if (!linked) return new Response("Not found", { status: 404 });
+      if (!linked) return notFound();
     }
 
     if (file.module === "projetos") {
       const { data: project } = await admin.from("projetos").select("id,capa_drive_file_id,cover_card_drive_file_id")
         .eq("id", file.entity_id).eq("publicado_transparencia", true).maybeSingle();
-      if (!project) return new Response("Not found", { status: 404 });
+      if (!project) return notFound();
       let linked = file.category === "cover" && project.capa_drive_file_id === file.id
         || file.category === "cover_card" && project.cover_card_drive_file_id === file.id;
       if (file.category === "gallery" || file.category === "gallery_thumb") {
@@ -165,27 +212,32 @@ Deno.serve(async (req) => {
           .eq(file.category === "gallery" ? "drive_file_id" : "thumb_drive_file_id", file.id).limit(1);
         linked = !!gallery?.length;
       }
-      if (!linked) return new Response("Not found", { status: 404 });
+      if (!linked) return notFound();
     }
 
     if (file.module === "team") {
       const member = await admin.from("equipe").select("id,avatar_drive_file_id,avatar_thumb_drive_file_id").eq("id", file.entity_id).eq("ativo", true).eq("is_public", true).maybeSingle();
-      if (!member.data) return new Response("Not found", { status: 404 });
+      if (!member.data) return notFound();
       if (file.category === "portfolio") {
         const item = await admin.from("team_member_portfolio").select("id").eq("drive_file_id", file.id).eq("is_public", true).maybeSingle();
-        if (!item.data) return new Response("Not found", { status: 404 });
-      } else if (![member.data.avatar_drive_file_id, member.data.avatar_thumb_drive_file_id].includes(file.id)) return new Response("Not found", { status: 404 });
+        if (!item.data) return notFound();
+      } else if (![member.data.avatar_drive_file_id, member.data.avatar_thumb_drive_file_id].includes(file.id)) return notFound();
     }
 
-    cacheMedia(slug, file);
+
+  // GET is supported by the Supabase Edge Functions gateway; HEAD is not.
+  // This authorization-only GET returns after all current visibility/link checks and
+  // before downloading the original Drive file.
+  if (authorizeOnly) {
+    return new Response(null, { status: 204, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-RKC-Media-Version": String(file.updated_at ?? file.created_at ?? file.id) } });
   }
 
   try {
-    const drive = await downloadDriveFile(file.drive_file_id, req.headers.get("Range"));
+    const drive = await downloadDriveFile(file.drive_file_id, req.headers.get("Range"), req.signal);
     const headers = new Headers();
     headers.set("Content-Type", file.mime_type || drive.headers.get("Content-Type") || "application/octet-stream");
     headers.set("Cache-Control", ["materias", "projetos"].includes(file.module)
-      ? "public, max-age=31536000, s-maxage=31536000, immutable"
+      ? "public, max-age=0, s-maxage=0, must-revalidate"
       : "public, max-age=86400, s-maxage=86400");
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set("Accept-Ranges", "bytes");
@@ -194,9 +246,14 @@ Deno.serve(async (req) => {
       const value = drive.headers.get(name);
       if (value) headers.set(name, value);
     }
-    if (req.method === "HEAD") return new Response(null, { status: drive.status, headers });
-    return new Response(drive.body, { status: drive.status, headers });
-  } catch {
-    return new Response("Media unavailable", { status: 502 });
+    return new Response(forwardDriveBody(drive.body!, req.signal), { status: drive.status, headers });
+  } catch (error) {
+    console.error("drive-media upstream request failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+    });
+    return new Response("Media unavailable", {
+      status: 502,
+      headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+    });
   }
 });

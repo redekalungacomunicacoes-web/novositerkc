@@ -6,6 +6,7 @@ import { ArrowLeft, Image as ImageIcon, Save, Trash2, Video } from "lucide-react
 import { toast } from "sonner";
 
 import { supabase } from "@/lib/supabase";
+import { purgeRkcPublicMediaCache } from "@/lib/publicMediaCache";
 import {
   PROJECTS_BUCKET,
   deleteProjetoMidia,
@@ -264,6 +265,7 @@ export function AdminProjetoForm() {
       }
 
       await loadFotos(projectDbId);
+      await purgeRkcPublicMediaCache();
       toast.success("Fotos adicionadas com sucesso.");
     } catch (error: any) {
       toast.error(error?.message || "Erro ao adicionar fotos.");
@@ -283,6 +285,7 @@ export function AdminProjetoForm() {
     }
 
     setFotos((prev) => prev.filter((item) => item.id !== foto.id));
+    await purgeRkcPublicMediaCache();
     toast.success("Foto removida.");
   };
 
@@ -346,6 +349,7 @@ export function AdminProjetoForm() {
       const savedId = String(data.id);
       setProjectDbId(savedId);
       await loadFotos(savedId);
+      await purgeRkcPublicMediaCache();
       toast.success("Projeto salvo com sucesso.");
 
       if (!projectDbId) {

@@ -1,0 +1,22 @@
+name: RKC Public Media Cache Staging
+on:
+  workflow_dispatch:
+    inputs:
+      worker_url:
+        description: URL of a newly provisioned isolated staging Worker
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Exercise isolated staging Worker over HTTPS
+        env:
+          RKC_MEDIA_WORKER_URL: ${{ inputs.worker_url }}
+        run: node scripts/test-cloudflare-public-media.mjs
