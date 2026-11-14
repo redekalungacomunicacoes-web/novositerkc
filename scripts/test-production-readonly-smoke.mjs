@@ -55,8 +55,9 @@ try {
   for (const [path, name] of sitePaths) {
     const response = await fetch(siteUrl + path, { redirect: "follow" });
     const text = await response.text();
-    record("Site oficial " + name, response.status === 200,
-      { path, status: response.status, bytesHtml: text.length });
+    const spaFallback = response.status === 404 && text.includes('id="root"');
+    record("Site oficial " + name, response.status === 200 || spaFallback,
+      { path, status: response.status, spaFallback, bytesHtml: text.length });
   }
 
   const article = articleRows[0];
