@@ -33,7 +33,6 @@ async function servePublicMedia(request, url, env) {
     authorization = await fetch(upstreamMediaUrl(env, id), {
       method: "HEAD",
       headers: { "Cache-Control": "no-cache" },
-      cf: { cacheTtl: 0 },
     });
   } catch {
     return new Response("Media authorization unavailable", {
