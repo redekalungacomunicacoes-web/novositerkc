@@ -11,3 +11,6 @@ enabled = true
 
 [observability.traces]
 enabled = true
+
+[exports.MediaCache]
+type = "worker"
