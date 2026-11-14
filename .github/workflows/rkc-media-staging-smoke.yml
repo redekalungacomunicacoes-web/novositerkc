@@ -28,4 +28,5 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_J76dp3g1EyY8GT52M-sYEw_zYirWFVF
           RKC_SITE_URL: https://kalungacomunicacoes.org
           RKC_PUBLIC_MEDIA_TEST_ID: materia-848886a9-c56d-4d8a-9523-1223b2481dd7
+          RKC_REVOKED_MEDIA_TEST_ID: materia-b09fc90d-4e21-4fa8-8283-1bce1cf95a91
         run: node scripts/test-production-readonly-smoke.mjs
