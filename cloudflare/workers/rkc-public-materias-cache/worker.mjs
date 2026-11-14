@@ -44,7 +44,7 @@ async function servePublicMedia(request, url, env) {
   const authorizationHeaders = authorization.headers.get("Cache-Control") || "";
   const authorizationType = (authorization.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
   const legacyRangeAuthorized = authorization.status === 206
-    && /^bytes 0-0\\/\\d+$/.test(authorization.headers.get("Content-Range") || "")
+    && /^bytes 0-0\/\d+$/.test(authorization.headers.get("Content-Range") || "")
     && IMAGE_TYPES.has(authorizationType)
     && authorizationHeaders.includes("s-maxage=0");
   const authorized = authorization.status === 204 && authorizationHeaders === "no-store" || legacyRangeAuthorized;
