@@ -1,0 +1,27 @@
+name: RKC isolated media cache staging smoke
+
+on:
+  push:
+    branches:
+      - codex/rkc-public-media-cache
+    paths:
+      - scripts/trigger-rkc-media-staging.txt
+  workflow_dispatch:
+    inputs:
+      driver_url:
+        description: URL of an isolated staging test-runner Worker
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  staging-http:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run isolated Cloudflare HTTP integration suite
+        env:
+          DRIVER_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.driver_url || 'https://rkc-media-test-runner-staging-20261114.redekalungacomunicacoes.workers.dev/__rkc_staging/run-20261114-a7d9c3e1' }}
+        run: curl --fail --silent --show-error --max-time 180 "$DRIVER_URL"
