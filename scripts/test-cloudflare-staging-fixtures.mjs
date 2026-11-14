@@ -31,6 +31,8 @@ async function purge(tags, token = purgeSecret) {
 }
 
 try {
+  const cacheReset = await purge(["rkc-public-media"]);
+  assert.equal(cacheReset.status, 200, "isolated staging cache reset");
   const reset = await fetch(workerUrl + "/__test/reset", { method: "POST" });
   assert.equal(reset.status, 200, "isolated fixture origin reset");
   await reset.json();
