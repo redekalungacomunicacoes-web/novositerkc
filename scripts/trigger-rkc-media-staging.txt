@@ -1,2 +1,3 @@
 Temporary trigger for isolated RKC media-cache HTTP tests. Synthetic fixtures only; no production database or files are used.
 Second isolated staging smoke run: print detailed diagnostics.
+Third run: direct HTTPS from GitHub Actions to isolated staging Worker using service binding to synthetic origin.
