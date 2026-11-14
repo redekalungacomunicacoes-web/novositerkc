@@ -1,4 +1,4 @@
-name: Validate Materias # Re-run smoke test after syntax correction
+name: Validate Materias
 on:
   pull_request:
     paths:
@@ -44,6 +44,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Validate Cloudflare Worker cache entrypoints (dry run)
+        run: |
+          cd cloudflare/workers/rkc-public-materias-cache
+          npx --yes wrangler@4.107.0 deploy --dry-run --outdir "$RUNNER_TEMP/rkc-worker-dry-run"
       - run: npx tsc -p tsconfig.materias.json
       - run: node --test tests/materia*.test.mjs tests/team-drive.test.mjs tests/cloudflare-public-media-cache.test.mjs tests/public-media-url.test.mjs tests/drive-media-visibility.test.mjs tests/cloudflare-cache-purge-auth.test.mjs
       - run: npm run build
