@@ -13,7 +13,7 @@ for (const item of cases) {
   const url = `${worker.replace(/\/$/, "")}/media?id=${encodeURIComponent(item.id)}`;
   const first = await fetch(url, { headers: { Accept: "image/*" } });
   const firstBytes = Buffer.from(await first.arrayBuffer());
-  assert.equal(first.status, 200, `first request failed for ${item.id}: ${first.status}`);
+  assert.equal(first.status, 200, `first request failed for ${item.id}: ${first.status}: ${firstBytes.toString("utf8").slice(0,240)}`);
   assert.equal(first.headers.get("x-rkc-media-cache"), "MISS");
   assert.ok(first.headers.get("content-type")?.toLowerCase().includes(item.type), `wrong MIME for ${item.id}`);
 
