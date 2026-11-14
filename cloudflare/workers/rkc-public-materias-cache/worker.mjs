@@ -191,7 +191,7 @@ export default {
         "Cache-Control": "no-store",
       }});
     }
-    if (url.pathname === "/__cache/purge") return purgePublicCache(request, env);
+    if (url.pathname === "/__cache/purge") return purgePublicCache(request, env, ctx);
     if (url.pathname === "/media") return servePublicMedia(request, url, env);
     if (request.method !== "GET" || url.pathname !== "/materias" || url.search) {
       return json({ error: "Rota pública indisponível." }, 404);
