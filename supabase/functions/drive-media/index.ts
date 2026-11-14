@@ -100,7 +100,9 @@ Deno.serve(async (req) => {
 
     if (file.module === "materias") {
       const { data: materia } = await admin.from("materias")
-        .select("id,status,capa_drive_file_id,capa_thumb_drive_file_id,banner_drive_file_id,audio_drive_file_id,content_blocks")
+        .select(file.category === "content" || file.category === "audio"
+          ? "id,status,capa_drive_file_id,capa_thumb_drive_file_id,banner_drive_file_id,audio_drive_file_id,content_blocks"
+          : "id,status,capa_drive_file_id,capa_thumb_drive_file_id,banner_drive_file_id,audio_drive_file_id")
         .eq("id", file.entity_id).eq("status", "published").maybeSingle();
       if (!materia) return new Response("Not found", { status: 404 });
       let linked = false;
