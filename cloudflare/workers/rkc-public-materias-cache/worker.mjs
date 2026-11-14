@@ -92,7 +92,7 @@ async function servePublicMedia(request, url, env) {
   const rangeHeader = request.headers.get("Range");
   if (rangeHeader && cacheable) {
     const bytes = new Uint8Array(await upstream.arrayBuffer());
-    const match = /^bytes=(\\d*)-(\\d*)$/.exec(rangeHeader.trim());
+    const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
     if (!match || (!match[1] && !match[2])) {
       return new Response(null, { status: 416, headers: {
         "Cache-Control": "no-store",
@@ -181,7 +181,7 @@ function imageWorkerUrl(value, workerOrigin, supabaseOrigin) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: {
