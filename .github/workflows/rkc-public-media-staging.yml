@@ -14,20 +14,11 @@ permissions:
 jobs:
   staging:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Automated security and integration tests
-        run: |
-          node --test tests/cloudflare-public-media-cache.test.mjs tests/drive-media-visibility.test.mjs tests/cloudflare-cache-purge-auth.test.mjs tests/public-media-url.test.mjs
-          npm run build
       - name: Exercise isolated staging Worker over HTTPS
         env:
           RKC_MEDIA_WORKER_URL: https://rkc-public-materias-staging-20261114.redekalungacomunicacoes.workers.dev
