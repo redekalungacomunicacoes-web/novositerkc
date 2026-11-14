@@ -12,5 +12,14 @@ enabled = true
 [observability.traces]
 enabled = true
 
+[exports.default]
+type = "worker"
+
+[exports.default.cache]
+enabled = false
+
 [exports.MediaCache]
 type = "worker"
+
+[exports.MediaCache.cache]
+enabled = true
