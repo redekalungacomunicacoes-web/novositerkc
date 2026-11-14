@@ -1,3 +1,5 @@
+import { WorkerEntrypoint } from "cloudflare:workers";
+
 const MEDIA_TTL_SECONDS = 60;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const PUBLIC_MEDIA_ID = /^(?:materia|projetos|projeto|kalucast)-[A-Za-z0-9_-]{2,200}$/;
@@ -17,7 +19,44 @@ function json(body, status = 200, cacheControl = "no-store", extraHeaders = {}) 
   });
 }
 
-async function servePublicMedia(request, url, env) {
+function upstreamMediaUrl(env, id, authorizationProbe = false) {
+  const originUrl = new URL("/functions/v1/drive-media", env.SUPABASE_URL);
+  originUrl.searchParams.set("id", id);
+  if (authorizationProbe) originUrl.searchParams.set("authorize", "1");
+  return originUrl;
+}
+
+function mediaCacheRequest(id) {
+  const url = new URL("https://rkc-media-cache.internal/media");
+  url.searchParams.set("id", id);
+  return new Request(url, { method: "GET" });
+}
+
+async function authorizePublicMedia(id, env) {
+  let authorization;
+  try {
+    // Supabase Edge Functions support GET, not HEAD. The updated function returns
+    // 204 without downloading Drive bytes; the legacy fallback transfers one byte.
+    authorization = await fetch(upstreamMediaUrl(env, id, true), {
+      method: "GET",
+      headers: { Range: "bytes=0-0", "Cache-Control": "no-cache" },
+    });
+  } catch {
+    return { ok: false, status: 503 };
+  }
+
+  const cacheControl = authorization.headers.get("Cache-Control") || "";
+  const contentType = (authorization.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+  const legacyRangeAuthorized = authorization.status === 206
+    && /^bytes 0-0\/\d+$/.test(authorization.headers.get("Content-Range") || "")
+    && IMAGE_TYPES.has(contentType)
+    && cacheControl.includes("s-maxage=0");
+  const authorized = authorization.status === 204 && cacheControl === "no-store" || legacyRangeAuthorized;
+  if (!authorized) return { ok: false, status: authorization.status === 404 ? 404 : 503 };
+  return { ok: true };
+}
+
+async function servePublicMedia(request, url, env, ctx) {
   const id = url.searchParams.get("id");
   if (url.searchParams.size !== 1 || !PUBLIC_MEDIA_ID.test(id || "")) {
     return json({ error: "Mídia pública não encontrada." }, 404);
@@ -26,31 +65,11 @@ async function servePublicMedia(request, url, env) {
     return new Response("Method not allowed", { status: 405, headers: { "Cache-Control": "no-store" } });
   }
 
-  // Supabase Edge Functions support GET but not HEAD. The authorization-only GET
-  // uses Range: bytes=0-0 for compatibility with the currently deployed origin.
-  // The updated drive-media returns 204 + no-store before downloading any Drive bytes.
-  let authorization;
-  try {
-    authorization = await fetch(upstreamMediaUrl(env, id, true), {
-      method: "GET",
-      headers: { "Range": "bytes=0-0", "Cache-Control": "no-cache" },
-    });
-  } catch {
-    return new Response("Media authorization unavailable", {
-      status: 503,
-      headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
-    });
-  }
-  const authorizationHeaders = authorization.headers.get("Cache-Control") || "";
-  const authorizationType = (authorization.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
-  const legacyRangeAuthorized = authorization.status === 206
-    && /^bytes 0-0\/\d+$/.test(authorization.headers.get("Content-Range") || "")
-    && IMAGE_TYPES.has(authorizationType)
-    && authorizationHeaders.includes("s-maxage=0");
-  const authorized = authorization.status === 204 && authorizationHeaders === "no-store" || legacyRangeAuthorized;
-  if (!authorized) {
+  // Gateway authorization always runs before entering the cacheable MediaCache entrypoint.
+  const authorization = await authorizePublicMedia(id, env);
+  if (!authorization.ok) {
     return new Response(authorization.status === 404 ? "Not found" : "Media authorization unavailable", {
-      status: authorization.status === 404 ? 404 : 503,
+      status: authorization.status,
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
     });
   }
@@ -58,19 +77,9 @@ async function servePublicMedia(request, url, env) {
     return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   }
 
-  let upstream;
+  let cachedResponse;
   try {
-    // The subrequest uses Workers Caching. It is independent of the outer no-store
-    // response, so the Worker executes and authorizes every request while image bytes
-    // are served from Cloudflare after the first origin transfer.
-    upstream = await fetch(upstreamMediaUrl(env, id), {
-      method: "GET",
-      cf: {
-        cacheEverything: true,
-        cacheTtl: MEDIA_TTL_SECONDS,
-        cacheTags: ["rkc-public-media", `media-${id}`],
-      },
-    });
+    cachedResponse = await ctx.exports.MediaCache.fetch(mediaCacheRequest(id));
   } catch {
     return new Response("Mídia temporariamente indisponível.", {
       status: 502,
@@ -78,21 +87,24 @@ async function servePublicMedia(request, url, env) {
     });
   }
 
-  const contentType = (upstream.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
-  const cacheable = upstream.status === 200 && IMAGE_TYPES.has(contentType);
-  const responseHeaders = new Headers(upstream.headers);
+  const contentType = (cachedResponse.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+  const responseHeaders = new Headers(cachedResponse.headers);
   responseHeaders.set("Access-Control-Allow-Origin", "*");
   responseHeaders.set("X-Content-Type-Options", "nosniff");
-  // Never cache the Worker response itself: that would bypass the authorization probe.
   responseHeaders.set("Cache-Control", "no-store");
-  responseHeaders.set("X-RKC-Media-Origin", "drive-media");
-  responseHeaders.set("X-RKC-Media-Cache", cacheable
-    ? (upstream.headers.get("CF-Cache-Status") || "UNKNOWN").toUpperCase()
-    : "BYPASS");
+  responseHeaders.set("X-RKC-Media-Cache", (cachedResponse.headers.get("CF-Cache-Status") || "UNKNOWN").toUpperCase());
+
+  if (cachedResponse.status !== 200 || !IMAGE_TYPES.has(contentType)) {
+    return new Response(cachedResponse.body, {
+      status: cachedResponse.status,
+      statusText: cachedResponse.statusText,
+      headers: responseHeaders,
+    });
+  }
 
   const rangeHeader = request.headers.get("Range");
-  if (rangeHeader && cacheable) {
-    const bytes = new Uint8Array(await upstream.arrayBuffer());
+  if (rangeHeader) {
+    const bytes = new Uint8Array(await cachedResponse.arrayBuffer());
     const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
     if (!match || (!match[1] && !match[2])) {
       return new Response(null, { status: 416, headers: {
@@ -118,16 +130,15 @@ async function servePublicMedia(request, url, env) {
         "Accept-Ranges": "bytes",
       }});
     }
-    const partialHeaders = new Headers(responseHeaders);
-    partialHeaders.set("Content-Range", `bytes ${start}-${end}/${bytes.length}`);
-    partialHeaders.set("Content-Length", String(end - start + 1));
-    partialHeaders.set("Accept-Ranges", "bytes");
-    return new Response(bytes.slice(start, end + 1), { status: 206, headers: partialHeaders });
+    responseHeaders.set("Content-Range", `bytes ${start}-${end}/${bytes.length}`);
+    responseHeaders.set("Content-Length", String(end - start + 1));
+    responseHeaders.set("Accept-Ranges", "bytes");
+    return new Response(bytes.slice(start, end + 1), { status: 206, headers: responseHeaders });
   }
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
+  return new Response(cachedResponse.body, {
+    status: cachedResponse.status,
+    statusText: cachedResponse.statusText,
     headers: responseHeaders,
   });
 }
@@ -145,21 +156,21 @@ async function purgePublicCache(request, env, ctx) {
   if (!Array.isArray(tags) || tags.length < 1 || tags.length > 20 || !tags.every(validTag)) {
     return json({ error: "Lista de tags inválida." }, 400);
   }
-  if (!ctx?.cache?.purge) return json({ error: "Workers Cache purge indisponível." }, 503);
+
+  const uniqueTags = [...new Set(tags)];
+  const results = [];
   try {
-    const result = await ctx.cache.purge({ tags: [...new Set(tags)] });
-    if (!result?.success) return json({ error: "A Cloudflare não confirmou a invalidação.", details: result?.errors || [] }, 502);
-    return json({ purged: [...new Set(tags)] });
+    const mediaTags = uniqueTags.filter((tag) => tag === "rkc-public-media" || tag.startsWith("media-"));
+    const listTags = uniqueTags.filter((tag) => tag === "rkc-public-materias");
+    if (mediaTags.length) results.push(await ctx.exports.MediaCache.purge(mediaTags));
+    if (listTags.length) results.push(await ctx.cache.purge({ tags: listTags }));
+    if (results.some((result) => !result?.success)) {
+      return json({ error: "A Cloudflare não confirmou a invalidação.", details: results.flatMap((result) => result?.errors || []) }, 502);
+    }
+    return json({ purged: uniqueTags });
   } catch {
     return json({ error: "Falha ao invalidar o cache." }, 502);
   }
-}
-
-function upstreamMediaUrl(env, id, authorizationProbe = false) {
-  const originUrl = new URL("/functions/v1/drive-media", env.SUPABASE_URL);
-  originUrl.searchParams.set("id", id);
-  if (authorizationProbe) originUrl.searchParams.set("authorize", "1");
-  return originUrl;
 }
 
 function upstreamUrl(base, select) {
@@ -182,6 +193,38 @@ function imageWorkerUrl(value, workerOrigin, supabaseOrigin) {
   } catch { return value; }
 }
 
+export class MediaCache extends WorkerEntrypoint {
+  async fetch(request) {
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    if (request.method !== "GET" || url.pathname !== "/media" || url.searchParams.size !== 1 || !PUBLIC_MEDIA_ID.test(id || "")) {
+      return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+    }
+
+    let upstream;
+    try {
+      upstream = await fetch(upstreamMediaUrl(this.env, id), { method: "GET" });
+    } catch {
+      return new Response("Mídia temporariamente indisponível.", {
+        status: 502,
+        headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+      });
+    }
+    const contentType = (upstream.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+    const cacheable = upstream.status === 200 && IMAGE_TYPES.has(contentType);
+    const headers = new Headers(upstream.headers);
+    headers.set("Access-Control-Allow-Origin", "*");
+    headers.set("X-Content-Type-Options", "nosniff");
+    headers.set("Cache-Control", cacheable ? `public, max-age=${MEDIA_TTL_SECONDS}` : "no-store");
+    if (cacheable) headers.set("Cache-Tag", `rkc-public-media,media-${id}`);
+    return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
+  }
+
+  async purge(tags) {
+    return this.ctx.cache.purge({ tags });
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -194,10 +237,11 @@ export default {
       }});
     }
     if (url.pathname === "/__cache/purge") return purgePublicCache(request, env, ctx);
-    if (url.pathname === "/media") return servePublicMedia(request, url, env);
+    if (url.pathname === "/media") return servePublicMedia(request, url, env, ctx);
     if (request.method !== "GET" || url.pathname !== "/materias" || url.search) {
       return json({ error: "Rota pública indisponível." }, 404);
     }
+
     const withAudio = "id,slug,titulo,resumo,capa_url,capa_thumb_url,banner_url,audio_url,autor_nome,tags,published_at,created_at,status";
     const withoutAudio = "id,slug,titulo,resumo,capa_url,capa_thumb_url,banner_url,autor_nome,tags,published_at,created_at,status";
     let upstream = await fetch(upstreamUrl(env.SUPABASE_URL, withAudio), { headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY } });
