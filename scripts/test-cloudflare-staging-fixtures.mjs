@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 const workerUrl = (process.env.RKC_MEDIA_WORKER_URL || "").replace(/\/$/, "");
+const testRunId = process.env.GITHUB_RUN_ID || `local-${Date.now()}`;
 assert.ok(workerUrl, "RKC_MEDIA_WORKER_URL is required");
 
 const results = [];
@@ -13,7 +14,7 @@ async function body(response) {
   return new Uint8Array(await response.arrayBuffer());
 }
 async function media(id, init = {}) {
-  return fetch(workerUrl + "/media?id=" + encodeURIComponent(id), init);
+  return fetch(workerUrl + "/media?id=" + encodeURIComponent(id) + "&testRun=" + encodeURIComponent(testRunId), init);
 }
 async function purge(tags, token = "invalid-staging-token") {
   return fetch(workerUrl + "/__cache/purge", {
