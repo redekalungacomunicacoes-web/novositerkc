@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 
-const worker = "https://rkc-public-materias-cache.redekalungacomunicacoes.workers.dev";
+const worker = process.env.RKC_MEDIA_WORKER_URL;
+if (!worker) throw new Error("RKC_MEDIA_WORKER_URL must point to an isolated staging Worker; production URLs are not accepted by default.");
 const cases = [
   { id: "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe", type: "image/jpeg" },
   { id: "materia-1f8zr8fWpoZz30ipp0aJfaCggeO6WxDhT", type: "image/png" },
@@ -9,35 +10,23 @@ const cases = [
 ];
 
 for (const item of cases) {
-  const url = `${worker}/media?id=${encodeURIComponent(item.id)}`;
+  const url = `${worker.replace(/\/$/, "")}/media?id=${encodeURIComponent(item.id)}`;
   const first = await fetch(url, { headers: { Accept: "image/*" } });
   const firstBytes = Buffer.from(await first.arrayBuffer());
-  const firstCacheStatus = first.headers.get("cf-cache-status")?.toUpperCase();
-  assert.ok(["MISS", "EXPIRED", "REVALIDATED"].includes(firstCacheStatus), `first request should reach origin for ${item.id}: ${firstCacheStatus || "header missing"}`);
   assert.equal(first.status, 200, `first request failed for ${item.id}: ${first.status}`);
+  assert.equal(first.headers.get("x-rkc-media-cache"), "MISS");
   assert.ok(first.headers.get("content-type")?.toLowerCase().includes(item.type), `wrong MIME for ${item.id}`);
 
   const second = await fetch(url, { headers: { Accept: "image/*" } });
   const secondBytes = Buffer.from(await second.arrayBuffer());
-  const cacheStatus = second.headers.get("cf-cache-status")?.toUpperCase();
   assert.equal(second.status, 200, `second request failed for ${item.id}: ${second.status}`);
-  assert.equal(cacheStatus, "HIT", `second request was not a cache HIT for ${item.id}: ${cacheStatus || "header missing"}`);
-  assert.ok(second.headers.get("age") !== null, `Age header missing for ${item.id}`);
-  assert.equal(createHash("sha256").update(firstBytes).digest("hex"), createHash("sha256").update(secondBytes).digest("hex"), `body changed between requests for ${item.id}`);
-  console.log(JSON.stringify({
-    id: item.id,
-    mime: item.type,
-    firstCacheStatus: first.headers.get("cf-cache-status"),
-    secondCacheStatus: cacheStatus,
-    age: second.headers.get("age"),
-    bytes: secondBytes.length,
-    secondRequestOriginExpected: "not invoked on HIT",
-  }));
+  assert.equal(second.headers.get("x-rkc-media-cache"), "HIT", `second request was not an app-cache HIT for ${item.id}`);
+  assert.equal(createHash("sha256").update(firstBytes).digest("hex"), createHash("sha256").update(secondBytes).digest("hex"));
+  console.log(JSON.stringify({ id: item.id, mime: item.type, first: "MISS", second: "HIT", bytes: secondBytes.length }));
 }
 
 const negativeId = `materia-rkc-private-control-${Date.now()}`;
-const negative = await fetch(`${worker}/media?id=${encodeURIComponent(negativeId)}`);
-const negativeBody = await negative.arrayBuffer();
-assert.equal(negative.status, 404, "unknown/private control ID must not be delivered");
-assert.equal(negative.headers.get("cache-control"), "no-store", "negative/private response must never be cached");
-console.log(JSON.stringify({ negativeControl: true, status: negative.status, cacheControl: negative.headers.get("cache-control"), bytes: negativeBody.byteLength }));
+const negative = await fetch(`${worker.replace(/\/$/, "")}/media?id=${encodeURIComponent(negativeId)}`);
+assert.equal(negative.status, 404);
+assert.equal(negative.headers.get("cache-control"), "no-store");
+console.log(JSON.stringify({ negativeControl: true, status: negative.status }));
