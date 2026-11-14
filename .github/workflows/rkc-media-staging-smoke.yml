@@ -24,4 +24,6 @@ jobs:
       - name: Run isolated Cloudflare HTTP integration suite
         env:
           DRIVER_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.driver_url || 'https://rkc-media-test-runner-staging-20261114.redekalungacomunicacoes.workers.dev/__rkc_staging/run-20261114-a7d9c3e1' }}
-        run: curl --fail --silent --show-error --max-time 180 "$DRIVER_URL"
+        run: |
+          curl --silent --show-error --max-time 180 "$DRIVER_URL" | tee /tmp/rkc-staging-result.json
+          jq -e '.ok == true' /tmp/rkc-staging-result.json
