@@ -22,6 +22,7 @@ jobs:
           RKC_MEDIA_WORKER_URL: https://rkc-media-cache-staging-20261114.redekalungacomunicacoes.workers.dev
         run: node scripts/test-cloudflare-staging-fixtures.mjs
       - name: Verify production site and Supabase with read-only HTTP requests
+        if: always()
         env:
           SUPABASE_URL: https://yycfqeymdsjyulexwrlb.supabase.co
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_J76dp3g1EyY8GT52M-sYEw_zYirWFVF
