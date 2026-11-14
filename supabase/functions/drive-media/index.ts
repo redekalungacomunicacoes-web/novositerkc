@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
 
   const result = await admin.from("drive_files")
-      .select("id,drive_file_id,name,mime_type,size_bytes,module,entity_id,category")
+      .select("id,drive_file_id,name,mime_type,size_bytes,module,entity_id,category,updated_at,created_at")
       .eq("public_slug", slug).eq("visibility", "public").eq("status", "active").is("deleted_at", null).single();
   const file = result.data;
   if (result.error || !file) return new Response("Not found", { status: 404 });
@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
   // This authorization-only GET returns after all current visibility/link checks and
   // before downloading the original Drive file.
   if (authorizeOnly) {
-    return new Response(null, { status: 204, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+    return new Response(null, { status: 204, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-RKC-Media-Version": String(file.updated_at ?? file.created_at ?? file.id) } });
   }
 
   try {
