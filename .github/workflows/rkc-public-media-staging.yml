@@ -18,11 +18,6 @@ jobs:
   staging:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      SUPABASE_URL: ${{ secrets.RKC_STAGING_SUPABASE_URL }}
-      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.RKC_STAGING_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,42 +31,7 @@ jobs:
         run: |
           node --test tests/cloudflare-public-media-cache.test.mjs tests/drive-media-visibility.test.mjs tests/cloudflare-cache-purge-auth.test.mjs tests/public-media-url.test.mjs
           npm run build
-      - name: Validate staging credentials
-        run: |
-          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Missing CLOUDFLARE_API_TOKEN repository secret"; exit 1; }
-          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID repository secret"; exit 1; }
-          test -n "$SUPABASE_URL" || { echo "::error::Missing RKC_STAGING_SUPABASE_URL repository secret"; exit 1; }
-          test -n "$SUPABASE_PUBLISHABLE_KEY" || { echo "::error::Missing RKC_STAGING_SUPABASE_PUBLISHABLE_KEY repository secret"; exit 1; }
-      - name: Deploy isolated staging Worker
-        id: deploy
-        shell: bash
-        run: |
-          WORKER_NAME="rkc-public-materias-staging-${GITHUB_RUN_ID}"
-          echo "worker_name=$WORKER_NAME" >> "$GITHUB_OUTPUT"
-          cd cloudflare/workers/rkc-public-materias-cache
-          npx --yes wrangler@4.50.0 deploy worker.mjs \
-            --name "$WORKER_NAME" --compatibility-date=2026-11-13 \
-            --account-id "$CLOUDFLARE_ACCOUNT_ID" \
-            --var "SUPABASE_URL:$SUPABASE_URL" \
-            --var "SUPABASE_PUBLISHABLE_KEY:$SUPABASE_PUBLISHABLE_KEY" | tee "$GITHUB_WORKSPACE/deploy.log"
-          cd "$GITHUB_WORKSPACE"
-          URL="$(grep -Eo 'https://[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.workers\.dev' deploy.log | tail -n1)"
-          test -n "$URL" || { echo "::error::Could not determine isolated staging Worker URL"; exit 1; }
-          echo "worker_url=$URL" >> "$GITHUB_OUTPUT"
-      - name: Configure one-run staging-only purge secret
+      - name: Exercise isolated staging Worker over HTTPS
         env:
-          WORKER_NAME: ${{ steps.deploy.outputs.worker_name }}
-        run: |
-          SECRET="$(openssl rand -hex 32)"
-          printf '%s' "$SECRET" | npx --yes wrangler@4.50.0 secret put RKC_CACHE_PURGE_SECRET --name "$WORKER_NAME" --account-id "$CLOUDFLARE_ACCOUNT_ID"
-          echo "::add-mask::$SECRET"
-          echo "RKC_CACHE_PURGE_SECRET=$SECRET" >> "$GITHUB_ENV"
-      - name: Exercise real staging Worker over HTTPS
-        env:
-          RKC_MEDIA_WORKER_URL: ${{ steps.deploy.outputs.worker_url }}
+          RKC_MEDIA_WORKER_URL: https://rkc-public-materias-staging-20261114.redekalungacomunicacoes.workers.dev
         run: node scripts/test-cloudflare-public-media.mjs
-      - name: Delete temporary staging Worker
-        if: always() && steps.deploy.outputs.worker_name != ''
-        env:
-          WORKER_NAME: ${{ steps.deploy.outputs.worker_name }}
-        run: npx --yes wrangler@4.50.0 delete --name "$WORKER_NAME" --force --account-id "$CLOUDFLARE_ACCOUNT_ID" || true
