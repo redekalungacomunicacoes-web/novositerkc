@@ -4,17 +4,26 @@ import worker from "../cloudflare/workers/rkc-public-materias-cache/worker.mjs";
 
 const env = { SUPABASE_URL: "https://project.supabase.co", SUPABASE_PUBLISHABLE_KEY: "public-test-key" };
 
+function isAuthorizationProbe(url, init) {
+  assert.equal(init.method, "GET", "Supabase Edge Functions authorization probe must use GET");
+  assert.equal(new URL(url).searchParams.get("authorize"), "1");
+  assert.equal(init.headers.Range, "bytes=0-0");
+  assert.equal(init.cf, undefined, "authorization probe must bypass Workers Cache options");
+  return true;
+}
+
 test("JPEG, PNG and WebP use an authorized cacheable origin subrequest", async () => {
   const oldFetch = globalThis.fetch;
   try {
     for (const type of ["image/jpeg", "image/png", "image/webp"]) {
       let driveOriginGets = 0;
       let cachedBody = null;
-      globalThis.fetch = async (_url, init) => {
-        if (init.method === "HEAD") {
-          assert.equal(init.cf, undefined, "authorization probe must bypass Workers Cache options");
+      globalThis.fetch = async (url, init) => {
+        if (new URL(url).searchParams.get("authorize") === "1") {
+          isAuthorizationProbe(url, init);
           return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
         }
+        assert.equal(init.method, "GET");
         assert.equal(init.cf.cacheEverything, true);
         assert.equal(init.cf.cacheTtl, 60);
         assert.deepEqual(init.cf.cacheTags, ["rkc-public-media", "media-materia-image"]);
@@ -39,8 +48,9 @@ test("revocation blocks stale cached bytes immediately even when purge fails", a
   const oldFetch = globalThis.fetch;
   let revoked = false;
   let originGets = 0;
-  globalThis.fetch = async (_url, init) => {
-    if (init.method === "HEAD") {
+  globalThis.fetch = async (url, init) => {
+    if (new URL(url).searchParams.get("authorize") === "1") {
+      isAuthorizationProbe(url, init);
       return revoked
         ? new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } })
         : new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
@@ -73,8 +83,11 @@ test("revocation blocks stale cached bytes immediately even when purge fails", a
 test("authorization outage fails closed instead of using a cached origin response", async () => {
   const oldFetch = globalThis.fetch;
   let originGets = 0;
-  globalThis.fetch = async (_url, init) => {
-    if (init.method === "HEAD") throw new Error("origin unavailable");
+  globalThis.fetch = async (url, init) => {
+    if (new URL(url).searchParams.get("authorize") === "1") {
+      isAuthorizationProbe(url, init);
+      throw new Error("origin unavailable");
+    }
     originGets++;
     return new Response("must not be reached", { status: 200, headers: { "Content-Type": "image/jpeg" } });
   };
@@ -88,15 +101,13 @@ test("authorization outage fails closed instead of using a cached origin respons
 
 test("private or unknown media is rejected before the cacheable GET", async () => {
   const oldFetch = globalThis.fetch;
-  let gets = 0;
-  globalThis.fetch = async (_url, init) => {
-    assert.equal(init.method, "HEAD");
+  globalThis.fetch = async (url, init) => {
+    isAuthorizationProbe(url, init);
     return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
   };
   try {
     const response = await worker.fetch(new Request("https://worker.example/media?id=materia-private"), env, {});
     assert.equal(response.status, 404);
-    assert.equal(gets, 0);
   } finally { globalThis.fetch = oldFetch; }
 });
 
@@ -136,12 +147,20 @@ test("purge endpoint authenticates, validates tags and reports Cloudflare failur
   } finally { globalThis.fetch = oldFetch; }
 });
 
-test("legacy authorized HEAD response remains compatible during staged rollout", async () => {
+test("legacy Range authorization response remains compatible during staged rollout", async () => {
   const oldFetch = globalThis.fetch;
   let imageGets = 0;
-  globalThis.fetch = async (_url, init) => {
-    if (init.method === "HEAD") {
-      return new Response(null, { status: 200, headers: { "Cache-Control": "public, max-age=0, s-maxage=0, must-revalidate" } });
+  globalThis.fetch = async (url, init) => {
+    if (new URL(url).searchParams.get("authorize") === "1") {
+      isAuthorizationProbe(url, init);
+      return new Response(new Uint8Array([1]), {
+        status: 206,
+        headers: {
+          "Cache-Control": "public, max-age=0, s-maxage=0, must-revalidate",
+          "Content-Type": "image/jpeg",
+          "Content-Range": "bytes 0-0/3000",
+        },
+      });
     }
     imageGets++;
     return new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "Content-Type": "image/jpeg", "CF-Cache-Status": "MISS" } });
@@ -156,8 +175,11 @@ test("legacy authorized HEAD response remains compatible during staged rollout",
 test("Range requests are sliced from the full cached object", async () => {
   const oldFetch = globalThis.fetch;
   let gets = 0;
-  globalThis.fetch = async (_url, init) => {
-    if (init.method === "HEAD") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+  globalThis.fetch = async (url, init) => {
+    if (new URL(url).searchParams.get("authorize") === "1") {
+      isAuthorizationProbe(url, init);
+      return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+    }
     gets++;
     assert.equal(init.headers, undefined, "the cacheable origin request remains a full GET");
     return new Response(new Uint8Array([0, 1, 2, 3, 4]), { status: 200, headers: { "Content-Type": "image/jpeg", "CF-Cache-Status": "HIT" } });
