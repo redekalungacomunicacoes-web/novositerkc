@@ -3,6 +3,14 @@ import { createHash } from "node:crypto";
 
 const worker = process.env.RKC_MEDIA_WORKER_URL;
 if (!worker) throw new Error("RKC_MEDIA_WORKER_URL must point to an isolated staging Worker; production URLs are not accepted by default.");
+const originProbeUrl = new URL("/functions/v1/drive-media", "https://yycfqeymdsjyulexwrlb.supabase.co");
+originProbeUrl.searchParams.set("id", "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe");
+const originProbe = await fetch(originProbeUrl, { method: "HEAD", headers: { "Cache-Control": "no-cache" } });
+console.log(JSON.stringify({
+  originHeadStatus: originProbe.status,
+  originHeadCacheControl: originProbe.headers.get("cache-control"),
+  originHeadContentType: originProbe.headers.get("content-type"),
+}));
 const cases = [
   { id: "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe", type: "image/jpeg" },
   { id: "materia-1f8zr8fWpoZz30ipp0aJfaCggeO6WxDhT", type: "image/png" },
