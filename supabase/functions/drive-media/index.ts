@@ -153,6 +153,12 @@ Deno.serve(async (req) => {
     }
 
 
+  // Lightweight authorization probe used by the Cloudflare Worker before every cache read.
+  // It runs all current visibility/link checks above but never downloads the original Drive file.
+  if (req.method === "HEAD") {
+    return new Response(null, { status: 204, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+  }
+
   try {
     const drive = await downloadDriveFile(file.drive_file_id, req.headers.get("Range"));
     const headers = new Headers();
