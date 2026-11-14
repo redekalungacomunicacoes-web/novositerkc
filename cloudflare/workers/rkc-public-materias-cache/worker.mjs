@@ -26,9 +26,10 @@ function upstreamMediaUrl(env, id, authorizationProbe = false) {
   return originUrl;
 }
 
-function mediaCacheRequest(id) {
+function mediaCacheRequest(id, version) {
   const url = new URL("https://rkc-media-cache.internal/media");
   url.searchParams.set("id", id);
+  url.searchParams.set("v", version);
   return new Request(url, { method: "GET" });
 }
 
@@ -53,7 +54,8 @@ async function authorizePublicMedia(id, env) {
     && cacheControl.includes("s-maxage=0");
   const authorized = authorization.status === 204 && cacheControl === "no-store" || legacyRangeAuthorized;
   if (!authorized) return { ok: false, status: authorization.status === 404 ? 404 : 503 };
-  return { ok: true };
+  const version = authorization.headers.get("X-RKC-Media-Version") || authorization.headers.get("ETag") || authorization.headers.get("Last-Modified") || "legacy";
+  return { ok: true, version };
 }
 
 async function servePublicMedia(request, url, env, ctx) {
@@ -79,7 +81,7 @@ async function servePublicMedia(request, url, env, ctx) {
 
   let cachedResponse;
   try {
-    cachedResponse = await ctx.exports.MediaCache.fetch(mediaCacheRequest(id));
+    cachedResponse = await ctx.exports.MediaCache.fetch(mediaCacheRequest(id, authorization.version));
   } catch {
     return new Response("Mídia temporariamente indisponível.", {
       status: 502,
@@ -197,7 +199,8 @@ export class MediaCache extends WorkerEntrypoint {
   async fetch(request) {
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
-    if (request.method !== "GET" || url.pathname !== "/media" || url.searchParams.size !== 1 || !PUBLIC_MEDIA_ID.test(id || "")) {
+    const version = url.searchParams.get("v");
+    if (request.method !== "GET" || url.pathname !== "/media" || url.searchParams.size !== 2 || !PUBLIC_MEDIA_ID.test(id || "") || !/^[A-Za-z0-9_.:+-]{1,80}$/.test(version || "")) {
       return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
     }
 
