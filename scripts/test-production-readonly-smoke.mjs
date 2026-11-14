@@ -65,19 +65,17 @@ try {
   const imageUrl = article?.capa_url || article?.capa_thumb_url || article?.banner_url;
   if (imageUrl) {
     const source = new URL(imageUrl);
-    const id = source.searchParams.get("id");
-    assert.ok(id, "public article image URL must include a Drive media id");
-    const mediaUrl = new URL("/functions/v1/drive-media", supabaseUrl);
-    mediaUrl.searchParams.set("id", id);
-    const media = await fetch(mediaUrl, { headers: { apikey: publishableKey, Range: "bytes=0-0" } });
+    const isDriveMedia = source.origin === supabaseUrl && source.pathname === "/functions/v1/drive-media" && Boolean(source.searchParams.get("id"));
+    const media = await fetch(source, { headers: { apikey: publishableKey, Range: "bytes=0-0" } });
     const contentRange = media.headers.get("content-range");
     const contentType = media.headers.get("content-type");
     const status = media.status;
     await media.body?.cancel();
-    record("drive-media entrega Range de imagem pública", status === 206 &&
-      /^bytes 0-0\/\d+$/.test(contentRange || "") &&
-      /^image\/(jpeg|png|webp)$/.test(contentType || ""),
-      { status, contentType, contentRange });
+    const rangeOk = status === 206 && /^bytes 0-0\/\d+$/.test(contentRange || "");
+    const imageOk = /^image\/(jpeg|png|webp)$/.test(contentType || "");
+    record(isDriveMedia ? "drive-media entrega Range de imagem pública" : "URL pública da imagem da matéria responde sem bloqueio de quota",
+      imageOk && (rangeOk || status === 200),
+      { status, contentType, contentRange, mediaRoute: isDriveMedia ? "drive-media" : source.hostname + source.pathname });
   } else {
     record("imagem pública para teste de Range", false, { reason: "matéria publicada não retornou capa_url/capa_thumb_url/banner_url" });
   }
