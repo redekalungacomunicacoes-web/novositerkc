@@ -1,5 +1,8 @@
 name: RKC Public Media Cache Staging
 on:
+  push:
+    branches:
+      - 'codex/rkc-public-media-cache'
   pull_request:
     paths:
       - 'cloudflare/workers/rkc-public-materias-cache/**'
