@@ -152,3 +152,22 @@ test("legacy authorized HEAD response remains compatible during staged rollout",
     assert.equal(imageGets, 1);
   } finally { globalThis.fetch = oldFetch; }
 });
+
+test("Range requests are sliced from the full cached object", async () => {
+  const oldFetch = globalThis.fetch;
+  let gets = 0;
+  globalThis.fetch = async (_url, init) => {
+    if (init.method === "HEAD") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+    gets++;
+    assert.equal(init.headers, undefined, "the cacheable origin request remains a full GET");
+    return new Response(new Uint8Array([0, 1, 2, 3, 4]), { status: 200, headers: { "Content-Type": "image/jpeg", "CF-Cache-Status": "HIT" } });
+  };
+  try {
+    const response = await worker.fetch(new Request("https://worker.example/media?id=materia-range", { headers: { Range: "bytes=1-3" } }), env, {});
+    assert.equal(response.status, 206);
+    assert.equal(response.headers.get("Content-Range"), "bytes 1-3/5");
+    assert.equal(response.headers.get("Content-Length"), "3");
+    assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [1, 2, 3]);
+    assert.equal(gets, 1);
+  } finally { globalThis.fetch = oldFetch; }
+});
