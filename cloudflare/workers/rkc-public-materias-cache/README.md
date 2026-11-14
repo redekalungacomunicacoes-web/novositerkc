@@ -59,6 +59,14 @@ Os workflows de validação do commit mais recente continuam em execução; nenh
 - The exact subscribed Cloudflare plan still needs independent confirmation if Billing Read permission is unavailable.
 - Existing large images are not converted by this change. New uploads retain the existing optimization behavior; original Drive files are not modified.
 
+## Manual secret setup required before rollout
+
+The connected Supabase integration does not expose the secure Edge Function secret-collection flow for this project. The project owner must create one random secret (at least 32 random bytes) in a password manager and enter it directly in the two dashboards. Never send the value in chat, commit it, or place it in a workflow file.
+
+1. Supabase Dashboard → project `yycfqeymdsjyulexwrlb` → Edge Functions → Secrets. Add Key `RKC_CACHE_PURGE_SECRET` and the generated Value, then Save. Supabase applies new Edge Function secrets immediately; no function redeploy is required.
+2. Keep the same value securely for the Cloudflare step. Do not deploy a new production Worker yet.
+3. Only after the production `drive-media` probe returns 204 + `Cache-Control: no-store`, open Cloudflare Dashboard → Workers & Pages → `rkc-public-materias-cache` → Settings → Variables and Secrets → Add → Type **Secret** → name `RKC_CACHE_PURGE_SECRET` → paste the same value → Deploy. This deployment step is deliberately deferred until the compatibility gate passes.
+
 ## Rollout and rollback
 
 - Deploy the Worker and updated drive-media Edge Function only after automated checks, staging HTTPS tests and security checks pass.
