@@ -106,9 +106,9 @@ async function servePublicMedia(request, url, env, ctx) {
   responseHeaders.set("Access-Control-Allow-Origin", "*");
   responseHeaders.set("X-Content-Type-Options", "nosniff");
   responseHeaders.set("Cache-Control", "no-store");
-  responseHeaders.set("X-RKC-Media-Cache", (cachedResponse.headers.get("CF-Cache-Status") || "UNKNOWN").toUpperCase());
   const cacheStatus = (cachedResponse.headers.get("CF-Cache-Status") || "UNKNOWN").toUpperCase();
-  const originTransferBytes = cacheStatus === "HIT" ? 0 : Number(cachedResponse.headers.get("Content-Length") || 0);
+  responseHeaders.set("X-RKC-Media-Cache", cacheStatus);
+  const originTransferBytes = cacheStatus === "HIT" ? 0 : Number(cachedResponse.headers.get("X-RKC-Origin-Bytes") || cachedResponse.headers.get("Content-Length") || 0);
   responseHeaders.set("X-RKC-Origin-Transfer-Bytes", String(Number.isFinite(originTransferBytes) ? originTransferBytes : 0));
 
   if (cachedResponse.status !== 200 || !IMAGE_TYPES.has(contentType)) {
@@ -235,6 +235,7 @@ export class MediaCache extends WorkerEntrypoint {
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set("Cache-Control", cacheable ? `public, max-age=${MEDIA_TTL_SECONDS}` : "no-store");
     if (cacheable) headers.set("Cache-Tag", `rkc-public-media,media-${id}`);
+    if (cacheable) headers.set("X-RKC-Origin-Bytes", headers.get("Content-Length") || "0");
     return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
   }
 
