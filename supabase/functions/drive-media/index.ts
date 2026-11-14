@@ -91,10 +91,13 @@ async function downloadDriveFile(fileId: string, range: string | null, requestSi
       signal: controller.signal,
       headers,
     });
-  } finally {
+  } catch (error) {
     clearTimeout(timeout);
     requestSignal.removeEventListener("abort", abortBeforeHeaders);
+    throw error;
   }
+  clearTimeout(timeout);
+  requestSignal.removeEventListener("abort", abortBeforeHeaders);
 
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
@@ -240,7 +243,13 @@ Deno.serve(async (req) => {
       if (value) headers.set(name, value);
     }
     return new Response(forwardDriveBody(drive.body!, req.signal), { status: drive.status, headers });
-  } catch {
-    return new Response("Media unavailable", { status: 502 });
+  } catch (error) {
+    console.error("drive-media upstream request failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+    });
+    return new Response("Media unavailable", {
+      status: 502,
+      headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+    });
   }
 });
