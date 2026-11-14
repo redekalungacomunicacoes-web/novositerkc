@@ -30,9 +30,19 @@ Isolated source for the RKC Cloudflare Worker media route. This source is paired
 
 ## Tests and staging
 
-Automated tests cover JPEG/PNG/WebP cache subrequests, HIT/MISS behavior, authorization failure, private media, simulated revocation with failed purge, legacy HEAD compatibility, byte ranges and purge authentication/failure.
+Automated tests cover JPEG/PNG/WebP cache subrequests, HIT/MISS behavior, authorization failure, private media, simulated revocation with failed purge, byte ranges and purge authentication/failure.
 
-The normal PR workflows run the automated unit/type/build checks. A manual GitHub Actions workflow accepts the URL of an isolated temporary Worker and runs the real HTTPS smoke test. For this mission, a temporary Worker with its own random purge secret was provisioned, tested and deleted. The staging Worker used the existing Supabase project only for read-only media validation and never targeted the production Worker. The live HTTP test was blocked because Supabase returned 402 with the explicit restriction code exceed_egress_quota.
+**Execução de 14/11/2026:**
+- Workers isolados ativos para teste: `rkc-media-origin-staging-20261114` e `rkc-media-cache-staging-20261114`. A origem é sintética; nenhum arquivo original ou registro privado foi acessado.
+- Workflow `43547410842`: staging HTTPS e smoke read-only de produção concluídos com sucesso.
+- HIT/MISS: JPEG 413 bytes, PNG 69 bytes e WebP 60 bytes. Em cada par, MISS seguido de HIT; a telemetria marcou 413/69/60 bytes no MISS e 0 no HIT. Total sintético evitado: **542 bytes**.
+- Range: 206, sem nova transferência de origem. Mídia privada: 404. Revogação de imagem já cacheada: 404 mesmo com purge não autorizado (401). Seis solicitações simultâneas retornaram corpos completos.
+- O workflow não contém mais a credencial temporária em texto. O segredo de staging foi rotacionado. O valor antigo permanece apenas no histórico de commits, mas está revogado; o histórico não foi reescrito para não alterar a cadeia de commits da PR.
+- Logs de produção: nenhum HTTP 402 após 01:45 UTC de 14/11; último 402 observado às 01:41 UTC. Para `drive-media`, 49 respostas 200 e nenhuma 5xx entre 01:45 e 02:40 UTC. No recorte móvel de 24h ainda aparecem 172 respostas 502 históricas, com a última em 13/11 às 12:42 UTC.
+- O teste explícito de compatibilidade de produção identificou um bloqueio: a Edge Function atual `drive-media` v30 responde ao probe `authorize=1` com 206 e `Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable`. O Worker exige 204 + `no-store` ou o fallback legado 206 + `s-maxage=0`; portanto, falha fechado e não deve ser implantado antes da atualização da função.
+- A função `cloudflare-cache-purge` ainda não está implantada no projeto Supabase, e o Worker de produção não possui o binding secreto de purge. A revogação continua segura sem purge, mas a integração de invalidação administrativa permanece pendente.
+
+Os workflows de validação de Materias, Projects, Tasks, Academia e institutional media passaram no commit `64e0bdea`. O smoke de staging passou; o workflow geral ficou vermelho somente pelo teste de compatibilidade da função de produção, que detectou corretamente o bloqueio descrito acima.
 
     node --test tests/cloudflare-public-media-cache.test.mjs tests/public-media-url.test.mjs tests/drive-media-visibility.test.mjs tests/cloudflare-cache-purge-auth.test.mjs
     RKC_MEDIA_WORKER_URL=<isolated-staging-worker> node scripts/test-cloudflare-public-media.mjs
@@ -49,4 +59,4 @@ The normal PR workflows run the automated unit/type/build checks. A manual GitHu
 
 - Deploy the Worker and updated drive-media Edge Function only after automated checks, staging HTTPS tests and security checks pass.
 - Rollback by restoring the previous Worker version and previous drive-media Edge Function version. Keep the previous deployment identifiers before rollout.
-- The new Worker is backward-compatible with the existing HEAD response during controlled staging, but the updated drive-media function is required to avoid a Drive download on every authorization probe.
+- The current production Edge Function v30 is not compatible with the authorization-only probe contract. Deploy the tested `drive-media` update first, verify 204 + no-store against a real public media slug, then deploy the Worker. The production baseline remains Worker version 4 (`166dd91f-b235-4552-bc66-092b8e1243cb`) and Edge Function version 30; restore these if a controlled rollout fails.
