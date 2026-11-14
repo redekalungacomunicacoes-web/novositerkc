@@ -84,11 +84,13 @@ async function downloadDriveFile(fileId: string, range?: string | null) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
+  if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRole) return new Response("Backend configuration error", { status: 500 });
-  const slug = new URL(req.url).searchParams.get("id")?.trim();
+  const requestUrl = new URL(req.url);
+  const slug = requestUrl.searchParams.get("id")?.trim();
+  const authorizeOnly = requestUrl.searchParams.get("authorize") === "1";
   if (!slug) return new Response("Not found", { status: 404 });
   const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
 
@@ -153,9 +155,10 @@ Deno.serve(async (req) => {
     }
 
 
-  // Lightweight authorization probe used by the Cloudflare Worker before every cache read.
-  // It runs all current visibility/link checks above but never downloads the original Drive file.
-  if (req.method === "HEAD") {
+  // GET is supported by the Supabase Edge Functions gateway; HEAD is not.
+  // This authorization-only GET returns after all current visibility/link checks and
+  // before downloading the original Drive file.
+  if (authorizeOnly) {
     return new Response(null, { status: 204, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   }
 
