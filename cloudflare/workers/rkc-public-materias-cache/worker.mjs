@@ -258,12 +258,8 @@ export default {
         "Cache-Control": "no-store",
       }});
     }
-    if (url.pathname.startsWith("/__test/") && env.MEDIA_ORIGIN) {
-      const fixtureUrl = new URL(url.pathname + url.search, env.SUPABASE_URL);
-      return env.MEDIA_ORIGIN.fetch(new Request(fixtureUrl.toString(), request));
-    }
     if (url.pathname === "/__test/purge-valid" && env.MEDIA_ORIGIN) {
-      if (request.method !== "POST" || !/^\\d{6,}$/.test(url.searchParams.get("testRun") || "")) {
+      if (request.method !== "POST" || !/^\d{6,}$/.test(url.searchParams.get("testRun") || "")) {
         return json({ error: "Rota de teste indisponível." }, 404);
       }
       const internalRequest = new Request(new URL("/__cache/purge", url), {
@@ -275,6 +271,10 @@ export default {
         body: await request.text(),
       });
       return purgePublicCache(internalRequest, env, ctx);
+    }
+    if (url.pathname.startsWith("/__test/") && env.MEDIA_ORIGIN) {
+      const fixtureUrl = new URL(url.pathname + url.search, env.SUPABASE_URL);
+      return env.MEDIA_ORIGIN.fetch(new Request(fixtureUrl.toString(), request));
     }
     if (url.pathname === "/__cache/purge") return purgePublicCache(request, env, ctx);
     if (url.pathname === "/media") return servePublicMedia(request, url, env, ctx);
