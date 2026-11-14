@@ -6,10 +6,13 @@ if (!worker) throw new Error("RKC_MEDIA_WORKER_URL must point to an isolated sta
 const originProbeUrl = new URL("/functions/v1/drive-media", "https://yycfqeymdsjyulexwrlb.supabase.co");
 originProbeUrl.searchParams.set("id", "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe");
 const originProbe = await fetch(originProbeUrl, { method: "HEAD", headers: { "Cache-Control": "no-cache" } });
+const originProbeBody = await originProbe.text();
 console.log(JSON.stringify({
   originHeadStatus: originProbe.status,
   originHeadCacheControl: originProbe.headers.get("cache-control"),
   originHeadContentType: originProbe.headers.get("content-type"),
+  originHeadErrorCode: originProbe.headers.get("sb-error-code"),
+  originHeadBody: originProbeBody.slice(0, 500),
 }));
 const cases = [
   { id: "materia-1Q0Z0z47Kxc5KV6hhO4cQkgbD-73xbuOe", type: "image/jpeg" },
