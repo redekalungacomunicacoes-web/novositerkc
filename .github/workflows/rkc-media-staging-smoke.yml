@@ -27,4 +27,5 @@ jobs:
           SUPABASE_URL: https://yycfqeymdsjyulexwrlb.supabase.co
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_J76dp3g1EyY8GT52M-sYEw_zYirWFVF
           RKC_SITE_URL: https://kalungacomunicacoes.org
+          RKC_PUBLIC_MEDIA_TEST_ID: materia-848886a9-c56d-4d8a-9523-1223b2481dd7
         run: node scripts/test-production-readonly-smoke.mjs
