@@ -107,6 +107,10 @@ async function downloadDriveFile(fileId: string, range: string | null, requestSi
   return response;
 }
 
+function notFound() {
+  return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+}
+
 function forwardDriveBody(body: ReadableStream<Uint8Array>, requestSignal: AbortSignal) {
   const reader = body.getReader();
   let finished = false;
@@ -150,27 +154,27 @@ function forwardDriveBody(body: ReadableStream<Uint8Array>, requestSignal: Abort
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
+  if (req.method !== "GET") return new Response("Method not allowed", { status: 405, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRole) return new Response("Backend configuration error", { status: 500 });
   const requestUrl = new URL(req.url);
   const slug = requestUrl.searchParams.get("id")?.trim();
   const authorizeOnly = requestUrl.searchParams.get("authorize") === "1";
-  if (!slug) return new Response("Not found", { status: 404 });
+  if (!slug) return notFound();
   const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
 
   const result = await admin.from("drive_files")
       .select("id,drive_file_id,name,mime_type,size_bytes,module,entity_id,category,updated_at,created_at")
       .eq("public_slug", slug).eq("visibility", "public").eq("status", "active").is("deleted_at", null).single();
   const file = result.data;
-  if (result.error || !file) return new Response("Not found", { status: 404 });
+  if (result.error || !file) return notFound();
 
     if (file.module === "materias") {
       const { data: materia } = await admin.from("materias")
         .select("id,status,capa_drive_file_id,capa_thumb_drive_file_id,banner_drive_file_id,audio_drive_file_id,content_blocks")
         .eq("id", file.entity_id).eq("status", "published").maybeSingle();
-      if (!materia) return new Response("Not found", { status: 404 });
+      if (!materia) return notFound();
       let linked = false;
       if (file.category === "cover") linked = materia.capa_drive_file_id === file.id;
       else if (file.category === "cover_thumb") linked = materia.capa_thumb_drive_file_id === file.id;
@@ -194,13 +198,13 @@ Deno.serve(async (req) => {
           .eq("materia_id", file.entity_id).eq("drive_file_id", file.id).maybeSingle();
         linked = !!item;
       }
-      if (!linked) return new Response("Not found", { status: 404 });
+      if (!linked) return notFound();
     }
 
     if (file.module === "projetos") {
       const { data: project } = await admin.from("projetos").select("id,capa_drive_file_id,cover_card_drive_file_id")
         .eq("id", file.entity_id).eq("publicado_transparencia", true).maybeSingle();
-      if (!project) return new Response("Not found", { status: 404 });
+      if (!project) return notFound();
       let linked = file.category === "cover" && project.capa_drive_file_id === file.id
         || file.category === "cover_card" && project.cover_card_drive_file_id === file.id;
       if (file.category === "gallery" || file.category === "gallery_thumb") {
@@ -208,16 +212,16 @@ Deno.serve(async (req) => {
           .eq(file.category === "gallery" ? "drive_file_id" : "thumb_drive_file_id", file.id).limit(1);
         linked = !!gallery?.length;
       }
-      if (!linked) return new Response("Not found", { status: 404 });
+      if (!linked) return notFound();
     }
 
     if (file.module === "team") {
       const member = await admin.from("equipe").select("id,avatar_drive_file_id,avatar_thumb_drive_file_id").eq("id", file.entity_id).eq("ativo", true).eq("is_public", true).maybeSingle();
-      if (!member.data) return new Response("Not found", { status: 404 });
+      if (!member.data) return notFound();
       if (file.category === "portfolio") {
         const item = await admin.from("team_member_portfolio").select("id").eq("drive_file_id", file.id).eq("is_public", true).maybeSingle();
-        if (!item.data) return new Response("Not found", { status: 404 });
-      } else if (![member.data.avatar_drive_file_id, member.data.avatar_thumb_drive_file_id].includes(file.id)) return new Response("Not found", { status: 404 });
+        if (!item.data) return notFound();
+      } else if (![member.data.avatar_drive_file_id, member.data.avatar_thumb_drive_file_id].includes(file.id)) return notFound();
     }
 
 
