@@ -204,7 +204,7 @@ test("GET authorization probe revalidates visibility without downloading origina
     assert.equal(response.headers.get("Cache-Control"), "no-store");
     assert.equal(downloads(), 0);
     state.articleStatus = "draft";
-    const revoked = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-head-probe", { method: "HEAD" }));
+    const revoked = await handler(new Request("https://project.supabase.co/functions/v1/drive-media?id=materia-head-probe&authorize=1", { method: "GET", headers: { Range: "bytes=0-0" } }));
     assert.equal(revoked.status, 404);
     assert.equal(downloads(), 0);
   });
