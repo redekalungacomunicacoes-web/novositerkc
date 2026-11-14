@@ -102,7 +102,7 @@ try {
   const validPurge = await fetch(workerUrl + "/__test/purge-valid?testRun=" + encodeURIComponent(testRunId), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tags: ["media-" + purgeId] }),
+    body: JSON.stringify({ purgeEverything: true }),
   });
   const afterValidPurge = await media(purgeId);
   const afterValidPurgeBytes = await body(afterValidPurge);
