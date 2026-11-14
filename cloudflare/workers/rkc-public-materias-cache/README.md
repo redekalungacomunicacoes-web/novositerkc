@@ -32,7 +32,7 @@ Isolated source for the RKC Cloudflare Worker media route. This source is paired
 
 Automated tests cover JPEG/PNG/WebP cache subrequests, HIT/MISS behavior, authorization failure, private media, simulated revocation with failed purge, legacy HEAD compatibility, byte ranges and purge authentication/failure.
 
-The GitHub Actions staging workflow runs automated tests and real HTTPS requests against the temporary Worker endpoint provisioned separately for this mission. The temporary Worker has its own random Cloudflare secret and uses the existing Supabase project only for read-only media validation. The smoke test never targets the production Worker. The Worker must be deleted after the staging round is complete.
+The normal PR workflows run the automated unit/type/build checks. A manual GitHub Actions workflow accepts the URL of an isolated temporary Worker and runs the real HTTPS smoke test. For this mission, a temporary Worker with its own random purge secret was provisioned, tested and deleted. The staging Worker used the existing Supabase project only for read-only media validation and never targeted the production Worker. The live HTTP test was blocked because Supabase returned 402 with the explicit restriction code exceed_egress_quota.
 
     node --test tests/cloudflare-public-media-cache.test.mjs tests/public-media-url.test.mjs tests/drive-media-visibility.test.mjs tests/cloudflare-cache-purge-auth.test.mjs
     RKC_MEDIA_WORKER_URL=<isolated-staging-worker> node scripts/test-cloudflare-public-media.mjs
