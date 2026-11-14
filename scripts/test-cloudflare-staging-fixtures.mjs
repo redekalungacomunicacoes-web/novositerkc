@@ -61,6 +61,21 @@ try {
     bytesAvoided += hitTransferBytes === 0 ? secondBytes.length : 0;
   }
 
+  const projectFixtureId = fixtureId("projeto-fixture-jpeg");
+  const projectFirst = await media(projectFixtureId);
+  const projectFirstBytes = await body(projectFirst);
+  const projectSecond = await media(projectFixtureId);
+  const projectSecondBytes = await body(projectSecond);
+  check("project gallery media uses the same MISS/HIT cache path",
+    projectFirst.status === 200 && projectSecond.status === 200 &&
+    projectFirst.headers.get("x-rkc-media-cache") === "MISS" &&
+    projectSecond.headers.get("x-rkc-media-cache") === "HIT" &&
+    projectFirstBytes.length === projectSecondBytes.length &&
+    projectFirstBytes.every((value, index) => value === projectSecondBytes[index]),
+    { first: projectFirst.headers.get("x-rkc-media-cache"), second: projectSecond.headers.get("x-rkc-media-cache"),
+      bodyBytes: projectFirstBytes.length, hitOriginBytes: projectSecond.headers.get("x-rkc-origin-transfer-bytes") });
+  bytesAvoided += Number(projectSecond.headers.get("x-rkc-origin-transfer-bytes") || 0) === 0 ? projectSecondBytes.length : 0;
+
   const range = await media(fixtureId("materia-fixture-jpeg"), { headers: { Range: "bytes=0-1" } });
   const rangeBytes = await body(range);
   const contentRange = range.headers.get("content-range") || "";
