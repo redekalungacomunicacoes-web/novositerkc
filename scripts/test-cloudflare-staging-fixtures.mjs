@@ -94,6 +94,28 @@ try {
   check("purge endpoint rejects unauthenticated staging requests", rejectedPurgeOnly.status === 401,
     { status: rejectedPurgeOnly.status });
 
+  const purgeId = fixtureId("materia-fixture-purge");
+  const purgeMiss = await media(purgeId);
+  const purgeMissBytes = await body(purgeMiss);
+  const purgeHit = await media(purgeId);
+  const purgeHitBytes = await body(purgeHit);
+  const validPurge = await fetch(workerUrl + "/__test/purge-valid?testRun=" + encodeURIComponent(testRunId), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tags: ["media-" + purgeId] }),
+  });
+  const afterValidPurge = await media(purgeId);
+  const afterValidPurgeBytes = await body(afterValidPurge);
+  check("authorized purge invalidates cached media and next request is MISS",
+    purgeMiss.status === 200 && purgeMiss.headers.get("x-rkc-media-cache") === "MISS" &&
+    purgeHit.status === 200 && purgeHit.headers.get("x-rkc-media-cache") === "HIT" &&
+    validPurge.status === 200 && afterValidPurge.status === 200 &&
+    afterValidPurge.headers.get("x-rkc-media-cache") === "MISS" &&
+    purgeMissBytes.length === purgeHitBytes.length && afterValidPurgeBytes.length === purgeMissBytes.length,
+    { first: purgeMiss.headers.get("x-rkc-media-cache"), second: purgeHit.headers.get("x-rkc-media-cache"),
+      purgeStatus: validPurge.status, afterPurge: afterValidPurge.headers.get("x-rkc-media-cache"),
+      originBytesAfterPurge: afterValidPurge.headers.get("x-rkc-origin-transfer-bytes") });
+
   const concurrentId = fixtureId("materia-fixture-concurrent");
   const concurrent = await Promise.all(Array.from({ length: 6 }, () => media(concurrentId)));
   const concurrentBodies = await Promise.all(concurrent.map(body));
