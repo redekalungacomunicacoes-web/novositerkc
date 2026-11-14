@@ -26,13 +26,14 @@ async function servePublicMedia(request, url, env) {
     return new Response("Method not allowed", { status: 405, headers: { "Cache-Control": "no-store" } });
   }
 
-  // This lightweight origin probe runs on every request. The outer Worker response is
-  // no-store, so Workers Cache cannot bypass this authorization check on later requests.
+  // Supabase Edge Functions support GET but not HEAD. The authorization-only GET
+  // uses Range: bytes=0-0 for compatibility with the currently deployed origin.
+  // The updated drive-media returns 204 + no-store before downloading any Drive bytes.
   let authorization;
   try {
-    authorization = await fetch(upstreamMediaUrl(env, id), {
-      method: "HEAD",
-      headers: { "Cache-Control": "no-cache" },
+    authorization = await fetch(upstreamMediaUrl(env, id, true), {
+      method: "GET",
+      headers: { "Range": "bytes=0-0", "Cache-Control": "no-cache" },
     });
   } catch {
     return new Response("Media authorization unavailable", {
@@ -41,11 +42,12 @@ async function servePublicMedia(request, url, env) {
     });
   }
   const authorizationHeaders = authorization.headers.get("Cache-Control") || "";
-  // During controlled rollout, accept the existing drive-media HEAD contract as well:
-  // it returns 200 only after the same visibility/link checks, with s-maxage=0.
-  // The updated function returns the preferred 204 + no-store probe without Drive download.
-  const authorized = authorization.status === 204 && authorizationHeaders === "no-store"
-    || authorization.status === 200 && authorizationHeaders === "public, max-age=0, s-maxage=0, must-revalidate";
+  const authorizationType = (authorization.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
+  const legacyRangeAuthorized = authorization.status === 206
+    && /^bytes 0-0\\/\\d+$/.test(authorization.headers.get("Content-Range") || "")
+    && IMAGE_TYPES.has(authorizationType)
+    && authorizationHeaders.includes("s-maxage=0");
+  const authorized = authorization.status === 204 && authorizationHeaders === "no-store" || legacyRangeAuthorized;
   if (!authorized) {
     return new Response(authorization.status === 404 ? "Not found" : "Media authorization unavailable", {
       status: authorization.status === 404 ? 404 : 503,
@@ -153,9 +155,10 @@ async function purgePublicCache(request, env, ctx) {
   }
 }
 
-function upstreamMediaUrl(env, id) {
+function upstreamMediaUrl(env, id, authorizationProbe = false) {
   const originUrl = new URL("/functions/v1/drive-media", env.SUPABASE_URL);
   originUrl.searchParams.set("id", id);
+  if (authorizationProbe) originUrl.searchParams.set("authorize", "1");
   return originUrl;
 }
 
