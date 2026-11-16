@@ -1975,7 +1975,7 @@ export function AdminMateriaForm() {
                 <style>{`
                   .article-content p,
                   .article-content .editorial-paragraph,
-                  .article-hero-subtitle { text-align: justify; text-indent: 1.5em; }
+                  .article-hero-subtitle { text-align: justify; text-indent: 0; }
                   .article-hero-title { text-align: justify; text-indent: 0; }
                   .article-content blockquote p,
                   .article-content aside p { text-align: left; text-indent: 0; }
