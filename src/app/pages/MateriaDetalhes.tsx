@@ -700,6 +700,11 @@ export function MateriaDetalhes() {
         </nav>
       )}
 
+      <style>{`
+        .article-content p { text-align: justify; text-indent: 1.5em; }
+        .article-content blockquote p,
+        .article-content aside p { text-align: left; text-indent: 0; }
+      `}</style>
       <article id="materia-conteudo" className="scroll-mt-20 py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           {loading && <div className="text-sm text-gray-500 mb-8">Carregando matéria...</div>}
