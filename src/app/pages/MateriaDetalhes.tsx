@@ -652,7 +652,7 @@ export function MateriaDetalhes() {
             </div>
 
             <h1
-              className="font-bold text-white leading-[1.1] max-w-4xl break-words"
+              className="article-hero-title font-bold text-white leading-[1.1] max-w-4xl break-words"
               style={{ fontSize: "clamp(1.95rem, 4.6vw, 4rem)" }}
             >
               {m.titulo}
@@ -660,7 +660,7 @@ export function MateriaDetalhes() {
 
             {!!m.resumo && (
               <p
-                className="mt-4 text-white/90 leading-relaxed max-w-3xl break-words"
+                className="article-hero-subtitle mt-4 text-white/90 leading-relaxed max-w-3xl break-words"
                 style={{ fontSize: "clamp(1rem, 2.2vw, 1.35rem)" }}
               >
                 {m.resumo}
@@ -700,6 +700,13 @@ export function MateriaDetalhes() {
         </nav>
       )}
 
+      <style>{`
+        .article-content p,
+        .article-hero-title,
+        .article-hero-subtitle { text-align: justify; text-indent: 1.5em; }
+        .article-content blockquote p,
+        .article-content aside p { text-align: left; text-indent: 0; }
+      `}</style>
       <article id="materia-conteudo" className="scroll-mt-20 py-16 md:py-24 bg-white">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           {loading && <div className="text-sm text-gray-500 mb-8">Carregando matéria...</div>}

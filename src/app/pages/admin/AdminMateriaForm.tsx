@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Save, ArrowLeft, Image as ImageIcon, Trash2, ChevronUp, ChevronDown, Plus, Copy, Bold, Italic, Pilcrow, Heading2, Quote, Highlighter, Rows3, Eye, X, PenLine } from "lucide-react";
@@ -141,6 +141,21 @@ function safeFilename(name: string) {
 
 function uid(prefix = "block") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function renderEditorialParagraphs(value: string) {
+  const normalized = String(value || "").replace(/\r\n/g, "\n").trim();
+  if (!normalized) return null;
+  return normalized.split(/\n{2,}/).map((paragraph, index) => (
+    <p key={`editorial-p-${index}`} className="editorial-paragraph">
+      {paragraph.split("\n").map((line, lineIndex, lines) => (
+        <Fragment key={`editorial-line-${lineIndex}`}>
+          {line}
+          {lineIndex < lines.length - 1 ? <br /> : null}
+        </Fragment>
+      ))}
+    </p>
+  ));
 }
 
 function normalizeHashtags(input: string): string[] {
@@ -1920,11 +1935,11 @@ export function AdminMateriaForm() {
                       <div className="mb-6 flex justify-end">{previewEditButton("image", "imagem principal")}</div>
                       
                       <div className="flex items-start justify-between gap-3">
-                        {previewEditField === "title" ? <input autoFocus value={previewData.title || ""} onChange={(event) => setValue("title", event.target.value, { shouldDirty: true, shouldValidate: true })} className="w-full rounded-md border px-3 py-2 text-3xl font-bold text-gray-950 sm:text-5xl" /> : <h1 className="max-w-4xl break-words text-3xl font-bold leading-[1.1] text-white sm:text-5xl">{previewData.title || "Título da matéria"}</h1>}
+                        {previewEditField === "title" ? <input autoFocus value={previewData.title || ""} onChange={(event) => setValue("title", event.target.value, { shouldDirty: true, shouldValidate: true })} className="w-full rounded-md border px-3 py-2 text-3xl font-bold text-gray-950 sm:text-5xl" /> : <h1 className="article-hero-title max-w-4xl break-words text-3xl font-bold leading-[1.1] text-white sm:text-5xl">{previewData.title || "Título da matéria"}</h1>}
                         {previewEditField !== "title" ? previewEditButton("title", "título") : null}
                       </div>
                       <div className="mt-4 flex items-start gap-3">
-                        {previewEditField === "subtitle" ? <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl text-gray-950" /> : <p className="max-w-3xl flex-1 text-lg leading-relaxed text-white/90 sm:text-xl">{previewData.subtitle || ""}</p>}
+                        {previewEditField === "subtitle" ? <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl text-gray-950" /> : <p className="article-hero-subtitle max-w-3xl flex-1 text-lg leading-relaxed text-white/90 sm:text-xl">{previewData.subtitle || ""}</p>}
                         {previewEditField !== "subtitle" ? previewEditButton("subtitle", "subtítulo") : null}
                       </div>
                       <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-white/90">
@@ -1957,6 +1972,14 @@ export function AdminMateriaForm() {
                   </div>
                 ) : null}
 
+                <style>{`
+                  .article-content p,
+                  .article-content .editorial-paragraph,
+                  .article-hero-title,
+                  .article-hero-subtitle { text-align: justify; text-indent: 1.5em; }
+                  .article-content blockquote p,
+                  .article-content aside p { text-align: left; text-indent: 0; }
+                `}</style>
                 <nav aria-label="Navegação da prévia da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
                   <div className="mx-auto flex max-w-5xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
                     <a href="#materia-conteudo-preview" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white">Matéria</a>
@@ -1990,7 +2013,7 @@ export function AdminMateriaForm() {
                               block.type === "heading" ? <h2 className="flex-1 pt-4 text-2xl font-bold text-gray-900">{plainText}</h2>
                               : block.type === "quote" ? <blockquote className="flex-1 border-l-4 border-green-700 pl-5 italic">{plainText}{block.author ? <cite className="mt-2 block text-sm not-italic text-gray-500">{block.author}</cite> : null}</blockquote>
                               : block.type === "highlight" ? <aside className="flex-1 rounded-lg bg-amber-50 p-5">{plainText}</aside>
-                              : <p className="flex-1 whitespace-pre-wrap">{plainText}</p>
+                              : <div className="flex-1">{renderEditorialParagraphs(block.text || plainText)}</div>
                             )}
                             {previewBlockActions(block, blockIndex, "bloco de texto")}
                           </div>
@@ -2001,7 +2024,7 @@ export function AdminMateriaForm() {
                     }) : (
                       <section className="space-y-2">
                         <div className="flex items-start justify-between gap-3">
-                          {previewEditField === "legacyContent" ? <textarea autoFocus value={previewData.content || ""} onChange={(event) => setValue("content", event.target.value, { shouldDirty: true })} rows={10} className="w-full rounded-md border p-3" /> : <div className="flex-1 whitespace-pre-wrap">{previewData.content || "O conteúdo da matéria aparecerá aqui."}</div>}
+                          {previewEditField === "legacyContent" ? <textarea autoFocus value={previewData.content || ""} onChange={(event) => setValue("content", event.target.value, { shouldDirty: true })} rows={10} className="w-full rounded-md border p-3" /> : <div className="flex-1">{renderEditorialParagraphs(previewData.content || "O conteúdo da matéria aparecerá aqui.")}</div>}
                           {previewEditButton("legacyContent", "conteúdo")}
                         </div>
                         {previewAddBlockMenu(0)}
