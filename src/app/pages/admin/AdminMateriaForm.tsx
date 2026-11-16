@@ -1935,11 +1935,11 @@ export function AdminMateriaForm() {
                       <div className="mb-6 flex justify-end">{previewEditButton("image", "imagem principal")}</div>
                       
                       <div className="flex items-start justify-between gap-3">
-                        {previewEditField === "title" ? <input autoFocus value={previewData.title || ""} onChange={(event) => setValue("title", event.target.value, { shouldDirty: true, shouldValidate: true })} className="w-full rounded-md border px-3 py-2 text-3xl font-bold text-gray-950 sm:text-5xl" /> : <h1 className="max-w-4xl break-words text-3xl font-bold leading-[1.1] text-white sm:text-5xl">{previewData.title || "Título da matéria"}</h1>}
+                        {previewEditField === "title" ? <input autoFocus value={previewData.title || ""} onChange={(event) => setValue("title", event.target.value, { shouldDirty: true, shouldValidate: true })} className="w-full rounded-md border px-3 py-2 text-3xl font-bold text-gray-950 sm:text-5xl" /> : <h1 className="article-hero-title max-w-4xl break-words text-3xl font-bold leading-[1.1] text-white sm:text-5xl">{previewData.title || "Título da matéria"}</h1>}
                         {previewEditField !== "title" ? previewEditButton("title", "título") : null}
                       </div>
                       <div className="mt-4 flex items-start gap-3">
-                        {previewEditField === "subtitle" ? <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl text-gray-950" /> : <p className="max-w-3xl flex-1 text-lg leading-relaxed text-white/90 sm:text-xl">{previewData.subtitle || ""}</p>}
+                        {previewEditField === "subtitle" ? <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl text-gray-950" /> : <p className="article-hero-subtitle max-w-3xl flex-1 text-lg leading-relaxed text-white/90 sm:text-xl">{previewData.subtitle || ""}</p>}
                         {previewEditField !== "subtitle" ? previewEditButton("subtitle", "subtítulo") : null}
                       </div>
                       <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-white/90">
@@ -1974,7 +1974,9 @@ export function AdminMateriaForm() {
 
                 <style>{`
                   .article-content p,
-                  .article-content .editorial-paragraph { text-align: justify; text-indent: 1.5em; }
+                  .article-content .editorial-paragraph,
+                  .article-hero-title,
+                  .article-hero-subtitle { text-align: justify; text-indent: 1.5em; }
                   .article-content blockquote p,
                   .article-content aside p { text-align: left; text-indent: 0; }
                 `}</style>
