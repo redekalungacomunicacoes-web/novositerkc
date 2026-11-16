@@ -147,9 +147,9 @@ function renderEditorialParagraphs(value: string) {
   const normalized = String(value || "").replace(/\r\n/g, "\n").trim();
   if (!normalized) return null;
   return normalized.split(/\n{2,}/).map((paragraph, index) => (
-    <p key={\`editorial-p-\${index}\`} className="editorial-paragraph">
+    <p key={`editorial-p-\${index}`} className="editorial-paragraph">
       {paragraph.split("\n").map((line, lineIndex, lines) => (
-        <Fragment key={\`editorial-line-\${lineIndex}\`}>
+        <Fragment key={`editorial-line-\${lineIndex}`}>
           {line}
           {lineIndex < lines.length - 1 ? <br /> : null}
         </Fragment>
