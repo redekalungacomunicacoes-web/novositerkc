@@ -143,6 +143,21 @@ function uid(prefix = "block") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function renderEditorialParagraphs(value: string) {
+  const normalized = String(value || "").replace(/\\r\\n/g, "\\n").trim();
+  if (!normalized) return null;
+  return normalized.split(/\\n{2,}/).map((paragraph, index) => (
+    <p key={`editorial-p-${index}`} className="editorial-paragraph">
+      {paragraph.split("\\n").map((line, lineIndex, lines) => (
+        <Fragment key={`editorial-line-${lineIndex}`}>
+          {line}
+          {lineIndex < lines.length - 1 ? <br /> : null}
+        </Fragment>
+      ))}
+    </p>
+  ));
+}
+
 function normalizeHashtags(input: string): string[] {
   return Array.from(
     new Set(
@@ -1957,6 +1972,12 @@ export function AdminMateriaForm() {
                   </div>
                 ) : null}
 
+                <style>{`
+                  .article-content p,
+                  .article-content .editorial-paragraph { text-align: justify; text-indent: 1.5em; }
+                  .article-content blockquote p,
+                  .article-content aside p { text-align: left; text-indent: 0; }
+                `}</style>
                 <nav aria-label="Navegação da prévia da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
                   <div className="mx-auto flex max-w-5xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
                     <a href="#materia-conteudo-preview" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white">Matéria</a>
@@ -1990,7 +2011,7 @@ export function AdminMateriaForm() {
                               block.type === "heading" ? <h2 className="flex-1 pt-4 text-2xl font-bold text-gray-900">{plainText}</h2>
                               : block.type === "quote" ? <blockquote className="flex-1 border-l-4 border-green-700 pl-5 italic">{plainText}{block.author ? <cite className="mt-2 block text-sm not-italic text-gray-500">{block.author}</cite> : null}</blockquote>
                               : block.type === "highlight" ? <aside className="flex-1 rounded-lg bg-amber-50 p-5">{plainText}</aside>
-                              : <p className="flex-1 whitespace-pre-wrap">{plainText}</p>
+                              : <div className="flex-1">{renderEditorialParagraphs(block.text || plainText)}</div>
                             )}
                             {previewBlockActions(block, blockIndex, "bloco de texto")}
                           </div>
@@ -2001,7 +2022,7 @@ export function AdminMateriaForm() {
                     }) : (
                       <section className="space-y-2">
                         <div className="flex items-start justify-between gap-3">
-                          {previewEditField === "legacyContent" ? <textarea autoFocus value={previewData.content || ""} onChange={(event) => setValue("content", event.target.value, { shouldDirty: true })} rows={10} className="w-full rounded-md border p-3" /> : <div className="flex-1 whitespace-pre-wrap">{previewData.content || "O conteúdo da matéria aparecerá aqui."}</div>}
+                          {previewEditField === "legacyContent" ? <textarea autoFocus value={previewData.content || ""} onChange={(event) => setValue("content", event.target.value, { shouldDirty: true })} rows={10} className="w-full rounded-md border p-3" /> : <div className="flex-1">{renderEditorialParagraphs(previewData.content || "O conteúdo da matéria aparecerá aqui.")}</div>}
                           {previewEditButton("legacyContent", "conteúdo")}
                         </div>
                         {previewAddBlockMenu(0)}
