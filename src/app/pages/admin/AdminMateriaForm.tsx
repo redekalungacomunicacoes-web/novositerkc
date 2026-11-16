@@ -1939,7 +1939,7 @@ export function AdminMateriaForm() {
                         {previewEditField !== "title" ? previewEditButton("title", "título") : null}
                       </div>
                       <div className="mt-4 flex items-start gap-3">
-                        {previewEditField === "subtitle" ? <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl text-gray-950" /> : <p className="article-hero-subtitle max-w-3xl flex-1 text-lg leading-relaxed text-white/90 sm:text-xl">{previewData.subtitle || ""}</p>}
+                        {previewEditField === "subtitle" ? <textarea autoFocus value={previewData.subtitle || ""} onChange={(event) => setValue("subtitle", event.target.value, { shouldDirty: true })} rows={3} className="w-full rounded-md border p-3 text-xl text-gray-950" /> : <p className="article-hero-subtitle max-w-4xl flex-1 text-lg leading-relaxed text-white/90 sm:text-xl">{previewData.subtitle || ""}</p>}
                         {previewEditField !== "subtitle" ? previewEditButton("subtitle", "subtítulo") : null}
                       </div>
                       <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-white/90">
@@ -1975,8 +1975,8 @@ export function AdminMateriaForm() {
                 <style>{`
                   .article-content p,
                   .article-content .editorial-paragraph,
-                  .article-hero-title,
                   .article-hero-subtitle { text-align: justify; text-indent: 1.5em; }
+                  .article-hero-title { text-align: justify; text-indent: 0; }
                   .article-content blockquote p,
                   .article-content aside p { text-align: left; text-indent: 0; }
                 `}</style>
