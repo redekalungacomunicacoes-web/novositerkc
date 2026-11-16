@@ -660,7 +660,7 @@ export function MateriaDetalhes() {
 
             {!!m.resumo && (
               <p
-                className="article-hero-subtitle mt-4 text-white/90 leading-relaxed max-w-3xl break-words"
+                className="article-hero-subtitle mt-4 text-white/90 leading-relaxed max-w-4xl break-words"
                 style={{ fontSize: "clamp(1rem, 2.2vw, 1.35rem)" }}
               >
                 {m.resumo}
@@ -702,8 +702,8 @@ export function MateriaDetalhes() {
 
       <style>{`
         .article-content p,
-        .article-hero-title,
         .article-hero-subtitle { text-align: justify; text-indent: 1.5em; }
+        .article-hero-title { text-align: justify; text-indent: 0; }
         .article-content blockquote p,
         .article-content aside p { text-align: left; text-indent: 0; }
       `}</style>
