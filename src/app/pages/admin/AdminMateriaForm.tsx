@@ -240,8 +240,8 @@ function buildLegacyHtml(blocks: MateriaContentBlock[]) {
         const author = block.author ? `<cite>${block.author}</cite>` : "";
         return `<blockquote><p>${block.text || ""}</p>${author}</blockquote>`;
       }
-      if (block.type === "highlight") return `<aside>${block.text || ""}</aside>`;
-      return `<p>${block.text || ""}</p>`;
+      if (block.type === "highlight" && "text" in block) return `<aside>${block.text || ""}</aside>`;
+      return `<p>${"text" in block ? block.text || "" : ""}</p>`;
     })
     .join("\n");
 }
@@ -1019,7 +1019,7 @@ export function AdminMateriaForm() {
 
         return {
           id: block.id,
-          type: nextType,
+          type: nextType as MateriaTextBlockType,
           text,
           size: "size" in block ? block.size || "md" : "md",
           author: nextType === "quote" && "author" in block ? block.author || "" : "",
@@ -1533,7 +1533,7 @@ export function AdminMateriaForm() {
 
                         <textarea
                           id={`block-text-${block.id}`}
-                          value={block.text || ""}
+                          value={"text" in block ? block.text || "" : ""}
                           onChange={(e) => updateBlock(block.id, { text: e.target.value })}
                           className="w-full min-h-[120px] p-3 rounded-md border font-mono text-sm"
                           placeholder="Texto ao lado da imagem"
@@ -1558,7 +1558,7 @@ export function AdminMateriaForm() {
                           <button type="button" onClick={() => applyInlineTag(block.id, "strong")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Bold className="w-3 h-3" /> Negrito</button>
                           <button type="button" onClick={() => applyInlineTag(block.id, "em")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Italic className="w-3 h-3" /> Itálico</button>
                           <button type="button" onClick={() => applyInlineLink(block.id)} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted" title="Selecione o texto no campo e clique aqui">🔗 Inserir link</button>
-                          <select value={block.size || "md"} onChange={(e) => updateBlock(block.id, { size: e.target.value as TextBlock["size"] })} className="h-8 px-2 rounded-md border text-xs">
+                          <select value={("size" in block ? block.size : undefined) || "md"} onChange={(e) => updateBlock(block.id, { size: e.target.value as TextBlock["size"] })} className="h-8 px-2 rounded-md border text-xs">
                             <option value="sm">Texto pequeno</option>
                             <option value="md">Texto normal</option>
                             <option value="lg">Texto grande</option>
