@@ -201,7 +201,7 @@ function textSizeClass(size?: string) {
   return "text-lg";
 }
 
-function renderBlock(block: MateriaContentBlock) {
+export function renderMateriaContentBlock(block: MateriaContentBlock) {
   if (block.type === "chart") {
     const max = Math.max(1, ...block.data.map((item) => item.value));
     const colors = ["#0f7a3e", "#d97706", "#2563eb", "#9333ea", "#0891b2", "#be123c", "#65a30d", "#c2410c"];
@@ -743,7 +743,7 @@ export function MateriaDetalhes() {
             <>
               <div className="prose prose-lg max-w-none">
                 {hasBlocks ? (
-                  <div className="article-content">{m.contentBlocks.map((block) => renderBlock(block))}</div>
+                  <div className="article-content">{m.contentBlocks.map((block) => renderMateriaContentBlock(block))}</div>
                 ) : (
                   renderLegacyContent(m.conteudo)
                 )}
