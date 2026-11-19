@@ -2043,7 +2043,7 @@ export function AdminMateriaForm() {
                           </div>
                           <input aria-label="Fonte dos dados" value={block.source} onChange={(event) => updateBlock(block.id, { source: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Fonte dos dados" />
                           <input aria-label="Nota" value={block.note || ""} onChange={(event) => updateBlock(block.id, { note: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Nota opcional" />
-                        </div> : <div className="[&>figure]:my-0 [&>figure]:shadow-none">{renderMateriaContentBlock(block)}</div>
+                        </div> : <div className="[&>figure]:my-0 [&>figure]:shadow-none">{renderMateriaContentBlock(block)}</div>}
                         <div className="mt-3 flex justify-end">{previewBlockActions(block, blockIndex, "gráfico")}</div>
                       </section>;
                       if (block.type === "image") return (
