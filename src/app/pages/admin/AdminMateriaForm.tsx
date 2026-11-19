@@ -961,12 +961,45 @@ export function AdminMateriaForm() {
         newBlock = { id: uid("txt"), type, text: "", size: "md", author: "" };
       }
 
-      // Adicionar vários blocos deve ser rápido: não abre o novo bloco nem move a página.
+      const insertAt = Math.max(0, Math.min(position, prev.length));
       const next = [...prev];
-      next.splice(Math.max(0, Math.min(position, next.length)), 0, newBlock);
+      next.splice(insertAt, 0, newBlock);
+      setActiveBlock(insertAt);
       return next;
     });
   };
+
+  const renderAddBlockMenu = (position = blocks.length, compact = false) => (
+    <details className={compact ? "relative shrink-0" : "relative inline-block"}>
+      <summary className={compact
+        ? "flex cursor-pointer list-none items-center gap-1 rounded-lg bg-[#0f3d2e] px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#164d3b]"
+        : "mx-auto flex w-fit cursor-pointer list-none items-center gap-2 rounded-lg border border-dashed border-[#0f7a3e]/50 bg-[#0f7a3e]/5 px-4 py-2 text-sm font-medium text-[#0f3d2e] hover:bg-[#0f7a3e]/10"}>
+        <Plus className="h-4 w-4" /> {compact ? "Adicionar" : "Adicionar próximo bloco"}
+      </summary>
+      <div className={compact
+        ? "absolute right-0 z-30 mt-2 grid min-w-48 gap-1 rounded-xl border bg-card p-2 shadow-xl"
+        : "absolute left-1/2 z-30 mt-2 grid min-w-56 -translate-x-1/2 gap-1 rounded-xl border bg-card p-2 shadow-xl"}>
+        {([
+          ["paragraph", "Parágrafo", "Texto corrido"],
+          ["heading", "Subtítulo", "Título de seção"],
+          ["quote", "Citação", "Fala ou trecho destacado"],
+          ["highlight", "Destaque", "Informação importante"],
+          ["image", "Imagem", "Imagem em largura completa"],
+          ["image-text", "Imagem + texto", "Imagem acompanhada de texto"],
+          ["chart", "Gráfico", "Dados em barras visuais"],
+        ] as const).map(([type, label, description]) => (
+          <button key={type} type="button" onClick={(event) => {
+            addBlock(type, position);
+            const details = event.currentTarget.closest("details");
+            if (details) details.open = false;
+          }} className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-muted">
+            <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${type === "chart" ? "bg-amber-500" : type === "image" || type === "image-text" ? "bg-blue-500" : type === "quote" ? "bg-green-700" : type === "highlight" ? "bg-amber-300" : "bg-gray-400"}`} />
+            <span><span className="block text-sm font-medium">{label}</span><span className="block text-[11px] text-muted-foreground">{description}</span></span>
+          </button>
+        ))}
+      </div>
+    </details>
+  );
 
   const duplicateBlock = (blockId: string) => {
     if (!isMounted.current) return;
@@ -1402,49 +1435,23 @@ export function AdminMateriaForm() {
               {expandedSections.conteudo ? <ChevronUp className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
             </button>
             <div id="materia-conteudo-body" hidden={!expandedSections.conteudo} className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-4 mb-4">
+            <div className="flex items-center justify-between gap-3 border-b pb-3">
               <div>
-                <h3 className="font-semibold text-lg">Conteúdo em blocos</h3>
-                <p className="text-xs text-muted-foreground mt-1">As cores abaixo reproduzem a linguagem visual usada na matéria publicada.</p>
+                <h3 className="font-semibold text-base">Blocos da matéria</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">Monte o conteúdo na ordem em que será publicado.</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" title="Texto corrido da matéria" onClick={() => addBlock("paragraph")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.paragraph.button}`}><Pilcrow className="w-3.5 h-3.5" /> Parágrafo</button>
-                <button type="button" title="Título de seção em verde RKC" onClick={() => addBlock("heading")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.heading.button}`}><Heading2 className="w-3.5 h-3.5" /> Subtítulo</button>
-                <button type="button" title="Citação com barra verde e autor/fonte opcional" onClick={() => addBlock("quote")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.quote.button}`}><Quote className="w-3.5 h-3.5" /> Citação</button>
-                <button type="button" title="Caixa amarela para uma informação importante" onClick={() => addBlock("highlight")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.highlight.button}`}><Highlighter className="w-3.5 h-3.5" /> Destaque</button>
-                <button type="button" title="Imagem em largura completa" onClick={() => addBlock("image")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles.image.button}`}><ImageIcon className="w-3.5 h-3.5" /> Imagem</button>
-                <button type="button" title="Composição de imagem ao lado do texto" onClick={() => addBlock("image-text")} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors ${blockStyles["image-text"].button}`}><Rows3 className="w-3.5 h-3.5" /> Imagem + Texto</button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-              <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2">
-                <span className="font-semibold text-[#0F7A3E]">Subtítulo</span>
-                <span className="text-muted-foreground"> · título de seção verde</span>
-              </div>
-              <div className="rounded-md border-l-4 border-[#0F7A3E] bg-[#0F7A3E]/5 px-3 py-2">
-                <span className="font-semibold text-[#0F7A3E]">Citação</span>
-                <span className="text-muted-foreground"> · barra verde</span>
-              </div>
-              <div className="rounded-md border-l-4 border-[#F2B705] bg-[#FDF8E5] px-3 py-2">
-                <span className="font-semibold text-[#5f4b00]">Destaque</span>
-                <span className="text-[#5f4b00]/75"> · caixa amarela</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setActiveBlock(null)} className="px-3 py-1.5 text-xs rounded-md border hover:bg-muted transition-colors">
-                Recolher todos
-              </button>
-              <button type="button" onClick={() => setActiveBlock(-1)} className="px-3 py-1.5 text-xs rounded-md border hover:bg-muted transition-colors">
-                Expandir todos
-              </button>
+              {renderAddBlockMenu(0, true){'}'}
             </div>
 
             {blocks.length === 0 ? (
-              <div className="border-2 border-dashed rounded-lg p-6 text-sm text-muted-foreground">
-                Nenhum bloco ainda. Use os botões acima para montar a matéria em formato de blog.
+              <div className="rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/10 px-5 py-8 text-center">
+                <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary"><Plus className="h-5 w-5" /></div>
+                <p className="text-sm font-medium">Comece sua matéria por aqui</p>
+                <p className="mt-1 text-xs text-muted-foreground">Adicione texto, imagem, citação, gráfico e outros conteúdos.</p>
+                <div className="mt-4 flex justify-center">{renderAddBlockMenu(0)}</div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {blocks.map((block, index) => {
                   const isExpanded = activeBlock === -1 || activeBlock === index;
                   const isActive = activeBlock === index;
@@ -1587,6 +1594,7 @@ export function AdminMateriaForm() {
                   </div>
                 );
                 })}
+                <div className="pt-1">{renderAddBlockMenu(blocks.length)}</div>
               </div>
             )}
 
