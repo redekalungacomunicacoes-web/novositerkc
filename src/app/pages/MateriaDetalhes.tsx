@@ -165,7 +165,7 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
 
       if (block.type === "chart") {
         const data = Array.isArray(block.data) ? block.data.map((item: any) => ({ label: String(item?.label || ""), value: Number(item?.value) })).filter((item: any) => item.label && Number.isFinite(item.value)) : [];
-        return { id: block.id || `chart-${idx}`, type: "chart" as const, title: String(block.title || ""), source: String(block.source || ""), note: String(block.note || ""), data };
+        return { id: block.id || `chart-${idx}`, type: "chart" as const, title: String(block.title || ""), source: String(block.source || ""), note: String(block.note || ""), chartType: ["bar-vertical", "pie"].includes(block.chartType) ? block.chartType : "bar-horizontal", data };
       }
       if (block.type === "image-text") {
         return {
@@ -204,11 +204,20 @@ function textSizeClass(size?: string) {
 function renderBlock(block: MateriaContentBlock) {
   if (block.type === "chart") {
     const max = Math.max(1, ...block.data.map((item) => item.value));
+    const colors = ["#0f7a3e", "#d97706", "#2563eb", "#9333ea", "#0891b2", "#be123c", "#65a30d", "#c2410c"];
+    const total = block.data.reduce((sum, item) => sum + Math.max(0, item.value), 0);
+    let angle = 0;
+    const pieGradient = block.data.map((item, index) => {
+      const start = angle;
+      angle += total > 0 ? Math.max(0, item.value) / total * 360 : 0;
+      return `${colors[index % colors.length]} ${start}deg ${angle}deg`;
+    }).join(", ");
     return <figure key={block.id} className="my-10 rounded-xl border border-[#0f3d2e]/15 bg-[#f8faf7] p-5 sm:p-7">
       <figcaption className="mb-5 text-xl font-bold text-[#0f3d2e]">{block.title || "Gráfico"}</figcaption>
-      <div className="space-y-4" role="img" aria-label={`Gráfico de barras: ${block.title}`}>
-        {block.data.map((item, index) => <div key={index}><div className="mb-1 flex justify-between gap-3 text-sm"><span>{item.label}</span><strong>{item.value.toLocaleString("pt-BR")}</strong></div><div className="h-4 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#0f7a3e] motion-safe:animate-[chart-grow_1s_ease-out_both]" style={{ width: `${Math.max(0, item.value) / max * 100}%` }} /></div></div>)}
-      </div>
+      {block.chartType === "pie" ? <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center">
+        <div role="img" aria-label={`Gráfico de pizza: ${block.title}`} className="h-56 w-56 shrink-0 rounded-full shadow-inner" style={{ background: `conic-gradient(${pieGradient || "#d1d5db 0deg 360deg"})` }} />
+        <ul className="w-full space-y-2">{block.data.map((item, index) => <li key={index} className="flex items-center justify-between gap-3 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: colors[index % colors.length] }} /><span>{item.label}</span></span><strong className="shrink-0">{item.value.toLocaleString("pt-BR")}{total > 0 ? ` · ${(Math.max(0, item.value) / total * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%` : ""}</strong></li>)}</ul>
+      </div> : block.chartType === "bar-vertical" ? <div role="img" aria-label={`Gráfico de barras verticais: ${block.title}`} className="flex h-64 items-end justify-around gap-3 border-b border-gray-300 px-1 pt-4">{block.data.map((item, index) => <div key={index} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"><strong className="text-xs">{item.value.toLocaleString("pt-BR")}</strong><div className="flex w-full flex-1 items-end"><div className="mx-auto w-full max-w-16 rounded-t-md bg-[#0f7a3e] motion-safe:animate-[chart-grow_1s_ease-out_both]" style={{ height: `${Math.max(0, item.value) / max * 88}%` }} /></div><span className="w-full truncate text-center text-xs" title={item.label}>{item.label}</span></div>)}</div> : <div className="space-y-4" role="img" aria-label={`Gráfico de barras horizontais: ${block.title}`}>{block.data.map((item, index) => <div key={index}><div className="mb-1 flex justify-between gap-3 text-sm"><span>{item.label}</span><strong>{item.value.toLocaleString("pt-BR")}</strong></div><div className="h-4 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#0f7a3e] motion-safe:animate-[chart-grow_1s_ease-out_both]" style={{ width: `${Math.max(0, item.value) / max * 100}%` }} /></div></div>)}</div>}
       {block.note ? <p className="mt-4 text-sm text-gray-600">{block.note}</p> : null}
       {block.source ? <p className="mt-2 text-xs text-gray-500">Fonte: {block.source}</p> : null}
       <style>{`@keyframes chart-grow { from { width: 0; } }`}</style>
