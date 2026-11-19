@@ -14,6 +14,7 @@ import {
 } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 import { YouTubeVideoPicker } from "./YouTubeVideoPicker";
+import { renderMateriaContentBlock } from "../MateriaDetalhes";
 
 type MateriaEditorSection = "principal" | "conteudo" | "publicacao" | "capa" | "banner" | "seo";
 
@@ -1333,9 +1334,9 @@ export function AdminMateriaForm() {
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" aria-pressed={editorMode === "traditional"} onClick={() => { setEditorMode("traditional"); setShowPreview(false); }} className={`px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "traditional" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>Editor tradicional</button>
+          <button type="button" aria-pressed={editorMode === "traditional"} onClick={() => { setEditorMode("traditional"); setShowPreview(false); }} className={`px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "traditional" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>Editor por campos</button>
           <button type="button" aria-pressed={editorMode === "preview"} onClick={() => { setEditorMode("preview"); setPreviewInterviewId(null); setShowPreview(true); }} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "preview" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>
-            <Eye className="h-4 w-4" /> Editor com prévia
+            <Eye className="h-4 w-4" /> Editor visual
           </button>
           <button type="button" onClick={async () => { if (id) { try { await cleanupUnreferencedMateriaFiles(id); } catch (cleanupError) { console.warn("[materia-drive] cancelamento com limpeza pendente", cleanupError); } } navigate("/admin/materias"); }} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
           <button type="button" onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
@@ -1956,9 +1957,10 @@ export function AdminMateriaForm() {
             <section aria-labelledby="materia-preview-title" className="w-full bg-white">
               <div className="flex items-center justify-between gap-3 border-b bg-white px-4 py-3">
                 <div>
-                  <h2 id="materia-preview-title" className="font-semibold">Editor com prévia</h2>
-                  <p className="text-xs text-muted-foreground">Visualização da página da matéria. Edite os elementos diretamente nesta página.</p>
+                  <h2 id="materia-preview-title" className="font-semibold">Editor visual</h2>
+                  <p className="text-xs text-muted-foreground">Visualização baseada no layout publicado. Edite os elementos diretamente na página.</p>
                 </div>
+                <button type="button" onClick={() => { setEditorMode("traditional"); setActiveTab("entrevistas"); setShowPreview(false); }} className="shrink-0 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">Entrevistas ({interviews.length})</button>
                 
               </div>
               <div className="w-full">
@@ -2017,14 +2019,17 @@ export function AdminMateriaForm() {
                   .article-content blockquote p,
                   .article-content aside p { text-align: left; text-indent: 0; }
                 `}</style>
-                <nav aria-label="Navegação da prévia da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
-                  <div className="mx-auto flex max-w-5xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
-                    <a href="#materia-conteudo-preview" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white">Matéria</a>
-                    {interviews.length > 0 ? <a href="#entrevistas-preview" className="shrink-0 rounded-full border border-[#0F7A3E] px-4 py-2 text-sm font-semibold text-[#0F7A3E]">Entrevistas <span className="ml-1 rounded-full bg-[#0F7A3E]/10 px-2 py-0.5 text-xs">{interviews.length}</span></a> : null}
+                {interviews.length > 0 ? <nav aria-label="Navegação das entrevistas da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
+                  <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-2 px-4 py-3 sm:px-6 lg:px-8">
+                    {interviews.slice(0, 3).map((interview, index) => <button key={interview.id} type="button" onClick={() => { setPreviewInterviewId(interview.id); document.getElementById("entrevistas-preview")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-[#0F7A3E] px-3 py-2 text-xs font-semibold text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 sm:text-sm">
+                      {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0F7A3E]/10 text-xs">{index + 1}</span>}
+                      <span className="min-w-0 break-words">{/^entrevista\\s+com\\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
+                    </button>)}
+                    {interviews.length > 3 ? <a href="#entrevistas-preview" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#0F7A3E] text-xl font-medium text-[#0F7A3E]">+</a> : null}
                   </div>
-                </nav>
+                </nav> : null}
                 <article id="materia-conteudo-preview" className="mx-auto max-w-4xl bg-white px-4 py-16 sm:px-6 md:py-24 lg:px-8">
-                  <div className="prose prose-lg mt-8 max-w-none text-gray-700"><div className="article-content space-y-6">
+                  <div className="prose prose-lg max-w-none text-gray-700"><div className="article-content">
                     {blocks.length > 0 ? blocks.map((block, blockIndex) => {
                       const editKey = `block:${block.id}`;
                       const editing = previewEditField === editKey;
@@ -2038,32 +2043,29 @@ export function AdminMateriaForm() {
                           </div>
                           <input aria-label="Fonte dos dados" value={block.source} onChange={(event) => updateBlock(block.id, { source: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Fonte dos dados" />
                           <input aria-label="Nota" value={block.note || ""} onChange={(event) => updateBlock(block.id, { note: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Nota opcional" />
-                        </div> : <><h3 className="mb-4 text-xl font-bold text-[#0f3d2e]">{block.title}</h3>{block.data.map((item, index) => { const max = Math.max(1, ...block.data.map((entry) => entry.value)); return <div key={index} className="mb-3"><div className="mb-1 flex justify-between text-sm"><span>{item.label}</span><strong>{item.value.toLocaleString("pt-BR")}</strong></div><div className="h-3 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#0f7a3e] transition-all duration-1000" style={{ width: `${Math.max(0, item.value) / max * 100}%` }} /></div></div>; })}{block.note ? <p className="mt-3 text-xs text-gray-600">{block.note}</p> : null}{block.source ? <p className="mt-2 text-xs text-gray-500">Fonte: {block.source}</p> : null}</>}
+                        </div> : <div className="[&>figure]:my-0 [&>figure]:shadow-none">{renderMateriaContentBlock(block)}</div>}
                         <div className="mt-3 flex justify-end">{previewBlockActions(block, blockIndex, "gráfico")}</div>
                       </section>;
                       if (block.type === "image") return (
-                        <figure key={block.id} className="space-y-3">
-                          {blockPreviews[block.id] || block.url ? <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[640px] rounded-lg object-contain" /> : null}
-                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div>
-                          {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} aria-label="URL da imagem" className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} aria-label="Legenda da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} aria-label="Crédito da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Crédito" /></div> : block.caption ? <figcaption className="mt-2 text-center text-sm text-gray-500">{block.caption}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption> : null}
-                        </figure>
+                        <div key={block.id} className="my-8">{editing ? <div className="space-y-2"><div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} aria-label="URL da imagem" className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} aria-label="Legenda da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} aria-label="Crédito da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Crédito" /></div> : <>{renderMateriaContentBlock({ ...block, url: blockPreviews[block.id] || block.url })}<div className="mt-2 flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div></>}</div>
                       );
                       if (block.type === "image-text") return (
-                        <figure key={block.id} className="space-y-3">
-                          <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[500px] rounded-lg object-contain" />
-                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div>
-                          {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" placeholder="Texto ao lado da imagem" /></div> : <><figcaption className="text-center text-sm text-gray-500">{block.caption || ""}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption><p className="whitespace-pre-wrap">{block.text || ""}</p></>}
-                        </figure>
+                        <div key={block.id} className="my-8">
+                          {editing ? <div className="space-y-2">
+                            <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div>
+                            <input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" />
+                            <input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Legenda" />
+                            <input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Crédito" />
+                            <textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" placeholder="Texto ao lado da imagem" />
+                          </div> : <>{renderMateriaContentBlock({ ...block, url: blockPreviews[block.id] || block.url })}<div className="mt-2 flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div></>}
+                        </div>
                       );
                       const plainText = (block.text || "").replace(/<[^>]*>/g, "");
                       return (
                         <section key={block.id} className="space-y-2">
                           <div className="flex items-start justify-between gap-3">
                             {editing ? <textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" /> : (
-                              block.type === "heading" ? <h2 className="flex-1 pt-4 text-2xl font-bold text-gray-900">{plainText}</h2>
-                              : block.type === "quote" ? <blockquote className="flex-1 border-l-4 border-green-700 pl-5 italic">{plainText}{block.author ? <cite className="mt-2 block text-sm not-italic text-gray-500">{block.author}</cite> : null}</blockquote>
-                              : block.type === "highlight" ? <aside className="flex-1 rounded-lg bg-amber-50 p-5">{plainText}</aside>
-                              : <div className="flex-1">{renderEditorialParagraphs(block.text || plainText)}</div>
+                              <div className="min-w-0 flex-1">{renderMateriaContentBlock(block)}</div>
                             )}
                             {previewBlockActions(block, blockIndex, "bloco de texto")}
                           </div>
