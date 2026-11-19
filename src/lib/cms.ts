@@ -58,7 +58,8 @@ export type MateriaContentBlock =
       credit?: string;
       align?: "left" | "right";
       width?: "sm" | "md" | "lg";
-    };
+    }
+  | { id: string; type: "chart"; title: string; source: string; note?: string; data: Array<{ label: string; value: number }> };
 
 export type ProjetoRow = {
   meta?: any;
