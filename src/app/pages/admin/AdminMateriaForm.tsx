@@ -1440,7 +1440,7 @@ export function AdminMateriaForm() {
                 <h3 className="font-semibold text-base">Blocos da matéria</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">Monte o conteúdo na ordem em que será publicado.</p>
               </div>
-              {renderAddBlockMenu(0, true){'}'}
+              {renderAddBlockMenu(blocks.length, true){'}'}
             </div>
 
             {blocks.length === 0 ? (
