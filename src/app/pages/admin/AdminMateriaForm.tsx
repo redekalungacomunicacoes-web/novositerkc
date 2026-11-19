@@ -191,7 +191,7 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
 
       if (block.type === "chart") {
         const data = Array.isArray(block.data) ? block.data.map((item: any) => ({ label: String(item?.label || ""), value: Number(item?.value) })).filter((item: any) => item.label && Number.isFinite(item.value)) : [];
-        return { id: block.id || uid("chart"), type: "chart" as const, title: String(block.title || ""), source: String(block.source || ""), note: String(block.note || ""), data };
+        return { id: block.id || uid("chart"), type: "chart" as const, title: String(block.title || ""), source: String(block.source || ""), note: String(block.note || ""), chartType: ["bar-vertical", "pie"].includes(block.chartType) ? block.chartType : "bar-horizontal", data };
       }
       if (block.type === "image-text") {
         return {
@@ -1488,9 +1488,25 @@ export function AdminMateriaForm() {
                     </div>
 
                     {isExpanded && (block.type === "chart" ? (
-                      <div className="space-y-3 px-4 pb-4">
+                      <div className="space-y-4 px-4 pb-4">
                         <input value={block.title} onChange={(e) => updateBlock(block.id, { title: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Título do gráfico" />
-                        <textarea value={block.data.map((item) => item.label + ";" + item.value).join(String.fromCharCode(10))} onChange={(e) => updateBlock(block.id, { data: e.target.value.split(String.fromCharCode(10)).map((line) => { const [label, rawValue] = line.split(";"); return { label: (label || "").trim(), value: Number(rawValue) }; }).filter((item) => item.label && Number.isFinite(item.value)) })} rows={5} className="w-full rounded-md border p-3 font-mono text-sm" placeholder="Categoria;25" />
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <label className="space-y-1 text-xs font-medium text-muted-foreground">Formato do gráfico
+                            <select value={block.chartType || "bar-horizontal"} onChange={(e) => updateBlock(block.id, { chartType: e.target.value as "bar-horizontal" | "bar-vertical" | "pie" })} className="h-10 w-full rounded-md border bg-background px-3 text-sm text-foreground">
+                              <option value="bar-horizontal">Barras horizontais</option><option value="bar-vertical">Barras verticais</option><option value="pie">Pizza (setores)</option>
+                            </select>
+                          </label>
+                          <div className="flex items-end text-xs text-muted-foreground">Escolha o formato conforme o tipo de comparação que deseja apresentar.</div>
+                        </div>
+                        <div className="overflow-hidden rounded-lg border">
+                          <div className="grid grid-cols-[minmax(0,1fr)_112px_36px] gap-2 bg-muted/60 px-3 py-2 text-xs font-semibold"><span>Categoria</span><span>Valor</span><span /></div>
+                          {block.data.map((item, rowIndex) => <div key={rowIndex} className="grid grid-cols-[minmax(0,1fr)_112px_36px] items-center gap-2 border-t px-3 py-2">
+                            <input aria-label={`Categoria ${rowIndex + 1}`} value={item.label} onChange={(e) => updateBlock(block.id, { data: block.data.map((row, i) => i === rowIndex ? { ...row, label: e.target.value } : row) })} className="h-9 min-w-0 rounded-md border px-2 text-sm" placeholder="Nome da categoria" />
+                            <input aria-label={`Valor da categoria ${rowIndex + 1}`} type="number" step="any" value={item.value} onChange={(e) => updateBlock(block.id, { data: block.data.map((row, i) => i === rowIndex ? { ...row, value: e.target.value === "" ? 0 : Number(e.target.value) } : row) })} className="h-9 w-full rounded-md border px-2 text-sm" placeholder="0" />
+                            <button type="button" disabled={block.data.length <= 1} onClick={() => updateBlock(block.id, { data: block.data.filter((_, i) => i !== rowIndex) })} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30" aria-label={`Remover categoria ${rowIndex + 1}`}><Trash2 className="h-4 w-4" /></button>
+                          </div>)}
+                          <div className="border-t bg-muted/20 p-2"><button type="button" onClick={() => updateBlock(block.id, { data: [...block.data, { label: "", value: 0 }] })} className="inline-flex items-center gap-1 rounded-md border bg-background px-3 py-2 text-xs font-medium hover:bg-muted"><Plus className="h-3.5 w-3.5" /> Adicionar categoria</button></div>
+                        </div>
                         <input value={block.source} onChange={(e) => updateBlock(block.id, { source: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Fonte dos dados" />
                         <input value={block.note || ""} onChange={(e) => updateBlock(block.id, { note: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Nota opcional" />
                       </div>
@@ -2015,7 +2031,11 @@ export function AdminMateriaForm() {
                       if (block.type === "chart") return <section key={block.id} className="my-8 rounded-xl border bg-[#f8faf7] p-5">
                         {editing ? <div className="space-y-3">
                           <input aria-label="Título do gráfico" value={block.title} onChange={(event) => updateBlock(block.id, { title: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Título do gráfico" />
-                          <textarea aria-label="Dados do gráfico" value={block.data.map((item) => `${item.label};${item.value}`).join("\n")} onChange={(event) => updateBlock(block.id, { data: event.target.value.split("\n").map((line) => { const [label, value] = line.split(";"); return { label: (label || "").trim(), value: Number(value) }; }).filter((item) => item.label && Number.isFinite(item.value)) })} rows={5} className="w-full rounded-md border p-3 font-mono text-sm" placeholder="Categoria;25" />
+                          <select aria-label="Formato do gráfico" value={block.chartType || "bar-horizontal"} onChange={(event) => updateBlock(block.id, { chartType: event.target.value as "bar-horizontal" | "bar-vertical" | "pie" })} className="h-10 w-full rounded-md border bg-background px-3"><option value="bar-horizontal">Barras horizontais</option><option value="bar-vertical">Barras verticais</option><option value="pie">Pizza (setores)</option></select>
+                          <div className="overflow-hidden rounded-lg border"><div className="grid grid-cols-[minmax(0,1fr)_100px_36px] gap-2 bg-muted/60 px-3 py-2 text-xs font-semibold"><span>Categoria</span><span>Valor</span><span /></div>
+                            {block.data.map((item, rowIndex) => <div key={rowIndex} className="grid grid-cols-[minmax(0,1fr)_100px_36px] items-center gap-2 border-t px-2 py-2"><input aria-label={`Categoria ${rowIndex + 1}`} value={item.label} onChange={(event) => updateBlock(block.id, { data: block.data.map((row, i) => i === rowIndex ? { ...row, label: event.target.value } : row) })} className="h-9 min-w-0 rounded border px-2 text-sm" placeholder="Categoria" /><input aria-label={`Valor ${rowIndex + 1}`} type="number" step="any" value={item.value} onChange={(event) => updateBlock(block.id, { data: block.data.map((row, i) => i === rowIndex ? { ...row, value: event.target.value === "" ? 0 : Number(event.target.value) } : row) })} className="h-9 w-full rounded border px-2 text-sm" /><button type="button" disabled={block.data.length <= 1} onClick={() => updateBlock(block.id, { data: block.data.filter((_, i) => i !== rowIndex) })} className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 disabled:opacity-30" aria-label="Remover categoria"><Trash2 className="h-4 w-4" /></button></div>)}
+                            <div className="border-t p-2"><button type="button" onClick={() => updateBlock(block.id, { data: [...block.data, { label: "", value: 0 }] })} className="inline-flex items-center gap-1 rounded border px-3 py-2 text-xs"><Plus className="h-3.5 w-3.5" /> Adicionar categoria</button></div>
+                          </div>
                           <input aria-label="Fonte dos dados" value={block.source} onChange={(event) => updateBlock(block.id, { source: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Fonte dos dados" />
                           <input aria-label="Nota" value={block.note || ""} onChange={(event) => updateBlock(block.id, { note: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Nota opcional" />
                         </div> : <><h3 className="mb-4 text-xl font-bold text-[#0f3d2e]">{block.title}</h3>{block.data.map((item, index) => { const max = Math.max(1, ...block.data.map((entry) => entry.value)); return <div key={index} className="mb-3"><div className="mb-1 flex justify-between text-sm"><span>{item.label}</span><strong>{item.value.toLocaleString("pt-BR")}</strong></div><div className="h-3 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#0f7a3e] transition-all duration-1000" style={{ width: `${Math.max(0, item.value) / max * 100}%` }} /></div></div>; })}{block.note ? <p className="mt-3 text-xs text-gray-600">{block.note}</p> : null}{block.source ? <p className="mt-2 text-xs text-gray-500">Fonte: {block.source}</p> : null}</>}
