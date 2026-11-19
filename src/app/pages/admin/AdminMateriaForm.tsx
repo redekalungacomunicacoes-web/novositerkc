@@ -234,6 +234,7 @@ function buildLegacyHtml(blocks: MateriaContentBlock[]) {
         return `<section><figure><img src="${block.url}" alt="${block.caption || "Imagem da matéria"}"/>${caption}</figure><div>${block.text || ""}</div></section>`;
       }
 
+      if (block.type === "chart") return "";
       if (block.type === "heading") return `<h2>${block.text || ""}</h2>`;
       if (block.type === "quote") {
         const author = block.author ? `<cite>${block.author}</cite>` : "";
@@ -996,6 +997,8 @@ export function AdminMateriaForm() {
         const credit = "credit" in block ? block.credit || "" : "";
         const drive_file_id = "drive_file_id" in block ? block.drive_file_id : undefined;
 
+        if (nextType === "chart") return { id: block.id, type: "chart", title: "Novo gráfico", source: "", note: "", data: [{ label: "Categoria 1", value: 10 }, { label: "Categoria 2", value: 20 }] };
+
         if (nextType === "image") {
           return { id: block.id, type: "image", url, caption, credit, drive_file_id };
         }
@@ -1477,7 +1480,14 @@ export function AdminMateriaForm() {
                       </div>
                     </div>
 
-                    {isExpanded && (block.type === "image" ? (
+                    {isExpanded && (block.type === "chart" ? (
+                      <div className="space-y-3 px-4 pb-4">
+                        <input value={block.title} onChange={(e) => updateBlock(block.id, { title: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Título do gráfico" />
+                        <textarea value={block.data.map((item) => item.label + ";" + item.value).join(String.fromCharCode(10))} onChange={(e) => updateBlock(block.id, { data: e.target.value.split(String.fromCharCode(10)).map((line) => { const [label, rawValue] = line.split(";"); return { label: (label || "").trim(), value: Number(rawValue) }; }).filter((item) => item.label && Number.isFinite(item.value)) })} rows={5} className="w-full rounded-md border p-3 font-mono text-sm" placeholder="Categoria;25" />
+                        <input value={block.source} onChange={(e) => updateBlock(block.id, { source: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Fonte dos dados" />
+                        <input value={block.note || ""} onChange={(e) => updateBlock(block.id, { note: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Nota opcional" />
+                      </div>
+                    ) : block.type === "image" ? (
                       <div className="px-4 pb-4">
                       <div className="space-y-3">
                         <div className="flex gap-2">
