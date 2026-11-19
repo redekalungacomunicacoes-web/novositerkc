@@ -14,6 +14,7 @@ import {
 } from "@/lib/cms";
 import { supabase } from "@/lib/supabase";
 import { YouTubeVideoPicker } from "./YouTubeVideoPicker";
+import { renderMateriaContentBlock } from "../MateriaDetalhes";
 
 type MateriaEditorSection = "principal" | "conteudo" | "publicacao" | "capa" | "banner" | "seo";
 
@@ -2038,15 +2039,11 @@ export function AdminMateriaForm() {
                           </div>
                           <input aria-label="Fonte dos dados" value={block.source} onChange={(event) => updateBlock(block.id, { source: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Fonte dos dados" />
                           <input aria-label="Nota" value={block.note || ""} onChange={(event) => updateBlock(block.id, { note: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Nota opcional" />
-                        </div> : <><h3 className="mb-4 text-xl font-bold text-[#0f3d2e]">{block.title}</h3>{block.data.map((item, index) => { const max = Math.max(1, ...block.data.map((entry) => entry.value)); return <div key={index} className="mb-3"><div className="mb-1 flex justify-between text-sm"><span>{item.label}</span><strong>{item.value.toLocaleString("pt-BR")}</strong></div><div className="h-3 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#0f7a3e] transition-all duration-1000" style={{ width: `${Math.max(0, item.value) / max * 100}%` }} /></div></div>; })}{block.note ? <p className="mt-3 text-xs text-gray-600">{block.note}</p> : null}{block.source ? <p className="mt-2 text-xs text-gray-500">Fonte: {block.source}</p> : null}</>}
+                        </div> : <div className="[&>figure]:my-0 [&>figure]:shadow-none">{renderMateriaContentBlock(block)}</div>
                         <div className="mt-3 flex justify-end">{previewBlockActions(block, blockIndex, "gráfico")}</div>
                       </section>;
                       if (block.type === "image") return (
-                        <figure key={block.id} className="space-y-3">
-                          {blockPreviews[block.id] || block.url ? <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[640px] rounded-lg object-contain" /> : null}
-                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div>
-                          {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} aria-label="URL da imagem" className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} aria-label="Legenda da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} aria-label="Crédito da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Crédito" /></div> : block.caption ? <figcaption className="mt-2 text-center text-sm text-gray-500">{block.caption}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption> : null}
-                        </figure>
+                        <div key={block.id} className="my-8">{editing ? <div className="space-y-2"><div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} aria-label="URL da imagem" className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} aria-label="Legenda da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} aria-label="Crédito da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Crédito" /></div> : <>{renderMateriaContentBlock(block)}<div className="mt-2 flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div></>}</div>
                       );
                       if (block.type === "image-text") return (
                         <figure key={block.id} className="space-y-3">
@@ -2060,10 +2057,7 @@ export function AdminMateriaForm() {
                         <section key={block.id} className="space-y-2">
                           <div className="flex items-start justify-between gap-3">
                             {editing ? <textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" /> : (
-                              block.type === "heading" ? <h2 className="flex-1 pt-4 text-2xl font-bold text-gray-900">{plainText}</h2>
-                              : block.type === "quote" ? <blockquote className="flex-1 border-l-4 border-green-700 pl-5 italic">{plainText}{block.author ? <cite className="mt-2 block text-sm not-italic text-gray-500">{block.author}</cite> : null}</blockquote>
-                              : block.type === "highlight" ? <aside className="flex-1 rounded-lg bg-amber-50 p-5">{plainText}</aside>
-                              : <div className="flex-1">{renderEditorialParagraphs(block.text || plainText)}</div>
+                              <div className="min-w-0 flex-1">{renderMateriaContentBlock(block)}</div>
                             )}
                             {previewBlockActions(block, blockIndex, "bloco de texto")}
                           </div>
