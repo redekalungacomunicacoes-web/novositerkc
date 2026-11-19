@@ -1334,9 +1334,9 @@ export function AdminMateriaForm() {
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" aria-pressed={editorMode === "traditional"} onClick={() => { setEditorMode("traditional"); setShowPreview(false); }} className={`px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "traditional" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>Editor tradicional</button>
+          <button type="button" aria-pressed={editorMode === "traditional"} onClick={() => { setEditorMode("traditional"); setShowPreview(false); }} className={`px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "traditional" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>Editor por campos</button>
           <button type="button" aria-pressed={editorMode === "preview"} onClick={() => { setEditorMode("preview"); setPreviewInterviewId(null); setShowPreview(true); }} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded-md transition-colors ${editorMode === "preview" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} disabled={loading}>
-            <Eye className="h-4 w-4" /> Editor com prévia
+            <Eye className="h-4 w-4" /> Editor visual
           </button>
           <button type="button" onClick={async () => { if (id) { try { await cleanupUnreferencedMateriaFiles(id); } catch (cleanupError) { console.warn("[materia-drive] cancelamento com limpeza pendente", cleanupError); } } navigate("/admin/materias"); }} className="px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted transition-colors" disabled={loading}>Cancelar</button>
           <button type="button" onClick={handleSubmit(onSubmit)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm" disabled={loading}>
@@ -1957,9 +1957,10 @@ export function AdminMateriaForm() {
             <section aria-labelledby="materia-preview-title" className="w-full bg-white">
               <div className="flex items-center justify-between gap-3 border-b bg-white px-4 py-3">
                 <div>
-                  <h2 id="materia-preview-title" className="font-semibold">Editor com prévia</h2>
-                  <p className="text-xs text-muted-foreground">Visualização da página da matéria. Edite os elementos diretamente nesta página.</p>
+                  <h2 id="materia-preview-title" className="font-semibold">Editor visual</h2>
+                  <p className="text-xs text-muted-foreground">Visualização baseada no layout publicado. Edite os elementos diretamente na página.</p>
                 </div>
+                <button type="button" onClick={() => { setEditorMode("traditional"); setActiveTab("entrevistas"); setShowPreview(false); }} className="shrink-0 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">Entrevistas ({interviews.length})</button>
                 
               </div>
               <div className="w-full">
@@ -2025,7 +2026,7 @@ export function AdminMateriaForm() {
                   </div>
                 </nav>
                 <article id="materia-conteudo-preview" className="mx-auto max-w-4xl bg-white px-4 py-16 sm:px-6 md:py-24 lg:px-8">
-                  <div className="prose prose-lg mt-8 max-w-none text-gray-700"><div className="article-content space-y-6">
+                  <div className="prose prose-lg max-w-none text-gray-700"><div className="article-content">
                     {blocks.length > 0 ? blocks.map((block, blockIndex) => {
                       const editKey = `block:${block.id}`;
                       const editing = previewEditField === editKey;
