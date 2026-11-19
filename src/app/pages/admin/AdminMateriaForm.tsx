@@ -110,12 +110,8 @@ const blockStyles: Record<
     badge: "bg-blue-500 text-white",
     button: "bg-blue-100 hover:bg-blue-200",
   },
-  "image-text": {
-    border: "border-emerald-700",
-    bg: "bg-emerald-50",
-    badge: "bg-emerald-700 text-white",
-    button: "bg-emerald-100 hover:bg-emerald-200",
-  },
+  "image-text": { border: "border-emerald-700", bg: "bg-emerald-50", badge: "bg-emerald-700 text-white", button: "bg-emerald-100 hover:bg-emerald-200" },
+  chart: { border: "border-amber-500", bg: "bg-amber-50", badge: "bg-amber-500 text-gray-950", button: "bg-amber-100 hover:bg-amber-200" },
 };
 
 const blockTypeLabels: Record<BlockType, string> = {
@@ -125,6 +121,7 @@ const blockTypeLabels: Record<BlockType, string> = {
   highlight: "Destaque",
   image: "Imagem",
   "image-text": "Imagem + Texto",
+  chart: "Gráfico",
 };
 
 function safeFilename(name: string) {
@@ -192,6 +189,10 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
         };
       }
 
+      if (block.type === "chart") {
+        const data = Array.isArray(block.data) ? block.data.map((item: any) => ({ label: String(item?.label || ""), value: Number(item?.value) })).filter((item: any) => item.label && Number.isFinite(item.value)) : [];
+        return { id: block.id || uid("chart"), type: "chart" as const, title: String(block.title || ""), source: String(block.source || ""), note: String(block.note || ""), data };
+      }
       if (block.type === "image-text") {
         return {
           id: block.id || uid("imgtxt"),
@@ -233,13 +234,14 @@ function buildLegacyHtml(blocks: MateriaContentBlock[]) {
         return `<section><figure><img src="${block.url}" alt="${block.caption || "Imagem da matéria"}"/>${caption}</figure><div>${block.text || ""}</div></section>`;
       }
 
+      if (block.type === "chart") return "";
       if (block.type === "heading") return `<h2>${block.text || ""}</h2>`;
       if (block.type === "quote") {
         const author = block.author ? `<cite>${block.author}</cite>` : "";
         return `<blockquote><p>${block.text || ""}</p>${author}</blockquote>`;
       }
-      if (block.type === "highlight") return `<aside>${block.text || ""}</aside>`;
-      return `<p>${block.text || ""}</p>`;
+      if (block.type === "highlight" && "text" in block) return `<aside>${block.text || ""}</aside>`;
+      return `<p>${"text" in block ? block.text || "" : ""}</p>`;
     })
     .join("\n");
 }
@@ -943,13 +945,15 @@ export function AdminMateriaForm() {
     }
   };
 
-  const addBlock = (type: MateriaTextBlockType | "image" | "image-text", position = blocks.length) => {
+  const addBlock = (type: MateriaTextBlockType | "image" | "image-text" | "chart", position = blocks.length) => {
     if (!isMounted.current) return;
     setBlocks((prev) => {
       if (!isMounted.current) return prev;
       let newBlock: MateriaContentBlock;
 
-      if (type === "image") {
+      if (type === "chart") {
+        newBlock = { id: uid("chart"), type: "chart", title: "Título do gráfico", source: "", note: "", data: [{ label: "Categoria 1", value: 10 }, { label: "Categoria 2", value: 20 }] };
+      } else if (type === "image") {
         newBlock = { id: uid("img"), type: "image", url: "", caption: "", credit: "" };
       } else if (type === "image-text") {
         newBlock = { id: uid("imgtxt"), type: "image-text", url: "", text: "", caption: "", credit: "", align: "left", width: "md" };
@@ -993,6 +997,8 @@ export function AdminMateriaForm() {
         const credit = "credit" in block ? block.credit || "" : "";
         const drive_file_id = "drive_file_id" in block ? block.drive_file_id : undefined;
 
+        if (nextType === "chart") return { id: block.id, type: "chart", title: "Novo gráfico", source: "", note: "", data: [{ label: "Categoria 1", value: 10 }, { label: "Categoria 2", value: 20 }] };
+
         if (nextType === "image") {
           return { id: block.id, type: "image", url, caption, credit, drive_file_id };
         }
@@ -1013,7 +1019,7 @@ export function AdminMateriaForm() {
 
         return {
           id: block.id,
-          type: nextType,
+          type: nextType as MateriaTextBlockType,
           text,
           size: "size" in block ? block.size || "md" : "md",
           author: nextType === "quote" && "author" in block ? block.author || "" : "",
@@ -1474,7 +1480,14 @@ export function AdminMateriaForm() {
                       </div>
                     </div>
 
-                    {isExpanded && (block.type === "image" ? (
+                    {isExpanded && (block.type === "chart" ? (
+                      <div className="space-y-3 px-4 pb-4">
+                        <input value={block.title} onChange={(e) => updateBlock(block.id, { title: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Título do gráfico" />
+                        <textarea value={block.data.map((item) => item.label + ";" + item.value).join(String.fromCharCode(10))} onChange={(e) => updateBlock(block.id, { data: e.target.value.split(String.fromCharCode(10)).map((line) => { const [label, rawValue] = line.split(";"); return { label: (label || "").trim(), value: Number(rawValue) }; }).filter((item) => item.label && Number.isFinite(item.value)) })} rows={5} className="w-full rounded-md border p-3 font-mono text-sm" placeholder="Categoria;25" />
+                        <input value={block.source} onChange={(e) => updateBlock(block.id, { source: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Fonte dos dados" />
+                        <input value={block.note || ""} onChange={(e) => updateBlock(block.id, { note: e.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Nota opcional" />
+                      </div>
+                    ) : block.type === "image" ? (
                       <div className="px-4 pb-4">
                       <div className="space-y-3">
                         <div className="flex gap-2">
@@ -1520,7 +1533,7 @@ export function AdminMateriaForm() {
 
                         <textarea
                           id={`block-text-${block.id}`}
-                          value={block.text || ""}
+                          value={"text" in block ? block.text || "" : ""}
                           onChange={(e) => updateBlock(block.id, { text: e.target.value })}
                           className="w-full min-h-[120px] p-3 rounded-md border font-mono text-sm"
                           placeholder="Texto ao lado da imagem"
@@ -1545,7 +1558,7 @@ export function AdminMateriaForm() {
                           <button type="button" onClick={() => applyInlineTag(block.id, "strong")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Bold className="w-3 h-3" /> Negrito</button>
                           <button type="button" onClick={() => applyInlineTag(block.id, "em")} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted"><Italic className="w-3 h-3" /> Itálico</button>
                           <button type="button" onClick={() => applyInlineLink(block.id)} className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-muted" title="Selecione o texto no campo e clique aqui">🔗 Inserir link</button>
-                          <select value={block.size || "md"} onChange={(e) => updateBlock(block.id, { size: e.target.value as TextBlock["size"] })} className="h-8 px-2 rounded-md border text-xs">
+                          <select value={("size" in block ? block.size : undefined) || "md"} onChange={(e) => updateBlock(block.id, { size: e.target.value as TextBlock["size"] })} className="h-8 px-2 rounded-md border text-xs">
                             <option value="sm">Texto pequeno</option>
                             <option value="md">Texto normal</option>
                             <option value="lg">Texto grande</option>
@@ -1909,7 +1922,7 @@ export function AdminMateriaForm() {
           <details className="my-3 rounded-lg border border-dashed border-green-700/40 bg-green-50/40 p-2">
             <summary className="cursor-pointer list-none text-center text-sm font-medium text-green-800">＋ Adicionar bloco</summary>
             <div className="mt-2 flex flex-wrap justify-center gap-2">
-              {([["paragraph", "Parágrafo"], ["heading", "Subtítulo"], ["quote", "Citação"], ["highlight", "Destaque"], ["image", "Imagem"], ["image-text", "Imagem + texto"]] as const).map(([type, label]) => <button key={type} type="button" onClick={() => addBlock(type, position)} className="rounded-md border bg-white px-3 py-1.5 text-xs hover:border-green-700">{label}</button>)}
+              {([["paragraph", "Parágrafo"], ["heading", "Subtítulo"], ["quote", "Citação"], ["highlight", "Destaque"], ["image", "Imagem"], ["image-text", "Imagem + texto"], ["chart", "Gráfico"]] as const).map(([type, label]) => <button key={type} type="button" onClick={() => addBlock(type, position)} className="rounded-md border bg-white px-3 py-1.5 text-xs hover:border-green-700">{label}</button>)}
             </div>
           </details>
         );
@@ -1991,6 +2004,15 @@ export function AdminMateriaForm() {
                     {blocks.length > 0 ? blocks.map((block, blockIndex) => {
                       const editKey = `block:${block.id}`;
                       const editing = previewEditField === editKey;
+                      if (block.type === "chart") return <section key={block.id} className="my-8 rounded-xl border bg-[#f8faf7] p-5">
+                        {editing ? <div className="space-y-3">
+                          <input aria-label="Título do gráfico" value={block.title} onChange={(event) => updateBlock(block.id, { title: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Título do gráfico" />
+                          <textarea aria-label="Dados do gráfico" value={block.data.map((item) => `${item.label};${item.value}`).join("\n")} onChange={(event) => updateBlock(block.id, { data: event.target.value.split("\n").map((line) => { const [label, value] = line.split(";"); return { label: (label || "").trim(), value: Number(value) }; }).filter((item) => item.label && Number.isFinite(item.value)) })} rows={5} className="w-full rounded-md border p-3 font-mono text-sm" placeholder="Categoria;25" />
+                          <input aria-label="Fonte dos dados" value={block.source} onChange={(event) => updateBlock(block.id, { source: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Fonte dos dados" />
+                          <input aria-label="Nota" value={block.note || ""} onChange={(event) => updateBlock(block.id, { note: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Nota opcional" />
+                        </div> : <><h3 className="mb-4 text-xl font-bold text-[#0f3d2e]">{block.title}</h3>{block.data.map((item, index) => { const max = Math.max(1, ...block.data.map((entry) => entry.value)); return <div key={index} className="mb-3"><div className="mb-1 flex justify-between text-sm"><span>{item.label}</span><strong>{item.value.toLocaleString("pt-BR")}</strong></div><div className="h-3 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#0f7a3e] transition-all duration-1000" style={{ width: `${Math.max(0, item.value) / max * 100}%` }} /></div></div>; })}{block.note ? <p className="mt-3 text-xs text-gray-600">{block.note}</p> : null}{block.source ? <p className="mt-2 text-xs text-gray-500">Fonte: {block.source}</p> : null}</>}
+                        <div className="mt-3 flex justify-end">{previewBlockActions(block, blockIndex, "gráfico")}</div>
+                      </section>;
                       if (block.type === "image") return (
                         <figure key={block.id} className="space-y-3">
                           {blockPreviews[block.id] || block.url ? <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[640px] rounded-lg object-contain" /> : null}
