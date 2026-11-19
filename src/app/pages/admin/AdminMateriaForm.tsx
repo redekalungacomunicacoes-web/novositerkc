@@ -2046,11 +2046,15 @@ export function AdminMateriaForm() {
                         <div key={block.id} className="my-8">{editing ? <div className="space-y-2"><div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} aria-label="URL da imagem" className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} aria-label="Legenda da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} aria-label="Crédito da imagem" className="h-10 w-full rounded-md border px-3" placeholder="Crédito" /></div> : <>{renderMateriaContentBlock(block)}<div className="mt-2 flex justify-end">{previewBlockActions(block, blockIndex, "imagem e legenda")}</div></>}</div>
                       );
                       if (block.type === "image-text") return (
-                        <figure key={block.id} className="space-y-3">
-                          <img src={blockPreviews[block.id] || block.url} alt={block.caption || "Imagem da matéria"} className="mx-auto max-h-[500px] rounded-lg object-contain" />
-                          <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div>
-                          {editing ? <div className="space-y-2"><input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" /><input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Legenda" /><textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" placeholder="Texto ao lado da imagem" /></div> : <><figcaption className="text-center text-sm text-gray-500">{block.caption || ""}{block.credit ? ` • Crédito: ${block.credit}` : ""}</figcaption><p className="whitespace-pre-wrap">{block.text || ""}</p></>}
-                        </figure>
+                        <div key={block.id} className="my-8">
+                          {editing ? <div className="space-y-2">
+                            <div className="flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div>
+                            <input value={block.url || ""} onChange={(event) => updateBlock(block.id, { url: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="URL da imagem" />
+                            <input value={block.caption || ""} onChange={(event) => updateBlock(block.id, { caption: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Legenda" />
+                            <input value={block.credit || ""} onChange={(event) => updateBlock(block.id, { credit: event.target.value })} className="h-10 w-full rounded-md border px-3" placeholder="Crédito" />
+                            <textarea autoFocus value={block.text || ""} onChange={(event) => updateBlock(block.id, { text: event.target.value })} rows={5} className="w-full rounded-md border p-3" placeholder="Texto ao lado da imagem" />
+                          </div> : <>{renderMateriaContentBlock(block)}<div className="mt-2 flex justify-end">{previewBlockActions(block, blockIndex, "imagem e texto")}</div></>}
+                        </div>
                       );
                       const plainText = (block.text || "").replace(/<[^>]*>/g, "");
                       return (
