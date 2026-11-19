@@ -163,6 +163,10 @@ function normalizeBlocks(raw: any): MateriaContentBlock[] {
         };
       }
 
+      if (block.type === "chart") {
+        const data = Array.isArray(block.data) ? block.data.map((item: any) => ({ label: String(item?.label || ""), value: Number(item?.value) })).filter((item: any) => item.label && Number.isFinite(item.value)) : [];
+        return { id: block.id || `chart-${idx}`, type: "chart" as const, title: String(block.title || ""), source: String(block.source || ""), note: String(block.note || ""), data };
+      }
       if (block.type === "image-text") {
         return {
           id: block.id || `imgtxt-${idx}`,
@@ -198,6 +202,20 @@ function textSizeClass(size?: string) {
 }
 
 function renderBlock(block: MateriaContentBlock) {
+  if (block.type === "chart") {
+    const max = Math.max(1, ...block.data.map((item) => item.value));
+    return <figure key={block.id} className="my-10 rounded-xl border border-[#0f3d2e]/15 bg-[#f8faf7] p-5 sm:p-7">
+      <figcaption className="mb-5 text-xl font-bold text-[#0f3d2e]">{block.title || "Gráfico"}</figcaption>
+      <div className="space-y-4" role="img" aria-label={`Gráfico de barras: ${block.title}`}>
+        {block.data.map((item, index) => <div key={index}><div className="mb-1 flex justify-between gap-3 text-sm"><span>{item.label}</span><strong>{item.value.toLocaleString("pt-BR")}</strong></div><div className="h-4 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#0f7a3e] motion-safe:animate-[chart-grow_1s_ease-out_both]" style={{ width: `${Math.max(0, item.value) / max * 100}%` }} /></div></div>)}
+      </div>
+      {block.note ? <p className="mt-4 text-sm text-gray-600">{block.note}</p> : null}
+      {block.source ? <p className="mt-2 text-xs text-gray-500">Fonte: {block.source}</p> : null}
+      <style>{`@keyframes chart-grow { from { width: 0; } }`}</style>
+    </figure>;
+  }
+
+
   if (block.type === "image") {
     return (
       <figure key={block.id} className="my-8">
