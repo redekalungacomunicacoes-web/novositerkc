@@ -2019,12 +2019,15 @@ export function AdminMateriaForm() {
                   .article-content blockquote p,
                   .article-content aside p { text-align: left; text-indent: 0; }
                 `}</style>
-                <nav aria-label="Navegação da prévia da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
-                  <div className="mx-auto flex max-w-5xl items-center gap-2 overflow-x-auto px-4 py-3 sm:px-6 lg:px-8">
-                    <a href="#materia-conteudo-preview" className="shrink-0 rounded-full bg-[#0F7A3E] px-4 py-2 text-sm font-semibold text-white">Matéria</a>
-                    {interviews.length > 0 ? <a href="#entrevistas-preview" className="shrink-0 rounded-full border border-[#0F7A3E] px-4 py-2 text-sm font-semibold text-[#0F7A3E]">Entrevistas <span className="ml-1 rounded-full bg-[#0F7A3E]/10 px-2 py-0.5 text-xs">{interviews.length}</span></a> : null}
+                {interviews.length > 0 ? <nav aria-label="Navegação das entrevistas da matéria" className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
+                  <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-2 px-4 py-3 sm:px-6 lg:px-8">
+                    {interviews.slice(0, 3).map((interview, index) => <button key={interview.id} type="button" onClick={() => { setPreviewInterviewId(interview.id); document.getElementById("entrevistas-preview")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-[#0F7A3E] px-3 py-2 text-xs font-semibold text-[#0F7A3E] transition hover:bg-[#0F7A3E]/5 sm:text-sm">
+                      {interview.thumbnailUrl ? <img src={interview.thumbnailUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0F7A3E]/10 text-xs">{index + 1}</span>}
+                      <span className="min-w-0 break-words">{/^entrevista\\s+com\\s+/i.test(interview.title || "") ? interview.title : `Entrevista com ${interview.title || `entrevistado(a) ${index + 1}`}`}</span>
+                    </button>)}
+                    {interviews.length > 3 ? <a href="#entrevistas-preview" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#0F7A3E] text-xl font-medium text-[#0F7A3E]">+</a> : null}
                   </div>
-                </nav>
+                </nav> : null}
                 <article id="materia-conteudo-preview" className="mx-auto max-w-4xl bg-white px-4 py-16 sm:px-6 md:py-24 lg:px-8">
                   <div className="prose prose-lg max-w-none text-gray-700"><div className="article-content">
                     {blocks.length > 0 ? blocks.map((block, blockIndex) => {
