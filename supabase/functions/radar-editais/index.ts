@@ -1,7 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 const URL_BASE = Deno.env.get("SUPABASE_URL")!;
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const client = createClient(URL_BASE, KEY, {auth:{persistSession:false}});
 const SOURCES = [
  {nome:"Secult Goiás — PNAB 2026",url:"https://goias.gov.br/cultura/pnab/edital-2026-pnab/",kind:"goias"},
  {nome:"MinC — Editais abertos",url:"https://www.gov.br/cultura/pt-br/assuntos/editais/inscricoes-abertas",kind:"federal"},
@@ -10,7 +9,7 @@ const SOURCES = [
  {nome:"Iphan — Editais e seleções",url:"https://www.gov.br/iphan/pt-br/acesso-a-informacao/editais-e-selecoes",kind:"federal"},
  {nome:"SECEC-RJ — Editais",url:"https://cultura.rj.gov.br/editais-3/",kind:"rio"}
 ] as const;
-const headers={"content-type":"application/json","access-control-allow-origin":"*","access-control-allow-headers":"authorization,apikey,content-type","access-control-allow-methods":"POST,OPTIONS"};
+const headers={"content-type":"application/json","access-control-allow-origin":"*","access-control-allow-headers":"authorization, x-client-info, apikey, content-type, x-supabase-api-version","access-control-allow-methods":"POST,OPTIONS"};
 function response(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers});}
 function clean(text:string){return text.replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/\s+/g," ").trim();}
 
@@ -100,6 +99,7 @@ export async function collectPages(
         const remaining = deadline - now();
         if (remaining < 1000) throw Error("Limite de tempo da coleta atingido");
         let retryAfterMs = 0;
+        let rateLimited = false;
         try {
           const res = await request(api, {signal:AbortSignal.timeout(Math.min(10_000, remaining)),headers:{accept:"application/json"}});
           if (res.status === 204) {
@@ -112,6 +112,7 @@ export async function collectPages(
               const seconds = Number(retryAfter);
               retryAfterMs = Number.isFinite(seconds) ? seconds * 1000 : Math.max(0,Date.parse(retryAfter)-now());
             }
+            if (res.status === 429) rateLimited = true;
             if (res.status !== 429 && res.status < 500) throw new TypeError("HTTP " + res.status);
             throw Error("HTTP " + res.status);
           }
@@ -120,7 +121,8 @@ export async function collectPages(
         } catch (error) {
           if (error instanceof TypeError && /^HTTP /.test(error.message)) throw error;
           if (attempt === 4) throw Error("Após 4 tentativas: " + errorMessage(error));
-          const delay = Math.max(1000 * 2 ** (attempt-1), Number.isFinite(retryAfterMs) ? retryAfterMs : 0);
+          // PNCP often rate-limits repeated pages. Honor Retry-After and avoid rapid retries.
+          const delay = Math.max(1000 * 2 ** (attempt-1), Number.isFinite(retryAfterMs) ? retryAfterMs : 0, rateLimited ? 9000 * attempt : 0);
           if (deadline - now() < delay + 1000) throw Error("Limite de tempo durante retentativa: " + errorMessage(error));
           await new Promise(resolve => setTimeout(resolve,delay));
         }
@@ -138,12 +140,28 @@ export async function collectPages(
       completed = page;
       if (page >= total) return {modalidade:modality,paginas:completed,totalPaginas:total,completa:true};
       // Avoid bursts against the national API. Backoff also honors Retry-After.
-      if (deadline-now() > 1300) await new Promise(resolve=>setTimeout(resolve,750));
+      if (deadline-now() > 1300) await new Promise(resolve=>setTimeout(resolve,1600));
     }
     throw Error("Limite seguro de " + MAX_PAGES + " páginas atingido");
   } catch (error) {
     return {modalidade:modality,paginas:completed,totalPaginas:total,completa:false,erro:"PNCP modalidade " + modality + ", página " + page + " (" + completed + "/" + total + " concluídas): " + errorMessage(error)};
   }
+}
+
+// The Supabase gateway verifies the Authorization JWT signature before this handler.
+// Keep verify_jwt=true when deploying; NEVER use decoded claims without that gateway check.
+// A service_role JWT may be valid after key rotation without matching the injected env key.
+function verifiedGatewayServiceRole(token:string,apiKey:string|null):boolean {
+  if(!token||apiKey!==token)return false;
+  try {
+    const parts=token.split(".");
+    if(parts.length!==3)return false;
+    const claims=JSON.parse(atob(parts[1].replace(/-/g,"+").replace(/_/g,"/")));
+    const projectRef=new URL(URL_BASE).hostname.split(".")[0];
+    return claims?.role==="service_role" &&
+      (!claims.ref||claims.ref===projectRef) &&
+      (typeof claims.exp!=="number"||claims.exp*1000>Date.now());
+  } catch {return false;}
 }
 
 Deno.serve(async(req)=>{
@@ -153,13 +171,16 @@ Deno.serve(async(req)=>{
  const bearer=req.headers.get("authorization")?.replace(/^Bearer\s+/i,"")||"";
  if(!bearer)return response({error:"Authorization required"},401);
  // Only logged-in captação staff or service-role automation may trigger scans.
- if(bearer!==KEY){
+ const gatewayServiceRole = verifiedGatewayServiceRole(bearer,req.headers.get("apikey"));
+ if(bearer!==KEY && !gatewayServiceRole){
    const userClient=createClient(URL_BASE,Deno.env.get("SUPABASE_ANON_KEY")!,{global:{headers:{Authorization:"Bearer "+bearer}},auth:{persistSession:false}});
    const {data:user,error:authError}=await userClient.auth.getUser();
    if(authError||!user.user)return response({error:"Invalid user"},401);
    const {data:allowed,error:aclError}=await userClient.rpc("can_access_captacao");
    if(aclError||allowed!==true)return response({error:"Access denied"},403);
  }
+ // Use the currently gateway-verified service-role JWT for an automation call.
+ const client=createClient(URL_BASE,gatewayServiceRole?bearer:KEY,{auth:{persistSession:false}});
  const {data:log,error:logError}=await client.from("captacao_radar_sincronizacoes").insert({status:"executando"}).select("id").single();
  if(logError)return response({error:"Unable to start sync"},500);
  let found=0,created=0;const errors:string[]=[];
@@ -203,7 +224,7 @@ Deno.serve(async(req)=>{
     if(pncpSourceError)throw pncpSourceError;
     const term=/cultura|patrim[oô]nio|museu|mem[oó]ria|quilomb|comunica[cç][aã]o|assessoria|imprensa|publicidade|audiovisual|document[aá]rio|filmagem|v[ií]deo|cinema|fotografia|educa[cç][aã]o|forma[cç][aã]o|capacita[cç][aã]o|direitos humanos|design|identidade visual|diagrama[cç][aã]o|editora[cç][aã]o|software|site|portal|aplicativo|marketing|m[ií]dia|exposi[cç][aã]o|curadoria|cenografia|artesanato|moda|sustentabilidade|ecologia|meio ambiente|comunidades tradicionais|produ[cç][aã]o cultural|oficina|acessibilidade|interc[aâ]mbio/i;
     const modalities=[1,4,6,8,9,12,13];
-    // Three bounded workers; each modality retains sequential pagination.
+    // One sequential worker respects the PNCP rate limit; report unfinished pages.
     await Promise.all(Array.from({length:1},async()=>{
       while(modalities.length){
         const modality=modalities.shift()!;
