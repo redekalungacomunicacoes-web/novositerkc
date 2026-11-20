@@ -347,6 +347,12 @@ function saoPauloDateTimeParts(value: string) {
   return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
 }
 
+function saoPauloDateOnlyToIso(date: string) {
+  const value = new Date(date + "T12:00:00-03:00");
+  if (!Number.isFinite(value.getTime())) throw new Error("Informe uma data válida.");
+  return value.toISOString();
+}
+
 function saoPauloDateTimeToIso(date: string, time: string) {
   const value = new Date(`${date}T${time}:00-03:00`);
   if (!Number.isFinite(value.getTime())) throw new Error("Informe uma data e um horário válidos.");
@@ -1237,7 +1243,7 @@ export function AdminMateriaForm() {
         audio_drive_file_id: audioDriveFileId,
         tags,
         status: publicationStatus,
-        published_at: publicationStatus === "published" ? new Date(data.date).toISOString() : null,
+        published_at: publicationStatus === "published" ? saoPauloDateOnlyToIso(data.date) : null,
         scheduled_at: scheduledAt,
         autor_equipe_id: data.authorId || null,
         autor_id: data.authorId || null,
@@ -1914,7 +1920,7 @@ export function AdminMateriaForm() {
       {showPreview && (() => {
         const previewData = watch();
         const previewDate = previewData.date
-          ? new Date(`${previewData.date}T12:00:00`).toLocaleDateString("pt-BR")
+          ? new Date(previewData.date + "T12:00:00-03:00").toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
           : "";
         const articleImage = previewData.bannerImage || previewData.coverImage;
         const previewEditButton = (key: string, label: string) => (
