@@ -14,6 +14,8 @@ type Popup = {
   cta_url: string | null;
 };
 
+const ARTICLE_POPUP_LABEL = "Última matéria publicada";
+
 function youtubeId(url?: string | null) {
   if (!url) return null;
   try {
@@ -24,6 +26,28 @@ function youtubeId(url?: string | null) {
     // Ignore malformed URLs.
   }
   return null;
+}
+
+function popupStorageKey(popup: Popup) {
+  return `rkc-popup-${popup.id}`;
+}
+
+function wasDismissed(popup: Popup) {
+  try {
+    const storage = popup.eyebrow === ARTICLE_POPUP_LABEL ? window.localStorage : window.sessionStorage;
+    return storage.getItem(popupStorageKey(popup)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberDismissal(popup: Popup) {
+  try {
+    const storage = popup.eyebrow === ARTICLE_POPUP_LABEL ? window.localStorage : window.sessionStorage;
+    storage.setItem(popupStorageKey(popup), "1");
+  } catch {
+    // The popup remains usable when browser storage is unavailable.
+  }
 }
 
 function trackPopup(popupId: string, event: "impression" | "click" | "close") {
@@ -38,42 +62,51 @@ export function SitePopup() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    let alive = true;
     setPopup(null);
     setOpen(false);
 
     void (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("site_popups")
         .select("id,title,eyebrow,description,image_url,youtube_url,cta_label,cta_url")
         .eq("active", true)
         .eq("target_path", location.pathname)
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (!data) return;
+      if (!alive || error || !data) return;
 
-      const key = `rkc-popup-${data.id}`;
-      if (sessionStorage.getItem(key)) return;
+      const nextPopup = data as Popup;
+      if (wasDismissed(nextPopup)) return;
 
-      setPopup(data as Popup);
+      setPopup(nextPopup);
       setOpen(true);
-      trackPopup(data.id, "impression");
+      trackPopup(nextPopup.id, "impression");
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [location.pathname]);
 
   if (!popup || !open) return null;
 
   const videoId = youtubeId(popup.youtube_url);
-  const storageKey = `rkc-popup-${popup.id}`;
+  const ctaUrl = popup.cta_url || popup.youtube_url;
+  const internalCta = !!ctaUrl && (
+    ctaUrl.startsWith("/") || ctaUrl.startsWith(window.location.origin)
+  );
 
   const close = () => {
-    sessionStorage.setItem(storageKey, "1");
+    rememberDismissal(popup);
     trackPopup(popup.id, "close");
     setOpen(false);
   };
 
   const clickCta = () => {
-    sessionStorage.setItem(storageKey, "1");
+    rememberDismissal(popup);
     trackPopup(popup.id, "click");
     setOpen(false);
   };
@@ -122,11 +155,11 @@ export function SitePopup() {
           )}
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {(popup.cta_url || popup.youtube_url) && (
+            {ctaUrl && (
               <a
-                href={popup.cta_url || popup.youtube_url || "#"}
-                target="_blank"
-                rel="noreferrer"
+                href={ctaUrl}
+                target={internalCta ? undefined : "_blank"}
+                rel={internalCta ? undefined : "noreferrer"}
                 onClick={clickCta}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#0F7A3E] px-4 py-2.5 text-sm font-semibold text-white"
               >
