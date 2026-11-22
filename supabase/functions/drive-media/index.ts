@@ -57,7 +57,7 @@ async function requestAccessToken() {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
     });
-    if (!response.ok) throw new Error("Google OAuth unavailable");
+    if (!response.ok) throw new Error(`Google OAuth token request failed (${response.status})`);
     const payload = await response.json();
     return { value: payload.access_token as string, expiresIn: Number(payload.expires_in) || 3600 };
   }
@@ -78,7 +78,7 @@ async function requestAccessToken() {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
   });
-  if (!response.ok) throw new Error("Google service account unavailable");
+  if (!response.ok) throw new Error(`Google service-account token request failed (${response.status})`);
   const result = await response.json();
   return { value: result.access_token as string, expiresIn: Number(result.expires_in) || 3600 };
 }
@@ -102,7 +102,7 @@ async function downloadDriveFile(fileId: string, range?: string | null) {
     signal: AbortSignal.timeout(30000),
     headers,
   });
-  if (!response.ok) throw new Error("Drive media unavailable");
+  if (!response.ok) throw new Error(`Google Drive media request failed (${response.status})`);
   return response;
 }
 
@@ -196,7 +196,11 @@ Deno.serve(async (req) => {
     }
     if (req.method === "HEAD") return new Response(null, { status: drive.status, headers });
     return new Response(drive.body, { status: drive.status, headers });
-  } catch {
+  } catch (error) {
+    console.error("drive-media upstream failure", {
+      stage: "google_drive_download",
+      error: error instanceof Error ? error.message : String(error),
+    });
     return new Response("Media unavailable", { status: 502 });
   }
 });
