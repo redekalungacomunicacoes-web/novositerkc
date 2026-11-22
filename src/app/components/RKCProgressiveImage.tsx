@@ -22,7 +22,7 @@ export function RKCProgressiveImage({
   fetchPriority = 'low',
   wrapperClassName,
   imageClassName,
-  preloadMargin = '1200px 0px',
+  preloadMargin = '600px 0px',
   showPlaceholder = true,
   onLoad,
   onError,
@@ -77,6 +77,16 @@ export function RKCProgressiveImage({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#E9E4DA] via-[#F6F2EB] to-[#E5DED1] animate-pulse"
         />
+      ) : null}
+
+      {failed ? (
+        <div
+          role="img"
+          aria-label={alt ? `Imagem indisponível: ${alt}` : 'Imagem indisponível'}
+          className="absolute inset-0 z-[2] flex min-h-[4rem] items-center justify-center bg-[#F1EEE8] px-4 text-center text-xs text-[#756F65]"
+        >
+          <span>Imagem indisponível</span>
+        </div>
       ) : null}
 
       {shouldLoad && src ? (
