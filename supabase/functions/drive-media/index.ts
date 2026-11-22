@@ -107,6 +107,7 @@ async function downloadDriveFile(fileId: string, range?: string | null) {
 }
 
 Deno.serve(async (req) => {
+  try {
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -202,5 +203,12 @@ Deno.serve(async (req) => {
       error: error instanceof Error ? error.message : String(error),
     });
     return new Response("Media unavailable", { status: 502 });
+  }
+  } catch (error) {
+    console.error("drive-media request failure", {
+      stage: "request_handler",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return new Response("Media service unavailable", { status: 503 });
   }
 });
