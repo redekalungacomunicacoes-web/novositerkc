@@ -19,7 +19,7 @@ export function RKCProgressiveImage({
   src,
   alt,
   loading = 'lazy',
-  fetchPriority = 'low',
+  fetchPriority = 'auto',
   wrapperClassName,
   imageClassName,
   preloadMargin = '1200px 0px',
@@ -85,7 +85,8 @@ export function RKCProgressiveImage({
           data-rkc-progressive="true"
           src={src}
           alt={alt}
-          loading={loading === 'eager' ? 'eager' : 'lazy'}
+          // IntersectionObserver already controls when src is attached; avoid a second native lazy-load delay.
+          loading="eager"
           decoding="async"
           fetchPriority={fetchPriority}
           onLoad={(event) => {
