@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Facebook, Instagram, Linkedin, Mail, MapPin, MessageCircle, Youtube } from "lucide-react";
 import { buildPublicStorageUrl, getFooterSettings, normalizeWhatsappLink } from "@/lib/footerSettings";
 import { RkcLogo } from "@/app/components/RkcLogo";
@@ -133,7 +134,10 @@ export function Footer() {
         </div>
 
         <div className="mt-8 border-t pt-6 text-center text-xs text-slate-500">
-          © {currentYear} Rede Kalunga Comunicações. Todos os direitos reservados.
+          <p>© {currentYear} Rede Kalunga Comunicações. Todos os direitos reservados.</p>
+          <Link to="/politica-de-privacidade" className="mt-3 inline-block text-green-700 transition hover:text-green-800 hover:underline">
+            Política de Privacidade
+          </Link>
         </div>
       </div>
     </footer>
