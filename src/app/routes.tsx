@@ -19,6 +19,7 @@ const Home = lazy(() => import("@/app/pages/Home").then(m => ({ default: m.Home 
 const MateriaDetalhes = lazy(() => import("@/app/pages/MateriaDetalhes").then(m => ({ default: m.MateriaDetalhes })));
 const Materias = lazy(() => import("@/app/pages/Materias").then(m => ({ default: m.Materias })));
 const Newsletter = lazy(() => import("@/app/pages/Newsletter").then(m => ({ default: m.Newsletter })));
+const PoliticaPrivacidade = lazy(() => import("@/app/pages/PoliticaPrivacidade").then(m => ({ default: m.PoliticaPrivacidade })));
 const NotFound = lazy(() => import("@/app/pages/NotFound").then(m => ({ default: m.NotFound })));
 const ProjetoDetalhes = lazy(() => import("@/app/pages/ProjetoDetalhes").then(m => ({ default: m.ProjetoDetalhes })));
 const Projetos = lazy(() => import("@/app/pages/Projetos").then(m => ({ default: m.Projetos })));
@@ -148,6 +149,7 @@ export const router = createBrowserRouter([
       { path: "materias/:id", element: <MateriaDetalhes /> },
       { path: "newsletter", element: <Newsletter /> },
       { path: "contato", element: <Contato /> },
+      { path: "politica-de-privacidade", element: <PoliticaPrivacidade /> },
       { path: "*", element: <NotFound /> },
     ],
   },
