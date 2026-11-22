@@ -57,7 +57,12 @@ async function requestAccessToken() {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
     });
-    if (!response.ok) throw new Error("Google OAuth unavailable");
+    if (!response.ok) {
+      const oauthError = await response.clone().json().catch(() => ({}));
+      const code = typeof oauthError?.error === "string" ? oauthError.error : "unknown";
+      const subtype = typeof oauthError?.error_subtype === "string" ? oauthError.error_subtype : "none";
+      throw new Error(`Google OAuth token request failed (${response.status}; code=${code}; subtype=${subtype})`);
+    }
     const payload = await response.json();
     return { value: payload.access_token as string, expiresIn: Number(payload.expires_in) || 3600 };
   }
@@ -78,7 +83,7 @@ async function requestAccessToken() {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
   });
-  if (!response.ok) throw new Error("Google service account unavailable");
+  if (!response.ok) throw new Error(`Google service-account token request failed (${response.status})`);
   const result = await response.json();
   return { value: result.access_token as string, expiresIn: Number(result.expires_in) || 3600 };
 }
@@ -102,11 +107,12 @@ async function downloadDriveFile(fileId: string, range?: string | null) {
     signal: AbortSignal.timeout(30000),
     headers,
   });
-  if (!response.ok) throw new Error("Drive media unavailable");
+  if (!response.ok) throw new Error(`Google Drive media request failed (${response.status})`);
   return response;
 }
 
 Deno.serve(async (req) => {
+  try {
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -196,7 +202,18 @@ Deno.serve(async (req) => {
     }
     if (req.method === "HEAD") return new Response(null, { status: drive.status, headers });
     return new Response(drive.body, { status: drive.status, headers });
-  } catch {
+  } catch (error) {
+    console.error("drive-media upstream failure", {
+      stage: "google_drive_download",
+      error: error instanceof Error ? error.message : String(error),
+    });
     return new Response("Media unavailable", { status: 502 });
+  }
+  } catch (error) {
+    console.error("drive-media request failure", {
+      stage: "request_handler",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return new Response("Media service unavailable", { status: 503 });
   }
 });
