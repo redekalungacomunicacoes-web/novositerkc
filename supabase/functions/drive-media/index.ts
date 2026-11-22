@@ -57,7 +57,12 @@ async function requestAccessToken() {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
     });
-    if (!response.ok) throw new Error(`Google OAuth token request failed (${response.status})`);
+    if (!response.ok) {
+      const oauthError = await response.clone().json().catch(() => ({}));
+      const code = typeof oauthError?.error === "string" ? oauthError.error : "unknown";
+      const subtype = typeof oauthError?.error_subtype === "string" ? oauthError.error_subtype : "none";
+      throw new Error(`Google OAuth token request failed (${response.status}; code=${code}; subtype=${subtype})`);
+    }
     const payload = await response.json();
     return { value: payload.access_token as string, expiresIn: Number(payload.expires_in) || 3600 };
   }
