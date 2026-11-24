@@ -170,11 +170,11 @@ export function Dashboard() {
         <div>
           <h1 className="mb-1 text-2xl font-semibold text-gray-900">Dashboard Financeiro</h1>
           <p className="text-sm text-gray-600">Últimos 6 meses com dados pagos</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Link to="/admin/financeiro/fundos" className="text-sm text-[#0f3d2e] hover:underline">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Link to="/admin/financeiro/fundos" className="text-sm font-medium text-[#ead7a6] transition hover:text-white">
               Ver Fundos
             </Link>
-            <span className="text-gray-400">•</span>
+            <span className="text-white/40">•</span>
             <Link to="/admin/financeiro/projetos" className="text-sm text-[#0f3d2e] hover:underline">
               Ver Projetos
             </Link>
@@ -184,7 +184,7 @@ export function Dashboard() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setReportOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
           >
             <FileText className="h-4 w-4" />
             Relatório
@@ -192,7 +192,7 @@ export function Dashboard() {
 
           <button
             onClick={() => void openCreateMovement()}
-            className="flex items-center gap-2 rounded-lg bg-[#0f3d2e] px-4 py-2 text-sm font-medium text-white hover:bg-[#0a2b20]"
+            className="flex items-center gap-2 rounded-xl bg-[#ead7a6] px-4 py-3 text-sm font-semibold text-[#173b2e] shadow-sm transition hover:bg-[#f3e5c2]"
           >
             <Plus className="h-4 w-4" />
             Nova Movimentação
@@ -200,10 +200,10 @@ export function Dashboard() {
         </div>
       </div>
 
-      {loading && <div className="mb-6 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">Carregando dados do financeiro...</div>}
-      {error && <div className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {loading && <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">Carregando dados do financeiro...</div>}
+      {error && <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
 
-      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {/* ✅ aqui usamos o saldo corrigido */}
         <KPICard title="Saldo Atual" value={formatCurrency(kpiSaldoAtual)} icon={<CircleDollarSign className="h-5 w-5" />} variant="primary" />
         <KPICard title="Entradas pagas" value={formatCurrency(dashboard.entradas)} icon={<TrendingUp className="h-5 w-5" />} />
@@ -211,8 +211,8 @@ export function Dashboard() {
         <KPICard title="Pendências" value={formatCurrency(dashboard.pendencias)} icon={<AlertCircle className="h-5 w-5" />} />
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
+      <div className="mb-8 grid grid-cols-1 gap-5 2xl:grid-cols-2">
+        <div className="rounded-2xl border border-[#e7e9e2] bg-white p-6 shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
           <h3 className="mb-6 text-base font-semibold text-gray-900">Fluxo de Caixa (Pago)</h3>
           {dashboard.fluxoCaixa.length === 0 ? (
             <p className="text-sm text-gray-500">Sem dados.</p>
@@ -251,7 +251,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6">
+      <div className="mb-8 rounded-2xl border border-[#e7e9e2] bg-white p-6 shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
         <h3 className="mb-6 text-base font-semibold text-gray-900">Distribuição por Categoria</h3>
         {categoriaData.length === 0 ? (
           <p className="text-sm text-gray-500">Sem dados.</p>
@@ -270,14 +270,14 @@ export function Dashboard() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+      <div className="overflow-hidden rounded-2xl border border-[#e7e9e2] bg-white shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
+        <div className="flex items-center justify-between border-b border-[#edf0e9] px-6 py-5">
           <h3 className="text-base font-semibold text-gray-900">Últimas movimentações</h3>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="border-b border-gray-200 bg-gray-50">
+            <thead className="border-b border-[#edf0e9] bg-[#f8f9f6]">
               <tr>
                 <th className="px-6 py-3 text-left text-xs uppercase">Data</th>
                 <th className="px-6 py-3 text-left text-xs uppercase">Descrição</th>
