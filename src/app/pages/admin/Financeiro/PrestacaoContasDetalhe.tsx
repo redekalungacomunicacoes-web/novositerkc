@@ -18,10 +18,10 @@ type ReportRow = {
 };
 
 const questions = [
-  { key: 'question_1', label: 'O que significa desenvolvimento institucional para a sua organização e o que vocês desejam alcançar nesse sentido em 2027?' },
-  { key: 'question_2', label: 'Quais mudanças institucionais vocês pretendem priorizar em 2027 e por que elas são importantes para a organização?' },
-  { key: 'question_3', label: 'Como vocês pretendem colocar essas prioridades em prática ao longo de 2027?' },
-  { key: 'question_4', label: 'Ao final de 2027, que mudanças concretas permitiriam reconhecer que a organização se desenvolveu institucionalmente?' },
+  { key: 'question_1', label: 'O que significa desenvolvimento institucional para a sua organização e o que vocês desejam alcançar nesse sentido em 2027?', guidance: "Relacione essa intenção à missão da organização, à realidade do território e aos valores que orientam seu jornalismo, incluindo interesse público, diversidade, equidade e independência editorial." },
+  { key: 'question_2', label: 'Quais mudanças institucionais vocês pretendem priorizar em 2027 e por que elas são importantes para a organização?', guidance: "Considere os aspectos mais relevantes para sua realidade, como organização da equipe, governança, planejamento, processos administrativos, gestão financeira e sustentabilidade. Não é necessário contemplar todos: explique suas escolhas." },
+  { key: 'question_3', label: 'Como vocês pretendem colocar essas prioridades em prática ao longo de 2027?', guidance: "Descreva as principais ações, responsabilidades, recursos e apoios necessários, incluindo como pretendem aproveitar mentorias, encontros e trocas na rede do Travessias, quando pertinente. Indique também os obstáculos previstos." },
+  { key: 'question_4', label: 'Ao final de 2027, que mudanças concretas permitiriam reconhecer que a organização se desenvolveu institucionalmente?', guidance: "Explique os sinais ou evidências que vocês pretendem acompanhar e como essas mudanças poderão contribuir para a continuidade da organização, a qualidade e regularidade da produção jornalística e sua relação com a comunidade local." },
 ];
 
 const channels = ['Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'Site ou Portal', 'Podcast ou conteúdo audiovisual', 'Jornal impresso / conteúdos impressos', 'Newsletters', 'Outros canais'];
@@ -146,8 +146,8 @@ export function PrestacaoContasDetalhe() {
 
         <section className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold">2. Respostas narrativas</h2>
-          <p className="mb-5 mt-1 text-sm text-gray-500">Os enunciados integrais serão inseridos conforme a conferência final do DOCX oficial. Por enquanto, registre cada resposta no campo correspondente.</p>
-          <div className="space-y-5">{questions.map((question) => <label key={question.key} className="block space-y-2 text-sm font-medium">{question.label}<textarea rows={5} value={narrative[question.key] || ''} onChange={(event) => setNarrative((current) => ({ ...current, [question.key]: event.target.value }))} placeholder="Digite a resposta..." className="w-full rounded-xl border border-gray-300 px-3 py-3 font-normal leading-6" /></label>)}</div>
+          <p className="mb-5 mt-1 text-sm text-gray-500">Responda às quatro perguntas conforme as orientações do formulário oficial FAJ II Ciclo.</p>
+          <div className="space-y-5">{questions.map((question) => <label key={question.key} className="block space-y-2 text-sm font-medium">{question.label}<span className="block text-sm font-normal text-gray-600">{question.guidance}</span><textarea rows={5} value={narrative[question.key] || ''} onChange={(event) => setNarrative((current) => ({ ...current, [question.key]: event.target.value }))} placeholder="Digite a resposta..." className="w-full rounded-xl border border-gray-300 px-3 py-3 font-normal leading-6" /></label>)}</div>
         </section>
 
         <section className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm sm:p-6">
