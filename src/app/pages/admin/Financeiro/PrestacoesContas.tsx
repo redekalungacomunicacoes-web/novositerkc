@@ -25,6 +25,7 @@ type Report = {
   status: 'draft' | 'in_review' | 'approved' | 'published' | 'archived';
   period_start: string | null;
   period_end: string | null;
+  due_date: string | null;
   created_at: string;
   template_id: string;
   fund_id: string | null;
@@ -62,15 +63,35 @@ export function PrestacoesContas() {
   const [referenceCode, setReferenceCode] = useState('');
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [filters, setFilters] = useState({ fund: '', project: '', funder: '', status: '', from: '', to: '' });
 
   const activeTemplates = useMemo(() => templates.filter((item) => item.status === 'active'), [templates]);
+
+  const funderByTemplate = new Map(templates.map(template => [template.id, template.institution_name || template.funding_program || '']));
+  const funders = Array.from(new Set(funderByTemplate.values())).filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const visibleReports = reports.filter(report =>
+    (!filters.fund || filters.fund === report.fund_id) &&
+    (!filters.project || filters.project === report.project_id) &&
+    (!filters.funder || filters.funder === funderByTemplate.get(report.template_id)) &&
+    (!filters.status || filters.status === report.status) &&
+    (!filters.from || (report.period_end ?? report.period_start ?? '') >= filters.from) &&
+    (!filters.to || Boolean(report.period_start ?? report.period_end) && (report.period_start ?? report.period_end ?? '') <= filters.to)
+  );
+  const filterOptions = [
+    ['fund', 'Fundo', funds.map(fund => [fund.id, fund.nome])],
+    ['project', 'Projeto', projects.map(project => [project.id, project.nome])],
+    ['funder', 'Financiador', funders.map(funder => [funder, funder])],
+    ['status', 'Situação', Object.entries(STATUS)],
+  ] as const;
+  const inputClass = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-normal';
 
   const loadData = async () => {
     setLoading(true);
     setLoadError('');
     const [templateResult, reportResult] = await Promise.all([
       supabase.from('finance_reporting_templates').select('id,slug,name,institution_name,funding_program,cycle_name,version,status,description').order('name'),
-      supabase.from('finance_accountability_reports').select('id,title,reference_code,status,period_start,period_end,created_at,template_id,fund_id,project_id').order('created_at', { ascending: false }),
+      supabase.from('finance_accountability_reports').select('id,title,reference_code,status,period_start,period_end,due_date,created_at,template_id,fund_id,project_id').order('created_at', { ascending: false }),
     ]);
     const issue = templateResult.error || reportResult.error;
     if (issue) {
@@ -100,11 +121,11 @@ export function PrestacoesContas() {
       cycle_name: 'II Ciclo',
       version: 1,
       status: 'active',
-      description: 'Modelo inicial FAJ II Ciclo. O mapeamento da planilha financeira oficial será concluído após conferência do XLSX original.',
+      description: 'Modelo FAJ II Ciclo com preenchimento narrativo e financeiro.',
       structure: {
         sections: ['identification', 'financial', 'work_plan', 'narrative', 'impact_engagement', 'documents', 'review'],
         narrative_fields: ['question_1', 'question_2', 'question_3', 'question_4'],
-        financial_spreadsheet_mapping: 'pending_official_xlsx',
+        financial_spreadsheet_mapping: 'audited_export_pending',
       },
     });
     setBusy(false);
@@ -129,6 +150,7 @@ export function PrestacoesContas() {
       reference_code: referenceCode.trim() || null,
       period_start: periodStart || null,
       period_end: periodEnd || null,
+      due_date: dueDate || null,
       status: 'draft',
       created_by: user?.id ?? null,
       updated_by: user?.id ?? null,
@@ -163,6 +185,7 @@ export function PrestacoesContas() {
     setReferenceCode('');
     setPeriodStart('');
     setPeriodEnd('');
+    setDueDate('');
     setFundId('');
     setProjectId('');
     await loadData();
@@ -200,6 +223,7 @@ export function PrestacoesContas() {
             <label className="space-y-1 text-sm font-medium">Projeto vinculado<select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 font-normal"><option value="">Sem vínculo por enquanto</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
             <label className="space-y-1 text-sm font-medium">Código de referência<input value={referenceCode} onChange={(event) => setReferenceCode(event.target.value)} placeholder="Opcional" className="w-full rounded-xl border border-gray-300 px-3 py-2.5 font-normal" /></label>
             <div className="grid grid-cols-2 gap-3"><label className="space-y-1 text-sm font-medium">Início<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} className="w-full rounded-xl border border-gray-300 px-3 py-2.5 font-normal" /></label><label className="space-y-1 text-sm font-medium">Fim<input type="date" min={periodStart || undefined} value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} className="w-full rounded-xl border border-gray-300 px-3 py-2.5 font-normal" /></label></div>
+            <label className="space-y-1 text-sm font-medium">Prazo de entrega<input type="date" className={inputClass} value={dueDate} onChange={event => setDueDate(event.target.value)} /></label>
           </div>
           <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium">Cancelar</button><button type="submit" disabled={busy || !templateId} className="rounded-xl bg-[#103d2e] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Salvando...' : 'Criar rascunho'}</button></div>
         </form>
@@ -207,18 +231,28 @@ export function PrestacoesContas() {
 
       <section className="rounded-2xl border border-[#e7e9e2] bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#edf0e9] p-5"><div className="flex items-center gap-3"><ClipboardList className="h-5 w-5 text-[#315b47]" /><div><h2 className="font-semibold">Prestações cadastradas</h2><p className="text-xs text-gray-500">Histórico e situação dos registros</p></div></div><button type="button" onClick={() => void loadData()} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><RefreshCw className="h-4 w-4" /> Atualizar</button></div>
-        {loading ? <p className="p-8 text-center text-sm text-gray-500">Carregando registros...</p> : reports.length ? <div className="divide-y divide-[#edf0e9]">{reports.map((report) => {
+        {reports.length > 0 && <div className="grid gap-3 border-b p-5 sm:grid-cols-2 lg:grid-cols-3">
+          {filterOptions.map(([key, label, options]) => <label key={key} className="space-y-1 text-sm font-medium">
+            <span>{label}</span><select className={inputClass} value={filters[key]} onChange={event => setFilters({ ...filters, [key]: event.target.value })}>
+              <option value="">Todos</option>
+              {options.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
+            </select>
+          </label>)}
+          <label className="space-y-1 text-sm font-medium"><span>Período a partir de</span><input type="date" className={inputClass} value={filters.from} onChange={event => setFilters({ ...filters, from: event.target.value })} /></label>
+          <label className="space-y-1 text-sm font-medium"><span>Período até</span><input type="date" className={inputClass} min={filters.from || undefined} value={filters.to} onChange={event => setFilters({ ...filters, to: event.target.value })} /></label>
+        </div>}
+        {loading ? <p className="p-8 text-center text-sm text-gray-500">Carregando registros...</p> : visibleReports.length ? <div className="divide-y divide-[#edf0e9]">{visibleReports.map((report) => {
           const template = templates.find((item) => item.id === report.template_id);
           const fund = funds.find((item) => item.id === report.fund_id);
           const project = projects.find((item) => item.id === report.project_id);
-          return <article key={report.id} className="flex flex-col justify-between gap-3 p-5 sm:flex-row sm:items-center"><div className="min-w-0"><div className="mb-1 flex flex-wrap items-center gap-2"><h3 className="font-semibold">{report.title}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusClass[report.status]}`}>{STATUS[report.status]}</span></div><p className="text-sm text-gray-500">{template?.name || 'Modelo não localizado'} · {report.reference_code || 'Sem código'}</p><p className="mt-1 text-xs text-gray-500">{fund?.nome || 'Sem fundo'}{project ? ` · ${project.nome}` : ''} · {report.period_start ? formatDate(report.period_start) : 'Período não definido'} a {report.period_end ? formatDate(report.period_end) : '—'}</p></div><div className="flex shrink-0 items-center gap-3"><span className="text-xs text-gray-400">Criada em {formatDate(report.created_at)}</span><Link to={`/admin/financeiro/prestacoes/${report.id}`} className="rounded-lg border border-[#dfe5dc] px-3 py-2 text-xs font-semibold text-[#315b47] hover:bg-[#f6f8f3]">Abrir prestação</Link></div></article>;
-        })}</div> : <div className="p-10 text-center"><span className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[#f4ebd8] text-[#315b47]"><FolderOpen className="h-6 w-6" /></span><h3 className="font-semibold">Nenhuma prestação cadastrada</h3><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-gray-500">Cadastre o modelo oficial FAJ II Ciclo e depois abra a primeira prestação como rascunho.</p></div>}
+          return <article key={report.id} className="flex flex-col justify-between gap-3 p-5 sm:flex-row sm:items-center"><div className="min-w-0"><div className="mb-1 flex flex-wrap items-center gap-2"><h3 className="font-semibold">{report.title}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusClass[report.status]}`}>{STATUS[report.status]}</span></div><p className="text-sm text-gray-500">{template?.name || 'Modelo não localizado'} · {report.reference_code || 'Sem código'}</p><p className="mt-1 text-xs text-gray-500">{fund?.nome || 'Sem fundo'}{project ? ` · ${project.nome}` : ''} · {report.period_start ? formatDate(report.period_start + 'T12:00:00') : 'Período não definido'} a {report.period_end ? formatDate(report.period_end + 'T12:00:00') : '—'}</p><p className="mt-1 text-sm text-gray-700">Prazo de entrega {report.due_date ? formatDate(report.due_date + 'T12:00:00') : '—'}</p></div><div className="flex shrink-0 items-center gap-3"><span className="text-xs text-gray-400">Criada em {formatDate(report.created_at)}</span><Link to={`/admin/financeiro/prestacoes/${report.id}`} className="rounded-lg border border-[#dfe5dc] px-3 py-2 text-xs font-semibold text-[#315b47] hover:bg-[#f6f8f3]">Abrir prestação</Link></div></article>;
+        })}</div> : reports.length ? <p className="p-8 text-center text-sm text-gray-500">Nenhuma prestação corresponde aos filtros.</p> : <div className="p-10 text-center"><span className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[#f4ebd8] text-[#315b47]"><FolderOpen className="h-6 w-6" /></span><h3 className="font-semibold">Nenhuma prestação cadastrada</h3><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-gray-500">Cadastre o modelo oficial FAJ II Ciclo e depois abra a primeira prestação como rascunho.</p></div>}
       </section>
 
       <section className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h2 className="font-semibold">Modelos oficiais</h2><p className="mt-1 text-sm text-gray-500">Versões de editais vinculadas às prestações.</p></div><button type="button" onClick={() => void createFajTemplate()} disabled={busy || templates.some((item) => item.slug === 'faj-ii-ciclo' && item.version === 1)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#103d2e] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><Plus className="h-4 w-4" /> Cadastrar FAJ II Ciclo</button></div>
         <div className="mt-4 space-y-3">{templates.length ? templates.map((item) => <div key={item.id} className="flex flex-col justify-between gap-2 rounded-xl border border-[#edf0e9] p-4 sm:flex-row sm:items-center"><div><p className="font-medium">{item.name} <span className="text-xs text-gray-400">v{item.version}</span></p><p className="text-sm text-gray-500">{item.institution_name || item.funding_program || 'Instituição não informada'} · {item.cycle_name || 'Ciclo não informado'}</p></div><span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{item.status === 'active' ? 'Ativo' : item.status === 'draft' ? 'Rascunho' : 'Arquivado'}</span></div>) : <p className="rounded-xl bg-[#f8f9f6] p-4 text-sm text-gray-500">Nenhum modelo cadastrado.</p>}</div>
-        <p className="mt-4 text-xs leading-5 text-gray-500">A estrutura narrativa do FAJ foi mapeada. A planilha financeira e a geração dos documentos oficiais permanecem pendentes da auditoria do arquivo XLSX original.</p>
+        <p className="mt-4 text-xs leading-5 text-gray-500">O modelo FAJ inclui campos narrativos e financeiros. A geração preenchida dos documentos oficiais está pendente.</p>
       </section>
     </div>
   );

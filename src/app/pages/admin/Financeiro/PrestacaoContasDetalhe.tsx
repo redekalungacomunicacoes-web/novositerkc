@@ -192,6 +192,7 @@ export function PrestacaoContasDetalhe() {
     Array.isArray(financial.budgetExcludingTeam) ? financial.budgetExcludingTeam : [],
     Array.isArray(financial.funding) ? financial.funding : [],
   ) : null;
+  const answered = questions.filter(({ key }) => typeof narrative[key] === 'string' && narrative[key].trim()).length;
   const money = (value: number | null) => value === null ? '—' : value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
@@ -254,7 +255,7 @@ export function PrestacaoContasDetalhe() {
 
         <section className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold">2. Respostas narrativas</h2>
-          <p className="mb-5 mt-1 text-sm text-gray-500">Responda às quatro perguntas conforme as orientações do formulário oficial FAJ II Ciclo.</p>
+          <p className="mb-5 mt-1 text-sm text-gray-500">{answered} de {questions.length} perguntas respondidas.</p>
           <div className="space-y-5">{questions.map((question) => <label key={question.key} className="block space-y-2 text-sm font-medium">{question.label}<span className="block text-sm font-normal text-gray-600">{question.guidance}</span><textarea rows={5} value={narrative[question.key] || ''} onChange={(event) => setNarrative((current) => ({ ...current, [question.key]: event.target.value }))} placeholder="Digite a resposta..." className="w-full rounded-xl border border-gray-300 px-3 py-3 font-normal leading-6" /></label>)}</div>
         </section>
 
