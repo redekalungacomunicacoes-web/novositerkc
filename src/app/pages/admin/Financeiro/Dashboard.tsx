@@ -173,10 +173,10 @@ export function Dashboard() {
           <h1 className="mb-2 text-3xl font-semibold tracking-tight text-[#173b2e] sm:text-4xl">Visão financeira</h1>
           <p className="max-w-xl text-sm leading-6 text-gray-600">Acompanhe recursos, movimentações e execução dos projetos em um só lugar.</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Link to="/admin/financeiro/fundos" className="text-sm font-medium text-[#ead7a6] transition hover:text-white">
+            <Link to="/admin/financeiro/fundos" className="text-sm font-medium text-[#315b47] transition hover:text-[#0f3d2e]">
               Ver Fundos
             </Link>
-            <span className="text-white/40">•</span>
+            <span className="text-gray-300">•</span>
             <Link to="/admin/financeiro/projetos" className="text-sm text-[#0f3d2e] hover:underline">
               Ver Projetos
             </Link>
