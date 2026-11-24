@@ -110,6 +110,23 @@ export function PrestacaoContasDetalhe() {
     }
   };
 
+  const metricNames = (channel: string): string[] => {
+    if (channel === 'Instagram') return ['Seguidores','Interações','Visualizações','Contas alcançadas','Visualizadores','Crescimento líquido'];
+    if (['Facebook','TikTok','LinkedIn'].includes(channel)) return ['Seguidores','Interações','Alcance','Visualizações'];
+    if (channel === 'Site ou Portal') return ['Visitantes'];
+    if (channel === 'Podcast ou conteúdo audiovisual') return ['Reproduções','Ouvintes'];
+    if (channel === 'Jornal impresso / conteúdos impressos') return ['Exemplares impressos','Exemplares distribuídos'];
+    if (channel === 'Newsletters') return ['Assinantes'];
+    return ['Indicador relevante'];
+  };
+  const setMetric = (channel: string, metric: string, field: string, value: string) => {
+    setImpact(current => {
+      const previous = current[channel] || {};
+      const metrics = previous.metrics || {};
+      return { ...current, [channel]: { ...previous, metrics: { ...metrics, [metric]: { ...(metrics[metric] || {}), [field]: value } } } };
+    });
+  };
+
   const setImpactValue = (channel: string, field: string, value: string) => {
     setImpact((current) => ({ ...current, [channel]: { ...(current[channel] || {}), [field]: value } }));
   };
@@ -152,8 +169,8 @@ export function PrestacaoContasDetalhe() {
 
         <section className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold">3. Impacto e engajamento</h2>
-          <p className="mb-5 mt-1 text-sm text-gray-500">Registre os dados de 2025 e 2026 por canal. Indicadores detalhados serão refinados com a planilha oficial.</p>
-          <div className="space-y-4">{channels.map((channel) => <div key={channel} className="rounded-xl border border-[#edf0e9] p-4"><h3 className="mb-3 text-sm font-semibold">{channel}</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[['2025','year_2025'],['2026','year_2026'],['Variação','variation'],['Observações','notes']].map(([label,key]) => <label key={key} className="space-y-1 text-xs font-medium text-gray-600">{label}<input value={impact[channel]?.[key] || ''} onChange={(event) => setImpactValue(channel,key,event.target.value)} className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm font-normal text-gray-900" /></label>)}</div></div>)}</div>
+          <p className="mb-5 mt-1 text-sm text-gray-500">Registre os indicadores individuais e seus períodos. Os campos gerais anteriores são preservados para não perder informações existentes.</p>
+          <div className="space-y-4">{channels.map((channel) => <div key={channel} className="rounded-xl border border-[#edf0e9] p-4"><h3 className="mb-3 text-sm font-semibold">{channel}</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[['2025','year_2025'],['2026','year_2026'],['Variação','variation'],['Observações','notes']].map(([label,key]) => <label key={key} className="space-y-1 text-xs font-medium text-gray-600">{label}<input value={impact[channel]?.[key] || ''} onChange={(event) => setImpactValue(channel,key,event.target.value)} className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm font-normal text-gray-900" /></label>)}</div><div className="mt-4 space-y-3">{metricNames(channel).map(metric => <fieldset key={metric} className="rounded-lg border p-3"><legend className="px-1 text-sm font-medium">{metric}</legend><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{[['2025','value_2025'],['Início 2025','start_2025'],['Fim 2025','end_2025'],['2026','value_2026'],['Início 2026','start_2026'],['Fim 2026','end_2026'],['Variação informada','variation'],['Observações','notes'], ...(channel === 'Outros canais' ? [['Nome do indicador','name']] : [])].map(([label,key]) => <label key={key} className="text-xs text-gray-600">{label}<input type={key.startsWith('start_') || key.startsWith('end_') ? 'date' : 'text'} placeholder={key.startsWith('value_') ? 'Não informado' : undefined} value={impact[channel]?.metrics?.[metric]?.[key] ?? ''} onChange={event => setMetric(channel,metric,key,event.target.value)} className="block w-full rounded-lg border px-2 py-2 text-sm" /></label>)}</div><p className="mt-2 text-xs text-gray-500">Compare apenas métricas equivalentes e períodos compatíveis.</p></fieldset>)}</div></div>)}</div>
         </section>
 
         <div className="sticky bottom-3 flex justify-end rounded-2xl border border-[#e7e9e2] bg-white/95 p-3 shadow-lg backdrop-blur"><button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-[#103d2e] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"><Save className="h-4 w-4" />{saving ? 'Salvando...' : 'Salvar rascunho'}</button></div>
