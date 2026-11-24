@@ -125,7 +125,7 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $function$
   select exists (
     select 1
     from public.user_roles ur
@@ -133,7 +133,7 @@ as $
     where ur.user_id = auth.uid()
       and r.name in ('admin_alfa', 'admin', 'financeiro')
   );
-$;
+$function$;
 
 revoke all on function public.can_manage_finance_accountability() from public;
 grant execute on function public.can_manage_finance_accountability() to authenticated;
