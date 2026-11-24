@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Save } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { calculateFajFinancials } from './fajFinancialCalculations';
 
 type ReportRow = {
   id: string;
@@ -134,6 +135,12 @@ export function PrestacaoContasDetalhe() {
   if (loading) return <div className="p-8 text-sm text-gray-500">Carregando prestação...</div>;
   if (error || !report) return <div className="space-y-3 p-8"><p className="text-sm text-rose-700">{error || 'Prestação não encontrada.'}</p><Link to="/admin/financeiro/prestacoes" className="text-sm text-[#315b47] underline">Voltar para prestações</Link></div>;
 
+  // Read only: do not seed or overwrite existing financial records.
+  const financial = report.financial_data || {};
+  const hasFinancialRows = Array.isArray(financial.team) && Array.isArray(financial.budgetExcludingTeam) && Array.isArray(financial.funding);
+  const calculated = hasFinancialRows ? calculateFajFinancials(financial.team, financial.budgetExcludingTeam, financial.funding) : null;
+  const money = (value: number | null) => value === null ? '—' : value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
   return (
     <div className="min-h-screen space-y-6 bg-[#f6f7f3] p-4 text-[#17251f] sm:p-6 lg:p-8">
       <header className="rounded-[26px] bg-[#103d2e] p-6 text-white sm:p-8">
@@ -151,6 +158,13 @@ export function PrestacaoContasDetalhe() {
         <h2 className="font-semibold">Modelos oficiais</h2>
         <p className="my-2 text-sm text-gray-500">Prepare cópias do Word e Excel oficiais, sem alterar os originais. O preenchimento automático será disponibilizado após validação.</p>
         <button type="button" disabled={preparingDocuments || report.status !== 'draft'} onClick={() => void prepareDocuments()} className="rounded-lg border px-3 py-2 text-sm">{preparingDocuments ? 'Preparando...' : 'Preparar documentos oficiais'}</button>
+      </section>
+      <section className="rounded-2xl border bg-white p-5">
+        <h2 className="font-semibold">Resumo financeiro · FAJ II</h2>
+        <p className="my-2 text-sm text-gray-500">Orçamento previsto, não execução de caixa. Valores derivados dos registros disponíveis; dados incompletos podem produzir totais parciais.</p>
+        {calculated ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[['Orçamento total', money(calculated.total)], ['Recursos FAJ', money(calculated.faj)], ['Outras fontes', money(calculated.other)], ['Equipe', money(calculated.teamTotal)]].map(([label, value]) => <div key={label} className="rounded-xl border p-3"><p className="text-xs text-gray-500">{label}</p><p className="mt-1 text-lg font-semibold">{value}</p></div>)}
+        </div> : <p className="text-sm text-gray-500">Dados financeiros ainda não vinculados ao formato de cálculo. Nenhum valor presumido.</p>}
       </section>
       <form onSubmit={save} className="space-y-6">
         <section className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm sm:p-6">
