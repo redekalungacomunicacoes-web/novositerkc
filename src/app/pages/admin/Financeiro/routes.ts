@@ -6,6 +6,7 @@ const Fundos = lazy(() => import("./Fundos").then(m => ({ default: m.Fundos })))
 const FundoDetalhes = lazy(() => import("./FundoDetalhes").then(m => ({ default: m.FundoDetalhes })));
 const Projetos = lazy(() => import("./Projetos").then(m => ({ default: m.Projetos })));
 const ProjetoDetalhes = lazy(() => import("./ProjetoDetalhes").then(m => ({ default: m.ProjetoDetalhes })));
+const PrestacoesContas = lazy(() => import("./PrestacoesContas").then(m => ({ default: m.PrestacoesContas })));
 
 export const financeiroRoutes: RouteObject[] = [
   { index: true, element: createElement(Dashboard) },
@@ -16,4 +17,5 @@ export const financeiroRoutes: RouteObject[] = [
   { path: "projetos/:id", element: createElement(ProjetoDetalhes) },
   { path: "movimentacoes", element: createElement(Dashboard) },
   { path: "relatorios", element: createElement(Dashboard) },
+  { path: "prestacoes", element: createElement(PrestacoesContas) },
 ];
