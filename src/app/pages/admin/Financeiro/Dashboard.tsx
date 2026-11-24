@@ -165,11 +165,13 @@ export function Dashboard() {
   };
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div className="min-h-screen bg-[#f6f7f3] p-4 text-[#17251f] sm:p-6 lg:p-8">
+      <div className="mb-8 rounded-[26px] border border-[#e5e8df] bg-gradient-to-br from-white via-white to-[#f4f0e5] p-6 shadow-[0_18px_50px_rgba(16,61,46,0.07)] sm:p-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="mb-1 text-2xl font-semibold text-gray-900">Dashboard Financeiro</h1>
-          <p className="text-sm text-gray-600">Últimos 6 meses com dados pagos</p>
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#d9c58e]/40 bg-[#f4ebd8] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#315b47]">Rede Kalunga Comunicações <span className="h-1 w-1 rounded-full bg-[#b18b42]" /> Gestão financeira</div>
+          <h1 className="mb-2 text-3xl font-semibold tracking-tight text-[#173b2e] sm:text-4xl">Visão financeira</h1>
+          <p className="max-w-xl text-sm leading-6 text-gray-600">Acompanhe recursos, movimentações e execução dos projetos em um só lugar.</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Link to="/admin/financeiro/fundos" className="text-sm font-medium text-[#ead7a6] transition hover:text-white">
               Ver Fundos
@@ -184,7 +186,7 @@ export function Dashboard() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setReportOpen(true)}
-            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            className="flex items-center gap-2 rounded-xl border border-[#dfe5dc] bg-white px-4 py-3 text-sm font-semibold text-[#234b39] shadow-sm transition hover:bg-[#f6f8f3]"
           >
             <FileText className="h-4 w-4" />
             Relatório
@@ -192,12 +194,13 @@ export function Dashboard() {
 
           <button
             onClick={() => void openCreateMovement()}
-            className="flex items-center gap-2 rounded-xl bg-[#ead7a6] px-4 py-3 text-sm font-semibold text-[#173b2e] shadow-sm transition hover:bg-[#f3e5c2]"
+            className="flex items-center gap-2 rounded-xl bg-[#123f30] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0d3327]"
           >
             <Plus className="h-4 w-4" />
             Nova Movimentação
           </button>
         </div>
+      </div>
       </div>
 
       {loading && <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">Carregando dados do financeiro...</div>}
@@ -231,7 +234,7 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="rounded-2xl border border-[#e7e9e2] bg-white p-6 shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
           <h3 className="mb-6 text-base font-semibold text-gray-900">Orçado vs Real</h3>
           {dashboard.orcadoVsReal.length === 0 ? (
             <p className="text-sm text-gray-500">Sem dados.</p>
