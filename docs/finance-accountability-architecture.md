@@ -55,7 +55,7 @@ Os dados preenchidos são armazenados em JSONB inicialmente para permitir modelo
 
 ## Segurança
 
-As novas tabelas ficam com RLS habilitado e acesso administrativo seguindo o mecanismo `public.is_admin()` já utilizado pelo módulo Financeiro. Não há política de leitura pública nesta etapa. A publicação pública será implementada por uma projeção segura, nunca expondo diretamente os campos privados ou o JSON completo.
+As novas tabelas ficam com RLS habilitado. O acesso de gestão utiliza a função `public.can_manage_finance_accountability()`, que reconhece os papéis `admin_alfa`, `admin` e `financeiro` já existentes em `user_roles`/`roles`. Não há política de leitura pública nesta etapa. A publicação pública será implementada por uma projeção segura, nunca expondo diretamente os campos privados ou o JSON completo.
 
 ## Próxima etapa
 
