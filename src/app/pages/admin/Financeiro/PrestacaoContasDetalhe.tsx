@@ -17,10 +17,10 @@ type ReportRow = {
 };
 
 const questions = [
-  { key: 'question_1', label: 'Pergunta 1' },
-  { key: 'question_2', label: 'Pergunta 2' },
-  { key: 'question_3', label: 'Pergunta 3' },
-  { key: 'question_4', label: 'Pergunta 4' },
+  { key: 'question_1', label: 'O que significa desenvolvimento institucional para a sua organização e o que vocês desejam alcançar nesse sentido em 2027?' },
+  { key: 'question_2', label: 'Quais mudanças institucionais vocês pretendem priorizar em 2027 e por que elas são importantes para a organização?' },
+  { key: 'question_3', label: 'Como vocês pretendem colocar essas prioridades em prática ao longo de 2027?' },
+  { key: 'question_4', label: 'Ao final de 2027, que mudanças concretas permitiriam reconhecer que a organização se desenvolveu institucionalmente?' },
 ];
 
 const channels = ['Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'Site ou Portal', 'Podcast ou conteúdo audiovisual', 'Jornal impresso / conteúdos impressos', 'Newsletters', 'Outros canais'];
@@ -48,7 +48,7 @@ export function PrestacaoContasDetalhe() {
         const row = data as ReportRow;
         setReport(row);
         setNarrative(row.narrative_data || {});
-        setInstitution((row.narrative_data?.institution || {}) as Record<string, string>);
+        setInstitution({ ...((row.narrative_data?.institution || {}) as Record<string, string>), emails: Array.isArray(row.narrative_data?.institution?.emails) ? row.narrative_data.institution.emails.join('\\n') : String(row.narrative_data?.institution?.emails || '') });
         setImpact((row.narrative_data?.impact_engagement || {}) as Record<string, any>);
       }
       setLoading(false);
@@ -62,7 +62,7 @@ export function PrestacaoContasDetalhe() {
     if (!report) return;
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const nextNarrative = { ...narrative, institution, impact_engagement: impact };
+    const nextNarrative = { ...narrative, institution: { ...institution, emails: (institution.emails || '').split(/[\\n,;]/).map((email) => email.trim()).filter(Boolean) }, impact_engagement: impact };
     const { error: updateError } = await supabase.from('finance_accountability_reports').update({
       narrative_data: nextNarrative,
       updated_by: user?.id ?? null,
@@ -103,7 +103,7 @@ export function PrestacaoContasDetalhe() {
           <h2 className="text-lg font-semibold">1. Identificação institucional</h2>
           <p className="mb-5 mt-1 text-sm text-gray-500">Dados básicos solicitados no documento narrativo oficial.</p>
           <div className="grid gap-4 sm:grid-cols-2">
-            {[['organization_name','Nome da organização'],['responsible_person','Pessoa responsável pelo preenchimento'],['role','Cargo'],['emails','E-mails de contato'],['requested_amount','Valor solicitado para o próximo ciclo'],['filled_at','Data do preenchimento']].map(([key,label]) => <label key={key} className="space-y-1 text-sm font-medium">{label}<input value={institution[key] || ''} onChange={(event) => setInstitution((current) => ({ ...current, [key]: event.target.value }))} type={key === 'filled_at' ? 'date' : 'text'} placeholder={key === 'requested_amount' ? 'Informe o valor em reais' : ''} className="w-full rounded-xl border border-gray-300 px-3 py-2.5 font-normal" /></label>)}
+            {[['organization_name','Nome da organização'],['responsible_person','Pessoa responsável pelo preenchimento'],['responsible_role','Cargo'],['emails','E-mails de contato (um por linha)'],['requested_amount','Valor solicitado para o próximo ciclo'],['filled_at','Data do preenchimento']].map(([key,label]) => <label key={key} className="space-y-1 text-sm font-medium">{label}<input value={institution[key] || ''} onChange={(event) => setInstitution((current) => ({ ...current, [key]: event.target.value }))} type={key === 'filled_at' ? 'date' : 'text'} placeholder={key === 'requested_amount' ? 'Informe o valor em reais' : key === 'emails' ? 'email@exemplo.com' : ''} className="w-full rounded-xl border border-gray-300 px-3 py-2.5 font-normal" /></label>)}
           </div>
         </section>
 
