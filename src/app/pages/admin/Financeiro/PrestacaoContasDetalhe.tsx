@@ -48,7 +48,7 @@ export function PrestacaoContasDetalhe() {
         const row = data as ReportRow;
         setReport(row);
         setNarrative(row.narrative_data || {});
-        setInstitution({ ...((row.narrative_data?.institution || {}) as Record<string, string>), emails: Array.isArray(row.narrative_data?.institution?.emails) ? row.narrative_data.institution.emails.join('\\n') : String(row.narrative_data?.institution?.emails || '') });
+        setInstitution({ ...((row.narrative_data?.institution || {}) as Record<string, string>), emails: Array.isArray(row.narrative_data?.institution?.emails) ? row.narrative_data.institution.emails.join('\n') : String(row.narrative_data?.institution?.emails || '') });
         setImpact((row.narrative_data?.impact_engagement || {}) as Record<string, any>);
       }
       setLoading(false);
@@ -62,7 +62,7 @@ export function PrestacaoContasDetalhe() {
     if (!report) return;
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const nextNarrative = { ...narrative, institution: { ...institution, emails: (institution.emails || '').split(/[\\n,;]/).map((email) => email.trim()).filter(Boolean) }, impact_engagement: impact };
+    const nextNarrative = { ...narrative, institution: { ...institution, emails: (institution.emails || '').split(/[\n,;]/).map((email) => email.trim()).filter(Boolean) }, impact_engagement: impact };
     const { error: updateError } = await supabase.from('finance_accountability_reports').update({
       narrative_data: nextNarrative,
       updated_by: user?.id ?? null,
