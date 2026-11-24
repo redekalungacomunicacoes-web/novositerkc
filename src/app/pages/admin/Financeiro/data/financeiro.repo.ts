@@ -13,12 +13,13 @@ export type FinanceiroFundo = {
   nome: string;
   ano: number;
   totalOrcado: number;
+  orcamentoCadastrado?: number;
   saldoInicial: number;
   saldoAtual: number;
   totalGasto: number;
   totalEntradas: number;
   totalSaidas: number;
-  status: FinanceStatus;
+  status: Extract<FinanceStatus, 'ativo' | 'concluido' | 'cancelado'>;
   execucao: number;
 };
 
@@ -32,7 +33,7 @@ export type FinanceiroProjeto = {
   gastoReal: number;
   diferenca: number;
   execucao: number;
-  status: FinanceStatus;
+  status: Extract<FinanceStatus, 'em_andamento' | 'concluido' | 'cancelado'>;
 };
 
 export type FinanceAttachment = {

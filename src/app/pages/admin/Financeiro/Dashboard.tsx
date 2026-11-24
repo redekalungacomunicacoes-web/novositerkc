@@ -62,30 +62,17 @@ export function Dashboard() {
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
 
-  // -----------------------------
-  // ✅ NOVO: saldoAtual calculado para o Caixa Geral
-  // Regra: soma de todos os fundos (saldoAtual) + entradas pagas - saídas pagas
-  // Observação:
-  // - projetos com fundo próprio já devem aparecer em funds (ou ter um fundo espelhado).
-  // - para misto, a base vem só das entradas/saídas.
-  // -----------------------------
-  const computedSaldoAtual = useMemo(() => {
-    const baseFundos = (funds || []).reduce((acc, f) => acc + (Number((f as any).saldoAtual) || 0), 0);
-
-    const entradasPagas = (movements || [])
-      .filter((m) => m.tipo === 'entrada' && m.status === 'pago')
-      .reduce((acc, m) => acc + (Number(m.valorTotal) || 0), 0);
-
-    const saidasPagas = (movements || [])
-      .filter((m) => m.tipo === 'saida' && m.status === 'pago')
-      .reduce((acc, m) => acc + (Number(m.valorTotal) || 0), 0);
-
-    return baseFundos + entradasPagas - saidasPagas;
-  }, [funds, movements]);
-
-  // Mantém também as métricas “padrão” do dashboard,
-  // mas garante que o KPI Saldo Atual use o valor calculado acima.
-  const kpiSaldoAtual = computedSaldoAtual;
+  const [executionFundId, setExecutionFundId] = useState('');
+  const executionFunds = executionFundId ? funds.filter(fund => fund.id === executionFundId) : funds;
+  const executionData = executionFunds.map(fund => ({
+    name: fund.nome,
+    previsto: fund.orcamentoCadastrado ?? null,
+    executado: fund.totalSaidas,
+  }));
+  const budget = executionData.reduce((total, fund) => total + (fund.previsto ?? 0), 0);
+  const spent = executionData.reduce((total, fund) => total + fund.executado, 0);
+  const execution = budget > 0 && executionData.every(fund => fund.previsto !== null) ? (spent / budget).toLocaleString('pt-BR', { style: 'percent', maximumFractionDigits: 1 }) : '—';
+  const showAmount = (amount: number) => loading || error ? '—' : formatCurrency(amount);
 
   const categoriaData = useMemo(
     () =>
@@ -211,11 +198,10 @@ export function Dashboard() {
       {error && <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {/* ✅ aqui usamos o saldo corrigido */}
-        <KPICard title="Saldo Atual" value={formatCurrency(kpiSaldoAtual)} icon={<CircleDollarSign className="h-5 w-5" />} variant="primary" />
-        <KPICard title="Entradas pagas" value={formatCurrency(dashboard.entradas)} icon={<TrendingUp className="h-5 w-5" />} />
-        <KPICard title="Saídas pagas" value={formatCurrency(dashboard.saidas)} icon={<TrendingDown className="h-5 w-5" />} />
-        <KPICard title="Pendências" value={formatCurrency(dashboard.pendencias)} icon={<AlertCircle className="h-5 w-5" />} />
+        <KPICard title="Saldo Atual" value={showAmount(dashboard.saldoAtual)} icon={<CircleDollarSign className="h-5 w-5" />} variant="primary" />
+        <KPICard title="Entradas pagas · 6 meses" value={showAmount(dashboard.entradas)} icon={<TrendingUp className="h-5 w-5" />} />
+        <KPICard title="Saídas pagas · 6 meses" value={showAmount(dashboard.saidas)} icon={<TrendingDown className="h-5 w-5" />} />
+        <KPICard title="Pendências · 6 meses" value={showAmount(dashboard.pendencias)} icon={<AlertCircle className="h-5 w-5" />} />
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-5 2xl:grid-cols-2">
@@ -239,19 +225,31 @@ export function Dashboard() {
         </div>
 
         <div className="rounded-2xl border border-[#e7e9e2] bg-white p-6 shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
-          <h3 className="mb-6 text-base font-semibold text-gray-900">Orçado vs Real</h3>
-          {dashboard.orcadoVsReal.length === 0 ? (
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Execução por fundo</h3>
+              {!loading && !error && executionData.length > 0 && <p className="mt-1 text-sm text-gray-600">Execução acumulada {execution === '—' ? 'indisponível sem orçamento completo' : execution}</p>}
+            </div>
+            <label className="text-sm text-gray-700">
+              Fundo
+              <select className="ml-2 max-w-52 rounded-lg border bg-white p-2" value={executionFundId} onChange={event => setExecutionFundId(event.target.value)}>
+                <option value="">Todos os fundos</option>
+                {funds.map(fund => <option key={fund.id} value={fund.id}>{fund.nome}</option>)}
+              </select>
+            </label>
+          </div>
+          {loading || Boolean(error) || executionData.length === 0 ? (
             <p className="text-sm text-gray-500">Sem dados.</p>
           ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={dashboard.orcadoVsReal}>
+              <BarChart data={executionData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="periodo" />
+                <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
                 <Legend />
-                <Bar dataKey="orcado" fill="#ffdd9a" name="Orçado" />
-                <Bar dataKey="real" fill="#0f3d2e" name="Real" />
+                <Bar dataKey="previsto" fill="#ffdd9a" name="Orçado" />
+                <Bar dataKey="executado" fill="#0f3d2e" name="Despesas pagas" />
               </BarChart>
             </ResponsiveContainer>
           )}
