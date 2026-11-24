@@ -180,6 +180,10 @@ export function Dashboard() {
             <Link to="/admin/financeiro/projetos" className="text-sm text-[#0f3d2e] hover:underline">
               Ver Projetos
             </Link>
+            <span className="text-gray-300">•</span>
+            <Link to="/admin/financeiro/prestacoes" className="text-sm font-semibold text-[#315b47] transition hover:text-[#0f3d2e]">
+              Prestações de contas
+            </Link>
           </div>
         </div>
 
