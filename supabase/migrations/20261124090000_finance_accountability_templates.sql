@@ -118,36 +118,56 @@ alter table public.finance_accountability_reports enable row level security;
 alter table public.finance_accountability_documents enable row level security;
 alter table public.finance_accountability_history enable row level security;
 
--- Inicialmente, somente administradores podem gerenciar modelos, relatórios e arquivos.
+-- Inclui o papel financeiro já utilizado pelo painel administrativo.
+create or replace function public.can_manage_finance_accountability()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select exists (
+    select 1
+    from public.user_roles ur
+    join public.roles r on r.id = ur.role_id
+    where ur.user_id = auth.uid()
+      and r.name in ('admin_alfa', 'admin', 'financeiro')
+  );
+$;
+
+revoke all on function public.can_manage_finance_accountability() from public;
+grant execute on function public.can_manage_finance_accountability() to authenticated;
+
+-- Administradores e integrantes com papel financeiro podem gerenciar estes registros.
 -- A leitura pública será implementada por uma camada de publicação segura, sem expor JSON privado.
 do $$ begin
   create policy "finance_reporting_templates_admin_all"
     on public.finance_reporting_templates for all to authenticated
-    using (public.is_admin()) with check (public.is_admin());
+    using (public.can_manage_finance_accountability()) with check (public.can_manage_finance_accountability());
 exception when duplicate_object then null; end $$;
 
 do $$ begin
   create policy "finance_accountability_reports_admin_all"
     on public.finance_accountability_reports for all to authenticated
-    using (public.is_admin()) with check (public.is_admin());
+    using (public.can_manage_finance_accountability()) with check (public.can_manage_finance_accountability());
 exception when duplicate_object then null; end $$;
 
 do $$ begin
   create policy "finance_accountability_documents_admin_all"
     on public.finance_accountability_documents for all to authenticated
-    using (public.is_admin()) with check (public.is_admin());
+    using (public.can_manage_finance_accountability()) with check (public.can_manage_finance_accountability());
 exception when duplicate_object then null; end $$;
 
 do $$ begin
   create policy "finance_accountability_history_admin_select"
     on public.finance_accountability_history for select to authenticated
-    using (public.is_admin());
+    using (public.can_manage_finance_accountability());
 exception when duplicate_object then null; end $$;
 
 do $$ begin
   create policy "finance_accountability_history_admin_insert"
     on public.finance_accountability_history for insert to authenticated
-    with check (public.is_admin());
+    with check (public.can_manage_finance_accountability());
 exception when duplicate_object then null; end $$;
 
 comment on table public.finance_reporting_templates is
