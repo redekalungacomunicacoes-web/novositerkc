@@ -139,23 +139,45 @@ revoke all on function public.can_manage_finance_accountability() from public;
 grant execute on function public.can_manage_finance_accountability() to authenticated;
 
 -- Administradores e integrantes com papel financeiro podem gerenciar estes registros.
+-- Não há DELETE: modelos, prestações e documentos devem ser arquivados, preservando histórico.
 -- A leitura pública será implementada por uma camada de publicação segura, sem expor JSON privado.
 do $$ begin
-  create policy "finance_reporting_templates_admin_all"
-    on public.finance_reporting_templates for all to authenticated
-    using (public.can_manage_finance_accountability()) with check (public.can_manage_finance_accountability());
+  create policy "finance_reporting_templates_finance_select"
+    on public.finance_reporting_templates for select to authenticated
+    using (public.can_manage_finance_accountability());
+  create policy "finance_reporting_templates_finance_insert"
+    on public.finance_reporting_templates for insert to authenticated
+    with check (public.can_manage_finance_accountability());
+  create policy "finance_reporting_templates_finance_update"
+    on public.finance_reporting_templates for update to authenticated
+    using (public.can_manage_finance_accountability())
+    with check (public.can_manage_finance_accountability());
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create policy "finance_accountability_reports_admin_all"
-    on public.finance_accountability_reports for all to authenticated
-    using (public.can_manage_finance_accountability()) with check (public.can_manage_finance_accountability());
+  create policy "finance_accountability_reports_finance_select"
+    on public.finance_accountability_reports for select to authenticated
+    using (public.can_manage_finance_accountability());
+  create policy "finance_accountability_reports_finance_insert"
+    on public.finance_accountability_reports for insert to authenticated
+    with check (public.can_manage_finance_accountability());
+  create policy "finance_accountability_reports_finance_update"
+    on public.finance_accountability_reports for update to authenticated
+    using (public.can_manage_finance_accountability())
+    with check (public.can_manage_finance_accountability());
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create policy "finance_accountability_documents_admin_all"
-    on public.finance_accountability_documents for all to authenticated
-    using (public.can_manage_finance_accountability()) with check (public.can_manage_finance_accountability());
+  create policy "finance_accountability_documents_finance_select"
+    on public.finance_accountability_documents for select to authenticated
+    using (public.can_manage_finance_accountability());
+  create policy "finance_accountability_documents_finance_insert"
+    on public.finance_accountability_documents for insert to authenticated
+    with check (public.can_manage_finance_accountability());
+  create policy "finance_accountability_documents_finance_update"
+    on public.finance_accountability_documents for update to authenticated
+    using (public.can_manage_finance_accountability())
+    with check (public.can_manage_finance_accountability());
 exception when duplicate_object then null; end $$;
 
 do $$ begin
