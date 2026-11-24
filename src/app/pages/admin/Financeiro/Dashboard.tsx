@@ -62,39 +62,42 @@ export function Dashboard() {
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
 
-  // -----------------------------
-  // ✅ NOVO: saldoAtual calculado para o Caixa Geral
-  // Regra: soma de todos os fundos (saldoAtual) + entradas pagas - saídas pagas
-  // Observação:
-  // - projetos com fundo próprio já devem aparecer em funds (ou ter um fundo espelhado).
-  // - para misto, a base vem só das entradas/saídas.
-  // -----------------------------
-  const computedSaldoAtual = useMemo(() => {
-    const baseFundos = (funds || []).reduce((acc, f) => acc + (Number((f as any).saldoAtual) || 0), 0);
-
-    const entradasPagas = (movements || [])
-      .filter((m) => m.tipo === 'entrada' && m.status === 'pago')
-      .reduce((acc, m) => acc + (Number(m.valorTotal) || 0), 0);
-
-    const saidasPagas = (movements || [])
-      .filter((m) => m.tipo === 'saida' && m.status === 'pago')
-      .reduce((acc, m) => acc + (Number(m.valorTotal) || 0), 0);
-
-    return baseFundos + entradasPagas - saidasPagas;
-  }, [funds, movements]);
-
-  // Mantém também as métricas “padrão” do dashboard,
-  // mas garante que o KPI Saldo Atual use o valor calculado acima.
-  const kpiSaldoAtual = computedSaldoAtual;
+  const [periodFilters, setPeriodFilters] = useState({ start: minusDaysISO(30), end: todayISO(), fundId: '', projectId: '' });
+  const [periodScope, setPeriodScope] = useState<typeof periodFilters | null>(null);
+  const [periodResult, setPeriodResult] = useState<{ scope: typeof periodFilters; data: typeof dashboard } | null>(null);
+  const [periodError, setPeriodError] = useState('');
+  const { getDashboardAggregates } = finance;
+  useEffect(() => {
+    if (!periodScope || loading) return;
+    let active = true;
+    setPeriodError('');
+    setPeriodResult(null);
+    void getDashboardAggregates(periodScope).then(data => {
+      if (active) setPeriodResult({ scope: periodScope, data });
+    }).catch(() => { if (active) setPeriodError('Não foi possível apurar os totais do período.'); });
+    return () => { active = false; };
+  }, [periodScope, loading, getDashboardAggregates]);
+  const periodDashboard = !periodScope ? dashboard : periodResult?.scope === periodScope ? periodResult?.data : undefined;
+  const [executionFundId, setExecutionFundId] = useState('');
+  const executionFunds = executionFundId ? funds.filter(fund => fund.id === executionFundId) : funds;
+  const executionData = executionFunds.map(fund => ({
+    name: fund.nome,
+    previsto: fund.orcamentoCadastrado ?? null,
+    executado: fund.totalSaidas,
+  }));
+  const budget = executionData.reduce((total, fund) => total + (fund.previsto ?? 0), 0);
+  const spent = executionData.reduce((total, fund) => total + fund.executado, 0);
+  const execution = budget > 0 && executionData.every(fund => fund.previsto !== null) ? (spent / budget).toLocaleString('pt-BR', { style: 'percent', maximumFractionDigits: 1 }) : '—';
+  const showAmount = (amount: number) => loading || error ? '—' : formatCurrency(amount);
 
   const categoriaData = useMemo(
     () =>
-      (dashboard.distribuicaoCategoria || []).map((item, index) => ({
+      (periodDashboard?.distribuicaoCategoria ?? []).map((item, index) => ({
         name: item.categoria,
         value: Number(item.valor) || 0,
         color: CHART_COLORS[index % CHART_COLORS.length],
       })),
-    [dashboard.distribuicaoCategoria],
+    [periodDashboard?.distribuicaoCategoria],
   );
 
   const openCreateMovement = async () => {
@@ -165,18 +168,24 @@ export function Dashboard() {
   };
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div className="min-h-screen bg-[#f6f7f3] p-4 text-[#17251f] sm:p-6 lg:p-8">
+      <div className="mb-8 rounded-[26px] border border-[#e5e8df] bg-gradient-to-br from-white via-white to-[#f4f0e5] p-6 shadow-[0_18px_50px_rgba(16,61,46,0.07)] sm:p-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="mb-1 text-2xl font-semibold text-gray-900">Dashboard Financeiro</h1>
-          <p className="text-sm text-gray-600">Últimos 6 meses com dados pagos</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Link to="/admin/financeiro/fundos" className="text-sm text-[#0f3d2e] hover:underline">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#d9c58e]/40 bg-[#f4ebd8] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#315b47]">Rede Kalunga Comunicações <span className="h-1 w-1 rounded-full bg-[#b18b42]" /> Gestão financeira</div>
+          <h1 className="mb-2 text-3xl font-semibold tracking-tight text-[#173b2e] sm:text-4xl">Visão financeira</h1>
+          <p className="max-w-xl text-sm leading-6 text-gray-600">Acompanhe recursos, movimentações e execução dos projetos em um só lugar.</p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Link to="/admin/financeiro/fundos" className="text-sm font-medium text-[#315b47] transition hover:text-[#0f3d2e]">
               Ver Fundos
             </Link>
-            <span className="text-gray-400">•</span>
+            <span className="text-gray-300">•</span>
             <Link to="/admin/financeiro/projetos" className="text-sm text-[#0f3d2e] hover:underline">
               Ver Projetos
+            </Link>
+            <span className="text-gray-300">•</span>
+            <Link to="/admin/financeiro/prestacoes" className="text-sm font-semibold text-[#315b47] transition hover:text-[#0f3d2e]">
+              Prestações de contas
             </Link>
           </div>
         </div>
@@ -184,7 +193,7 @@ export function Dashboard() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setReportOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+            className="flex items-center gap-2 rounded-xl border border-[#dfe5dc] bg-white px-4 py-3 text-sm font-semibold text-[#234b39] shadow-sm transition hover:bg-[#f6f8f3]"
           >
             <FileText className="h-4 w-4" />
             Relatório
@@ -192,33 +201,52 @@ export function Dashboard() {
 
           <button
             onClick={() => void openCreateMovement()}
-            className="flex items-center gap-2 rounded-lg bg-[#0f3d2e] px-4 py-2 text-sm font-medium text-white hover:bg-[#0a2b20]"
+            className="flex items-center gap-2 rounded-xl bg-[#123f30] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0d3327]"
           >
             <Plus className="h-4 w-4" />
             Nova Movimentação
           </button>
         </div>
       </div>
-
-      {loading && <div className="mb-6 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">Carregando dados do financeiro...</div>}
-      {error && <div className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-
-      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {/* ✅ aqui usamos o saldo corrigido */}
-        <KPICard title="Saldo Atual" value={formatCurrency(kpiSaldoAtual)} icon={<CircleDollarSign className="h-5 w-5" />} variant="primary" />
-        <KPICard title="Entradas pagas" value={formatCurrency(dashboard.entradas)} icon={<TrendingUp className="h-5 w-5" />} />
-        <KPICard title="Saídas pagas" value={formatCurrency(dashboard.saidas)} icon={<TrendingDown className="h-5 w-5" />} />
-        <KPICard title="Pendências" value={formatCurrency(dashboard.pendencias)} icon={<AlertCircle className="h-5 w-5" />} />
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
+      {loading && <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">Carregando dados do financeiro...</div>}
+      {error && <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
+
+      <form className="mb-5 flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4"
+        onSubmit={event => { event.preventDefault(); setPeriodScope({ ...periodFilters }); }}>
+        <div className="w-full">
+          <h2 className="font-semibold">Movimentações do período</h2>
+          <p className="text-sm text-gray-600">{periodScope ? `${formatDate(periodScope.start + 'T12:00:00')} a ${formatDate(periodScope.end + 'T12:00:00')}` : 'Últimos seis meses do calendário'}. O saldo geral e a execução acumulada são exibidos à parte.</p>
+        </div>
+        <label className="text-sm">De<input type="date" required value={periodFilters.start} onChange={event => setPeriodFilters({ ...periodFilters, start: event.target.value })} className="block rounded-lg border p-2" /></label>
+        <label className="text-sm">Até<input type="date" required min={periodFilters.start || undefined} value={periodFilters.end} onChange={event => setPeriodFilters({ ...periodFilters, end: event.target.value })} className="block rounded-lg border p-2" /></label>
+        <label className="text-sm">Fundo<select value={periodFilters.fundId} onChange={event => setPeriodFilters({ ...periodFilters, fundId: event.target.value, projectId: '' })} className="block max-w-56 rounded-lg border p-2">
+          <option value="">Todos</option>{funds.map(fund => <option key={fund.id} value={fund.id}>{fund.nome}</option>)}
+        </select></label>
+        <label className="text-sm">Projeto<select value={periodFilters.projectId} onChange={event => setPeriodFilters({ ...periodFilters, projectId: event.target.value })} className="block max-w-56 rounded-lg border p-2">
+          <option value="">Todos</option>{projects.filter(project => !periodFilters.fundId || project.fundoId === periodFilters.fundId).map(project => <option key={project.id} value={project.id}>{project.nome}</option>)}
+        </select></label>
+        <button type="submit" className="rounded-lg bg-[#103d2e] px-3 py-2 text-sm font-semibold text-white">Aplicar</button>
+        {periodScope && <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { setPeriodError(''); setPeriodScope(null); }}>Voltar ao período padrão</button>}
+        {periodScope && !periodDashboard && !periodError && <p role="status" className="text-sm">Consultando período…</p>}
+        {periodScope && periodError && <p role="alert" className="text-sm text-rose-700">{periodError}</p>}
+      </form>
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KPICard title="Saldo Atual" value={showAmount(dashboard.saldoAtual)} icon={<CircleDollarSign className="h-5 w-5" />} variant="primary" />
+        <KPICard title="Entradas pagas no período" value={periodDashboard ? showAmount(periodDashboard.entradas) : '—'} icon={<TrendingUp className="h-5 w-5" />} />
+        <KPICard title="Saídas pagas no período" value={periodDashboard ? showAmount(periodDashboard.saidas) : '—'} icon={<TrendingDown className="h-5 w-5" />} />
+        <KPICard title="Pendências no período" value={periodDashboard ? showAmount(periodDashboard.pendencias) : '—'} icon={<AlertCircle className="h-5 w-5" />} />
+      </div>
+
+      <div className="mb-8 grid grid-cols-1 gap-5 2xl:grid-cols-2">
+        <div className="rounded-2xl border border-[#e7e9e2] bg-white p-6 shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
           <h3 className="mb-6 text-base font-semibold text-gray-900">Fluxo de Caixa (Pago)</h3>
-          {dashboard.fluxoCaixa.length === 0 ? (
+          {!periodDashboard?.fluxoCaixa.length ? (
             <p className="text-sm text-gray-500">Sem dados.</p>
           ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={dashboard.fluxoCaixa}>
+              <LineChart data={periodDashboard.fluxoCaixa}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="periodo" />
                 <YAxis />
@@ -231,27 +259,39 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h3 className="mb-6 text-base font-semibold text-gray-900">Orçado vs Real</h3>
-          {dashboard.orcadoVsReal.length === 0 ? (
+        <div className="rounded-2xl border border-[#e7e9e2] bg-white p-6 shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Execução por fundo</h3>
+              {!loading && !error && executionData.length > 0 && <p className="mt-1 text-sm text-gray-600">Execução acumulada {execution === '—' ? 'indisponível sem orçamento completo' : execution}</p>}
+            </div>
+            <label className="text-sm text-gray-700">
+              Fundo
+              <select className="ml-2 max-w-52 rounded-lg border bg-white p-2" value={executionFundId} onChange={event => setExecutionFundId(event.target.value)}>
+                <option value="">Todos os fundos</option>
+                {funds.map(fund => <option key={fund.id} value={fund.id}>{fund.nome}</option>)}
+              </select>
+            </label>
+          </div>
+          {loading || Boolean(error) || executionData.length === 0 ? (
             <p className="text-sm text-gray-500">Sem dados.</p>
           ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={dashboard.orcadoVsReal}>
+              <BarChart data={executionData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="periodo" />
+                <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
                 <Legend />
-                <Bar dataKey="orcado" fill="#ffdd9a" name="Orçado" />
-                <Bar dataKey="real" fill="#0f3d2e" name="Real" />
+                <Bar dataKey="previsto" fill="#ffdd9a" name="Orçado" />
+                <Bar dataKey="executado" fill="#0f3d2e" name="Despesas pagas" />
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
       </div>
 
-      <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6">
+      <div className="mb-8 rounded-2xl border border-[#e7e9e2] bg-white p-6 shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
         <h3 className="mb-6 text-base font-semibold text-gray-900">Distribuição por Categoria</h3>
         {categoriaData.length === 0 ? (
           <p className="text-sm text-gray-500">Sem dados.</p>
@@ -270,14 +310,14 @@ export function Dashboard() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+      <div className="overflow-hidden rounded-2xl border border-[#e7e9e2] bg-white shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
+        <div className="flex items-center justify-between border-b border-[#edf0e9] px-6 py-5">
           <h3 className="text-base font-semibold text-gray-900">Últimas movimentações</h3>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="border-b border-gray-200 bg-gray-50">
+            <thead className="border-b border-[#edf0e9] bg-[#f8f9f6]">
               <tr>
                 <th className="px-6 py-3 text-left text-xs uppercase">Data</th>
                 <th className="px-6 py-3 text-left text-xs uppercase">Descrição</th>

@@ -19,8 +19,8 @@ type Props = {
   attachments: FinanceAttachment[];
   onSubmit: (payload: MovementPayload) => Promise<{ id?: string } | void>;
   onDelete?: () => Promise<void>;
-  onUploadAttachment: (file: File, context: { movementId: string; fundId?: string; projectId?: string }) => Promise<void>;
-  onDeleteAttachment: (attachmentId: string) => Promise<void>;
+  onUploadAttachment: (file: File, context: { movementId: string; fundId?: string; projectId?: string }) => Promise<unknown>;
+  onDeleteAttachment: (attachmentId: string) => Promise<unknown>;
   onViewAttachment: (attachment: FinanceAttachment) => Promise<string>;
   onChanged: () => Promise<void>;
 };

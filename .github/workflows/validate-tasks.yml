@@ -40,7 +40,7 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check --node-modules-dir=manual --config supabase/functions/drive-files/deno.json supabase/functions/drive-files/index.ts
-      - run: npm install --no-save --package-lock=false playwright@1.51.1
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
       - run: npx playwright install --with-deps chromium
       - name: Responsive task flows
         run: |

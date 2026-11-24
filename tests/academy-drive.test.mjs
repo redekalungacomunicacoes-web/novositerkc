@@ -444,6 +444,8 @@ test("HTTP endpoint denies anonymous access, reader writes and out-of-scope down
         )
         .replace('"../_shared/google-drive.ts"', JSON.stringify(driveUrl))
         .replace('"../_shared/academy-drive.ts"', JSON.stringify(academyUrl))
+        .replace('"../_shared/accountability-sheets.ts"', JSON.stringify(dataModule("export const getAccountabilitySheetStatus=()=>{throw new Error(\"Unexpected accountability operation in unrelated test\");};\nexport const syncAccountabilitySheet=()=>{throw new Error(\"Unexpected accountability operation in unrelated test\");};")))
+        .replace('"../_shared/accountability-drive.ts"', JSON.stringify(dataModule("export const prepareAccountabilityFolder=()=>{throw new Error(\"Unexpected accountability operation in unrelated test\");};\nexport const prepareAccountabilityDocuments=()=>{throw new Error(\"Unexpected accountability operation in unrelated test\");};\nexport const uploadAccountabilityEvidence=()=>{throw new Error(\"Unexpected accountability operation in unrelated test\");};")))
         .replace('"../_shared/project-drive.ts"', JSON.stringify(dataModule('export const uploadProjectDrive=()=>{},getProjectPreview=()=>{};')))
         .replace('"../_shared/site-drive.ts"', JSON.stringify(dataModule('export const uploadSiteDrive=()=>{};')))
         .replace('"../_shared/team-drive.ts"', JSON.stringify(dataModule('export const ensureTeamMemberFolder=()=>{},requireTeamEditor=()=>{},confirmTeamAvatar=()=>{},uploadTeamAvatar=()=>{},uploadTeamAvatarPair=()=>{},uploadTeamPortfolio=()=>{},removeTeamAvatar=()=>{},removeTeamPortfolio=()=>{},importLegacyTeamAvatar=()=>{};')))

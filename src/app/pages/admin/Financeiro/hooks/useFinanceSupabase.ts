@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 // (COLE AQUI O MESMO CÓDIGO QUE VOCÊ MANDOU, COM APENAS AS MUDANÇAS ABAIXO)
 // ✅ 1) ProjectPayload: fund_id agora pode ser '' (misto) OU vazio (pra criar fundo)
 // ✅ 2) createProject: se payload.fund_id vier '' E initial_amount > 0 => cria fundo próprio e usa esse id
@@ -152,12 +153,13 @@ const mapFund = (row: AnyRow): FinanceiroFundo => {
     nome: String(row.nome ?? row.name ?? 'Sem nome'),
     ano: Number(row.ano ?? row.year ?? new Date().getFullYear()),
     totalOrcado,
+    orcamentoCadastrado: row.total_orcado == null ? undefined : Number(row.total_orcado),
     saldoInicial,
     saldoAtual,
     totalGasto,
     totalEntradas,
     totalSaidas,
-    status: normalizeStatus(row.status, 'ativo'),
+    status: (['concluido', 'cancelado'] as const).find(status => status === normalizeStatus(row.status, 'ativo')) ?? 'ativo',
     execucao: totalOrcado > 0 ? Math.min(100, (totalGasto / totalOrcado) * 100) : 0,
   };
 };
@@ -178,7 +180,7 @@ const mapProject = (row: AnyRow, fundsById: Map<string, string>): FinanceiroProj
     gastoReal,
     diferenca: gastoReal - totalOrcado,
     execucao: totalOrcado > 0 ? Math.min(100, (gastoReal / totalOrcado) * 100) : 0,
-    status: normalizeStatus(row.status, 'em_andamento'),
+    status: (['concluido', 'cancelado'] as const).find(status => status === normalizeStatus(row.status, 'em_andamento')) ?? 'em_andamento',
   };
 };
 
@@ -218,34 +220,22 @@ const buildMovementsQuery = (filters?: MovementFilters) => {
   if (filters?.status) query = query.eq('status', filters.status);
   if (filters?.startDate) query = query.gte('date', filters.startDate);
   if (filters?.endDate) query = query.lte('date', filters.endDate);
-  query = query.order('date', { ascending: false });
+  query = query.order('date', { ascending: false }).order('id');
   if (filters?.limit) query = query.limit(filters.limit);
   return query;
 };
 
-const monthKey = (dateIsoLike: string) => {
-  const d = new Date(dateIsoLike);
-  if (Number.isNaN(d.getTime())) return String(dateIsoLike).slice(0, 7);
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}`;
-};
-
-const buildPeriodsBetween = (startDate: string, endDate: string) => {
-  const periods: string[] = [];
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return periods;
-
-  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-  const last = new Date(end.getFullYear(), end.getMonth(), 1);
-
-  while (cursor.getTime() <= last.getTime()) {
-    const mm = String(cursor.getMonth() + 1).padStart(2, '0');
-    periods.push(`${cursor.getFullYear()}-${mm}`);
-    cursor.setMonth(cursor.getMonth() + 1);
+async function listAllMovementRows(filters: MovementFilters) {
+  const rows: AnyRow[] = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await buildMovementsQuery(filters).range(offset, offset + pageSize - 1);
+    ensure(error, 'Falha ao carregar os totais do financeiro.');
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
   }
-  return periods;
-};
+}
 
 const DEFAULT_DASHBOARD: DashboardData = {
   entradas: 0,
@@ -459,101 +449,56 @@ export function useFinanceSupabase() {
 
   const listLatestMovements = useCallback(async () => listMovements({ limit: 10 }), [listMovements]);
 
-  const getDashboardAggregates = useCallback(async (): Promise<DashboardData> => {
-    try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 5);
+  const getDashboardAggregates = useCallback(async (
+    scope?: { start: string; end: string; fundId: string; projectId: string }
+  ): Promise<DashboardData> => {
+    const endDate = new Date();
+    const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 5, 1);
+    const start = scope?.start ?? format(startDate, 'yyyy-MM-dd');
+    const end = scope?.end ?? format(endDate, 'yyyy-MM-dd');
+    const [periodRows, paidRows, fundsList] = await Promise.all([
+      listAllMovementRows({ startDate: start, endDate: end, projectId: scope?.projectId || undefined }),
+      scope ? [] : listAllMovementRows({ status: 'pago', endDate: end }),
+      scope ? [] : listFunds(),
+    ]);
 
-      const start = startDate.toISOString().slice(0, 10);
-      const end = endDate.toISOString().slice(0, 10);
+    const saldoAtual = fundsList.reduce((total, fund) => total + fund.saldoInicial, 0)
+      + paidRows.map(mapMovement).reduce((total, movement) => total + (movement.tipo === 'entrada' ? movement.valorTotal : -movement.valorTotal), 0);
+    const fluxoMap = new Map<string, DashboardData['fluxoCaixa'][number]>();
+    const categoriaMap = new Map<string, number>();
+    let entradas = 0;
+    let saidas = 0;
+    let pendencias = 0;
 
-      const [movementsRes, paidFundsMovementsRes, fundsList] = await Promise.all([
-        buildMovementsQuery({ startDate: start, endDate: end }),
-        buildMovementsQuery({ status: 'pago' }),
-        listFunds(),
-      ]);
-
-      ensure(movementsRes.error, 'Falha ao carregar dados do dashboard.');
-      ensure(paidFundsMovementsRes.error, 'Falha ao carregar saldo dos fundos.');
-
-      const raw = (movementsRes.data || []).map((row) => mapMovement(row as AnyRow));
-      const paidFundsRaw = (paidFundsMovementsRes.data || []).map((row) => mapMovement(row as AnyRow));
-
-      const projectFundFromRow = new Map<string, string>();
-      raw.forEach((_m, idx) => {
-        const r = movementsRes.data?.[idx] as AnyRow | undefined;
-        const proj = r?.project as AnyRow | undefined;
-        if (proj?.id && proj?.fund_id) projectFundFromRow.set(String(proj.id), String(proj.fund_id));
-      });
-
-      const paidFundProjectMap = new Map<string, string>();
-      paidFundsRaw.forEach((_m, idx) => {
-        const r = paidFundsMovementsRes.data?.[idx] as AnyRow | undefined;
-        const proj = r?.project as AnyRow | undefined;
-        if (proj?.id && proj?.fund_id) paidFundProjectMap.set(String(proj.id), String(proj.fund_id));
-      });
-
-      const fundsNameById = new Map(fundsList.map((f) => [f.id, f.nome]));
-
-      const normalized = raw.map((m) => {
-        const resolvedFundId = m.fundoId || (m.projetoId ? (projectFundFromRow.get(m.projetoId) ?? '') : '');
-        const resolvedFundName = resolvedFundId ? (fundsNameById.get(resolvedFundId) ?? m.fundo) : m.fundo;
-        return { ...m, fundoId: resolvedFundId, fundo: resolvedFundName || '—' };
-      });
-
-      const paidFundsNormalized = paidFundsRaw
-        .map((m) => {
-          const resolvedFundId = m.fundoId || (m.projetoId ? (paidFundProjectMap.get(m.projetoId) ?? '') : '');
-          return { ...m, fundoId: resolvedFundId };
-        })
-        .filter((m) => Boolean(m.fundoId));
-
-      const paid = normalized.filter((m) => m.status === 'pago');
-      const paidIn = paid.filter((m) => m.tipo === 'entrada');
-      const paidOut = paid.filter((m) => m.tipo === 'saida');
-
-      const entradas = paidIn.reduce((acc, m) => acc + m.valorTotal, 0);
-      const saidas = paidOut.reduce((acc, m) => acc + m.valorTotal, 0);
-      const pendencias = normalized.filter((m) => m.status === 'pendente').reduce((acc, m) => acc + m.valorTotal, 0);
-
-      const { totalSaldoGeral } = computeFundBalances(fundsList, paidFundsNormalized);
-      const saldoAtual = totalSaldoGeral;
-
-      const fluxoMap = new Map<string, { periodo: string; entradas: number; saidas: number }>();
-      const pizzaMap = new Map<string, number>();
-      const realMap = new Map<string, number>();
-
-      for (const row of paid) {
-        const period = monthKey(row.data);
-        const current = fluxoMap.get(period) ?? { periodo: period, entradas: 0, saidas: 0 };
-        if (row.tipo === 'entrada') current.entradas += row.valorTotal;
-        if (row.tipo === 'saida') current.saidas += row.valorTotal;
-        fluxoMap.set(period, current);
-
-        if (row.tipo === 'saida') {
-          const cat = row.categoria || 'Sem categoria';
-          pizzaMap.set(cat, (pizzaMap.get(cat) ?? 0) + row.valorTotal);
-          realMap.set(period, (realMap.get(period) ?? 0) + row.valorTotal);
-        }
+    for (const row of periodRows) {
+      const movement = mapMovement(row);
+      const project = row.project as { fund_id?: string } | null | undefined;
+      if (scope?.fundId && (movement.fundoId || project?.fund_id) !== scope.fundId) continue;
+      if (movement.status === 'pendente') pendencias += movement.valorTotal;
+      if (movement.status !== 'pago') continue;
+      const periodo = movement.data.slice(0, 7);
+      const month = fluxoMap.get(periodo) ?? { periodo, entradas: 0, saidas: 0 };
+      if (movement.tipo === 'entrada') {
+        month.entradas += movement.valorTotal;
+        entradas += movement.valorTotal;
+      } else {
+        month.saidas += movement.valorTotal;
+        saidas += movement.valorTotal;
+        const categoria = movement.categoria || 'Sem categoria';
+        categoriaMap.set(categoria, (categoriaMap.get(categoria) ?? 0) + movement.valorTotal);
       }
-
-      const periods = buildPeriodsBetween(start, end);
-      const totalOrcadoPeriodo = fundsList.reduce((acc, f) => acc + (Number.isFinite(f.totalOrcado) ? f.totalOrcado : 0), 0);
-      const orcadoMensal = periods.length > 0 ? totalOrcadoPeriodo / periods.length : 0;
-
-      return {
-        entradas,
-        saidas,
-        saldoAtual,
-        pendencias,
-        fluxoCaixa: periods.map((periodo) => fluxoMap.get(periodo) ?? { periodo, entradas: 0, saidas: 0 }),
-        distribuicaoCategoria: Array.from(pizzaMap.entries()).map(([categoria, valor]) => ({ categoria, valor })),
-        orcadoVsReal: periods.map((periodo) => ({ periodo, orcado: orcadoMensal, real: realMap.get(periodo) ?? 0 })),
-      };
-    } catch {
-      return DEFAULT_DASHBOARD;
+      fluxoMap.set(periodo, month);
     }
+
+    return {
+      entradas,
+      saidas,
+      saldoAtual,
+      pendencias,
+      fluxoCaixa: Array.from(fluxoMap.values()).sort((a, b) => a.periodo.localeCompare(b.periodo)),
+      distribuicaoCategoria: Array.from(categoriaMap, ([categoria, valor]) => ({ categoria, valor })),
+      orcadoVsReal: [],
+    };
   }, [listFunds]);
 
   const load = useCallback(async () => {
@@ -563,8 +508,7 @@ export function useFinanceSupabase() {
       const fundsList = await listFunds();
       const projectsList = await listProjects(fundsList);
 
-      const { data: paidFundsMovementsData, error: paidFundsMovementsError } = await buildMovementsQuery({ status: 'pago' });
-      ensure(paidFundsMovementsError, 'Falha ao carregar saldo dos fundos.');
+      const paidFundsMovementsData = await listAllMovementRows({ status: 'pago', endDate: format(new Date(), 'yyyy-MM-dd') });
 
       const paidFundsMovementsRaw = (paidFundsMovementsData || []).map((row) => mapMovement(row as AnyRow));
       const projectFundById = new Map(projectsList.map((project) => [project.id, project.fundoId]));
@@ -697,6 +641,7 @@ export function useFinanceSupabase() {
         .single();
 
       ensure(fundInsert.error, 'Falha ao criar fundo próprio do projeto.');
+      if (!fundInsert.data) throw new Error('O fundo criado não foi retornado.');
       fundIdToUse = String(fundInsert.data.id);
     }
 
@@ -772,6 +717,7 @@ export function useFinanceSupabase() {
     const base = toMovementDbPayload(payload);
     const result = await supabase.from('finance_movements').insert(base).select('id').single();
     ensure(result.error, 'Falha ao criar movimentação.');
+    if (!result.data) throw new Error('A movimentação criada não foi retornada.');
     return String(result.data.id);
   };
 
@@ -792,6 +738,7 @@ export function useFinanceSupabase() {
   const getSignedUrl = useCallback(async (storagePath: string) => {
     const { data, error: signedError } = await supabase.storage.from('finance-attachments').createSignedUrl(storagePath, 60 * 10);
     ensure(signedError, 'Falha ao gerar URL assinada.');
+    if (!data) throw new Error('A URL assinada não foi retornada.');
     return data.signedUrl;
   }, []);
 

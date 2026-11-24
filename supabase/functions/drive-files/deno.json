@@ -1,1 +1,8 @@
-{"imports":{"https://esm.sh/@supabase/supabase-js@2":"npm:@supabase/supabase-js@2.94.1"}}
+{
+  "imports": {
+    "https://esm.sh/@supabase/supabase-js@2": "npm:@supabase/supabase-js@2.94.1",
+    "jszip": "npm:jszip@3.10.1",
+    "@xmldom/xmldom": "npm:@xmldom/xmldom@0.9.12",
+    "pdf-lib": "npm:pdf-lib@1.17.1"
+  }
+}
