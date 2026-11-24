@@ -62,6 +62,22 @@ export function Dashboard() {
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
 
+  const [periodFilters, setPeriodFilters] = useState({ start: minusDaysISO(30), end: todayISO(), fundId: '', projectId: '' });
+  const [periodScope, setPeriodScope] = useState<typeof periodFilters | null>(null);
+  const [periodResult, setPeriodResult] = useState<{ scope: typeof periodFilters; data: typeof dashboard } | null>(null);
+  const [periodError, setPeriodError] = useState('');
+  const { getDashboardAggregates } = finance;
+  useEffect(() => {
+    if (!periodScope || loading) return;
+    let active = true;
+    setPeriodError('');
+    setPeriodResult(null);
+    void getDashboardAggregates(periodScope).then(data => {
+      if (active) setPeriodResult({ scope: periodScope, data });
+    }).catch(() => { if (active) setPeriodError('Não foi possível apurar os totais do período.'); });
+    return () => { active = false; };
+  }, [periodScope, loading, getDashboardAggregates]);
+  const periodDashboard = !periodScope ? dashboard : periodResult?.scope === periodScope ? periodResult?.data : undefined;
   const [executionFundId, setExecutionFundId] = useState('');
   const executionFunds = executionFundId ? funds.filter(fund => fund.id === executionFundId) : funds;
   const executionData = executionFunds.map(fund => ({
@@ -76,12 +92,12 @@ export function Dashboard() {
 
   const categoriaData = useMemo(
     () =>
-      (dashboard.distribuicaoCategoria || []).map((item, index) => ({
+      (periodDashboard?.distribuicaoCategoria ?? []).map((item, index) => ({
         name: item.categoria,
         value: Number(item.valor) || 0,
         color: CHART_COLORS[index % CHART_COLORS.length],
       })),
-    [dashboard.distribuicaoCategoria],
+    [periodDashboard?.distribuicaoCategoria],
   );
 
   const openCreateMovement = async () => {
@@ -197,21 +213,40 @@ export function Dashboard() {
       {loading && <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">Carregando dados do financeiro...</div>}
       {error && <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
 
+      <form className="mb-5 flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4"
+        onSubmit={event => { event.preventDefault(); setPeriodScope({ ...periodFilters }); }}>
+        <div className="w-full">
+          <h2 className="font-semibold">Movimentações do período</h2>
+          <p className="text-sm text-gray-600">{periodScope ? `${formatDate(periodScope.start + 'T12:00:00')} a ${formatDate(periodScope.end + 'T12:00:00')}` : 'Últimos seis meses do calendário'}. O saldo geral e a execução acumulada são exibidos à parte.</p>
+        </div>
+        <label className="text-sm">De<input type="date" required value={periodFilters.start} onChange={event => setPeriodFilters({ ...periodFilters, start: event.target.value })} className="block rounded-lg border p-2" /></label>
+        <label className="text-sm">Até<input type="date" required min={periodFilters.start || undefined} value={periodFilters.end} onChange={event => setPeriodFilters({ ...periodFilters, end: event.target.value })} className="block rounded-lg border p-2" /></label>
+        <label className="text-sm">Fundo<select value={periodFilters.fundId} onChange={event => setPeriodFilters({ ...periodFilters, fundId: event.target.value, projectId: '' })} className="block max-w-56 rounded-lg border p-2">
+          <option value="">Todos</option>{funds.map(fund => <option key={fund.id} value={fund.id}>{fund.nome}</option>)}
+        </select></label>
+        <label className="text-sm">Projeto<select value={periodFilters.projectId} onChange={event => setPeriodFilters({ ...periodFilters, projectId: event.target.value })} className="block max-w-56 rounded-lg border p-2">
+          <option value="">Todos</option>{projects.filter(project => !periodFilters.fundId || project.fundoId === periodFilters.fundId).map(project => <option key={project.id} value={project.id}>{project.nome}</option>)}
+        </select></label>
+        <button type="submit" className="rounded-lg bg-[#103d2e] px-3 py-2 text-sm font-semibold text-white">Aplicar</button>
+        {periodScope && <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { setPeriodError(''); setPeriodScope(null); }}>Voltar ao período padrão</button>}
+        {periodScope && !periodDashboard && !periodError && <p role="status" className="text-sm">Consultando período…</p>}
+        {periodScope && periodError && <p role="alert" className="text-sm text-rose-700">{periodError}</p>}
+      </form>
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KPICard title="Saldo Atual" value={showAmount(dashboard.saldoAtual)} icon={<CircleDollarSign className="h-5 w-5" />} variant="primary" />
-        <KPICard title="Entradas pagas · 6 meses" value={showAmount(dashboard.entradas)} icon={<TrendingUp className="h-5 w-5" />} />
-        <KPICard title="Saídas pagas · 6 meses" value={showAmount(dashboard.saidas)} icon={<TrendingDown className="h-5 w-5" />} />
-        <KPICard title="Pendências · 6 meses" value={showAmount(dashboard.pendencias)} icon={<AlertCircle className="h-5 w-5" />} />
+        <KPICard title="Entradas pagas no período" value={periodDashboard ? showAmount(periodDashboard.entradas) : '—'} icon={<TrendingUp className="h-5 w-5" />} />
+        <KPICard title="Saídas pagas no período" value={periodDashboard ? showAmount(periodDashboard.saidas) : '—'} icon={<TrendingDown className="h-5 w-5" />} />
+        <KPICard title="Pendências no período" value={periodDashboard ? showAmount(periodDashboard.pendencias) : '—'} icon={<AlertCircle className="h-5 w-5" />} />
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-5 2xl:grid-cols-2">
         <div className="rounded-2xl border border-[#e7e9e2] bg-white p-6 shadow-[0_8px_28px_rgba(23,37,31,0.035)]">
           <h3 className="mb-6 text-base font-semibold text-gray-900">Fluxo de Caixa (Pago)</h3>
-          {dashboard.fluxoCaixa.length === 0 ? (
+          {!periodDashboard?.fluxoCaixa.length ? (
             <p className="text-sm text-gray-500">Sem dados.</p>
           ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={dashboard.fluxoCaixa}>
+              <LineChart data={periodDashboard.fluxoCaixa}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="periodo" />
                 <YAxis />

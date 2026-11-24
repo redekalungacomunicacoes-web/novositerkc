@@ -449,15 +449,17 @@ export function useFinanceSupabase() {
 
   const listLatestMovements = useCallback(async () => listMovements({ limit: 10 }), [listMovements]);
 
-  const getDashboardAggregates = useCallback(async (): Promise<DashboardData> => {
+  const getDashboardAggregates = useCallback(async (
+    scope?: { start: string; end: string; fundId: string; projectId: string }
+  ): Promise<DashboardData> => {
     const endDate = new Date();
     const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 5, 1);
-    const start = format(startDate, 'yyyy-MM-dd');
-    const end = format(endDate, 'yyyy-MM-dd');
+    const start = scope?.start ?? format(startDate, 'yyyy-MM-dd');
+    const end = scope?.end ?? format(endDate, 'yyyy-MM-dd');
     const [periodRows, paidRows, fundsList] = await Promise.all([
-      listAllMovementRows({ startDate: start, endDate: end }),
-      listAllMovementRows({ status: 'pago', endDate: end }),
-      listFunds(),
+      listAllMovementRows({ startDate: start, endDate: end, projectId: scope?.projectId || undefined }),
+      scope ? [] : listAllMovementRows({ status: 'pago', endDate: end }),
+      scope ? [] : listFunds(),
     ]);
 
     const saldoAtual = fundsList.reduce((total, fund) => total + fund.saldoInicial, 0)
@@ -468,7 +470,10 @@ export function useFinanceSupabase() {
     let saidas = 0;
     let pendencias = 0;
 
-    for (const movement of periodRows.map(mapMovement)) {
+    for (const row of periodRows) {
+      const movement = mapMovement(row);
+      const project = row.project as { fund_id?: string } | null | undefined;
+      if (scope?.fundId && (movement.fundoId || project?.fund_id) !== scope.fundId) continue;
       if (movement.status === 'pendente') pendencias += movement.valorTotal;
       if (movement.status !== 'pago') continue;
       const periodo = movement.data.slice(0, 7);

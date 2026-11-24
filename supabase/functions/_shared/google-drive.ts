@@ -113,6 +113,15 @@ async function accessToken() {
   return await serviceAccountAccessToken();
 }
 
+export async function googleSheetsFetch(path: string, init: RequestInit = {}) {
+  const token = await accessToken();
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  return fetch(`https://sheets.googleapis.com/v4/spreadsheets/${path}`, {
+    signal: AbortSignal.timeout(30000), ...init, headers,
+  });
+}
+
 async function driveFetch(url: string, init: RequestInit = {}) {
   const token = await accessToken();
   return fetch(url, {
@@ -122,10 +131,10 @@ async function driveFetch(url: string, init: RequestInit = {}) {
   });
 }
 
-export async function uploadDriveFile(file: File, folderId: string) {
+export async function uploadDriveFile(file: File, folderId: string, appProperties?: Record<string, string>, convertToMimeType?: string) {
   const token = await accessToken();
   const boundary = `rkc_${crypto.randomUUID()}`;
-  const metadata = JSON.stringify({ name: file.name, parents: [folderId] });
+  const metadata = JSON.stringify({ name: file.name, parents: [folderId], appProperties, mimeType: convertToMimeType });
   const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${file.type || "application/octet-stream"}\r\n\r\n`;
   const suffix = `\r\n--${boundary}--`;
   const body = new Blob([
@@ -330,10 +339,12 @@ export async function ensureDrivePath(
   return { folderId: parentId, folders };
 }
 
-function isPublicDirectPermission(permission: {
+type DrivePermission = {
   type: string;
   permissionDetails?: Array<{ inherited: boolean }>;
-}) {
+};
+
+function isPublicDirectPermission(permission: DrivePermission) {
   if (!["anyone", "domain"].includes(permission.type)) return false;
   // A limited folder may still report parent permissions as metadata-only entries.
   // Treat only direct entries as access that makes the destination unsafe.
@@ -341,7 +352,7 @@ function isPublicDirectPermission(permission: {
     permission.permissionDetails.some((detail) => detail.inherited === false);
 }
 
-async function listDrivePermissions(id: string) {
+async function listDrivePermissions(id: string): Promise<DrivePermission[]> {
   const params = new URLSearchParams({
     supportsAllDrives: "true",
     pageSize: "100",
@@ -462,10 +473,10 @@ export async function resolveAcademyFolder(rootId: string) {
     reused,
   };
 }
-export async function assertPrivateDriveFile(id: string) {
+export async function assertPrivateDriveFile(id: string, rejectInheritedPublic = false) {
   const permissions = await listDrivePermissions(id);
   if (
-    permissions.some(isPublicDirectPermission)
+    permissions.some(permission => rejectInheritedPublic ? ["anyone", "domain"].includes(permission.type) : isPublicDirectPermission(permission))
   )
     throw new Error(
       "O arquivo herdou acesso aberto no Drive. Envio não confirmado.",
@@ -483,16 +494,21 @@ export async function listDriveChildren(folderId: string) {
   return response.json();
 }
 
-export async function copyDriveOfficeTemplate(sourceId: string, folderId: string, name: string, key: string, mimeType: string) {
+export async function findAccountabilityCopy(folderId: string, key: string) {
   const q = ["'"+escapeDriveQuery(folderId)+"' in parents", "trashed = false", "appProperties has { key='rkcAccountabilityCopy' and value='"+escapeDriveQuery(key)+"' }"].join(" and ");
   const params = new URLSearchParams({q,fields:"files(id,name,mimeType,parents),nextPageToken",supportsAllDrives:"true",includeItemsFromAllDrives:"true"});
   const found = await driveFetch(`${DRIVE_API}/files?${params}`);
   if (!found.ok) throw new Error("Falha ao verificar cópia oficial.");
   const existing = await found.json();
   if (existing.nextPageToken || existing.files?.length > 1) throw new Error("Cópias duplicadas; revisão necessária.");
-  if (existing.files?.length) {
-    if (existing.files[0].mimeType !== mimeType) throw new Error("Formato da cópia incompatível.");
-    return existing.files[0];
+  return existing.files?.[0] as { id: string; name: string; mimeType: string; parents?: string[] } | undefined;
+}
+
+export async function copyDriveOfficeTemplate(sourceId: string, folderId: string, name: string, key: string, mimeType: string) {
+  const existing = await findAccountabilityCopy(folderId, key);
+  if (existing) {
+    if (existing.mimeType !== mimeType) throw new Error("Formato da cópia incompatível.");
+    return existing;
   }
   const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(sourceId)}/copy?supportsAllDrives=true&fields=id,name,mimeType,parents`, {
     method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,parents:[folderId],appProperties:{rkcAccountabilityCopy:key}})
@@ -501,4 +517,20 @@ export async function copyDriveOfficeTemplate(sourceId: string, folderId: string
   const copied = await response.json();
   if (copied.mimeType !== mimeType || !copied.parents?.includes(folderId)) throw new Error("Cópia não confirmada.");
   return copied;
+}
+
+export async function findAccountabilityExport(folderId: string, key: string) {
+  const q = [
+    "'" + escapeDriveQuery(folderId) + "' in parents",
+    "trashed = false",
+    "appProperties has { key='rkcAccountabilityExport' and value='" + escapeDriveQuery(key) + "' }",
+  ].join(" and ");
+  const params = new URLSearchParams({
+    q, fields: "files(id,name,mimeType,parents),nextPageToken", supportsAllDrives: "true", includeItemsFromAllDrives: "true",
+  });
+  const response = await driveFetch(`${DRIVE_API}/files?${params}`);
+  if (!response.ok) throw new Error("Não foi possível verificar os documentos gerados.");
+  const result = await response.json();
+  if (result.nextPageToken || result.files?.length > 1) throw new Error("Documentos duplicados no Drive. Revisão necessária.");
+  return result.files?.[0] as { id: string; name: string; mimeType: string; parents?: string[] } | undefined;
 }

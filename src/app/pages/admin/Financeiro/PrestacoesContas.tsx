@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, ClipboardList, FilePlus2, FolderOpen, Plus, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -49,6 +49,7 @@ const statusClass: Record<Report['status'], string> = {
 };
 
 export function PrestacoesContas() {
+  const navigate = useNavigate();
   const { funds, projects } = useFinanceSupabase();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -157,15 +158,6 @@ export function PrestacoesContas() {
       financial_data: {},
       narrative_data: {},
     }).select('id').single();
-    if (!error && data?.id) {
-      await supabase.from('finance_accountability_history').insert({
-        report_id: data.id,
-        action: 'created',
-        actor_id: user?.id ?? null,
-        change_summary: 'Prestação criada como rascunho.',
-        snapshot: { title: title.trim(), template_id: templateId, fund_id: fundId || null, project_id: projectId || null },
-      });
-    }
     let folderReady = false;
     if (!error && data?.id) {
       try {
@@ -188,7 +180,8 @@ export function PrestacoesContas() {
     setDueDate('');
     setFundId('');
     setProjectId('');
-    await loadData();
+    if (data?.id) navigate(`/admin/financeiro/prestacoes/${data.id}`);
+    else await loadData();
   };
 
   return (
