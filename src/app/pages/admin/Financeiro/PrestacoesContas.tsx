@@ -95,7 +95,7 @@ export function PrestacoesContas() {
     const { error } = await supabase.from('finance_reporting_templates').insert({
       slug: 'faj-ii-ciclo',
       name: 'Prestação de Contas FAJ',
-      institution_name: 'Fundo de Apoio a Jornalistas',
+      institution_name: 'Fundo de Apoio ao Jornalismo',
       funding_program: 'FAJ',
       cycle_name: 'II Ciclo',
       version: 1,

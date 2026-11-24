@@ -482,3 +482,23 @@ export async function listDriveChildren(folderId: string) {
   if (!response.ok) throw new Error("Não foi possível conferir o conteúdo da pasta.");
   return response.json();
 }
+
+export async function copyDriveOfficeTemplate(sourceId: string, folderId: string, name: string, key: string, mimeType: string) {
+  const q = ["'"+escapeDriveQuery(folderId)+"' in parents", "trashed = false", "appProperties has { key='rkcAccountabilityCopy' and value='"+escapeDriveQuery(key)+"' }"].join(" and ");
+  const params = new URLSearchParams({q,fields:"files(id,name,mimeType,parents),nextPageToken",supportsAllDrives:"true",includeItemsFromAllDrives:"true"});
+  const found = await driveFetch(`${DRIVE_API}/files?${params}`);
+  if (!found.ok) throw new Error("Falha ao verificar cópia oficial.");
+  const existing = await found.json();
+  if (existing.nextPageToken || existing.files?.length > 1) throw new Error("Cópias duplicadas; revisão necessária.");
+  if (existing.files?.length) {
+    if (existing.files[0].mimeType !== mimeType) throw new Error("Formato da cópia incompatível.");
+    return existing.files[0];
+  }
+  const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(sourceId)}/copy?supportsAllDrives=true&fields=id,name,mimeType,parents`, {
+    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,parents:[folderId],appProperties:{rkcAccountabilityCopy:key}})
+  });
+  if (!response.ok) throw new Error("Falha ao copiar modelo oficial.");
+  const copied = await response.json();
+  if (copied.mimeType !== mimeType || !copied.parents?.includes(folderId)) throw new Error("Cópia não confirmada.");
+  return copied;
+}

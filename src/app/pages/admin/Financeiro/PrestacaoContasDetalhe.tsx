@@ -35,6 +35,7 @@ export function PrestacaoContasDetalhe() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [preparingDrive, setPreparingDrive] = useState(false);
+  const [preparingDocuments, setPreparingDocuments] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -69,6 +70,17 @@ export function PrestacaoContasDetalhe() {
       toast.success('Pasta vinculada ao Drive.');
     } catch { toast.error('Não foi possível preparar a pasta. O rascunho permanece salvo.'); }
     finally { setPreparingDrive(false); }
+  };
+
+  const prepareDocuments = async () => {
+    if (!report || preparingDocuments) return;
+    setPreparingDocuments(true);
+    try {
+      const result = await supabase.functions.invoke('drive-files', {body:{action:'accountability-prepare-documents',report_id:report.id}});
+      if (result.error || !result.data?.ok) throw new Error('Modelos indisponíveis');
+      toast.success('Cópias dos modelos preparadas no Drive. Preenchimento automático ainda indisponível.');
+    } catch { toast.error('Não foi possível preparar os modelos. Verifique o cadastro e as permissões do Drive.'); }
+    finally { setPreparingDocuments(false); }
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -117,6 +129,11 @@ export function PrestacaoContasDetalhe() {
         <p className="my-2 text-sm text-gray-500">{report.drive_folder_id ? 'Pasta institucional vinculada.' : 'Pasta pendente de preparação.'}</p>
         {report.drive_folder_id && <a className="mr-4 text-sm underline" href={`https://drive.google.com/drive/folders/${encodeURIComponent(report.drive_folder_id)}`} target="_blank" rel="noopener noreferrer">Abrir pasta</a>}
         <button type="button" disabled={preparingDrive} onClick={() => void prepareDrive()} className="rounded-lg border px-3 py-2 text-sm">{preparingDrive ? 'Preparando...' : report.drive_folder_id ? 'Verificar pasta' : 'Preparar pasta'}</button>
+      </section>
+      <section className="rounded-2xl border bg-white p-5">
+        <h2 className="font-semibold">Modelos oficiais</h2>
+        <p className="my-2 text-sm text-gray-500">Prepare cópias do Word e Excel oficiais, sem alterar os originais. O preenchimento automático será disponibilizado após validação.</p>
+        <button type="button" disabled={preparingDocuments || report.status !== 'draft'} onClick={() => void prepareDocuments()} className="rounded-lg border px-3 py-2 text-sm">{preparingDocuments ? 'Preparando...' : 'Preparar documentos oficiais'}</button>
       </section>
       <form onSubmit={save} className="space-y-6">
         <section className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm sm:p-6">
