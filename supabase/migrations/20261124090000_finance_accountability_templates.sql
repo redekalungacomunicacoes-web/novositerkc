@@ -34,6 +34,8 @@ create table if not exists public.finance_accountability_reports (
   fund_id uuid references public.finance_funds(id) on delete set null,
   project_id uuid references public.finance_projects(id) on delete set null,
   title text not null,
+  drive_folder_id text unique,
+  drive_folder_name text not null default '',
   reference_code text,
   period_start date,
   period_end date,
@@ -206,3 +208,18 @@ comment on table public.finance_accountability_documents is
   'Arquivos oficiais de origem, documentos gerados e anexos associados a uma prestação.';
 comment on table public.finance_accountability_history is
   'Histórico de alterações e snapshots para rastreabilidade das prestações de contas.';
+
+-- Folder identity is assigned only by the authenticated backend.
+create or replace function public.guard_accountability_drive_identity()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if current_user in ('authenticated','anon') then
+    if TG_OP = 'INSERT' then
+      if new.drive_folder_id is not null or new.drive_folder_name <> '' then raise exception 'Drive identity is managed by the backend'; end if;
+    elsif new.drive_folder_id is distinct from old.drive_folder_id or new.drive_folder_name is distinct from old.drive_folder_name then
+      raise exception 'Drive identity is managed by the backend';
+    end if;
+  end if;
+  return new;
+end; $$;
+create trigger guard_accountability_drive_identity before insert or update on public.finance_accountability_reports for each row execute function public.guard_accountability_drive_identity();

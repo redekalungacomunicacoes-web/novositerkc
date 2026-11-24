@@ -18,6 +18,7 @@ import { createCenterFolder, manageCenterFolder, moveCenterFile, uploadCenterFil
 import { prepareTaskFolder } from "../_shared/task-drive.ts";
 import { uploadAcademyDrive, prepareAcademyDestination } from "../_shared/academy-drive.ts";
 import { ensureTeamMemberFolder, importLegacyTeamAvatar, uploadTeamAvatar, uploadTeamAvatarPair, uploadTeamPortfolio, removeTeamAvatar, removeTeamPortfolio, requireTeamEditor, confirmTeamAvatar } from "../_shared/team-drive.ts";
+import { prepareAccountabilityFolder } from "../_shared/accountability-drive.ts";
 import { uploadProjectDrive, getProjectPreview } from "../_shared/project-drive.ts";
 import { uploadSiteDrive } from "../_shared/site-drive.ts";
 import { cleanupUnreferencedMateriaFiles, uploadMateriaDrive } from "../_shared/materia-drive.ts";
@@ -265,6 +266,11 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const action = String(body.action ?? "");
+    if (action === "accountability-ensure-folder") {
+      if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
+      const folderId = await prepareAccountabilityFolder(String(body.report_id || ""), requireAcademyRoot(rootFolderId), userClient, admin);
+      return json({ok:true,folder_id:folderId});
+    }
     if (action === "project-preview") {
       const file = await getProjectPreview(String(body.slug || ""),userClient,admin);
       const response = await downloadDriveFile(file.drive_file_id);

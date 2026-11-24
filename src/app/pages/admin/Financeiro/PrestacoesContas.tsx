@@ -144,12 +144,20 @@ export function PrestacoesContas() {
         snapshot: { title: title.trim(), template_id: templateId, fund_id: fundId || null, project_id: projectId || null },
       });
     }
+    let folderReady = false;
+    if (!error && data?.id) {
+      try {
+        const result = await supabase.functions.invoke('drive-files', { body: { action: 'accountability-ensure-folder', report_id: data.id } });
+        folderReady = !result.error && result.data?.ok === true;
+      } catch { /* draft is already saved; retry from detail */ }
+    }
     setBusy(false);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success('Prestação criada como rascunho.');
+    if (folderReady) toast.success('Prestação criada com pasta no Drive.');
+    else toast.warning('Rascunho salvo. Abra a prestação para tentar preparar a pasta novamente.');
     setShowCreate(false);
     setTitle('');
     setReferenceCode('');

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 type ReportRow = {
   id: string;
   title: string;
+  drive_folder_id: string | null;
   status: string;
   template_id: string;
   narrative_data: Record<string, any>;
@@ -33,6 +34,7 @@ export function PrestacaoContasDetalhe() {
   const [institution, setInstitution] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [preparingDrive, setPreparingDrive] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function PrestacaoContasDetalhe() {
     const load = async () => {
       setLoading(true);
       const { data, error: queryError } = await supabase.from('finance_accountability_reports')
-        .select('id,title,status,template_id,narrative_data,financial_data,reference_code,period_start,period_end')
+        .select('id,title,status,template_id,narrative_data,financial_data,reference_code,period_start,period_end,drive_folder_id')
         .eq('id', id).single();
       if (!active) return;
       if (queryError) setError(queryError.message);
@@ -56,6 +58,18 @@ export function PrestacaoContasDetalhe() {
     void load();
     return () => { active = false; };
   }, [id]);
+
+  const prepareDrive = async () => {
+    if (!report || preparingDrive) return;
+    setPreparingDrive(true);
+    try {
+      const result = await supabase.functions.invoke('drive-files', { body: { action: 'accountability-ensure-folder', report_id: report.id } });
+      if (result.error || !result.data?.ok || !result.data?.folder_id) throw new Error('Não foi possível preparar a pasta. Tente novamente.');
+      setReport(current => current?.id === report.id ? { ...current, drive_folder_id: result.data.folder_id } : current);
+      toast.success('Pasta vinculada ao Drive.');
+    } catch { toast.error('Não foi possível preparar a pasta. O rascunho permanece salvo.'); }
+    finally { setPreparingDrive(false); }
+  };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -98,6 +112,12 @@ export function PrestacaoContasDetalhe() {
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-semibold uppercase tracking-widest text-[#ead7a6]">Rascunho · FAJ II Ciclo</p><h1 className="mt-2 text-2xl font-semibold sm:text-3xl">{report.title}</h1><p className="mt-2 text-sm text-white/70">Preencha aos poucos. As informações ficam privadas até a aprovação e publicação.</p></div><span className="rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white">Rascunho</span></div>
       </header>
 
+      <section className="rounded-2xl border bg-white p-5">
+        <h2 className="font-semibold">Documentos no Google Drive</h2>
+        <p className="my-2 text-sm text-gray-500">{report.drive_folder_id ? 'Pasta institucional vinculada.' : 'Pasta pendente de preparação.'}</p>
+        {report.drive_folder_id && <a className="mr-4 text-sm underline" href={`https://drive.google.com/drive/folders/${encodeURIComponent(report.drive_folder_id)}`} target="_blank" rel="noopener noreferrer">Abrir pasta</a>}
+        <button type="button" disabled={preparingDrive} onClick={() => void prepareDrive()} className="rounded-lg border px-3 py-2 text-sm">{preparingDrive ? 'Preparando...' : report.drive_folder_id ? 'Verificar pasta' : 'Preparar pasta'}</button>
+      </section>
       <form onSubmit={save} className="space-y-6">
         <section className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold">1. Identificação institucional</h2>
