@@ -37,6 +37,9 @@ jobs:
         run: |
           cp dist/index.html dist/404.html
           install -D -m 644 dist/index.html dist/admin/financeiro/prestacoes/index.html
+          for route in faj-ii-ciclo faj-ii-ciclo/financeiro faj-ii-ciclo/narrativo; do
+            install -D -m 644 dist/index.html "dist/prestacao-de-contas/$route/index.html"
+          done
 
       - uses: actions/upload-pages-artifact@v3
         with:

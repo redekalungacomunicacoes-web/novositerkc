@@ -42,6 +42,7 @@ async function setup(db) {
     '20261124195000_finance_accountability_deadline.sql',
     '20261124200000_finance_accountability_workflow.sql',
     '20261124204000_finance_accountability_evidence.sql',
+    '20261125010000_finance_accountability_public_dashboard.sql',
   ];
   for (const file of migrations) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'));
@@ -210,4 +211,48 @@ test('only empty finance drafts can be safely removed from the dashboard', async
   const updated = (await db.query('select updated_at::text from public.finance_accountability_reports where id=$1', [second.id])).rows[0];
   await assert.rejects(discard('authenticated', ids.operator, second, updated.updated_at), { code: '22023' });
   assert.equal((await db.query('select status from public.finance_accountability_reports where id=$1', [second.id])).rows[0].status, 'draft');
+});
+
+test('serves only reviewed accountability content and revokes anonymous access after unpublishing', async t => {
+  const db = new PGlite();
+  t.after(() => db.close());
+  await setup(db);
+  const { id, revision } = (await db.query(`
+    insert into public.finance_accountability_reports(template_id, title, financial_data)
+    select id, 'Prestação de teste', '{"team":[{"name":"Nome privado"}]}'
+    from public.finance_reporting_templates
+    returning id, updated_at::text as revision
+  `)).rows[0];
+  const get = () => asRole(db, 'anon', null, async () => (await db.query(
+    "select public.get_finance_accountability_public_report('teste') as report",
+  )).rows[0].report);
+  const publish = (role, user, content, expected = null, reportRevision = revision) => asRole(db, role, user, async () =>
+    (await db.query("select public.set_finance_accountability_publication($1,$2,$3,'teste',$4) as release",
+      [id, reportRevision, expected, content === null ? null : JSON.stringify(content)])).rows[0].release);
+  assert.equal(await get(), null);
+  await assert.rejects(asRole(db, 'anon', null, () => db.query('select * from public.finance_accountability_public_releases')), { code: '42501' });
+  await assert.rejects(asRole(db, 'anon', null, () => db.query('select * from public.finance_accountability_reports')), { code: '42501' });
+  await assert.rejects(publish('anon', null, { overview: [] }), { code: '42501' });
+  await assert.rejects(publish('authenticated', ids.outsider, { overview: [] }), { code: '42501' });
+  await assert.rejects(publish('authenticated', ids.operator, { narrative: [{ label: 'Primeira pergunta', body: 'Resposta' }] }), /integralidade/);
+  await assert.rejects(publish('authenticated', ids.operator, { institution: [{ body: 'privado@example.com' }] }), /e-mail/);
+
+  const release = await publish('authenticated', ids.operator, {
+    overview: [{ total: 100, faj: 60, other: 40, share: 0.6, employee_name: 'Nome privado' }],
+    team: [{ label: 'Nome privado', total: 10, other: { cpf: 'Privado' } }],
+  });
+  assert.deepEqual((await get()).content, {
+    overview: [{ total: 100, faj: 60, other: 40, share: 0.6 }],
+    team: [{ label: 'Equipe e estrutura', total: 10 }],
+  });
+  await assert.rejects(publish('authenticated', ids.operator, {}, null), /publicação mudou/);
+  await assert.rejects(publish('authenticated', ids.operator, { overview: [{}] }, release.published_at, '2000-01-01'), /prestação mudou/i);
+  const row = (await db.query('select status, delivered_at from public.finance_accountability_reports where id = $1', [id])).rows[0];
+  assert.deepEqual(row, { status: 'draft', delivered_at: null });
+  await db.query("update public.finance_accountability_reports set financial_data = '{}' where id = $1", [id]);
+  assert.equal((await get()).content.overview[0].total, 100);
+  await publish('authenticated', ids.operator, null, release.published_at);
+  assert.equal(await get(), null);
+  const { rows } = await db.query("select action from public.finance_accountability_history where report_id = $1 and action in ('published','unpublished') order by id", [id]);
+  assert.deepEqual(rows.map(row => row.action), ['published', 'unpublished']);
 });

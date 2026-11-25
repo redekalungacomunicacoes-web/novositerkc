@@ -10,6 +10,7 @@ import {
 } from "@/lib/rbac";
 import { supabase } from "@/lib/supabase";
 
+const AccountabilityDashboard = lazy(() => import("@/app/pages/public/Accountability/Dashboard"));
 const Academia = lazy(() => import("@/app/pages/admin/academia/Academia").then(m => ({ default: m.Academia })));
 const AdminLayout = lazy(() => import("@/app/layouts/AdminLayout").then(m => ({ default: m.AdminLayout })));
 const RootLayout = lazy(() => import("@/app/layouts/RootLayout").then(m => ({ default: m.RootLayout })));
@@ -82,6 +83,7 @@ function requireRoles(required: RoleName[]) {
 const taskRoles: RoleName[] = ["admin", "editor", "autor"];
 
 export const router = createBrowserRouter([
+  { path: "/prestacao-de-contas/:slug/:view?", element: <AccountabilityDashboard /> },
   {
     path: "/app",
     element: <AppEntry />,
