@@ -61,18 +61,22 @@ export function accountabilityPublicContent(
   ];
   const plan = (Array.isArray(financial.workPlanRows) ? financial.workPlanRows : []).map(row => ({
     label: text(row.objective), activity: text(row.activity), outcome: text(row.outcome),
-    evidence: text(row.evidence), period: text(row.period), budgetLine: text(row.budgetLine),
+    evidence: text(row.evidence), period: text(row.period), budgetLine: text(row.budgetLine), notes: text(row.notes),
   })).filter(row => Object.values(row).some(value => value !== null));
   const legacyPlan = text(financial.workPlan);
   return {
-    overview: totals.total === null && totals.faj === null ? [] : [{ total: totals.total, faj: totals.faj, other, share: totals.share }],
-    budget: [...(hasTeam ? [teamTotal] : []), ...budget.map((row, index) => ({
+    overview: totals.total === null && totals.faj === null ? [] : [{ total: totals.total, faj: totals.faj, other, share: totals.share,
+      reference: text(financial.budgetReference) ?? amount(financial.budgetReference), period: text(financial.budgetPeriod),
+      notes: text(financial.budgetChanges), fundingChanges: text(financial.sustainabilityVariations), fundingRisks: text(financial.sustainabilityRisks),
+    }],
+    budget: [...(hasTeam ? [{ ...teamTotal, notes: text(financial.personnelNotes) }] : []), ...budget.map((row, index) => ({
       ...budgetRow(text(row.label) || budgetLabels[index] || 'Rubrica adicional', amount(row.total), amount(row.faj)),
-      description: text(row.description),
+      description: text(row.description), notes: text(row.notes),
     }))],
     team: hasTeam ? [teamTotal] : [],
     funding: funding.map(row => ({
       label: text(row.source), type: text(row.sourceType), year: amount(row.year), status: text(row.status), total: amount(row.amount),
+      purpose: text(row.purpose), project: text(row.project), expectedDate: text(row.expectedDate) ?? amount(row.expectedDate), notes: text(row.notes),
     })).filter(row => row.label || row.total !== null),
     plan: plan.length ? plan : legacyPlan ? [{ label: 'Plano de trabalho', activity: legacyPlan }] : [],
     institution: vision,

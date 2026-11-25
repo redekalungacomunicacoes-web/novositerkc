@@ -58,13 +58,13 @@ export function DashboardContent({ report, section, navigate, initialRubric }: {
       {section === 'funding' && visible.length > 0 && <><FundingSummary rows={rows} filter={(year, selectedStatus) => { setFilter(String(year)); setStatus(String(selectedStatus)); }} /><div className="rkc-account-table" tabIndex={0} role="region" aria-label="Tabela de dados"><table>
         <thead><tr><th>Fonte</th><th>Tipo</th><th>Ano</th><th>Situação</th><th>Valor</th></tr></thead>
         <tbody>{visible.map((row, index) => <tr key={index}>
-          <th scope="row">{valueText(row.label)}</th><td>{valueText(row.type)}</td><td>{valueText(row.year)}</td>
+          <th scope="row">{(row.purpose || row.project || row.expectedDate || row.notes) ? <details><summary>{valueText(row.label)}</summary><PublicFields row={row} fields={{ purpose: "Finalidade", project: "Projeto ou pesquisa", expectedDate: "Entrada prevista", notes: "Observações" }} /></details> : valueText(row.label)}</th><td>{valueText(row.type)}</td><td>{valueText(row.year)}</td>
           <td>{valueText(row.status)}</td><td>{money(row.total)}</td>
         </tr>)}</tbody>
-      </table></div></>}
+      </table></div><PublicFields row={report.content.overview?.[0] ?? {}} fields={{ fundingChanges: "Variações e mudanças", fundingRisks: "Riscos, captação e sustentabilidade" }} /></>}
       {section === 'plan' && <div className="rkc-account-stack">{visible.map((row, index) => <details key={index} className="rkc-account-panel">
         <summary>{row.activity || row.label || 'Atividade'}{row.period && <small>{row.period}</small>}</summary>
-        <dl>{Object.entries({ label: 'Objetivo', outcome: 'Resultado esperado', evidence: 'Evidência prevista', period: 'Período', budgetLine: 'Rubrica' })
+        <dl>{Object.entries({ label: 'Objetivo', outcome: 'Resultado esperado', evidence: 'Evidência prevista', period: 'Período', budgetLine: 'Rubricas vinculadas', notes: 'Observações e suporte do FAJ' })
           .filter(([key]) => row[key] != null).map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{row[key]}</dd></div>)}</dl>
       </details>)}</div>}
       {section === 'narrative' && <>
@@ -93,6 +93,14 @@ export function DashboardContent({ report, section, navigate, initialRubric }: {
       </article>)}</div>}
     </>}
   </section>;
+}
+
+function PublicFields({ row, fields }: { row: PublicRow; fields: Record<string, string> }) {
+  const entries = Object.entries(fields).filter(([key]) => row[key] != null);
+  if (!entries.length) return null;
+  return <dl className="rkc-account-source-fields">{entries.map(([key, label]) => <div key={key}>
+    <dt>{label}</dt><dd className="rkc-account-value">{row[key]}</dd>
+  </div>)}</dl>;
 }
 
 function FundingSummary({ rows, filter }: { rows: PublicRow[]; filter: (year: number | string, status: number | string) => void }) {
@@ -156,6 +164,7 @@ function Overview({ row, rubrics, navigate, team = false }: {
       </button>)}</div>
       {navigate && <button type="button" onClick={() => navigate('budget')}>Ver todas as rubricas</button>}
     </div>}
+    {!team && <PublicFields row={row} fields={{ reference: 'Exercício do orçamento', period: 'Período do orçamento', notes: 'Mudanças em relação ao orçamento aprovado' }} />}
     {team && navigate && <button className="rkc-account-team-link" type="button" onClick={() => navigate('budget', 'Pessoal/equipe')}>Ver rubrica Pessoal/equipe</button>}
   </>;
 }
@@ -176,7 +185,7 @@ function Budget({ rows, openRubric }: { rows: PublicRow[]; openRubric: string })
     </figure>
     <div className="rkc-account-table" tabIndex={0} role="region" aria-label="Tabela de dados"><table>
       <thead><tr><th>Rubrica</th><th>Custo previsto</th><th>FAJ solicitado</th><th>Outras fontes previstas</th><th>Participação FAJ</th></tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={index}><th scope="row">{row.description ? <details open={row.label === openRubric || undefined}><summary>{row.label}</summary><p className="rkc-account-body">{row.description}</p></details> : row.label}</th><td>{money(row.total)}</td>
+      <tbody>{rows.map((row, index) => <tr key={index}><th scope="row">{row.description || row.notes ? <details open={row.label === openRubric || undefined}><summary>{row.label}</summary><PublicFields row={row} fields={{ description: 'Descrição', notes: 'Observações' }} /></details> : row.label}</th><td>{money(row.total)}</td>
         <td>{money(row.faj)}</td><td>{money(row.other)}</td>
         <td>{percentage(typeof row.total === 'number' && row.total > 0 && typeof row.faj === 'number' ? row.faj / row.total : null)}</td></tr>)}</tbody>
     </table></div>

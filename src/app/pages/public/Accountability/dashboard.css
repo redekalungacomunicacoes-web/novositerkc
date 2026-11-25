@@ -78,3 +78,5 @@
 .rkc-account-rank button { display:grid; width:100%; grid-template-columns:minmax(0,1fr) auto; gap:.35rem .75rem; text-align:left; }
 .rkc-account-rank .rkc-account-bar { grid-column:1 / -1; background:var(--green); height:.3rem; }
 .rkc-account-team-link { margin-top:1rem; }
+.rkc-account-source-fields { display:grid; gap:.75rem; margin-block:1rem; min-width:0; overflow-wrap:anywhere; }
+.rkc-account-source-fields dd { max-width:72ch; }
