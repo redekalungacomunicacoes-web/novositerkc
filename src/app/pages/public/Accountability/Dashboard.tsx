@@ -340,7 +340,8 @@ function rubricShare(row: PublicRow) {
 }
 
 export default function Dashboard() {
-  const { slug = '', view } = useParams();
+  const { slug: routeSlug = '', view } = useParams();
+  const slug = routeSlug === 'faj-ii-ciclo-painel' ? 'faj-ii-ciclo' : routeSlug;
   const { hash } = useLocation();
   const [params, setParams] = useSearchParams();
   const [state, setState] = useState<{ slug: string; report: PublicReport | null; error: boolean }>();
@@ -354,7 +355,7 @@ export default function Dashboard() {
   const goTo = (tab: Section, label?: string) => setParams({ aba: tab, ...(label ? { rubrica: label } : {}) });
   const candidate = params.get('aba') as Section | null;
   const section = candidate && tabs.includes(candidate) ? candidate : tabs[0];
-  const base = '/prestacao-de-contas/' + encodeURIComponent(slug);
+  const base = '/prestacao-de-contas/' + encodeURIComponent(slug === 'faj-ii-ciclo' ? 'faj-ii-ciclo-painel' : slug);
 
   useEffect(() => {
     let active = true;

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<link rel="canonical" href="https://kalungacomunicacoes.org/prestacao-de-contas/faj-ii-ciclo/"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rede Kalunga · FAJ II Ciclo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#f6f3ec;--surf:#fff;--ink:#1d2a1f;--mut:#667064;--line:#ded9cb;--g:#0f7f31;--o:#b97a00;--b:#2f64a8;--gl:#dcefe1;--ol:#fbeccb;--bl:#dce8f6;--r:#9a3b2e;
+--hf:'Bricolage Grotesque',Georgia,serif;--bf:'Public Sans',system-ui,sans-serif;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a14;--surf:#1a251d;--ink:#eae7dc;--mut:#9aa595;--line:#2c3a2f;--g:#4cc275;--o:#f2b83a;--b:#6fa3e0;--gl:#1d3a26;--ol:#3b3017;--bl:#1f2f48;--r:#e08a7c;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121a14;--surf:#1a251d;--ink:#eae7dc;--mut:#9aa595;--line:#2c3a2f;--g:#4cc275;--o:#f2b83a;--b:#6fa3e0;--gl:#1d3a26;--ol:#3b3017;--bl:#1f2f48;--r:#e08a7c;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--bf)}
+header{padding:28px 20px 8px;max-width:1100px;margin:0 auto}
+h1{font:800 clamp(26px,5vw,40px)/1.05 var(--hf);margin:0 0 6px;letter-spacing:-.01em}
+h2{font:600 20px var(--hf);margin:0 0 12px}
+.sub{color:var(--mut);margin:0}
+nav{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5;border-bottom:1px solid var(--line);margin-top:14px}
+nav div{max-width:1100px;margin:0 auto;display:flex;gap:2px;overflow-x:auto;padding:0 12px}
+nav button{background:none;border:0;border-bottom:3px solid transparent;color:var(--mut);font:500 14px var(--bf);padding:12px 12px;cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{color:var(--ink);border-color:var(--o);font-weight:600}
+nav button:focus-visible,.chip:focus-visible,summary:focus-visible{outline:2px solid var(--b);outline-offset:2px}
+main{max-width:1100px;margin:0 auto;padding:20px}
+section{display:none}section.on{display:block}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin-bottom:20px}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:16px}
+.kpi b{display:block;font:800 28px var(--hf);color:var(--g)}.kpi span{color:var(--mut);font-size:13px}
+.kpi.o b{color:var(--o)}.kpi.b b{color:var(--b)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surf)}
+table{border-collapse:collapse;width:100%;min-width:620px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;font-size:14px}
+th{font-weight:600;color:var(--mut);background:var(--bg);cursor:pointer;white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}tfoot td{font-weight:600;background:var(--bg)}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--ol);min-width:120px}
+.bar i{background:var(--g);display:block}
+.leg{display:flex;gap:14px;font-size:13px;color:var(--mut);margin:0 0 10px}
+.leg s{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;text-decoration:none}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.chip{border:1px solid var(--line);background:var(--surf);color:var(--ink);border-radius:99px;padding:6px 14px;font:500 13px var(--bf);cursor:pointer}
+.chip[aria-pressed=true]{background:var(--g);border-color:var(--g);color:#fff}
+.tag{display:inline-block;border-radius:5px;padding:1px 8px;font-size:12px;font-weight:600}
+.t1{background:var(--gl);color:var(--g)}.t2{background:var(--bl);color:var(--b)}.t3{background:var(--ol);color:var(--o)}
+details{background:var(--surf);border:1px solid var(--line);border-radius:10px;margin-bottom:10px}
+summary{cursor:pointer;padding:14px 16px;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:12px}
+summary::after{content:"+";color:var(--o);font-size:20px;line-height:1}details[open] summary::after{content:"–"}
+.dc{padding:0 16px 16px;color:var(--ink)}.dc p{margin:.5em 0}.dc dt{font-weight:600;color:var(--mut);font-size:13px;margin-top:10px}.dc dd{margin:2px 0 0}
+.gal{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:14px}
+.gal figure{margin:0;cursor:zoom-in}.gal img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block;background:var(--line)}
+.gal figcaption{font-size:12.5px;color:var(--mut);margin-top:4px}
+.logos{display:inline-flex;align-items:center;gap:22px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 22px;margin-bottom:18px}
+.logos img{height:46px;width:auto;display:block}.logos i{width:1px;height:34px;background:#d9d9d9}
+@media(max-width:560px){.logos{gap:14px;padding:10px 14px}.logos img{height:34px}.logos i{height:26px}}
+body::before{content:"";display:block;height:5px;background:linear-gradient(90deg,var(--g) 0 34%,#f7b51e 34% 67%,#5a8fcb 67%)}
+.card,.tw,details{border-radius:12px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.kpi{border-left:4px solid var(--g)}.kpi.o{border-left-color:#f7b51e}.kpi.b{border-left-color:#5a8fcb}
+nav button[aria-selected=true]{border-color:var(--g)}summary::after{color:var(--g)}
+.chip[aria-pressed=true]{background:var(--g)}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:20;padding:16px;cursor:zoom-out}
+#lb.on{display:flex}#lb img{max-width:100%;max-height:100%;border-radius:6px}
+.two{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.row{display:grid;grid-template-columns:130px 1fr 90px;gap:10px;align-items:center;margin:8px 0;font-size:13px}
+.pos{color:var(--g);font-weight:600}.neg{color:var(--r);font-weight:600}
+input[type=search]{width:100%;max-width:340px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surf);color:var(--ink);font:inherit;margin-bottom:12px}
+ul.cl{margin:6px 0 0;padding-left:18px}ul.cl li{margin:3px 0}
+@media(max-width:560px){.row{grid-template-columns:90px 1fr 70px}}
+</style></head><body>
+<header><div class="logos"><img id="l3" alt="Rede Kalunga Comunicações"><i></i><img id="l1" alt="Fundo de Apoio ao Jornalismo"></div><h1>Rede Kalunga Comunicações</h1>
+<p class="sub">Renovação FAJ · II Ciclo · dezembro de 2026 a novembro de 2027 · formulário preenchido em 14/11/2026</p>
+<p><a href="/prestacao-de-contas/faj-ii-ciclo-painel/">Consultar o painel e o relatório completos</a></p></header>
+<nav><div role="tablist" id="tabs"></div></nav>
+<main>
+<section id="resumo"></section><section id="orcamento"></section><section id="equipe"></section>
+<section id="receitas"></section><section id="plano"></section><section id="impacto"></section><section id="narrativa"></section>
+</main>
+<script>
+const R=v=>'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:v%1?2:0,maximumFractionDigits:2});
+const P=v=>(v*100).toFixed(0).replace('.',',')+'%';
+const $=s=>document.querySelector(s);
+const dt=n=>{const d=new Date(Date.UTC(1899,11,30)+n*864e5);return d.toLocaleDateString('pt-BR',{month:'short',year:'numeric',timeZone:'UTC'})};
+const TABS=[['resumo','Resumo'],['orcamento','Orçamento'],['equipe','Equipe'],['receitas','Receitas'],['plano','Plano de trabalho'],['impacto','Impacto'],['narrativa','Narrativa']];
+
+const RUB=[
+['Pessoal/equipe',96000,65700,'Equipe de 10 pessoas (aba Equipe).'],
+['Infraestrutura e custos operacionais',12000,5000,'R$ 8.000 alimentação (R$ 4.000 do Rede Integra); R$ 4.000 materiais, conectividade e operação. Sem sede própria, sem aluguel.'],
+['Serviços especializados e consultorias',22800,12000,'R$ 12.000 assessoria jurídica (12 meses); R$ 6.000 inglês (fev–nov/2027); R$ 3.000 letramento racial (3 meses); R$ 1.800 mentorias.'],
+['Produção jornalística e editorial',44000,36000,'R$ 20.000 Jornal Kalunga; R$ 10.000 coberturas; R$ 14.000 podcasts KaluCast e A Voz da Comunidade.'],
+['Tecnologia e ferramentas digitais',5500,3000,'R$ 2.500 site; R$ 1.000 apps e assinaturas; R$ 2.000 outras ferramentas (armazenamento, tarefas, segurança).'],
+['Equipamentos',10000,8000,'R$ 5.000 drone; R$ 5.000 acessórios e manutenção de foto, áudio e audiovisual. Principalmente no 1º semestre de 2027.'],
+['Viagens e deslocamentos',10000,8000,'Território Kalunga, Chapada dos Veadeiros, atividades externas e apoio ao intercâmbio.'],
+['Eventos e atividades institucionais',31000,3000,'R$ 21.000 Rede Integra (setembro/2027; total de R$ 25.000 com a alimentação); R$ 10.000 etapa da Oficina de Comunicação Kalunga, com busca de financiamento complementar.'],
+['Comunicação e relacionamento com público',5000,4000,'R$ 3.000 impulsionamento; R$ 2.000 mobilização, escuta comunitária e relacionamento.'],
+['Despesas administrativas e financeiras',8700,2300,'R$ 4.800 contabilidade (R$ 400/mês); R$ 3.900 tarifas, tributos e custos fiscais.'],
+['Outros custos',5000,3000,'Despesas extraordinárias e emergenciais, sujeitas a justificativa e às regras dos financiadores.']];
+
+
+
+const REC=[
+['Instituto Unibanco / Imaginable Futures','Fundação nacional','Fortalecimento Institucional – Equidade Étnico-Racial na Educação (apoio institucional)',2025,100000,'rec',45689,'Parceria com gestão técnica da ponteAponte.'],
+['Instituto Unibanco / Imaginable Futures','Fundação nacional','Fortalecimento Institucional – Equidade Étnico-Racial na Educação (apoio institucional)',2026,100000,'rec',46054,'Idem.'],
+['Instituto Unibanco / Imaginable Futures','Fundação nacional','Fortalecimento Institucional – Equidade Étnico-Racial na Educação (apoio institucional)',2027,100000,'rcb',46419,'Última parcela prevista.'],
+['Embaixada da Irlanda no Brasil','Organismo internacional','3ª Oficina de Comunicação Kalunga – edição especial Riachão',2025,53181.07,'rec',45975,'Oficinas realizadas em abril de 2026.'],
+['FAJ','FAJ','Apoio Institucional – Ciclo I (1ª parcela)',2025,75000,'rec',45995,'Primeira parcela.'],
+['FAJ','FAJ','Apoio Institucional – Ciclo I (2ª parcela)',2026,75000,'rec',46174,'Recebida em junho de 2026.'],
+['FAJ','FAJ','Apoio Institucional – Ciclo II (renovação)',2026,75000,'pot',46370,'Renovação solicitada, sujeita à aprovação.'],
+['FAJ','FAJ','Apoio Institucional – Ciclo II (renovação)',2027,75000,'pot',46539,'Renovação solicitada, sujeita à aprovação.'],
+['COSPE','Organismo internacional','Resistência Quilombola',2025,6000,'rec',46001,'Produção audiovisual.'],
+['Brivac (Brigada Voluntária Ambiental de Cavalcante)','Outro','Cobertura do Simpósio de Manejo Integrado do Fogo',2025,8400,'rec',45778,'Cobertura jornalística e audiovisual.'],
+['Brivac (Brigada Voluntária Ambiental de Cavalcante)','Outro','Cobertura do Simpósio de Manejo Integrado do Fogo',2026,8400,'rec',46143,'Cobertura jornalística e audiovisual.'],
+['AKCE (Associação Kalunga Comunitária do Engenho II)','Outro','Oficina de Comunicação Comunitária',2026,12600,'rec',46082,'Oficinas no Engenho II e Vão do Moleque.'],
+['Sicoob UniCentro Br','Outro','Memória Viva: Formação Cultural e Salvaguarda do Museu Iaiá Procópia',2026,20000,'rec',46122,'Executado em novembro de 2026.'],
+['Unilab','Poder público','Diálogos e Saberes Ancestrais: Guiné-Bissau e Brasil',2026,5000,'rec',46184,'Cobertura de 23 a 26 de junho.'],
+['Fundação Cultural Palmares','Poder público','Raízes da Resistência – Desfile de Moda Quilombola e Afro',2026,46000,'rec',46082,'Executado entre maio e agosto de 2026.'],
+['SOBRE','Outro','VI Conferência Brasileira de Restauração Ecológica – SOBRE 2026',2026,49745,'rec',46211,'Cobertura de 27 a 31 de julho de 2026.']];
+const ST={rec:['Recebido','t1'],rcb:['A receber (confirmado)','t2'],pot:['Potencial / prospecção','t3']};
+
+const PL=[
+['Jornalismo','Continuidade das reportagens, coberturas e edições do Jornal Kalunga, com remuneração de colaboradores comunitários, impressão, distribuição e canais digitais.','Regularidade das produções, com mais participação das comunidades.','Reportagens e edições publicadas, exemplares distribuídos, colaboradores remunerados, comunidades contempladas.','Meses 1 a 12','Pessoal; Produção jornalística; Viagens; Comunicação','Assessoria jurídica; mentoria do Travessias sobre segurança de comunicadores; inclui podcasts KaluCast e A Voz da Comunidade.'],
+['Gestão','Redistribuir responsabilidades entre diretorias e coordenações, usando a ferramenta de tarefas do site, com reuniões periódicas.','Equipe com responsabilidades distribuídas e rotina organizada.','Reuniões, tarefas acompanhadas na plataforma, avaliações da equipe.','Meses 1–2 organização; 3, 5, 7, 9 e 11 reuniões; 12 avaliação','Pessoal; Tecnologia; Administrativas','Conversa com o FAJ ou outra organização sobre gestão compartilhada.'],
+['Gestão','Nova edição do Rede Integra, encontro presencial de avaliação, planejamento e cofluência.','Decisões coletivas e encaminhamentos definidos.','Encontro realizado, participação, registros e encaminhamentos.','Meses 8–9 preparação; setembro realização; 11 acompanhamento','Eventos; Viagens; Pessoal','Pessoa facilitadora com apoio do Travessias, FAJ ou Mural.'],
+['Jornalismo','Formação e acompanhamento de correspondentes comunitários (apuração, entrevistas, fotografia), podendo incluir etapa da Oficina de Comunicação Kalunga.','Mais pessoas das comunidades na produção jornalística, com colaboração remunerada.','Encontros, participantes, correspondentes acompanhados, conteúdos produzidos.','Meses 4–5 organização; 6–8 encontros; 9–11 acompanhamento','Produção jornalística; Viagens; Eventos; Pessoal','Troca com iniciativas de jornalismo comunitário; a TV Quilombo seria importante.'],
+['Aprendizagem','Intercâmbio presencial com organização de comunicação de trabalho próximo ao da Rede.','Experiências para a organização interna e o jornalismo da Rede.','Intercâmbio realizado, registros e encaminhamentos de colaboração.','Julho de 2027','Viagens; Eventos','Aproximação com Voz das Comunidades ou Fala Roça (RJ).'],
+['Sustentabilidade','Estruturar setor de projetos e captação, com acompanhamento de editais e propostas para todas as áreas.','Rotina de captação organizada e responsabilidades compartilhadas.','Responsáveis definidos, calendário de oportunidades, projetos submetidos.','Meses 1–3 organização; 4–11 submissão; 12 avaliação','Pessoal; Consultorias; Administrativas','Mentoria do Travessias sobre captação em territórios quilombolas e tradicionais.'],
+['Segurança','Contratar assessoria jurídica (contratos, direitos autorais, proteção de fontes, segurança nas coberturas).','Mais segurança jurídica para pautas sensíveis e rotinas administrativas.','Assessoria contratada, documentos revisados (como o estatuto), demandas acompanhadas.','Meses 1–2 contratação; 3–12 acompanhamento','Consultorias','Conversas iniciadas com advogado negro e quilombola.'],
+['Gestão','Encontro de escuta e cuidado coletivo conduzido por profissional de psicologia.','Acolhimento, diálogo e atenção à saúde mental.','Atividade realizada, participação e avaliação, com privacidade.','Setembro de 2027','Eventos','Será durante o Rede Integra.'],
+['Equidade racial','Formação em letramento racial com a equipe.','Mais diálogo sobre questões raciais no trabalho e na produção jornalística.','Formação realizada, participação, registro de aprendizados.','Meses 2 a 4','Consultorias','Mentoria com João Raphael Ramos (Afro Literato).'],
+['Aprendizagem','Formação introdutória em inglês para integrantes interessados.','Melhor participação em intercâmbios e articulação internacional.','Formação realizada, participantes, avaliação.','Meses 3–12 (fev–nov/2027)','Consultorias','Apoio do Travessias para encontrar formação; só 2 integrantes fluentes.'],
+['Aprendizagem','Ampliar a participação de estagiários de comunicação e jornalismo, com acompanhamento.','Demandas melhor distribuídas e aprendizagem prática para estudantes.','Estagiários integrados, conteúdos produzidos, registros de supervisão.','Meses 1–2 seleção; 3–12 atuação','Pessoal','Troca com outras organizações do FAJ sobre acompanhamento de jovens profissionais.'],
+['Sustentabilidade','Aprimorar a gestão financeira: registros, orçamentos, prestação de contas e partilha periódica com a equipe.','Mais transparência e responsabilidades financeiras distribuídas.','Controles atualizados, relatórios, reuniões e decisões registradas.','Meses 1–2 organização; 3–11 acompanhamento; 12 avaliação','Pessoal; Administrativas; Consultorias','Mentoria do Travessias sobre gestão financeira e prestação de contas.']];
+
+const IMP=[
+['Instagram','29,4 mil seguidores; 981.714 visualizações; 28,5 mil interações; 328.249 contas alcançadas','41.546 seguidores; 792.991 visualizações; ~54,1 mil interações; 175.747 visualizadores','+41,3% seguidores; +89,8% interações; −19,2% visualizações (recortes de 30 dias não coincidentes)','Em 180 dias de 2026: 5.358.811 visualizações e +4.847 seguidores líquidos.'],
+['Facebook','675 seguidores; 27.479 visualizações; ~1,3 mil engajamentos; 12 mil visualizadores','1.366 seguidores; 43.847 visualizações; ~2,6 mil engajamentos; 22 mil visualizadores (90 dias)','+102,4% seguidores; +59,6% visualizações; ~+100% engajamentos; +83,3% visualizadores','Uso menos frequente; barreiras de conectividade em parte das comunidades.'],
+['TikTok','Sem uso regular','1.980 seguidores; 355 interações; 987 visualizações','Início de uso do canal','Expansão dos canais de circulação.'],
+['LinkedIn','Não se aplica','69 seguidores; sem publicações regulares','—','Canal pouco utilizado.'],
+['Site / portal','Site ainda não estava no ar','8.745 visualizadores','Novo canal em 2026','Espaço próprio para notícias e produções.'],
+['YouTube','32 inscritos; 261 visualizações','75 inscritos; 1.060 visualizações (a conferir)','+134,4% inscritos; +306,1% visualizações','Registro dos conteúdos audiovisuais.'],
+['Jornal Kalunga (impresso)','5.630 impressos; 5.230 distribuídos','1.650 impressos; 1.580 distribuídos','−70,7% impressão; −69,8% distribuição','A 9ª edição especial exigiu mais tempo, logística e participação de estudantes, professores e Iaiá Procópia.'],
+['Newsletter','Não existia','363 assinantes','Sem base comparável','—'],
+['Podcasts (Spotify)','1ª temporada do KaluCast e A Voz da Comunidade: 9 episódios; ~4.500 reproduções','2ª temporada do KaluCast: ~2.830 reproduções; 1.197 ouvintes mensais','−37,1% reproduções até o momento (2026 em andamento)','Sem comparação anual fechada.']];
+const BARS=[['Instagram',29400,41546],['TikTok',0,1980],['Facebook',675,1366],['Newsletter',0,363],['YouTube',32,75],['LinkedIn',0,69]];
+
+const NAR=[
+['1. O que é desenvolvimento institucional e o que desejam em 2027','Fortalecer as condições para seguir produzindo jornalismo independente, local e quilombola, com qualidade e regularidade. A Rede atua há cinco anos e dialoga com mais de 39 comunidades do Território Quilombola Kalunga e com oito municípios da Chapada dos Veadeiros, cobrindo titulação, conflitos fundiários, direitos quilombolas, clima e Cerrado.',['Garantir a continuidade e a circulação do Jornal Kalunga','Envolver mais pessoas das comunidades, reconhecendo e remunerando suas contribuições','Dividir responsabilidades, dar transparência à gestão e cuidar da saúde mental','Ter apoio jurídico e recursos contínuos para preservar a independência editorial']],
+['2. Mudanças institucionais prioritárias','Cinco frentes, escolhidas pela realidade da Rede.',['Jornal Kalunga e participação comunitária: dar continuidade aos colaboradores remunerados de 2026, formar correspondentes e criar uma comunidade no WhatsApp com moradores e lideranças','Divisão de responsabilidades: fazer a equipe usar a ferramenta de gestão de tarefas criada no site com o apoio do Ciclo I; hoje muito fica concentrado na direção','Cuidado com as pessoas: manter os espaços de escuta de 2026 e avançar na assessoria jurídica','Gestão financeira: compartilhar responsabilidades e dar acesso às informações de projetos, despesas e prestações de contas','Projetos e captação: estruturar uma área dedicada a editais e propostas, mantendo parcerias']],
+['3. Como colocar em prática ao longo de 2027','Partindo das experiências e aprendizados de 2026, incluindo o Rede Integra de setembro de 2026.',['Equipe jornalística segue com pautas, apuração, verificação e edição; prever recursos para colaboradores, deslocamentos, impressão e distribuição','Cada pessoa assume atividades conforme experiência e disponibilidade; avaliar quem acompanhará mais de perto o financeiro','Agenda 2027: novo Rede Integra com cuidado em saúde mental, etapa da Oficina de Comunicação Kalunga, 3 meses de letramento racial, 10 meses de inglês, intercâmbio e podcasts','Aproveitar mentorias do Travessias sobre sustentabilidade, gestão, segurança jurídica e fortalecimento editorial','Obstáculos: tempo para conciliar mudanças com coberturas e projetos, custos de deslocamento, conectividade e limites de recursos']],
+['4. Sinais de desenvolvimento ao final de 2027','Reconhecer avanços pela capacidade de manter e fortalecer as produções com qualidade, independência e presença no território.',['Acompanhar conteúdos publicados, coberturas, circulação do jornal, acessos ao site, reproduções de podcasts e alcance audiovisual','Observar diversidade de fontes, comunidades nas pautas e colaboradores comunitários remunerados','Ouvir as pessoas e receber avaliações sobre como o jornalismo as mantém informadas','Assumir novos compromissos sem concentrar responsabilidades; mais participação, transparência, cuidado com a equipe e segurança','Avaliar a sustentabilidade por projetos executados, parcerias mantidas e financiamentos construídos']],
+['Contexto financeiro (aba Receitas)','Entre 2025 e 2026 a receita cresceu e as fontes se diversificaram. A cobertura da SOBRE 2026 (mais de 2 mil participantes) foi a primeira de maior valor financeiro, e trouxe novas despesas com equipe e deslocamentos.',['Riscos: financiamentos de duração limitada, receitas de serviços variáveis, distâncias e custos de permanência no território','Plano: estruturar captação, melhorar o acompanhamento financeiro, manter parcerias e ampliar serviços preservando a independência editorial','Em resultado negativo: avaliar coletivamente recursos, despesas e prioridades, protegendo a remuneração da equipe e as produções']],
+['Mudanças no orçamento do ciclo atual','Ajustes e remanejamentos pontuais por deslocamentos, imprevistos, custos de produção e novas parcerias.',['Saldo em 20/11/2026: R$ 27.000 (R$ 20.000 do FAJ e R$ 7.000 do Instituto Unibanco), previsto para as últimas remunerações, o último episódio do podcast, contabilidade e despesas de encerramento até dezembro','Pequenos saldos dos projetos com a SOBRE e o Museu Iaiá Procópia, com prestação de contas em andamento']]];
+
+function tabs(){$('#tabs').innerHTML=TABS.map(([k,l])=>`<button role="tab" data-k="${k}" aria-selected="false">${l}</button>`).join('');
+ $('#tabs').onclick=e=>{const k=e.target.dataset.k;if(k)show(k)}}
+function show(k){if(!TABS.some(t=>t[0]===k))k='resumo';
+ document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id===k));
+ document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.k===k));
+ if(location.hash!=='#'+k)history.replaceState(null,'','#'+k)}
+
+const tot=RUB.reduce((a,r)=>a+r[1],0),faj=RUB.reduce((a,r)=>a+r[2],0);
+const recTot=(a)=>REC.filter(r=>r[3]===a&&r[5]==='rec').reduce((s,r)=>s+r[4],0);
+function resumo(){
+ $('#resumo').innerHTML=`<div class="grid">
+ <div class="card kpi"><b>${R(150000)}</b><span>Valor solicitado ao FAJ</span></div>
+ <div class="card kpi o"><b>${R(tot)}</b><span>Orçamento total de 2027 (FAJ cobre ${P(faj/tot)})</span></div>
+ <div class="card kpi b"><b>10</b><span>Pessoas na equipe, custo de ${R(96000)}</span></div>
+ <div class="card kpi"><b>${R(27000)}</b><span>Saldo em 20/11/2026</span></div></div>
+ <div class="two"><div class="card"><h2>Identificação</h2><dl class="dc" style="padding:0;margin:0">
+ <dt>Organização</dt><dd>Rede Kalunga Comunicações</dd><dt>Período da renovação</dt><dd>Dezembro de 2026 a novembro de 2027</dd>
+ <dt>Alteração de dados cadastrais</dt><dd>Sem resposta registrada na planilha</dd></dl></div>
+ <div class="card"><h2>Para onde vai o dinheiro</h2><div class="leg"><span><s style="background:var(--g)"></s>FAJ</span><span><s style="background:var(--ol)"></s>Outras fontes</span></div>
+ ${RUB.map(r=>`<div class="row"><span>${r[0].split(/[ /]/)[0]}</span><div class="bar"><i style="width:${r[2]/r[1]*100}%"></i></div><span class="n">${R(r[1])}</span></div>`).join('')}</div></div>
+ <div class="card" style="margin-top:12px"><h2>Receitas confirmadas por ano</h2>
+ ${[2025,2026].map(a=>`<div class="row"><span>${a}</span><div class="bar" style="background:var(--bl)"><i style="width:${recTot(a)/320000*100}%;background:var(--b)"></i></div><span>${R(recTot(a))}</span></div>`).join('')}
+ <p class="sub">Em 2027 há ${R(100000)} confirmados a receber (Unibanco) e ${R(75000)} potenciais (FAJ). O pedido de renovação está sujeito à aprovação.</p></div>`}
+
+function orc(){
+ $('#orcamento').innerHTML=`<p class="sub" style="margin-bottom:12px">Período do orçamento: 01/12/2026 a 30/11/2027. Clique numa linha para ver o detalhamento.</p>
+ <div class="leg"><span><s style="background:var(--g)"></s>Financiado pelo FAJ</span><span><s style="background:var(--ol)"></s>Outras fontes</span></div>
+ <div class="tw"><table><thead><tr><th>Rubrica</th><th class="n">Custo total</th><th class="n">FAJ</th><th class="n">Outras</th><th>% FAJ</th></tr></thead><tbody>
+ ${RUB.map((r,i)=>`<tr class="rb" data-i="${i}" style="cursor:pointer"><td>${r[0]}</td><td class="n">${R(r[1])}</td><td class="n">${R(r[2])}</td><td class="n">${R(r[1]-r[2])}</td>
+ <td><div class="bar"><i style="width:${r[2]/r[1]*100}%"></i></div>${P(r[2]/r[1])}</td></tr>
+ <tr hidden id="d${i}"><td colspan="5" style="background:var(--bg);color:var(--mut)">${r[3]}</td></tr>`).join('')}</tbody>
+ <tfoot><tr><td>Total</td><td class="n">${R(tot)}</td><td class="n">${R(faj)}</td><td class="n">${R(tot-faj)}</td><td>${P(faj/tot)}</td></tr></tfoot></table></div>`;
+ $('#orcamento').onclick=e=>{const t=e.target.closest('.rb');if(t){const d=$('#d'+t.dataset.i);d.hidden=!d.hidden}}}
+
+function equipe(){
+ const pessoal=RUB[0];
+ $('#equipe').innerHTML=`<div class="grid">
+ <div class="card kpi"><b>10</b><span>Pessoas</span></div>
+ <div class="card kpi o"><b>${R(pessoal[1])}</b><span>Custo anual</span></div>
+ <div class="card kpi b"><b>${R(pessoal[2])}</b><span>Parcela prevista do FAJ</span></div>
+ <div class="card kpi"><b>${R(pessoal[1]-pessoal[2])}</b><span>Outras fontes previstas</span></div>
+ </div>`;
+}
+
+function receitas(){
+ const st={};
+ $('#receitas').innerHTML=`<div class="grid">
+ <div class="card kpi"><b>${R(recTot(2025))}</b><span>Recebido em 2025</span></div><div class="card kpi"><b>${R(recTot(2026))}</b><span>Recebido em 2026</span></div>
+ <div class="card kpi b"><b>${R(100000)}</b><span>Confirmado a receber em 2027</span></div><div class="card kpi o"><b>${R(150000)}</b><span>Potencial: FAJ Ciclo II (R$ 75.000 em 2026 e 2027)</span></div></div>
+ <p class="sub">Financiadores confirmados, exceto FAJ: 4 em 2025, 7 em 2026 e 1 em 2027. Recursos não confirmados não entram na receita.</p><br>
+ <div class="chips" id="rf">${[['all','Todos'],['rec','Recebido'],['rcb','A receber'],['pot','Potencial']].map((x,i)=>`<button class="chip" aria-pressed="${i==0}" data-v="${x[0]}">${x[1]}</button>`).join('')}
+ ${['Todos os anos',2025,2026,2027].map((y,i)=>`<button class="chip" aria-pressed="${i==0}" data-y="${i?y:0}">${y}</button>`).join('')}</div>
+ <input type="search" id="q" placeholder="Buscar financiador ou projeto">
+ <div class="tw"><table><thead><tr><th>Financiador</th><th>Projeto</th><th>Ano</th><th class="n">Valor</th><th>Status</th><th>Entrada</th></tr></thead><tbody id="rb"></tbody><tfoot><tr><td colspan="3">Total filtrado</td><td class="n" id="rt"></td><td colspan="2"></td></tr></tfoot></table></div>`;
+ let s='all',y=0;
+ const draw=()=>{const q=$('#q').value.toLowerCase();const L=REC.filter(r=>(s==='all'||r[5]===s)&&(!y||r[3]==y)&&(r[0]+r[2]).toLowerCase().includes(q));
+  $('#rb').innerHTML=L.map(r=>`<tr title="${r[7]}"><td>${r[0]}<br><small style="color:var(--mut)">${r[1]}</small></td><td>${r[2]}<br><small style="color:var(--mut)">${r[7]}</small></td><td>${r[3]}</td><td class="n">${R(r[4])}</td><td><span class="tag ${ST[r[5]][1]}">${ST[r[5]][0]}</span></td><td>${dt(r[6])}</td></tr>`).join('')||'<tr><td colspan="6">Nenhum resultado para esse filtro.</td></tr>';
+  $('#rt').textContent=R(L.reduce((a,r)=>a+r[4],0))};
+ draw();$('#q').oninput=draw;
+ $('#rf').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;if(b.dataset.v){s=b.dataset.v;}else{y=+b.dataset.y}
+  document.querySelectorAll('#rf .chip').forEach(x=>{if(!!x.dataset.v===!!b.dataset.v)x.setAttribute('aria-pressed',x===b)});draw()}}
+
+function plano(){
+ const cats=['Todos',...new Set(PL.map(p=>p[0]))];
+ $('#plano').innerHTML=`<p class="sub" style="margin-bottom:12px">${PL.length} atividades ligadas às rubricas do orçamento.</p><div class="chips" id="pf">${cats.map((c,i)=>`<button class="chip" aria-pressed="${i==0}" data-v="${c}">${c}</button>`).join('')}</div><div id="pl"></div>`;
+ const draw=c=>{$('#pl').innerHTML=PL.filter(p=>c==='Todos'||p[0]===c).map(p=>`<details><summary><span>${p[1]}</span><span class="tag t3" style="white-space:nowrap;align-self:flex-start">${p[4]}</span></summary><div class="dc"><dl>
+  <dt>Resultado esperado</dt><dd>${p[2]}</dd><dt>Indicador e evidência</dt><dd>${p[3]}</dd><dt>Rubricas</dt><dd>${p[5]}</dd><dt>Apoio desejado do FAJ</dt><dd>${p[6]}</dd></dl></div></details>`).join('')};
+ draw('Todos');$('#pf').onclick=e=>{const v=e.target.dataset.v;if(!v)return;document.querySelectorAll('#pf .chip').forEach(b=>b.setAttribute('aria-pressed',b===e.target));draw(v)}}
+
+function impacto(){
+ const mx=45000;
+ $('#impacto').innerHTML=`<div class="card" style="margin-bottom:14px"><h2>Seguidores e inscritos, 2025 × 2026</h2><div class="leg"><span><s style="background:var(--ol)"></s>2025</span><span><s style="background:var(--b)"></s>2026</span></div>
+ ${BARS.map(b=>`<div class="row"><span>${b[0]}</span><div><div class="bar" style="height:7px;margin-bottom:3px"><i style="width:${b[1]/mx*100}%;background:var(--o)"></i></div><div class="bar" style="height:7px;background:var(--bl)"><i style="width:${b[2]/mx*100}%;background:var(--b)"></i></div></div><span>${b[1].toLocaleString('pt-BR')} → ${b[2].toLocaleString('pt-BR')}</span></div>`).join('')}
+ <p class="sub">O Instagram foi lido em recortes de 30 dias que não coincidem, então a variação de visualizações deve ser lida com cautela.</p></div>
+ <div class="tw"><table><thead><tr><th>Canal</th><th>2025</th><th>2026 (atual)</th><th>Variação</th><th>Observações</th></tr></thead><tbody>
+ ${IMP.map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join('')}</tbody></table></div>`}
+
+function narrativa(){
+ $('#narrativa').innerHTML=`<p class="sub" style="margin-bottom:12px">Síntese das respostas do formulário narrativo e dos campos de contexto da planilha.</p>`+
+ NAR.map((n,i)=>`<details ${i==0?'open':''}><summary><span>${n[0]}</span></summary><div class="dc"><p>${n[1]}</p><ul class="cl">${n[2].map(x=>`<li>${x}</li>`).join('')}</ul></div></details>`).join('')}
+
+$('#l3').src='/prestacao-de-contas/marcas/rede-kalunga.png';
+$('#l1').src='/prestacao-de-contas/marcas/faj-azul.png';
+tabs();resumo();orc();equipe();receitas();plano();impacto();narrativa();
+show(location.hash.slice(1));addEventListener('hashchange',()=>show(location.hash.slice(1)));
+</script></body></html>
