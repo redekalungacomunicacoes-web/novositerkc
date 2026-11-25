@@ -341,7 +341,8 @@ function rubricShare(row: PublicRow) {
 
 export default function Dashboard() {
   const { slug: routeSlug = '', view } = useParams();
-  const slug = routeSlug === 'faj-ii-ciclo-painel' ? 'faj-ii-ciclo' : routeSlug;
+  const slug = routeSlug;
+  const staticFaj = slug === 'faj-ii-ciclo' || slug === 'faj-ii-ciclo-painel';
   const { hash } = useLocation();
   const [params, setParams] = useSearchParams();
   const [state, setState] = useState<{ slug: string; report: PublicReport | null; error: boolean }>();
@@ -355,9 +356,10 @@ export default function Dashboard() {
   const goTo = (tab: Section, label?: string) => setParams({ aba: tab, ...(label ? { rubrica: label } : {}) });
   const candidate = params.get('aba') as Section | null;
   const section = candidate && tabs.includes(candidate) ? candidate : tabs[0];
-  const base = '/prestacao-de-contas/' + encodeURIComponent(slug === 'faj-ii-ciclo' ? 'faj-ii-ciclo-painel' : slug);
+  const base = '/prestacao-de-contas/' + encodeURIComponent(slug);
 
   useEffect(() => {
+    if (staticFaj) return;
     let active = true;
     void supabase.rpc('get_finance_accountability_public_report', { requested_slug: slug }).then(({ data, error }) => {
       if (!active) return;
@@ -365,7 +367,7 @@ export default function Dashboard() {
       setState({ slug, report: parsed, error: !!error || (data != null && parsed === null) });
     });
     return () => { active = false; };
-  }, [slug]);
+  }, [slug, staticFaj]);
 
   useEffect(() => {
     if (!report) return;
@@ -402,6 +404,10 @@ export default function Dashboard() {
       else setNotice('Tela cheia indisponível neste navegador.');
     } catch { setNotice('Não foi possível ativar a tela cheia.'); }
   };
+
+  if (staticFaj) return <main className="rkc-account rkc-account-landing">
+    <a href="/prestacao-de-contas/faj-ii-ciclo.html">Abrir a prestação de contas do FAJ II Ciclo</a>
+  </main>;
 
   if (landing) return <main className="rkc-account rkc-account-landing" aria-label="FAJ II Ciclo">
     <div className="rkc-account-landing-inner">

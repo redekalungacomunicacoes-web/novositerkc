@@ -51,6 +51,23 @@ jobs:
           cp dist/index.html dist/404.html
           install -D -m 644 dist/index.html dist/admin/financeiro/prestacoes/index.html
 
+      - name: Redirect replaced FAJ dashboard addresses
+        if: github.event_name != 'pull_request'
+        run: |
+          for route in faj-ii-ciclo-painel faj-ii-ciclo-painel/financeiro faj-ii-ciclo-painel/narrativo; do
+            mkdir -p "dist/prestacao-de-contas/$route"
+            cat > "dist/prestacao-de-contas/$route/index.html" <<'EOF'
+          <!doctype html>
+          <html lang="pt-BR">
+          <meta charset="utf-8">
+          <meta name="robots" content="noindex">
+          <meta http-equiv="refresh" content="0; url=/prestacao-de-contas/faj-ii-ciclo">
+          <title>Prestação de contas do FAJ II Ciclo</title>
+          <a href="/prestacao-de-contas/faj-ii-ciclo">Abrir prestação de contas do FAJ II Ciclo</a>
+          </html>
+          EOF
+          done
+
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'
         with:
