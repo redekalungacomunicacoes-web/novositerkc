@@ -1,6 +1,6 @@
 # Auditoria financeira FAJ II
 Fonte: XLSX oficial, leitura openpyxl com fórmulas e valores em cache (não recalculados).
-Sete abas: 0_APRESENTACAO, 1_DADOS DE IDENTIFICAÇÃO, 2_PLANO_DE_TRABALHO, 3_SUSTENTABILIDADE, 4_EQUIPE, 5_ORCAMENTO_RUBRICAS, LISTAS. Total: 86 fórmulas (15, 40, 31 nas três abas financeiras).
+Seis abas: 1_DADOS DE IDENTIFICAÇÃO, 2_PLANO_DE_TRABALHO, 3_SUSTENTABILIDADE, 4_EQUIPE, 5_ORCAMENTO_RUBRICAS, LISTAS. Total: 86 fórmulas (15, 40, 31 nas três abas financeiras).
 ## Sustentabilidade
 B22:D25: SUMIFS sobre F3:F18 (valor), E3:E18 (ano), G3:G18 (status). Status exatos: Confirmado – recurso recebido; Confirmado – a receber; Em negociação; Potencial doador / prospecção.
 B23 e B24 usam 2026 em vez de 2025: divergência confirmada, não alterar original. B26:D26 somam COUNTIFS de registros positivos confirmados, excluindo B="FAJ"; não contam financiadores distintos.
@@ -14,6 +14,8 @@ Usar financial_data existente para rascunhos versionados, sem criar lançamentos
 
 ## Conferência do original e implementação no painel
 
-A leitura do XLSX original no Drive confirmou as sete abas, 86 fórmulas e os valores em cache de C18:F18 da aba de orçamento: R$ 250.000,00, R$ 150.000,00, R$ 100.000,00 e 60%. A planilha foi aberta somente para leitura. Os valores conferidos são orçamento previsto e não são importados como receitas ou movimentos.
+A leitura do XLSX original no Drive confirmou as seis abas, 86 fórmulas e os valores em cache de C18:F18 da aba de orçamento: R$ 250.000,00, R$ 150.000,00, R$ 100.000,00 e 60%. A planilha foi aberta somente para leitura. Os valores conferidos são orçamento previsto e não são importados como receitas ou movimentos.
 
 O painel agrupa a sustentabilidade pelo ano de cada registro (incluindo 2025 nos dois status afetados), conta cada linha de equipe identificada e recalcula pessoal com todas as linhas válidas. A rubrica de pessoal recebe os totais derivados da equipe. Campos monetários vazios permanecem sem valor e zero é explícito. A participação FAJ fica em branco quando o valor informado de alguma rubrica está incompleto ou excede o custo previsto. A preparação de arquivos continua usando cópias de modelos e ainda não aplica as correções a um documento exportado.
+
+O mapeamento aceita cópias legadas com uma aba adicional de apresentação. Em exportações, as fórmulas compartilhadas B23:C23, B24:C24 e F18:G18 são desagrupadas para preservar os resultados individuais de cada célula. Os critérios de 2026 em C23 e C24 permanecem intactos.

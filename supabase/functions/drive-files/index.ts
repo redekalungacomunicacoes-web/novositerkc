@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const rootFolderId = Deno.env.get("GOOGLE_DRIVE_ROOT_FOLDER_ID");
+  const financeRootId = Deno.env.get("GOOGLE_DRIVE_FINANCE_ROOT_FOLDER_ID") ?? "1FNXWM54iyl8pPkEzwDXLnPYAR7f4X3DT";
   if (!supabaseUrl || !anonKey || !serviceRole)
     return json(
       { ok: false, error: "Configuração do backend incompleta." },
@@ -132,8 +133,7 @@ Deno.serve(async (req) => {
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
       if (form.get("module") === "finance-accountability") {
-        if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
-        return json({ok:true,file:await uploadAccountabilityEvidence(form, requireAcademyRoot(rootFolderId), userClient, admin, auth.user.id)});
+        return json({ok:true,file:await uploadAccountabilityEvidence(form, financeRootId, userClient, admin, auth.user.id)});
       }
       if (form.get("module") === "site") {
         if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
@@ -275,29 +275,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, sync: await getAccountabilitySheetStatus(String(body.report_id || ""), userClient, admin) });
     }
     if (action === "accountability-sync-sheet") {
-      if (!rootFolderId) return json({ ok: false, error: "Pasta raiz do Drive não configurada." }, 503);
       if (body.resolution !== undefined && !["panel", "sheet"].includes(body.resolution)) {
         return json({ ok: false, error: "Resolução de conflito inválida." }, 400);
       }
       return json({ ok: true, ...await syncAccountabilitySheet(
-        String(body.report_id || ""), requireAcademyRoot(rootFolderId), userClient, admin, auth.user.id,
+        String(body.report_id || ""), financeRootId, userClient, admin, auth.user.id,
         { resolution: body.resolution, conflictToken: typeof body.conflict_token === "string" ? body.conflict_token : undefined },
       ) });
     }
     if (action === "accountability-generate-document") {
-      if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
       const { generateAccountabilityDocument } = await import("../_shared/accountability-exports.ts");
       const document = await generateAccountabilityDocument(String(body.report_id || ""), String(body.format || ""),
-        requireAcademyRoot(rootFolderId), userClient, admin, auth.user.id);
+        financeRootId, userClient, admin, auth.user.id);
       return json({ok:true,document});
     }
     if (action === "accountability-prepare-documents") {
-      if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
-      return json({ok:true,documents:await prepareAccountabilityDocuments(String(body.report_id || ""),requireAcademyRoot(rootFolderId),userClient,admin,auth.user.id)});
+      return json({ok:true,documents:await prepareAccountabilityDocuments(String(body.report_id || ""),financeRootId,userClient,admin,auth.user.id)});
     }
     if (action === "accountability-ensure-folder") {
-      if (!rootFolderId) return json({ok:false,error:"Pasta raiz do Drive não configurada."},503);
-      const folderId = await prepareAccountabilityFolder(String(body.report_id || ""), requireAcademyRoot(rootFolderId), userClient, admin);
+      const folderId = await prepareAccountabilityFolder(String(body.report_id || ""), financeRootId, userClient, admin);
       return json({ok:true,folder_id:folderId});
     }
     if (action === "project-preview") {

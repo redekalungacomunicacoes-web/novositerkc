@@ -10,18 +10,18 @@ import { reconcileCells } from '../supabase/functions/_shared/accountability-she
 test('official cell map excludes static notes, duplicate fields and protected formulas', () => {
   const keys = fajEditableCells.map(a1);
   assert.equal(new Set(keys).size, keys.length);
-  assert(!keys.includes(`'${fajTabs[2]}'!A16`));
-  assert(!keys.includes(`'${fajTabs[5]}'!B3`));
+  assert(!keys.includes(`'${fajTabs[1]}'!A16`));
+  assert(!keys.includes(`'${fajTabs[4]}'!B3`));
   assert(fajFormulaCorrections.every(cell => !keys.includes(a1(cell))));
   const original = {
     financial_data: { workPlan: 'Legacy', funding: [{ amount: 200, externalId: 'x' }] },
     narrative_data: { question_1: 'Keep' },
   };
   const values = {
-    [`'${fajTabs[3]}'!F3`]: 0,
-    [`'${fajTabs[3]}'!H3`]: 46023,
-    [`'${fajTabs[2]}'!A15`]: 'End of official table',
-    [`'${fajTabs[1]}'!B5`]: 'a@example.test; b@example.test',
+    [`'${fajTabs[2]}'!F3`]: 0,
+    [`'${fajTabs[2]}'!H3`]: 46023,
+    [`'${fajTabs[1]}'!A15`]: 'End of official table',
+    [`'${fajTabs[0]}'!B5`]: 'a@example.test; b@example.test',
   };
   const updated = applyFajCells(original, values);
   assert.equal(updated.financial_data.workPlan, 'Legacy');
@@ -30,14 +30,14 @@ test('official cell map excludes static notes, duplicate fields and protected fo
   assert.equal(updated.financial_data.funding[0].externalId, 'x');
   assert.equal(updated.narrative_data.question_1, 'Keep');
   assert.deepEqual(updated.narrative_data.institution.emails, ['a@example.test', 'b@example.test']);
-  assert.equal(readFajCells(updated)[`'${fajTabs[3]}'!F3`], 0);
+  assert.equal(readFajCells(updated)[`'${fajTabs[2]}'!F3`], 0);
   assert.match(updated.financial_data.funding[0].expectedDate, /^\d{4}-\d{2}-\d{2}$/);
-  assert.throws(() => applyFajCells(original, { [`'${fajTabs[3]}'!F3`]: '1000,50' }));
+  assert.throws(() => applyFajCells(original, { [`'${fajTabs[2]}'!F3`]: '1000,50' }));
 });
 
 test('reconciles independent panel and sheet edits, then detects a same-cell conflict', () => {
-  const amount = `'${fajTabs[3]}'!F3`;
-  const source = `'${fajTabs[3]}'!A3`;
+  const amount = `'${fajTabs[2]}'!F3`;
+  const source = `'${fajTabs[2]}'!A3`;
   const blank = { financial_data: {}, narrative_data: {} };
   const baseline = readFajCells(blank);
   const panel = readFajCells(applyFajCells(blank, { [amount]: 0 }));
@@ -123,7 +123,7 @@ test('Drive edge round-trip reads and writes official cells with mocked Google t
   const state = { spreadsheet_id: spreadsheet, status: 'pending', baseline: readFajCells(report), conflicts: [], conflict_token: null, error: null, last_synced_at: null };
   const writes = [];
   const cells = Object.fromEntries(fajTabs.map(tab => [tab, {}]));
-  const [,, , funding, team, budget] = fajTabs;
+  const [,, funding, team, budget] = fajTabs;
   const add = (tab, col, row, value) => {
     cells[tab][`${col}${row}`] = { ...cells[tab][`${col}${row}`], ...value };
   };
@@ -183,14 +183,14 @@ test('Drive edge round-trip reads and writes official cells with mocked Google t
       }
       const fieldMask = url.searchParams.get('fields');
       assert.equal((fieldMask.match(/\(/g) ?? []).length, (fieldMask.match(/\)/g) ?? []).length);
-      assert.equal(url.searchParams.getAll('ranges').length, 7);
+      assert.equal(url.searchParams.getAll('ranges').length, fajTabs.length);
       return json(providerSnapshot());
     }
     assert.equal(url.hostname, 'www.googleapis.com');
     if (url.pathname.endsWith('/permissions')) return json({ permissions: [{ type: 'user' }] });
     if (url.pathname === '/drive/v3/files') {
       const query = url.searchParams.get('q');
-      const match = { FINANCEIRO: 'financeRoot', PRESTACOES_DE_CONTAS: 'restrictedReports', DOCUMENTOS_OFICIAIS: 'documentsFolder' };
+      const match = { PRESTACOES_DE_CONTAS: 'restrictedReports', DOCUMENTOS_OFICIAIS: 'documentsFolder' };
       const name = Object.keys(match).find(key => query.includes(`name = '${key}'`));
       assert(name);
       return json({ files: [{ id: match[name], name }] });
@@ -198,7 +198,8 @@ test('Drive edge round-trip reads and writes official cells with mocked Google t
     const id = url.pathname.split('/').at(-1);
     if (id === spreadsheet) return json({ id, mimeType: 'application/vnd.google-apps.spreadsheet', parents: ['documentsFolder'] });
     if (id === 'reportFolder') return json({ id, mimeType: 'application/vnd.google-apps.folder', parents: ['restrictedReports'] });
-    if (id === 'restrictedReports') return json({ id, mimeType: 'application/vnd.google-apps.folder', inheritedPermissionsDisabled: true });
+    if (id === 'restrictedReports') return json({ id, mimeType: 'application/vnd.google-apps.folder', parents: ['financial_root'] });
+    if (id === 'financial_root') return json({ id, name: 'RKC - FINANCEIRO PRIVADO', mimeType: 'application/vnd.google-apps.folder' });
     throw new Error(`Unexpected provider call to ${url.pathname}`);
   });
 

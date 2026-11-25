@@ -131,9 +131,10 @@ export async function fillFajWorkbook(bytes: Uint8Array, report: CellReport) {
   const workbook = await readXml(zip, 'xl/workbook.xml');
   const relationships = await readXml(zip, 'xl/_rels/workbook.xml.rels');
   const declared = nodes(workbook, SHEET, 'sheet');
-  if (declared.length !== fajTabs.length || declared.some((node, index) => node.getAttribute('name') !== fajTabs[index])
-      || !['hidden', 'veryHidden'].includes(declared[6].getAttribute('state') ?? '')) {
-    throw new Error('O XLSX não corresponde às sete abas oficiais do FAJ II Ciclo.');
+  const official = declared.filter(node => node.getAttribute('name') !== '0_APRESENTACAO');
+  if (official.length !== fajTabs.length || official.some((node, index) => node.getAttribute('name') !== fajTabs[index])
+      || !['hidden', 'veryHidden'].includes(official.at(-1)!.getAttribute('state') ?? '')) {
+    throw new Error('O XLSX não corresponde às seis abas oficiais do FAJ II Ciclo.');
   }
   const financial = object(report.financial_data);
   for (const group of ['workPlanRows', 'funding', 'team', 'budgetExcludingTeam'] as const) {
@@ -168,15 +169,33 @@ export async function fillFajWorkbook(bytes: Uint8Array, report: CellReport) {
       const cell = value === null ? index.get(ref) : getOrCreateCell(doc, index, ref);
       if (cell) setCellValue(doc, cell, value);
     }
-    if (name === fajTabs[5]) {
-      const organization = values[`'${fajTabs[1]}'!B3`] ?? null;
+    if (name === fajTabs[4]) {
+      const organization = values[`'${fajTabs[0]}'!B3`] ?? null;
       setCellValue(doc, getOrCreateCell(doc, index, 'B3'), organization);
     }
-    for (const field of fajFormulaCorrections.filter(field => field.tab === name)) {
-      const cell = index.get(a1(field.row, field.column));
+    const corrections = new Map(fajFormulaCorrections.filter(field => field.tab === name)
+      .map(field => [a1(field.row, field.column), field.formula]));
+    const sharedFormulas = new Map<string, string[]>();
+    for (const [ref, cell] of index) {
+      const formula = nodes(cell, SHEET, 'f')[0];
+      const group = formula?.getAttribute('si');
+      if (formula?.getAttribute('t') !== 'shared' || group == null) continue;
+      const members = sharedFormulas.get(group) ?? [];
+      members.push(ref);
+      sharedFormulas.set(group, members);
+    }
+    for (const [ref, value] of corrections) {
+      const cell = index.get(ref);
       const formula = cell && nodes(cell, SHEET, 'f')[0];
       if (!formula) throw new Error('Uma fórmula oficial esperada está ausente.');
-      formula.textContent = field.formula.replace(/^=/, '');
+      if (formula.getAttribute('t') === 'shared') {
+        const members = sharedFormulas.get(formula.getAttribute('si') ?? '');
+        if (!members?.every(member => corrections.has(member))) {
+          throw new Error('O grupo de fórmulas compartilhadas do modelo oficial mudou.');
+        }
+        for (const attribute of ['t', 'si', 'ref']) formula.removeAttribute(attribute);
+      }
+      formula.textContent = value.replace(/^=/, '');
     }
     // Never distribute numbers cached for the input template.
     for (const cell of nodes(doc, SHEET, 'c').filter(cell => nodes(cell, SHEET, 'f').length)) {
