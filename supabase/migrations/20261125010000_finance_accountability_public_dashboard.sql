@@ -28,7 +28,7 @@ as $$
   where release.slug = requested_slug and release.enabled and report.status <> 'archived';
 $$;
 
-revoke all on function public.get_finance_accountability_public_report(text) from public;
+revoke all on function public.get_finance_accountability_public_report(text) from public, anon, authenticated;
 grant execute on function public.get_finance_accountability_public_report(text) to anon, authenticated;
 
 create function public.get_finance_accountability_publication(target_report_id uuid)
@@ -41,7 +41,7 @@ as $$
   where report_id = target_report_id and public.can_manage_finance_accountability();
 $$;
 
-revoke all on function public.get_finance_accountability_publication(uuid) from public;
+revoke all on function public.get_finance_accountability_publication(uuid) from public, anon, authenticated;
 grant execute on function public.get_finance_accountability_publication(uuid) to authenticated;
 
 create function public.set_finance_accountability_publication(
@@ -147,5 +147,5 @@ begin
 end;
 $$;
 
-revoke all on function public.set_finance_accountability_publication(uuid,timestamptz,timestamptz,text,jsonb) from public;
+revoke all on function public.set_finance_accountability_publication(uuid,timestamptz,timestamptz,text,jsonb) from public, anon, authenticated;
 grant execute on function public.set_finance_accountability_publication(uuid,timestamptz,timestamptz,text,jsonb) to authenticated;
