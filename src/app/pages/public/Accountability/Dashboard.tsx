@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, BarChart3, BookOpen, Info, Maximize, Share2 } from 'lucide-react';
+import { ArrowUpRight, BarChart3, BookOpen, ChevronRight, Info, Maximize, Share2 } from 'lucide-react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { formatDate, money, percentage, sections, type PublicReport, type PublicRow, type Section } from './model';
@@ -79,10 +79,10 @@ export function DashboardContent({ report, section, navigate, initialRubric }: {
         <button type="button" aria-pressed={timeline} onClick={() => setTimeline(true)}>Cronograma</button>
       </div>}
       {!visible.length && <p role="status">Nenhum registro para os filtros selecionados.</p>}
-      {section === 'overview' && <Overview row={rows[0]} rubrics={report.content.budget ?? []} navigate={navigate} />}
-      {section === 'budget' && visible.length > 0 && <Budget rows={visible} openRubric={filter} table={table} plan={report.content.plan ?? []} />}
+      {section === 'overview' && <Overview row={rows[0]} rubrics={report.content.budget ?? []} plan={report.content.plan ?? []} navigate={navigate} />}
+      {section === 'budget' && visible.length > 0 && <Budget rows={visible} openRubric={filter} table={table} total={overview.total} plan={report.content.plan ?? []} />}
       {section === 'team' && <Overview row={{ ...rows[0], share: Number(rows[0].total) > 0 && typeof rows[0].faj === 'number' ? rows[0].faj / Number(rows[0].total) : null }}
-        rubrics={[]} team navigate={navigate} />}
+        rubrics={[]} plan={[]} team navigate={navigate} />}
       {section === 'funding' && <><FundingSummary rows={rows} overview={overview} filter={(year, selectedStatus) => { setFilter(String(year)); setStatus(String(selectedStatus)); }} /><div className="rkc-account-table" tabIndex={0} role="region" aria-label="Tabela de dados"><table>
         <thead><tr><th>Fonte</th><th>Tipo</th><th>Ano</th><th>Situação</th><th>Valor</th></tr></thead>
         <tbody>{visible.map((row, index) => <tr key={index}>
@@ -211,32 +211,20 @@ function ImpactComparison({ row }: { row: PublicRow }) {
   </div>;
 }
 
-function Overview({ row, rubrics, navigate, team = false }: {
-  row: PublicRow; rubrics: PublicRow[]; navigate?: (section: Section, rubric?: string) => void; team?: boolean;
+function Overview({ row, rubrics, plan, navigate, team = false }: {
+  row: PublicRow; rubrics: PublicRow[]; plan: PublicRow[]; navigate?: (section: Section, rubric?: string) => void; team?: boolean;
 }) {
-  const share = typeof row.share === 'number' && row.share >= 0 && row.share <= 1 ? row.share : null;
-  const top = [...rubrics].filter(item => typeof item.total === 'number').sort((a, b) => Number(b.total) - Number(a.total)).slice(0, 5);
+  const ranked = [...rubrics].sort((a, b) => Number(b.total ?? -1) - Number(a.total ?? -1));
   return <>
     {team && typeof row.count === 'number' && <p className="rkc-account-team-count">{row.count} integrantes</p>}
-    <div className="rkc-account-cards rkc-account-metrics">{[
-      [team ? 'Custo previsto da equipe' : 'Orçamento previsto', money(row.total)],
-      [team ? 'Parcela prevista do FAJ' : 'Solicitado ao FAJ', money(row.faj)],
-      ['Outras fontes previstas', money(row.other)],
-    ].map(([label, value]) => <article className="rkc-account-panel" key={label}><h3>{label}</h3><strong>{value}</strong></article>)}</div>
-    {share !== null && <figure className="rkc-account-panel">
-      <figcaption>{team ? 'Composição do custo da equipe' : 'Composição do orçamento previsto'}</figcaption>
-      <div className="rkc-account-bar" aria-hidden="true"><span style={{ width: percentageWidth(share) }} /></div>
-      <div className="rkc-account-legend"><span>FAJ · {percentage(share)}</span><span>Outras fontes · {percentage(1 - share)}</span></div>
-    </figure>}
-    {top.length > 0 && <div className="rkc-account-panel">
-      <h3>Maiores rubricas do orçamento</h3>
-      <div className="rkc-account-rank">{top.map(item => <button type="button" key={item.label} disabled={!navigate}
-        onClick={() => navigate?.('budget', String(item.label))}>
-        <span>{item.label}</span><b>{money(item.total)}</b>
-        <span aria-hidden="true" className="rkc-account-bar" style={{ width: percentageWidth(Number(item.total) / Number(top[0].total || 1)) }} />
-      </button>)}</div>
-      {navigate && <button type="button" onClick={() => navigate('budget')}>Ver todas as rubricas</button>}
-    </div>}
+    <BudgetComposition row={row} label={team ? 'Custo previsto da equipe' : 'Orçamento previsto'} />
+    {ranked.length > 0 && <section className="rkc-account-explore">
+      <div className="rkc-account-explore-title"><div><h3>Onde o orçamento será aplicado</h3>
+        <p>{ranked.length} rubricas previstas. Selecione uma para abrir o detalhamento.</p></div>
+        {navigate && <button type="button" onClick={() => navigate('budget')}>Gráfico e tabela <ArrowUpRight size={16} /></button>}
+      </div>
+      <RubricExplorer rows={ranked} total={row.total} plan={plan} />
+    </section>}
     {!team && (row.budgetCheck != null || row.fajCheck != null || row.teamCheck != null) && <details className="rkc-account-panel">
       <summary>Valores de conferência da planilha</summary>
       <PublicFields row={{
@@ -253,43 +241,78 @@ function Overview({ row, rubrics, navigate, team = false }: {
 
 function percentageWidth(value: number) { return Math.min(100, Math.max(0, value * 100)) + '%'; }
 
-function Budget({ rows, openRubric, table, plan }: { rows: PublicRow[]; openRubric: string; table: boolean; plan: PublicRow[] }) {
-  const detail = (row: PublicRow) => {
-    const related = plan.filter(activity => typeof activity.budgetLine === 'string' &&
-      activity.budgetLine.split(';').some(label => label.trim().replace(/\.$/, '') === String(row.label).trim()));
-    return <>
-      <PublicFields row={row} fields={{ description: 'Descrição', notes: 'Observações' }} />
-      <CellNote value={row.cellComment} />
-      {related.length > 0 && <details><summary>Atividades vinculadas no plano de trabalho</summary>
-        <ul className="rkc-account-linked">{related.map((activity, index) => <li key={index}>{activity.activity}</li>)}</ul>
-      </details>}
-    </>;
-  };
-  const max = Math.max(1, ...rows.map(row => Number(row.total) || 0));
+function BudgetComposition({ row, label }: { row: PublicRow; label: string }) {
+  const share = typeof row.share === 'number' && row.share >= 0 && row.share <= 1 ? row.share : null;
+  return <figure className="rkc-account-composition">
+    <figcaption><span>{label}</span><strong>{money(row.total)}</strong></figcaption>
+    {share !== null && <div className="rkc-account-donut" aria-hidden="true"
+      style={{ background: `conic-gradient(var(--chart-faj) ${share * 100}%, var(--chart-other) 0)` }}><span>{percentage(share)}<small>FAJ</small></span></div>}
+    <dl className="rkc-account-composition-key">
+      <div><dt>{label === 'Custo previsto da equipe' ? 'Parcela prevista do FAJ' : 'Solicitado ao FAJ'}</dt><dd>{money(row.faj)}{share !== null && <small>{percentage(share)}</small>}</dd></div>
+      <div><dt>Outras fontes previstas</dt><dd>{money(row.other)}{share !== null && <small>{percentage(1 - share)}</small>}</dd></div>
+    </dl>
+  </figure>;
+}
+
+function RubricSource({ row, plan }: { row: PublicRow; plan: PublicRow[] }) {
+  const related = plan.filter(activity => typeof activity.budgetLine === 'string' &&
+    activity.budgetLine.split(';').some(label => label.trim().replace(/\.$/, '') === String(row.label).trim()));
   return <>
-    {!table ? <div className="rkc-account-stack">
+    <PublicFields row={row} fields={{ description: 'Descrição', notes: 'Observações da planilha' }} />
+    <CellNote value={row.cellComment} />
+    {related.length > 0 && <details className="rkc-account-linked-activities">
+      <summary>Atividades vinculadas no plano de trabalho ({related.length})</summary>
+      <ul className="rkc-account-linked">{related.map((activity, index) => <li key={index}>{activity.activity}</li>)}</ul>
+    </details>}
+  </>;
+}
+
+function RubricExplorer({ rows, total, plan }: { rows: PublicRow[]; total: PublicRow[string]; plan: PublicRow[] }) {
+  const [selected, setSelected] = useState<PublicRow[string]>(null);
+  const active = rows.find(row => row.label === selected) ?? rows[0];
+  const max = Math.max(1, ...rows.map(row => Number(row.total) || 0));
+  const share = typeof total === 'number' && total > 0 && typeof active.total === 'number' ? active.total / total : null;
+  return <div className="rkc-account-explorer">
+    <div className="rkc-account-explorer-list">
       <div className="rkc-account-legend"><span>FAJ solicitado</span><span>Outras fontes previstas</span></div>
-      {rows.map((row, index) => <details key={index} className="rkc-account-panel rkc-account-rubric" open={row.label === openRubric || undefined}>
-        <summary><span>{row.label}</span><b>{money(row.total)}</b>
-        {typeof row.total === 'number' && <div className="rkc-account-track" aria-hidden="true">
-          <div className="rkc-account-bar" style={{ width: percentageWidth(row.total / max) }}>
-            <span style={{ width: percentageWidth(row.total > 0 && typeof row.faj === 'number' ? row.faj / row.total : 0) }} />
-          </div>
-        </div>}</summary>
-        <dl className="rkc-account-periods"><div><dt>FAJ solicitado</dt><dd>{money(row.faj)}</dd></div>
-          <div><dt>Outras fontes previstas</dt><dd>{money(row.other)}</dd></div>
-          <div><dt>Participação FAJ</dt><dd>{rubricShare(row)}</dd></div>
+      <div role="group" aria-label="Selecionar rubrica">
+        {rows.map((row, index) => <button key={index} type="button"
+          aria-pressed={row === active} aria-controls="account-rubric-detail" onClick={() => setSelected(row.label)}>
+          <span>{row.label}</span><strong>{money(row.total)}</strong><ChevronRight aria-hidden="true" size={16} />
+          {typeof row.total === 'number' && <span className="rkc-account-track" aria-hidden="true">
+            <span className="rkc-account-bar" style={{ width: percentageWidth(row.total / max) }}>
+              <span style={{ width: percentageWidth(row.total > 0 && typeof row.faj === 'number' ? row.faj / row.total : 0) }} />
+            </span>
+          </span>}
+        </button>)}
+      </div>
+    </div>
+    <section id="account-rubric-detail" className="rkc-account-inspector" aria-label="Detalhamento da rubrica">
+      <div aria-live="polite">
+        <h4>{active.label}</h4>
+        <strong className="rkc-account-inspector-value">{money(active.total)}</strong>
+        {share !== null && <p>{percentage(share)} do orçamento previsto</p>}
+        <dl className="rkc-account-inspector-breakdown">
+          <div><dt>FAJ solicitado</dt><dd>{money(active.faj)}</dd></div>
+          <div><dt>Outras fontes previstas</dt><dd>{money(active.other)}</dd></div>
+          <div><dt>Participação FAJ nesta rubrica</dt><dd>{rubricShare(active)}</dd></div>
         </dl>
-        {detail(row)}
-      </details>)}
-    </div> :
+      </div>
+      <RubricSource key={String(active.label)} row={active} plan={plan} />
+    </section>
+  </div>;
+}
+
+function Budget({ rows, openRubric, table, total, plan }: {
+  rows: PublicRow[]; openRubric: string; table: boolean; total: PublicRow[string]; plan: PublicRow[];
+}) {
+  return !table ? <RubricExplorer rows={rows} total={total} plan={plan} /> :
     <div className="rkc-account-table" tabIndex={0} role="region" aria-label="Tabela de dados"><table>
       <thead><tr><th>Rubrica</th><th>Custo previsto</th><th>FAJ solicitado</th><th>Outras fontes previstas</th><th>Participação FAJ</th></tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={index}><th scope="row"><details open={row.label === openRubric || undefined}><summary>{row.label}</summary>{detail(row)}</details></th><td>{money(row.total)}</td>
+      <tbody>{rows.map((row, index) => <tr key={index}><th scope="row"><details open={row.label === openRubric || undefined}><summary>{row.label}</summary><RubricSource row={row} plan={plan} /></details></th><td>{money(row.total)}</td>
         <td>{money(row.faj)}</td><td>{money(row.other)}</td>
         <td>{rubricShare(row)}</td></tr>)}</tbody>
-    </table></div>}
-  </>;
+    </table></div>;
 }
 
 function rubricShare(row: PublicRow) {
