@@ -199,7 +199,8 @@ test('only empty finance drafts can be safely removed from the dashboard', async
     'select action from public.finance_accountability_history where report_id=$1 order by id',
     [first.id],
   )).rows.map(row => row.action), ['created', 'archived']);
-  await assert.rejects(discard('authenticated', ids.operator, first), { code: '22023' });
+  const archivedVersion = (await db.query('select updated_at::text from public.finance_accountability_reports where id=$1', [first.id])).rows[0].updated_at;
+  await assert.rejects(discard('authenticated', ids.operator, first, archivedVersion), { code: '22023' });
 
   const second = (await create('Rascunho com conteúdo real')).rows[0];
   await asRole(db, 'authenticated', ids.operator, () => db.query(
