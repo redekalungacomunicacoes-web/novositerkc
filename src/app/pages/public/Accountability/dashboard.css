@@ -6,6 +6,7 @@
   --green: #165433;
   --other: #a9c8b4;
   --white: #fff;
+  --on-deep: #fff;
   --deep: #0d3827;
   --chart-faj: #c2ee8c;
   --chart-other: #46765e;
@@ -44,7 +45,7 @@
 .rkc-account-cover {
   position: relative;
   padding-block: clamp(2.75rem, 8vw, 6.5rem);
-  color: var(--white);
+  color: var(--on-deep);
   background: radial-gradient(ellipse at 100% 0%, #21583d, var(--deep) 65%);
 }
 .rkc-account-cover .rkc-account-kicker, .rkc-account-cover dt { color: var(--chart-faj); }
@@ -133,7 +134,7 @@
 }
 @media print {
   .rkc-account-hero { background: var(--white); color: var(--ink); padding: .5rem 0; }
-  .rkc-account-actions, .rkc-account nav, .rkc-account-tools, .rkc-account-section button, .rkc-account-skip { display: none; }
+  .rkc-account-actions, .rkc-account nav, .rkc-account-tabs, .rkc-account-tools, .rkc-account-section button, .rkc-account-skip { display: none; }
   .rkc-account-panel { break-inside: avoid; }
 }
 
@@ -148,7 +149,7 @@
   padding: clamp(1.35rem, 4vw, 2.75rem);
   border-radius: 1.1rem;
   background: var(--deep);
-  color: var(--white);
+  color: var(--on-deep);
 }
 .rkc-account-composition figcaption span { color: var(--chart-faj); font-weight: 650; }
 .rkc-account-composition figcaption strong {
@@ -168,7 +169,7 @@
 .rkc-account-composition-key { display: grid; gap: .85rem; margin: 0; }
 .rkc-account-composition-key div { border-left: 3px solid var(--chart-other); padding-left: .75rem; }
 .rkc-account-composition-key div:first-child { border-color: var(--chart-faj); }
-.rkc-account-composition-key dt { color: var(--white); }
+.rkc-account-composition-key dt { color: var(--on-deep); }
 .rkc-account-composition-key dd { display: flex; align-items: baseline; gap: .55rem; flex-wrap: wrap; font-size: 1.15rem; font-weight: 700; }
 .rkc-account-composition-key dd small { font-weight: 500; color: var(--chart-faj); }
 .rkc-account-explore { margin-block: 2rem; }
@@ -219,3 +220,31 @@
 .rkc-account-source-table th:first-child { min-width: 12rem; }
 .rkc-account-source-table tr:nth-child(even) { background: #f7faf7; }
 .rkc-account-composition + .rkc-account-explorer, .rkc-account-composition + .rkc-account-table { margin-top: 1rem; }
+
+.rkc-account-search { margin-block: 1rem; align-items: start; }
+.rkc-account-search ul { margin: 0; padding: .25rem 1.25rem; }
+.rkc-account-search a { color: var(--green); text-decoration: underline; }
+
+@media print {
+  .rkc-account-table { overflow: visible; }
+  .rkc-account-table table { min-width: 0; width: 100%; }
+  .rkc-account-table th, .rkc-account-table td { overflow-wrap: anywhere; font-size: .75rem; }
+}
+
+.rkc-account-totals { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); margin-block: 1.25rem; }
+.rkc-account-totals dd { margin-top: .3rem; font-size: clamp(1.3rem, 2.5vw, 2rem); font-weight: 750; line-height: 1.15; }
+
+@media screen and (prefers-color-scheme: dark) {
+  .rkc-account {
+    color-scheme: dark;
+    --ink: #edf7ee;
+    --mute: #bbd0bf;
+    --paper: #182c22;
+    --line: #456051;
+    --green: #bfebc9;
+    --white: #101d17;
+  }
+  .rkc-account-source-table tr:nth-child(even) { background: var(--paper); }
+  .rkc-account-brands { padding: .4rem .65rem; border-radius: .55rem; background: #fff; }
+  .rkc-account-funder small { color: #41584a; }
+}

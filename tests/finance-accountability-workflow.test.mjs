@@ -51,6 +51,7 @@ async function setup(db) {
     '20261125005753_finance_accountability_public_dashboard.sql',
     'undefined_finance_accountability_source_details.sql',
     '20261125020000_finance_accountability_editorial.sql',
+    '20261125033000_finance_accountability_team_members.sql',
   ];
   for (const file of migrations) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'));
@@ -245,13 +246,24 @@ test('serves only reviewed accountability content and revokes anonymous access a
   await assert.rejects(publish('authenticated', ids.operator, { narrative: [{ label: 'Primeira pergunta', body: 'Resposta' }] }), /integralidade/);
   await assert.rejects(publish('authenticated', ids.operator, { institution: [{ body: 'privado@example.com' }] }), /e-mail/);
 
+  await assert.rejects(publish('authenticated', ids.operator, {
+    team_members: [{ name: 'Coordenação', notes: 'privado@example.com' }],
+  }), /e-mail/);
+  await assert.rejects(publish('authenticated', ids.operator, {
+    team_members: Array.from({ length: 41 }, () => ({ name: 'Coordenação' })),
+  }), /integralidade/);
+
   const release = await publish('authenticated', ids.operator, {
     overview: [{ total: 100, faj: 60, other: 40, share: 0.6, employee_name: 'Nome privado' }],
     team: [{ label: 'Nome privado', total: 10, other: { cpf: 'Privado' } }],
+    team_members: [{ name: 'Coordenação', relationship: 'Contrato', monthly: 1000, months: 2,
+      charges: 0, faj: 1000, notes: null, privateDocument: 'Privado' }],
   });
   assert.deepEqual((await get()).content, {
     overview: [{ total: 100, faj: 60, other: 40, share: 0.6 }],
     team: [{ label: 'Equipe e estrutura', total: 10 }],
+    team_members: [{ name: 'Coordenação', relationship: 'Contrato', monthly: 1000, months: 2,
+      charges: 0, faj: 1000, notes: null }],
   });
   await assert.rejects(publish('authenticated', ids.operator, {}, null), /publicação mudou/);
   await assert.rejects(publish('authenticated', ids.operator, { overview: [{}] }, release.published_at, '2000-01-01'), /prestação mudou/i);

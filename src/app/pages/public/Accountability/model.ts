@@ -2,6 +2,7 @@ export const sections = {
   overview: 'Dados de identificação',
   budget: 'Orçamento por rubricas',
   team: 'Equipe',
+  team_members: 'Detalhamento da equipe',
   funding: 'Sustentabilidade',
   plan: 'Plano de trabalho',
   institution: 'Apresentação institucional',
@@ -28,3 +29,25 @@ export const percentage = (value: PublicRow[string]) => typeof value === 'number
 export const formatDate = (date: string | null) => date
   ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: date.length === 10 ? 'UTC' : 'America/Sao_Paulo' }).format(new Date(date))
   : 'Não informado';
+
+const plainObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+export function parsePublicReport(value: unknown): PublicReport | null {
+  if (!plainObject(value) || !plainObject(value.content) ||
+      typeof value.title !== 'string' || typeof value.published_at !== 'string' ||
+      !Number.isFinite(Date.parse(value.published_at))) return null;
+
+  const content: PublicReport['content'] = {};
+  for (const section of Object.keys(sections) as Section[]) {
+    const rows = value.content[section];
+    if (rows === undefined) continue;
+    if (!Array.isArray(rows) || !rows.every(row => plainObject(row) &&
+      Object.values(row).every(field => field === null ||
+        typeof field === 'string' || (typeof field === 'number' && Number.isFinite(field))))) return null;
+    content[section] = rows;
+  }
+  const date = (field: unknown) => typeof field === 'string' && Number.isFinite(Date.parse(field)) ? field : null;
+  return { title: value.title, published_at: value.published_at,
+    period_start: date(value.period_start), period_end: date(value.period_end), content };
+}

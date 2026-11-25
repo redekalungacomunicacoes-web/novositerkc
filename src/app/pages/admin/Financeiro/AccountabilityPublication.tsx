@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { editorialBucket } from '@/app/pages/public/Accountability/EditorialMedia';
 import { DashboardContent } from '@/app/pages/public/Accountability/Dashboard';
-import { formatDate, sections, type PublicReport, type PublicRow, type Section } from '@/app/pages/public/Accountability/model';
+import { formatDate, parsePublicReport, sections, type PublicReport, type PublicRow, type Section } from '@/app/pages/public/Accountability/model';
 import { accountabilityPublicContent } from './accountabilityPublicContent';
 import type { FajFinancialData } from './fajFinancialCalculations';
 
@@ -34,10 +34,12 @@ export function AccountabilityPublication({ report, disabled, onChange }: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [source, setSource] = useState<PublicReport['content']>();
+  const [publishedContent, setPublishedContent] = useState<PublicReport['content']>();
   const [media, setMedia] = useState<PublicRow[]>([]);
   const sourceInput = useRef<HTMLInputElement>(null);
   const baseContent = useMemo(() => accountabilityPublicContent(report.financial_data, report.narrative_data), [report]);
-  const content = { ...baseContent, ...source, ...(media.length ? { records: media } : {}) };
+  const content = { ...(source ?? publishedContent ?? baseContent), team_members: baseContent.team_members,
+    ...(media.length ? { records: [...(publishedContent?.records ?? []), ...media] } : {}) };
   const available = (Object.keys(sections) as Section[]).filter(key => key === 'narrative'
     ? content[key]?.length === 4 : !!content[key]?.length);
   const selectedAvailable = selected.filter(key => available.includes(key));
@@ -48,12 +50,25 @@ export function AccountabilityPublication({ report, disabled, onChange }: {
     setLoading(true);
     setError('');
     setReviewed(false);
-    void supabase.rpc('get_finance_accountability_publication', { target_report_id: report.id }).then(({ data, error }) => {
+    setPublishedContent(undefined);
+    setSelected([]);
+    void supabase.rpc('get_finance_accountability_publication', { target_report_id: report.id }).then(async ({ data, error }) => {
       if (!active) return;
       if (error) setError('Não foi possível consultar a publicação. Recarregue a página.');
       const current = data as Release | null;
       setRelease(current);
       setSlug(current?.slug ?? report.template.slug);
+      if (current?.enabled) {
+        const result = await supabase.rpc('get_finance_accountability_public_report', { requested_slug: current.slug });
+        if (!active) return;
+        const published = parsePublicReport(result.data);
+        if (result.error || !published) {
+          setError('Não foi possível carregar as seções já publicadas.');
+        } else {
+          setPublishedContent(published.content);
+          setSelected(Object.keys(published.content) as Section[]);
+        }
+      }
       setLoading(false);
     });
     return () => { active = false; };
@@ -96,7 +111,7 @@ export function AccountabilityPublication({ report, disabled, onChange }: {
       const parsed: unknown = JSON.parse(await file.text());
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
       const entries = Object.entries(parsed);
-      if (!entries.length || entries.some(([key, rows]) => key === 'records' || !Object.hasOwn(sections, key)
+      if (!entries.length || entries.some(([key, rows]) => key === 'records' || key === 'team_members' || !Object.hasOwn(sections, key)
         || !Array.isArray(rows) || rows.some(row => !row || typeof row !== 'object' || Array.isArray(row)
           || Object.values(row).some(value => value !== null && !['string', 'number'].includes(typeof value))))) throw new Error();
       setSource(parsed as PublicReport['content']);
@@ -153,7 +168,7 @@ export function AccountabilityPublication({ report, disabled, onChange }: {
               <input ref={sourceInput} type="file" accept="application/json,.json" className="block"
                 onChange={event => { const file = event.target.files?.[0]; if (file) void importSource(file); }} />
             </label>
-            {source && <button type="button" className="underline" onClick={() => { setSource(undefined); setSelected([]); setReviewed(false); }}>
+            {(source || publishedContent) && <button type="button" className="underline" onClick={() => { setSource(undefined); setPublishedContent(undefined); setSelected([]); setReviewed(false); }}>
               Usar dados do cadastro
             </button>}
             {media.map((row, index) => <fieldset key={index} className="space-y-2 rounded border p-3">
@@ -177,7 +192,7 @@ export function AccountabilityPublication({ report, disabled, onChange }: {
                 setReviewed(false);
               }}>Remover da seleção</button>
             </fieldset>)}
-            <button type="button" className="underline" disabled={media.length >= 30} onClick={() => {
+            <button type="button" className="underline" disabled={media.length + (publishedContent?.records?.length ?? 0) >= 30} onClick={() => {
               setMedia(current => [...current, { question: 1, afterParagraph: 0 }]);
               setReviewed(false);
             }}>Adicionar imagem</button>

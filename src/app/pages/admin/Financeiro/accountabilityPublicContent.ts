@@ -17,7 +17,7 @@ export function accountabilityPublicContent(
     label, total, faj,
     other: total !== null && faj !== null && faj <= total ? (Math.round(total * 100) - Math.round(faj * 100)) / 100 : null,
   });
-  // Keep personnel aggregated as one rubrica. Never project individual rows.
+  // Keep the team aggregate as a single budget line.
   const teamTotal = budgetRow('Pessoal/equipe', totals.teamTotal, totals.teamFaj);
   const hasTeam = team.length > 0 && (teamTotal.total !== null || teamTotal.faj !== null);
   const other = totals.share === null ? null : totals.other;
@@ -71,6 +71,10 @@ export function accountabilityPublicContent(
       ...budgetRow(text(row.label) || budgetLabels[index] || 'Rubrica adicional', amount(row.total), amount(row.faj)),
       description: text(row.description), notes: text(row.notes),
     }))],
+    team_members: team.map(row => ({
+      name: text(row.name), relationship: text(row.relationship), monthly: amount(row.monthly),
+      months: amount(row.months), faj: amount(row.faj), charges: amount(row.charges), notes: text(row.notes),
+    })).filter(row => row.name !== null || row.monthly !== null || row.faj !== null || row.charges !== null),
     team: hasTeam ? [{ ...teamTotal, count: totals.teamCount }] : [],
     funding: funding.map(row => ({
       label: text(row.source), type: text(row.sourceType), year: amount(row.year), status: text(row.status), total: amount(row.amount),
