@@ -49,15 +49,13 @@ export function accountabilityPublicContent(
   }
   const answers = questions.flatMap(question => {
     const body = text(narrative[question.key]);
-    return body ? [{ label: question.label, body }] : [];
+    return body ? [{ label: question.label, body, guidance: question.guidance }] : [];
   });
   const name = text(institution.organization_name);
   const renewal = text(institution.renewal_period);
-  const context = text(narrative.question_1);
   const vision: PublicRow[] = [
     ...(name ? [{ label: 'Organização', body: name }] : []),
     ...(renewal ? [{ label: 'Período de renovação', body: renewal }] : []),
-    ...(context ? [{ label: 'Desenvolvimento institucional', body: context }] : []),
   ];
   const plan = (Array.isArray(financial.workPlanRows) ? financial.workPlanRows : []).map(row => ({
     label: text(row.objective), activity: text(row.activity), outcome: text(row.outcome),
@@ -73,7 +71,7 @@ export function accountabilityPublicContent(
       ...budgetRow(text(row.label) || budgetLabels[index] || 'Rubrica adicional', amount(row.total), amount(row.faj)),
       description: text(row.description), notes: text(row.notes),
     }))],
-    team: hasTeam ? [teamTotal] : [],
+    team: hasTeam ? [{ ...teamTotal, count: totals.teamCount }] : [],
     funding: funding.map(row => ({
       label: text(row.source), type: text(row.sourceType), year: amount(row.year), status: text(row.status), total: amount(row.amount),
       purpose: text(row.purpose), project: text(row.project), expectedDate: text(row.expectedDate) ?? amount(row.expectedDate), notes: text(row.notes),
@@ -82,10 +80,5 @@ export function accountabilityPublicContent(
     institution: vision,
     narrative: answers,
     impact,
-    results: [
-      ...(text(narrative.question_2) ? [{ label: 'Prioridades institucionais', body: text(narrative.question_2) }] : []),
-      ...(text(narrative.question_3) ? [{ label: 'Ações previstas', body: text(narrative.question_3) }] : []),
-      ...(text(narrative.question_4) ? [{ label: 'Mudanças esperadas e evidências', body: text(narrative.question_4) }] : []),
-    ],
   };
 }
