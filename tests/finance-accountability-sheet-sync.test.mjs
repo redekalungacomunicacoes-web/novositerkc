@@ -139,7 +139,7 @@ test('Drive edge round-trip reads and writes official cells with mocked Google t
   mark(funding, refs(22, 26, ['B','C','D']), formula);
   mark(team, [...refs(2, 17, ['F','H']), ...refs(18, 18, ['F','G','H']), ...refs(22, 26, ['C'])], formula);
   mark(budget, [...refs(7, 7, ['C','D']), ...refs(7, 17, ['E','F']), ...refs(18, 18, ['C','D','E','F']), ...refs(21, 23, ['B'])], formula);
-  for (const { tab, row, column, formula: value } of fajFormulaCorrections) add(tab, String.fromCharCode(64 + column), row, { userEnteredValue: { formulaValue: value } });
+  for (const { tab, row, column, formula: value } of fajFormulaCorrections) add(tab, String.fromCharCode(64 + column), row, { userEnteredValue: { formulaValue: value.replaceAll(',', ';') } });
   const validation = { dataValidation: { strict: true } };
   mark(funding, refs(3, 18, ['E','F','G']), validation);
   mark(team, refs(2, 17, ['C','D','E','G']), validation);

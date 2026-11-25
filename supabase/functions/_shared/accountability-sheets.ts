@@ -45,6 +45,10 @@ type Sheet = {
 };
 const sheetBounds = [ "A1:B7", "A1:G17", "A1:I30", "A1:I26", "A1:G26", "A1:J11"];
 const expectedNumberOfFormulas = 86;
+// Sheets returns localized separators for the FAJ template imported with pt_BR.
+const localizedFormula = (formula: string) => formula.replace(/,/g, ";");
+const matchesFormula = (value: string | undefined, formula: string) =>
+  value === formula || value === localizedFormula(formula);
 const cellOf = (tab: string, row: number, column: number) => ({ tab, row, column });
 const linkedOrganization = cellOf(fajTabs[4], 3, 2);
 const sameCells = (left: Cells, right: Cells) => fajEditableKeys.every(key => left[key] === right[key]);
@@ -106,12 +110,12 @@ async function assertSheetManifest(id: string) {
 
 async function snapshot(id: string) {
   const params = new URLSearchParams({
-    fields: "sheets(properties(sheetId,title,hidden),protectedRanges(description,warningOnly,range,unprotectedRanges),data(startRow,startColumn,rowData(values(userEnteredValue,dataValidation))))",
+    fields: "properties(locale),sheets(properties(sheetId,title,hidden),protectedRanges(description,warningOnly,range,unprotectedRanges),data(startRow,startColumn,rowData(values(userEnteredValue,dataValidation))))",
   });
   fajTabs.forEach((tab, index) => params.append("ranges", `'${tab}'!${sheetBounds[index]}`));
   // A missing tab makes the requested A1 ranges invalid. An independent metadata query
   // is unnecessary for current report reads because the template check captures all tabs.
-  const result: { sheets?: Sheet[] } = await sheetsResponse(`${encodeURIComponent(id)}?${params}`);
+  const result: { properties?: { locale?: string }; sheets?: Sheet[] } = await sheetsResponse(`${encodeURIComponent(id)}?${params}`);
   const tabs = new Map(result.sheets?.map(sheet => [sheet.properties.title, sheet]));
   const entries = new Map<string, GridCell>();
   for (const grid of tabs.values()) {
@@ -129,7 +133,7 @@ async function snapshot(id: string) {
     if (entered?.formulaValue !== undefined) throw new Error(`Remova a fórmula do campo editável ${key} antes de sincronizar.`);
     cells[key] = normalizeFajCell(cell, entered?.stringValue ?? entered?.numberValue ?? entered?.boolValue);
   }
-  return { tabs, entries, cells };
+  return { tabs, entries, cells, locale: result.properties?.locale };
 }
 
 function assertLayout(sheet: Awaited<ReturnType<typeof snapshot>>, initialized: boolean) {
@@ -155,7 +159,7 @@ function assertLayout(sheet: Awaited<ReturnType<typeof snapshot>>, initialized: 
   if (initialized) {
     for (const correction of fajFormulaCorrections) {
       const value = sheet.entries.get(a1(correction))?.userEnteredValue?.formulaValue;
-      if (value !== correction.formula) throw new Error(`Fórmula oficial divergente em ${a1(correction)}.`);
+      if (!matchesFormula(value, correction.formula)) throw new Error(`Fórmula oficial divergente em ${a1(correction)}.`);
     }
     for (const tab of fajTabs) {
       const grid = sheet.tabs.get(tab)!;
@@ -196,8 +200,11 @@ async function writeBatch(id: string, requests: unknown[]) {
 }
 
 async function protectAndCorrect(id: string, sheet: Awaited<ReturnType<typeof snapshot>>) {
-  const requests: unknown[] = fajFormulaCorrections.map(({ tab, row, column, formula }) =>
-    updateCell(sheet, tab, row, column, { formulaValue: formula }));
+  const requests: unknown[] = fajFormulaCorrections
+    .filter(correction => !matchesFormula(sheet.entries.get(a1(correction))?.userEnteredValue?.formulaValue, correction.formula))
+    .map(({ tab, row, column, formula }) => updateCell(sheet, tab, row, column, {
+      formulaValue: sheet.locale === "pt_BR" ? localizedFormula(formula) : formula,
+    }));
   for (const tab of fajTabs) {
     const { properties: { sheetId }, protectedRanges } = sheet.tabs.get(tab)!;
     if (protectedRanges?.some(range => range.description === PROTECTION)) continue;
@@ -210,7 +217,7 @@ async function protectAndCorrect(id: string, sheet: Awaited<ReturnType<typeof sn
       },
     });
   }
-  await writeBatch(id, requests);
+  if (requests.length) await writeBatch(id, requests);
 }
 
 async function validateBoundFile(id: string, reportFolderId: string, root: string) {

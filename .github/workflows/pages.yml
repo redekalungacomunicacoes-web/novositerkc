@@ -33,7 +33,10 @@ jobs:
       - name: Generate search metadata, structured data and sitemap
         run: node scripts/generate-article-seo.mjs
 
-      - run: cp dist/index.html dist/404.html
+      - name: Prepare SPA entry points
+        run: |
+          cp dist/index.html dist/404.html
+          install -D -m 644 dist/index.html dist/admin/financeiro/prestacoes/index.html
 
       - uses: actions/upload-pages-artifact@v3
         with:
