@@ -25,5 +25,5 @@ const percent = new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFracti
 export const money = (value: PublicRow[string]) => typeof value === 'number' ? currency.format(value) : 'Não informado';
 export const percentage = (value: PublicRow[string]) => typeof value === 'number' ? percent.format(value) : 'Não informado';
 export const formatDate = (date: string | null) => date
-  ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(date))
+  ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: date.length === 10 ? 'UTC' : 'America/Sao_Paulo' }).format(new Date(date))
   : 'Não informado';

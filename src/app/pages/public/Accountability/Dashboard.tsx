@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, BarChart3, BookOpen, Maximize, Share2 } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { RkcLogo } from '@/app/components/RkcLogo';
 import { supabase } from '@/lib/supabase';
 import { formatDate, money, percentage, sections, type PublicReport, type PublicRow, type Section } from './model';
 import './dashboard.css';
@@ -219,7 +218,13 @@ export default function Dashboard() {
   return <div className="rkc-account" ref={root}>
     <a className="rkc-account-skip" href="#account-main">Ir para o conteúdo</a>
     <header className="rkc-account-top"><div className="rkc-account-wrap">
-      <Link to="/" aria-label="Página inicial da Rede Kalunga"><RkcLogo className="rkc-account-logo" /></Link>
+      <div className="rkc-account-brands">
+        <Link to="/" aria-label="Página inicial da Rede Kalunga">
+          <img className="rkc-account-logo" src="/prestacao-de-contas/marcas/rede-kalunga.png" alt="Rede Kalunga de Comunicações" width="1610" height="402" />
+        </Link>
+        {slug === 'faj-ii-ciclo' && report && <img className="rkc-account-faj" src="/prestacao-de-contas/marcas/faj-azul.png"
+          alt="Fundo de Apoio ao Jornalismo" width="349" height="111" />}
+      </div>
       <div className="rkc-account-actions">{report && <>
         <button type="button" onClick={() => void share()}><Share2 size={16} /> Compartilhar</button>
         <button type="button" onClick={() => void presentation()}><Maximize size={16} /> Apresentação</button>
