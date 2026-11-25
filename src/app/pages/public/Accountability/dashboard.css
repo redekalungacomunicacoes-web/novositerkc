@@ -219,3 +219,33 @@
 .rkc-account-source-table th:first-child { min-width: 12rem; }
 .rkc-account-source-table tr:nth-child(even) { background: #f7faf7; }
 .rkc-account-composition + .rkc-account-explorer, .rkc-account-composition + .rkc-account-table { margin-top: 1rem; }
+
+.rkc-account { --paper: #f6f3ec; --line: #e3ddd0; --green: #196443; --deep: #143a2a; }
+.rkc-account-primary-tabs { gap: .25rem 1.05rem; margin-block: .6rem; }
+.rkc-account-primary-tabs a { white-space: nowrap; }
+.rkc-account-key-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 11rem),1fr)); gap: .65rem; margin-bottom: .9rem; }
+.rkc-account-key-metrics div { border: 1px solid var(--line); border-top: 3px solid var(--green); border-radius: .65rem; background: var(--white); padding: .95rem; }
+.rkc-account-key-metrics div:nth-child(2) { border-top-color: #9b6a2c; }
+.rkc-account-key-metrics div:nth-child(3) { border-top-color: #547572; }
+.rkc-account-key-metrics dd { font-size: clamp(1.35rem, 3vw, 2rem); font-weight: 700; color: var(--deep); font-variant-numeric: tabular-nums; }
+.rkc-account-overview-grid { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: .9rem; align-items: start; }
+.rkc-account-overview-grid > .rkc-account-stack { align-content: start; }
+.rkc-account-annual > div { display: flex; justify-content: space-between; padding-block: .55rem; border-bottom: 1px solid var(--line); }
+.rkc-account-annual dd { font-weight: 700; }
+.rkc-account-annual + button { margin-top: .75rem; }
+.rkc-account-rubric-map > p { color: var(--mute); }
+.rkc-account-rubric-map button { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; text-align: left; gap: .25rem .6rem; margin-top: .3rem; padding: .36rem .55rem; }
+.rkc-account-rubric-map button strong { font-size: .9rem; margin: 0; white-space: nowrap; }
+.rkc-account-rubric-map .rkc-account-track { grid-column: 1 / -1; margin: 0; }
+.rkc-account-rubric-map .rkc-account-bar { height: .35rem; }
+.rkc-account-chips, .rkc-account-filter-totals { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
+.rkc-account-chips button { border-radius: 2rem; font-size: .84rem; }
+.rkc-account-filter-totals { background: var(--paper); border-radius: .6rem; padding: .85rem; gap: .5rem 1.1rem; font-size: .9rem; }
+.rkc-account-filter-totals strong { display: block; }
+.rkc-account-table tfoot { background: var(--paper); font-weight: 650; }
+.rkc-account-narrative-answer { scroll-margin-top: 1rem; }
+.rkc-account-narrative-answer summary { color: var(--deep); }
+@media (max-width: 760px) {
+  .rkc-account-overview-grid { grid-template-columns: 1fr; }
+  .rkc-account-primary-tabs { flex-wrap: nowrap; overflow-x: auto; padding-inline: .25rem; }
+}
