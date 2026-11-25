@@ -50,12 +50,6 @@ jobs:
         run: |
           cp dist/index.html dist/404.html
           install -D -m 644 dist/index.html dist/admin/financeiro/prestacoes/index.html
-          for route in faj-ii-ciclo faj-ii-ciclo/financeiro faj-ii-ciclo/narrativo; do
-            destination="dist/prestacao-de-contas/$route/index.html"
-            install -D -m 644 dist/index.html "$destination"
-            sed -i 's|<title>[^<]*</title>|<title>Prestação de Contas FAJ II Ciclo · Rede Kalunga</title>|; s|name="description" content="[^"]*"|name="description" content="Orçamento, relatório narrativo e indicadores do FAJ II Ciclo da Rede Kalunga."|' "$destination"
-            sed -i '/<\/head>/i\    <meta property="og:title" content="Prestação de Contas FAJ II Ciclo · Rede Kalunga" />\n    <meta property="og:description" content="Orçamento, relatório narrativo e indicadores da Rede Kalunga." />' "$destination"
-          done
 
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'

@@ -292,7 +292,11 @@ export async function generate() {
   const settings = settingsRows[0] || {};
   await writeFile('dist/index.html', renderSiteSeo(template, settings));
 
+  const accountabilityPath = '/prestacao-de-contas/faj-ii-ciclo/';
   const staticPages = [
+    { path: accountabilityPath, title: 'Prestação de Contas FAJ II Ciclo', description: 'Orçamento, relatório narrativo e indicadores do FAJ II Ciclo da Rede Kalunga.' },
+    { path: accountabilityPath + 'financeiro/', title: 'Dashboard Financeiro do FAJ II Ciclo', description: 'Orçamento previsto, rubricas, equipe, financiamento e plano de trabalho do FAJ II Ciclo.' },
+    { path: accountabilityPath + 'narrativo/', title: 'Relatório Narrativo e Impacto do FAJ II Ciclo', description: 'Respostas do formulário narrativo, registros e indicadores de impacto do FAJ II Ciclo.' },
     { path: '/materias', title: 'Matérias | Rede Kalunga Comunicações', description: 'Jornalismo independente que nasce do Território Quilombola Kalunga e da Chapada dos Veadeiros.' },
     { path: '/quem-somos', title: 'Quem Somos | Rede Kalunga Comunicações', description: 'Conheça a Rede Kalunga Comunicações, iniciativa quilombola de jornalismo e comunicação no Território Kalunga.' },
     { path: '/projetos', title: 'Projetos | Rede Kalunga Comunicações', description: 'Iniciativas de comunicação, memória, cultura e formação da Rede Kalunga Comunicações.' },

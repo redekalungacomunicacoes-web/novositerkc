@@ -2,13 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, BarChart3, BookOpen, ChevronRight, Info, Maximize, Share2 } from 'lucide-react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { formatDate, money, percentage, sections, type PublicReport, type PublicRow, type Section } from './model';
+import { formatDate, money, parsePublicReport, percentage, sections, type PublicReport, type PublicRow, type Section } from './model';
 import { Gallery, NarrativeAnswer } from './EditorialMedia';
 import './dashboard.css';
 
 const financialTabs: Section[] = ['overview', 'plan', 'funding', 'team', 'budget'];
 const narrativeTabs: Section[] = ['institution', 'narrative', 'records', 'impact', 'results'];
-const valueText = (value: PublicRow[string] | undefined) => value == null ? 'Não informado' : String(value);
+const valueText = (value: PublicRow[string] | undefined) => value == null || value === '' ? 'Não informado' : String(value);
+const sumMoney = (rows: PublicRow[], key: string) => {
+  const values = rows.flatMap(row => typeof row[key] === 'number' ? [Math.round(row[key] * 100)] : []);
+  return values.length ? values.reduce((total, value) => total + value, 0) / 100 : null;
+};
+const matches = (row: PublicRow, query: string) => Object.values(row).some(value =>
+  value != null && String(value).toLocaleLowerCase('pt-BR').includes(query));
 const unique = (rows: PublicRow[], field: string) => Array.from(new Set(rows.map(row => row[field]).filter(value => value != null)));
 
 export function DashboardContent({ report, section, navigate, initialRubric }: { report: PublicReport; section: Section; navigate?: (section: Section, rubric?: string) => void; initialRubric?: string }) {
@@ -79,16 +85,23 @@ export function DashboardContent({ report, section, navigate, initialRubric }: {
         <button type="button" aria-pressed={timeline} onClick={() => setTimeline(true)}>Cronograma</button>
       </div>}
       {!visible.length && <p role="status">Nenhum registro para os filtros selecionados.</p>}
-      {section === 'overview' && <Identification report={report} row={overview} navigate={navigate} />}
+      {section === 'overview' && <>
+        <ReportTotals report={report} />
+        <Identification report={report} row={overview} navigate={navigate} />
+        <PublicFields row={overview} fields={{ notes: 'Variações do orçamento' }} />
+      </>}
       {section === 'budget' && <>
         {overview.total != null && <BudgetComposition row={overview} label="Orçamento previsto" />}
         {visible.length > 0 && <Budget rows={visible} openRubric={filter} table={table} total={overview.total} plan={report.content.plan ?? []} />}
         <BudgetSource row={overview} />
       </>}
       {section === 'team' && <TeamSummary row={rows[0]} navigate={navigate} />}
+      {(section === 'team_members' || section === 'team') && !!report.content.team_members?.length &&
+        <TeamMembers rows={report.content.team_members} />}
       {section === 'funding' && <>
         <FundingSummary rows={rows} overview={overview} filter={(year, selectedStatus) => { setFilter(String(year)); setStatus(String(selectedStatus)); }} />
         <h3 className="rkc-account-subheading">Registros de financiamento</h3>
+        <p role="status">{visible.length} de {rows.length} fontes · Total da seleção {money(sumMoney(visible, 'total'))}</p>
         <SourceTable title="Registros de financiamento" rows={visible} columns={[
           ['label', 'Financiador ou doador'], ['type', 'Tipo de financiador'], ['purpose', 'Finalidade do recurso', fundingComments?.purposeComment],
           ['project', 'Nome do projeto ou pesquisa', fundingComments?.projectComment], ['year', 'Ano do recurso'],
@@ -193,13 +206,8 @@ function FundingSummary({ rows, overview, filter }: { rows: PublicRow[]; overvie
 }
 
 function ImpactComparison({ row }: { row: PublicRow }) {
-  const count = (value: PublicRow[string]) => {
-    if (typeof value === 'number') return value;
-    return typeof value === 'string' && /^\d{1,3}(?:\.\d{3})+$|^\d+$/.test(value.trim()) ? Number(value.replaceAll('.', '')) : null;
-  };
-  const prior = count(row.prior);
-  const current = count(row.current);
-  if (row.label === 'Dados gerais do canal' || prior === null || current === null || prior < 0 || current < 0) return null;
+  const { prior, current } = row;
+  if (row.label === 'Dados gerais do canal' || typeof prior !== 'number' || typeof current !== 'number' || prior < 0 || current < 0) return null;
   const days = (start: PublicRow[string], end: PublicRow[string]) =>
     typeof start === 'string' && typeof end === 'string' ? Date.parse(end) - Date.parse(start) : NaN;
   const priorDuration = days(row.priorStart, row.priorEnd);
@@ -228,7 +236,11 @@ function SourceTable({ title, rows, columns }: {
         {comment && <CellNote value={comment} />}
       </th>)}</tr></thead>
       <tbody>{rows.map((row, index) => <tr key={index}>{columns.map(([key], column) => {
-        const value = key === 'total' ? money(row[key]) : valueText(row[key]);
+        const field = row[key];
+        const value = ['total', 'faj', 'other', 'monthly', 'charges'].includes(key) && typeof field !== 'string'
+          ? money(field)
+          : key === 'expectedDate' && typeof field === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(field) && Number.isFinite(Date.parse(field))
+            ? formatDate(field) : valueText(field);
         return column === 0 ? <th key={key} scope="row">{value}</th> : <td key={key}>{value}</td>;
       })}</tr>)}</tbody>
     </table>
@@ -262,11 +274,55 @@ function TeamSummary({ row, navigate }: { row: PublicRow; navigate?: (section: S
       ['count', 'Integrantes'], ['total', 'Custo anual previsto'], ['faj', 'Valor previsto do FAJ'],
       ['other', 'Outras fontes previstas'], ['share', '% do custo coberto pelo FAJ'],
     ]} />
-    <p>O demonstrativo individual de remuneração, vínculo e meses previstos está disponível no painel financeiro restrito.</p>
     <CellNote value={row.roleComment} label="Equipe permanente" />
     <CellNote value={row.relationshipComment} label="Tipo de vínculo" />
     {navigate && <button className="rkc-account-team-link" type="button" onClick={() => navigate('budget', 'Pessoal/equipe')}>Ver rubrica Pessoal/equipe</button>}
   </>;
+}
+
+function ReportTotals({ report }: { report: PublicReport }) {
+  const requested = report.content.overview?.[0]?.faj;
+  const team = report.content.team?.[0]?.faj;
+  const funding = report.content.funding ?? [];
+  const funders = sumMoney(funding, 'total');
+  const otherBudget = typeof requested === 'number' && typeof team === 'number' && requested >= team
+    ? (Math.round(requested * 100) - Math.round(team * 100)) / 100 : null;
+
+  return <dl className="rkc-account-cards rkc-account-totals">
+    <div className="rkc-account-panel"><dt>Solicitado ao FAJ</dt><dd>{money(requested ?? null)}</dd></div>
+    <div className="rkc-account-panel"><dt>Equipe · FAJ</dt><dd>{money(team ?? null)}</dd></div>
+    <div className="rkc-account-panel"><dt>Demais rubricas · FAJ</dt><dd>{money(otherBudget)}</dd></div>
+    <div className="rkc-account-panel"><dt>Financiamento · {funding.length} fontes</dt><dd>{money(funders)}</dd></div>
+  </dl>;
+}
+
+function TeamMembers({ rows }: { rows: PublicRow[] }) {
+  return <>
+    <h3 className="rkc-account-subheading">Funções, vínculos e remunerações previstas</h3>
+    <p>{rows.length} funções · Valor previsto do FAJ {money(sumMoney(rows, 'faj'))}</p>
+    <SourceTable title="Remuneração e vínculo por função" rows={rows} columns={[
+      ['name', 'Função'], ['relationship', 'Vínculo'], ['monthly', 'Remuneração mensal bruta'],
+      ['charges', 'Encargos mensais'], ['months', 'Meses previstos'], ['faj', 'Valor previsto do FAJ'],
+      ['notes', 'Observações'],
+    ]} />
+  </>;
+}
+
+function ReportSearch({ report, base }: { report: PublicReport; base: string }) {
+  const [query, setQuery] = useState('');
+  const term = query.trim().toLocaleLowerCase('pt-BR');
+  const results = term ? (Object.keys(sections) as Section[]).flatMap(key => {
+    const count = report.content[key]?.filter(row => matches(row, term)).length ?? 0;
+    const tab = key === 'team_members' ? 'team' : key;
+    const page = narrativeTabs.includes(tab) ? 'narrativo' : 'financeiro';
+    return count > 0 ? [{ key, count, url: base + '/' + page + '?aba=' + tab }] : [];
+  }) : [];
+  return <div className="rkc-account-tools rkc-account-search">
+    <label>Buscar na prestação<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
+    {term && (results.length ? <ul aria-label="Resultados da busca">{results.map(result =>
+      <li key={result.key}><Link to={result.url}>{sections[result.key]} ({result.count})</Link></li>,
+    )}</ul> : <p role="status">Nenhuma seção contém esse termo.</p>)}
+  </div>;
 }
 
 function BudgetSource({ row }: { row: PublicRow }) {
@@ -383,7 +439,9 @@ export default function Dashboard() {
   useEffect(() => {
     let active = true;
     void supabase.rpc('get_finance_accountability_public_report', { requested_slug: slug }).then(({ data, error }) => {
-      if (active) setState({ slug, report: data as PublicReport | null, error: !!error });
+      if (!active) return;
+      const parsed = parsePublicReport(data);
+      setState({ slug, report: parsed, error: !!error || (data != null && parsed === null) });
     });
     return () => { active = false; };
   }, [slug]);
@@ -440,6 +498,12 @@ export default function Dashboard() {
       <div className="rkc-account-actions">{report && <>
         <button type="button" onClick={() => void share()}><Share2 size={16} /> Compartilhar</button>
         <button type="button" onClick={() => void presentation()}><Maximize size={16} /> Apresentação</button>
+        {!landing && <button type="button" onClick={() => {
+          const closed = Array.from(root.current?.querySelectorAll<HTMLDetailsElement>('details:not([open])') ?? []);
+          closed.forEach(detail => { detail.open = true; });
+          window.addEventListener('afterprint', () => closed.forEach(detail => { detail.open = false; }), { once: true });
+          window.print();
+        }}>Imprimir ou salvar em PDF</button>}
       </>}</div>
     </div></header>
     {notice && <p className="rkc-account-wrap" role="status">{notice}</p>}
@@ -458,23 +522,44 @@ export default function Dashboard() {
         </dl>}
       </div></div>
       <div className="rkc-account-wrap">
+        {report && <ReportSearch key={slug + view + section} report={report} base={base} />}
         {state?.slug !== slug ? <p role="status">Carregando prestação…</p> : !report || (view && view !== 'financeiro' && !narrative)
           ? <p role="status">{state.error ? 'Erro ao consultar a prestação. Atualize a página para tentar novamente.' : 'Prestação indisponível para consulta pública.'}</p>
-          : landing ? <nav className="rkc-account-entry" aria-label="Áreas do Portal de Transparência">
+          : landing ? <>
+            <ReportTotals report={report} />
+            <nav className="rkc-account-entry" aria-label="Áreas do Portal de Transparência">
             <Link to={base + '/financeiro'}><BarChart3 aria-hidden="true" /><h2>Dashboard Financeiro</h2>
               <p>Orçamento previsto, rubricas, equipe, financiamento e plano de trabalho.</p><ArrowUpRight aria-hidden="true" /></Link>
             <Link to={base + '/narrativo'}><BookOpen aria-hidden="true" /><h2>Relatório Narrativo e Impacto</h2>
               <p>Respostas oficiais, registros de atividades e indicadores de impacto.</p><ArrowUpRight aria-hidden="true" /></Link>
-          </nav> : <>
+            </nav>
+          </> : <>
             <nav className="rkc-account-views" aria-label="Páginas da prestação">
               <Link to={base}>Portal de Transparência</Link>
               <Link to={base + '/financeiro'} aria-current={!narrative ? 'page' : undefined}><BarChart3 size={20} /> Financeiro</Link>
               <Link to={base + '/narrativo'} aria-current={narrative ? 'page' : undefined}><BookOpen size={20} /> Narrativo e impacto</Link>
             </nav>
-            <nav className="rkc-account-tabs" aria-label="Seções da prestação">
-              {tabs.map(tab => <Link key={tab} to={{ search: '?aba=' + tab }} aria-current={section === tab ? 'location' : undefined}>{sections[tab]}</Link>)}
-            </nav>
-            <DashboardContent key={section + slug + rubric} report={report} section={section} navigate={goTo} initialRubric={rubric} />
+            <div className="rkc-account-tabs" role="tablist" aria-label="Seções da prestação">
+              {tabs.map((tab, index) => <Link key={tab} id={'account-tab-' + tab} to={{ search: '?aba=' + tab }}
+                role="tab" aria-selected={tab === section} aria-controls="account-tab-panel"
+                aria-current={tab === section ? 'location' : undefined} tabIndex={tab === section ? 0 : -1}
+                onKeyDown={event => {
+                  if (event.key === ' ') {
+                    event.preventDefault();
+                    goTo(tab);
+                    return;
+                  }
+                  const next = { ArrowLeft: (index + tabs.length - 1) % tabs.length,
+                    ArrowRight: (index + 1) % tabs.length, Home: 0, End: tabs.length - 1 }[event.key];
+                  if (next === undefined) return;
+                  event.preventDefault();
+                  goTo(tabs[next]);
+                  document.getElementById('account-tab-' + tabs[next])?.focus();
+                }}>{sections[tab]}</Link>)}
+            </div>
+            <div id="account-tab-panel" role="tabpanel" aria-labelledby={'account-tab-' + section} tabIndex={0}>
+              <DashboardContent key={section + slug + rubric} report={report} section={section} navigate={goTo} initialRubric={rubric} />
+            </div>
           </>}
       </div>
     </main>
