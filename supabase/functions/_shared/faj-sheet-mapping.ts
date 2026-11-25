@@ -12,10 +12,10 @@ export type FajCell = {
 };
 
 export const fajTabs = [
-  "0_APRESENTACAO", "1_DADOS DE IDENTIFICAÇÃO", "2_PLANO_DE_TRABALHO",
+  "1_DADOS DE IDENTIFICAÇÃO", "2_PLANO_DE_TRABALHO",
   "3_SUSTENTABILIDADE", "4_EQUIPE", "5_ORCAMENTO_RUBRICAS", "LISTAS",
 ] as const;
-const [, identity, plan, funding, team, budget] = fajTabs;
+const [identity, plan, funding, team, budget] = fajTabs;
 type Column = readonly [column: number, key: string, kind: Kind];
 const rows = (tab: string, first: number, count: number, group: string, columns: readonly Column[]): FajCell[] =>
   Array.from({ length: count }, (_, index) => columns.map(([column, key, kind]) => ({
@@ -51,7 +51,9 @@ export const fajEditableCells: readonly FajCell[] = [
 
 export const fajFormulaCorrections = [
   { tab: funding, row: 23, column: 2, formula: '=SUMIFS($F$3:$F$18,$E$3:$E$18,2025,$G$3:$G$18,"Confirmado – a receber")' },
+  { tab: funding, row: 23, column: 3, formula: '=SUMIFS($F$3:$F$18,$E$3:$E$18,2026,$G$3:$G$18,"Confirmado – a receber")' },
   { tab: funding, row: 24, column: 2, formula: '=SUMIFS($F$3:$F$18,$E$3:$E$18,2025,$G$3:$G$18,"Em negociação")' },
+  { tab: funding, row: 24, column: 3, formula: '=SUMIFS($F$3:$F$18,$E$3:$E$18,2026,$G$3:$G$18,"Em negociação")' },
   { tab: team, row: 18, column: 6, formula: "=SUM(F2:F17)" },
   { tab: team, row: 18, column: 7, formula: "=SUM(G2:G17)" },
   { tab: team, row: 22, column: 3, formula: '=COUNTIF(A2:A17,"?*")' },

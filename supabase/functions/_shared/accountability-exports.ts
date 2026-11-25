@@ -1,7 +1,7 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { prepareAccountabilityFolder } from './accountability-drive.ts';
+import { getFinanceDriveChild, prepareAccountabilityFolder } from './accountability-drive.ts';
 import { withCenterLease } from './file-center.ts';
-import { assertPrivateDriveFile, downloadDriveFile, ensureDriveFolder, findAccountabilityExport, findDriveFolder, getDriveFileMetadata, getDriveFolder, uploadDriveFile } from './google-drive.ts';
+import { assertPrivateDriveFile, downloadDriveFile, ensureDriveFolder, findAccountabilityExport, getDriveFileMetadata, getDriveFolder, uploadDriveFile } from './google-drive.ts';
 import { fillFajNarrative, fillFajWorkbook, object } from './faj-office-export.ts';
 import { renderFajConsolidatedPdf } from './faj-pdf-export.ts';
 
@@ -20,11 +20,7 @@ async function sha256(bytes: Uint8Array<ArrayBuffer>) {
 
 async function readSource(id: unknown, root: string, mime: string) {
   if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{10,}$/.test(id)) throw new Error('O modelo oficial da versão ainda não está vinculado.');
-  const finance = await findDriveFolder(root, 'FINANCEIRO');
-  if (!finance) throw new Error('Pasta FINANCEIRO indisponível.');
-  const models = await findDriveFolder(finance.id, 'MODELOS_OFICIAIS');
-  if (!models) throw new Error('Pasta de modelos oficiais indisponível.');
-  await getDriveFolder(models.id, true);
+  const models = await getFinanceDriveChild(root, 'MODELOS_OFICIAIS');
   const metadata = await getDriveFileMetadata(id);
   if (metadata.trashed || metadata.mimeType !== mime || !metadata.parents?.includes(models.id)) {
     throw new Error('O modelo oficial está fora da pasta de modelos ou não tem o formato esperado.');
