@@ -209,3 +209,13 @@
   .rkc-account-explorer-list [role=group] { max-height: 15rem; overflow-y: auto; }
   .rkc-account-inspector { border-left: 0; border-top: 1px solid var(--line); }
 }
+
+.rkc-account-identity { display: grid; gap: 1.1rem; justify-items: start; padding: clamp(1.2rem, 4vw, 2.5rem); background: var(--paper); border: 1px solid var(--line); border-radius: 1rem; }
+.rkc-account-identity h3 { font-size: clamp(1.5rem, 3vw, 2.2rem); color: var(--deep); font-weight: 700; }
+.rkc-account-identity dl { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .85rem; }
+.rkc-account-identity dl div { border-top: 1px solid var(--other); padding-block-start: .65rem; }
+.rkc-account-subheading { margin-block: 1.35rem .4rem; font-weight: 700; color: var(--deep); font-size: 1.2rem; }
+.rkc-account-source-table th, .rkc-account-source-table td { white-space: pre-wrap; }
+.rkc-account-source-table th:first-child { min-width: 12rem; }
+.rkc-account-source-table tr:nth-child(even) { background: #f7faf7; }
+.rkc-account-composition + .rkc-account-explorer, .rkc-account-composition + .rkc-account-table { margin-top: 1rem; }

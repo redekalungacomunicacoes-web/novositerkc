@@ -6,7 +6,7 @@ import { formatDate, money, percentage, sections, type PublicReport, type Public
 import { Gallery, NarrativeAnswer } from './EditorialMedia';
 import './dashboard.css';
 
-const financialTabs: Section[] = ['overview', 'budget', 'team', 'funding', 'plan'];
+const financialTabs: Section[] = ['overview', 'plan', 'funding', 'team', 'budget'];
 const narrativeTabs: Section[] = ['institution', 'narrative', 'records', 'impact', 'results'];
 const valueText = (value: PublicRow[string] | undefined) => value == null ? 'Não informado' : String(value);
 const unique = (rows: PublicRow[], field: string) => Array.from(new Set(rows.map(row => row[field]).filter(value => value != null)));
@@ -14,7 +14,7 @@ const unique = (rows: PublicRow[], field: string) => Array.from(new Set(rows.map
 export function DashboardContent({ report, section, navigate, initialRubric }: { report: PublicReport; section: Section; navigate?: (section: Section, rubric?: string) => void; initialRubric?: string }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState(initialRubric ?? '');
-  const [sort, setSort] = useState('');
+  const [sort, setSort] = useState('total');
   const [status, setStatus] = useState('');
   const [period, setPeriod] = useState('');
   const [table, setTable] = useState(false);
@@ -47,7 +47,7 @@ export function DashboardContent({ report, section, navigate, initialRubric }: {
         {report.content.narrative?.[3].label} <ArrowUpRight size={16} aria-hidden="true" />
       </Link>
     </p>}
-    {!rows.length && !officialResults ? <p className="rkc-account-panel">Dados indisponíveis nesta versão pública.</p> : <>
+    {!rows.length && section !== 'overview' && !officialResults ? <p className="rkc-account-panel">Dados indisponíveis nesta versão pública.</p> : <>
       {field && <div className="rkc-account-tools">
         <label>Buscar<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
         <label>{filterLabel}<select value={filter} onChange={event => setFilter(event.target.value)}>
@@ -75,32 +75,34 @@ export function DashboardContent({ report, section, navigate, initialRubric }: {
       </div>}
       {(section === 'budget' || section === 'impact') && <ViewSwitch table={table} onChange={setTable} />}
       {section === 'plan' && <div className="rkc-account-switch" role="group" aria-label="Exibição do plano">
-        <button type="button" aria-pressed={!timeline} onClick={() => setTimeline(false)}>Atividades</button>
+        <button type="button" aria-pressed={!timeline} onClick={() => setTimeline(false)}>Tabela de atividades</button>
         <button type="button" aria-pressed={timeline} onClick={() => setTimeline(true)}>Cronograma</button>
       </div>}
       {!visible.length && <p role="status">Nenhum registro para os filtros selecionados.</p>}
-      {section === 'overview' && <Overview row={rows[0]} rubrics={report.content.budget ?? []} plan={report.content.plan ?? []} navigate={navigate} />}
-      {section === 'budget' && visible.length > 0 && <Budget rows={visible} openRubric={filter} table={table} total={overview.total} plan={report.content.plan ?? []} />}
-      {section === 'team' && <Overview row={{ ...rows[0], share: Number(rows[0].total) > 0 && typeof rows[0].faj === 'number' ? rows[0].faj / Number(rows[0].total) : null }}
-        rubrics={[]} plan={[]} team navigate={navigate} />}
-      {section === 'funding' && <><FundingSummary rows={rows} overview={overview} filter={(year, selectedStatus) => { setFilter(String(year)); setStatus(String(selectedStatus)); }} /><div className="rkc-account-table" tabIndex={0} role="region" aria-label="Tabela de dados"><table>
-        <thead><tr><th>Fonte</th><th>Tipo</th><th>Ano</th><th>Situação</th><th>Valor</th></tr></thead>
-        <tbody>{visible.map((row, index) => <tr key={index}>
-          <th scope="row">{(row.purpose || row.project || row.expectedDate || row.notes) ? <details><summary>{valueText(row.label)}</summary><PublicFields row={row} fields={{ purpose: "Finalidade", project: "Projeto ou pesquisa", expectedDate: "Entrada prevista", notes: "Observações" }}
-             /></details> : valueText(row.label)}</th><td>{valueText(row.type)}</td><td>{valueText(row.year)}</td>
-          <td>{valueText(row.status)}</td><td>{money(row.total)}</td>
-        </tr>)}</tbody>
-      </table></div>
-        {fundingComments && <div className="rkc-account-note-fields">
-          <CellNote value={fundingComments.purposeComment} label="Finalidade do recurso" />
-          <CellNote value={fundingComments.projectComment} label="Nome do projeto ou pesquisa" />
-        </div>}
-        <PublicFields row={overview} fields={{ fundingChanges: "Variações e mudanças", fundingRisks: "Riscos, captação e sustentabilidade" }} /></>}
-      {section === 'plan' && <div className={timeline ? 'rkc-account-stack rkc-account-timeline' : 'rkc-account-stack'}>{visible.map((row, index) => <details key={index} className="rkc-account-panel">
-        <summary>{timeline && row.period && <small>{row.period}</small>}{row.activity || row.label || 'Atividade'}{!timeline && row.period && <small>{row.period}</small>}</summary>
-        <dl>{Object.entries({ label: 'Objetivo', outcome: 'Resultado esperado', evidence: 'Evidência prevista', period: 'Período', budgetLine: 'Rubricas vinculadas', notes: 'Observações e suporte do FAJ' })
-          .filter(([key]) => row[key] != null).map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{row[key]}</dd></div>)}</dl>
-      </details>)}</div>}
+      {section === 'overview' && <Identification report={report} row={overview} navigate={navigate} />}
+      {section === 'budget' && <>
+        {overview.total != null && <BudgetComposition row={overview} label="Orçamento previsto" />}
+        {visible.length > 0 && <Budget rows={visible} openRubric={filter} table={table} total={overview.total} plan={report.content.plan ?? []} />}
+        <BudgetSource row={overview} />
+      </>}
+      {section === 'team' && <TeamSummary row={rows[0]} navigate={navigate} />}
+      {section === 'funding' && <>
+        <FundingSummary rows={rows} overview={overview} filter={(year, selectedStatus) => { setFilter(String(year)); setStatus(String(selectedStatus)); }} />
+        <h3 className="rkc-account-subheading">Registros de financiamento</h3>
+        <SourceTable title="Registros de financiamento" rows={visible} columns={[
+          ['label', 'Financiador ou doador'], ['type', 'Tipo de financiador'], ['purpose', 'Finalidade do recurso', fundingComments?.purposeComment],
+          ['project', 'Nome do projeto ou pesquisa', fundingComments?.projectComment], ['year', 'Ano do recurso'],
+          ['total', 'Valor (R$)'], ['status', 'Situação'], ['expectedDate', 'Data ou período previsto de entrada'], ['notes', 'Observações'],
+        ]} />
+        <h3 className="rkc-account-subheading">Contexto da sustentabilidade</h3>
+        <PublicFields row={overview} fields={{ fundingChanges: 'Variações e mudanças', fundingRisks: 'Riscos, captação e sustentabilidade' }} />
+      </>}
+      {section === 'plan' && (timeline
+        ? <div className="rkc-account-stack rkc-account-timeline">{visible.map((row, index) => <details key={index} className="rkc-account-panel">
+          <summary><small>{row.period}</small>{row.activity || row.label || 'Atividade'}</summary>
+          <PublicFields row={row} fields={Object.fromEntries(planColumns)} />
+        </details>)}</div>
+        : <SourceTable title="Atividades do plano de trabalho" rows={visible} columns={planColumns} />)}
       {section === 'narrative' && <div className="rkc-account-reading">
         <nav aria-label="Índice das perguntas"><ol>{rows.map((row, index) => <li key={index}>
           <a href={'#pergunta-' + (index + 1)}>{row.label}</a>
@@ -211,21 +213,65 @@ function ImpactComparison({ row }: { row: PublicRow }) {
   </div>;
 }
 
-function Overview({ row, rubrics, plan, navigate, team = false }: {
-  row: PublicRow; rubrics: PublicRow[]; plan: PublicRow[]; navigate?: (section: Section, rubric?: string) => void; team?: boolean;
+const planColumns = [
+  ['label', 'Objetivo'], ['activity', 'Atividade ou entrega'], ['outcome', 'Resultado esperado'],
+  ['evidence', 'Indicador ou evidência'], ['period', 'Período'], ['budgetLine', 'Rubrica ou custo'],
+  ['notes', 'Observações e apoio do FAJ'],
+] as const;
+
+function SourceTable({ title, rows, columns }: {
+  title: string; rows: PublicRow[]; columns: readonly (readonly [string, string, PublicRow[string]?])[];
 }) {
-  const ranked = [...rubrics].sort((a, b) => Number(b.total ?? -1) - Number(a.total ?? -1));
+  return <div className="rkc-account-table rkc-account-source-table" tabIndex={0} role="region" aria-label={title}>
+    <table>
+      <thead><tr>{columns.map(([key, label, comment]) => <th key={key} scope="col">{label}
+        {comment && <CellNote value={comment} />}
+      </th>)}</tr></thead>
+      <tbody>{rows.map((row, index) => <tr key={index}>{columns.map(([key], column) => {
+        const value = key === 'total' ? money(row[key]) : valueText(row[key]);
+        return column === 0 ? <th key={key} scope="row">{value}</th> : <td key={key}>{value}</td>;
+      })}</tr>)}</tbody>
+    </table>
+  </div>;
+}
+
+function Identification({ report, row, navigate }: {
+  report: PublicReport; row: PublicRow; navigate?: (section: Section, rubric?: string) => void;
+}) {
+  const fields = report.content.institution ?? [];
+  const organization = row.organization ?? fields.find(field => field.label === 'Organização' || field.label === 'Nome da organização')?.body;
+  const period = fields.find(field => field.label === 'Período de renovação' || field.label === 'Período previsto da renovação')?.body
+    ?? [report.period_start, report.period_end].filter(Boolean).map(formatDate).join(' a ');
+  return <article className="rkc-account-identity">
+    <div><p className="rkc-account-kicker">{report.title}</p><h3>{organization || 'Organização responsável'}</h3></div>
+    <dl>
+      <div><dt>Nome da organização</dt><dd>{valueText(organization)}</dd></div>
+      <div><dt>Período previsto da renovação</dt><dd>{period || 'Não informado'}</dd></div>
+      {row.reference != null && <div><dt>Exercício de referência</dt><dd>{row.reference}</dd></div>}
+      {row.faj != null && <div><dt>Valor solicitado ao FAJ</dt><dd>{money(row.faj)}</dd></div>}
+    </dl>
+    {navigate && <button type="button" onClick={() => navigate('budget')}>Consultar orçamento por rubricas <ArrowUpRight size={16} /></button>}
+  </article>;
+}
+
+function TeamSummary({ row, navigate }: { row: PublicRow; navigate?: (section: Section, rubric?: string) => void }) {
+  const share = typeof row.total === 'number' && row.total > 0 && typeof row.faj === 'number' ? row.faj / row.total : null;
   return <>
-    {team && typeof row.count === 'number' && <p className="rkc-account-team-count">{row.count} integrantes</p>}
-    <BudgetComposition row={row} label={team ? 'Custo previsto da equipe' : 'Orçamento previsto'} />
-    {ranked.length > 0 && <section className="rkc-account-explore">
-      <div className="rkc-account-explore-title"><div><h3>Onde o orçamento será aplicado</h3>
-        <p>{ranked.length} rubricas previstas. Selecione uma para abrir o detalhamento.</p></div>
-        {navigate && <button type="button" onClick={() => navigate('budget')}>Gráfico e tabela <ArrowUpRight size={16} /></button>}
-      </div>
-      <RubricExplorer rows={ranked} total={row.total} plan={plan} />
-    </section>}
-    {!team && (row.budgetCheck != null || row.fajCheck != null || row.teamCheck != null) && <details className="rkc-account-panel">
+    <h3 className="rkc-account-subheading">Composição e custo previsto da equipe</h3>
+    <SourceTable title="Totais da equipe" rows={[{ ...row, faj: money(row.faj), other: money(row.other), share: percentage(share) }]} columns={[
+      ['count', 'Integrantes'], ['total', 'Custo anual previsto'], ['faj', 'Valor previsto do FAJ'],
+      ['other', 'Outras fontes previstas'], ['share', '% do custo coberto pelo FAJ'],
+    ]} />
+    <p>O demonstrativo individual de remuneração, vínculo e meses previstos está disponível no painel financeiro restrito.</p>
+    <CellNote value={row.roleComment} label="Equipe permanente" />
+    <CellNote value={row.relationshipComment} label="Tipo de vínculo" />
+    {navigate && <button className="rkc-account-team-link" type="button" onClick={() => navigate('budget', 'Pessoal/equipe')}>Ver rubrica Pessoal/equipe</button>}
+  </>;
+}
+
+function BudgetSource({ row }: { row: PublicRow }) {
+  return <>
+    {(row.budgetCheck != null || row.fajCheck != null || row.teamCheck != null) && <details className="rkc-account-panel">
       <summary>Valores de conferência da planilha</summary>
       <PublicFields row={{
         budgetCheck: row.budgetCheck == null ? null : money(row.budgetCheck),
@@ -233,9 +279,7 @@ function Overview({ row, rubrics, plan, navigate, team = false }: {
         teamCheck: row.teamCheck == null ? null : money(row.teamCheck),
       }} fields={{ budgetCheck: 'Despesa total prevista', fajCheck: 'Valor FAJ previsto', teamCheck: 'Custo total da equipe' }} />
     </details>}
-    {!team && <PublicFields row={row} fields={{ reference: 'Exercício do orçamento', period: 'Período do orçamento', notes: 'Mudanças em relação ao orçamento aprovado' }} />}
-    {team && <><CellNote value={row.roleComment} label="Equipe permanente" /><CellNote value={row.relationshipComment} label="Tipo de vínculo" /></>}
-    {team && navigate && <button className="rkc-account-team-link" type="button" onClick={() => navigate('budget', 'Pessoal/equipe')}>Ver rubrica Pessoal/equipe</button>}
+    <PublicFields row={row} fields={{ reference: 'Exercício do orçamento', period: 'Período do orçamento', notes: 'Mudanças em relação ao orçamento aprovado' }} />
   </>;
 }
 

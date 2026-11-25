@@ -1,8 +1,8 @@
 export const sections = {
-  overview: 'Visão geral',
-  budget: 'Orçamento e rubricas',
-  team: 'Equipe e estrutura',
-  funding: 'Sustentabilidade financeira',
+  overview: 'Dados de identificação',
+  budget: 'Orçamento por rubricas',
+  team: 'Equipe',
+  funding: 'Sustentabilidade',
   plan: 'Plano de trabalho',
   institution: 'Apresentação institucional',
   narrative: 'Desenvolvimento institucional',
