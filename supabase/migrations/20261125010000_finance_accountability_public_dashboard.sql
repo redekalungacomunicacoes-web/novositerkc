@@ -90,7 +90,7 @@ begin
     for section in select * from jsonb_each(reviewed_content) loop
       allowed_keys := case section.key
         when 'overview' then array['total','faj','other','share']
-        when 'budget' then array['label','total','faj','other']
+        when 'budget' then array['label','description','total','faj','other']
         when 'team' then array['label','total','faj','other']
         when 'funding' then array['label','type','year','status','total']
         when 'plan' then array['label','activity','outcome','evidence','period','budgetLine']

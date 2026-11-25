@@ -79,7 +79,7 @@ export function DashboardContent({ report, section }: { report: PublicReport; se
       {section === 'impact' && <div className="rkc-account-cards">{visible.map((row, index) => <article className="rkc-account-panel" key={index}>
         <small>{row.channel}</small><h3>{row.label}</h3>
         <dl className="rkc-account-periods">{([['2025', 'prior'], ['2026', 'current']] as const).map(([year, key]) =>
-          <div key={key}><dt>{year}</dt><dd>{valueText(row[key])}</dd>
+          <div key={key}><dt>{year}</dt><dd className="rkc-account-value">{valueText(row[key])}</dd>
             {(row[key + 'Start'] || row[key + 'End']) && <small>{[row[key + 'Start'], row[key + 'End']].filter(Boolean).join(' a ')}</small>}</div>)}</dl>
         <ImpactComparison row={row} />
         {row.variation && <p>Variação informada · {row.variation}</p>}
@@ -158,7 +158,7 @@ function Budget({ rows }: { rows: PublicRow[] }) {
     </figure>
     <div className="rkc-account-table" tabIndex={0} role="region" aria-label="Tabela de dados"><table>
       <thead><tr><th>Rubrica</th><th>Custo previsto</th><th>FAJ solicitado</th><th>Outras fontes previstas</th><th>Participação FAJ</th></tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={index}><th scope="row">{row.label}</th><td>{money(row.total)}</td>
+      <tbody>{rows.map((row, index) => <tr key={index}><th scope="row">{row.description ? <details><summary>{row.label}</summary><p className="rkc-account-body">{row.description}</p></details> : row.label}</th><td>{money(row.total)}</td>
         <td>{money(row.faj)}</td><td>{money(row.other)}</td>
         <td>{percentage(typeof row.total === 'number' && row.total > 0 && typeof row.faj === 'number' ? row.faj / row.total : null)}</td></tr>)}</tbody>
     </table></div>

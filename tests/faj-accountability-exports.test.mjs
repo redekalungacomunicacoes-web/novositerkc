@@ -60,21 +60,25 @@ test('fills the original XLSX in isolation while preserving workbook structure a
     const result = await JSZip.loadAsync(await fillFajWorkbook(original, data));
     const wb = await result.file('xl/workbook.xml').async('string');
     assert.match(wb, /name="LISTAS"[^>]*state="hidden"|state="hidden"[^>]*name="LISTAS"/);
-    assert.equal((wb.match(/<sheet /g) ?? []).length, 7);
+    const originalWorkbook = await before.file('xl/workbook.xml').async('string');
+    const sheets = (originalWorkbook.match(/<sheet /g) ?? []).length;
+    const offset = originalWorkbook.includes('name="0_APRESENTACAO"') ? 1 : 0;
+    assert.equal(sheets, 6 + offset);
+    assert.equal((wb.match(/<sheet /g) ?? []).length, sheets);
     let formulas = 0;
-    for (let index = 1; index <= 7; index++) {
+    for (let index = 1; index <= sheets; index++) {
       const path = `xl/worksheets/sheet${index}.xml`;
       const sheet = await result.file(path).async('string');
       const initial = await before.file(path).async('string');
       formulas += (sheet.match(/<f(?: |>)/g) ?? []).length;
       assert.equal((sheet.match(/<dataValidation(?: |>)/g) ?? []).length, (initial.match(/<dataValidation(?: |>)/g) ?? []).length);
       assert.equal((sheet.match(/<mergeCell(?: |>)/g) ?? []).length, (initial.match(/<mergeCell(?: |>)/g) ?? []).length);
-      if (index === 3) {
+      if (index === 2 + offset) {
         assert.match(sheet, /Observações importantes:|<c[^>]*r="A16"/);
         assert.match(sheet, /<c[^>]*r="A3"[^>]*t="inlineStr"[^>]*><is><t[^>]*>=texto não executável<\/t>/);
       }
-      if (index === 4) assert.match(sheet, /\$E\$3:\$E\$18,2025,\$G\$3:\$G\$18,"Confirmado – a receber"/);
-      if (index === 5) assert.ok(/<f(?: [^>]+)?>SUM\(F2:F17\)<\/f>/.test(sheet));
+      if (index === 3 + offset) assert.match(sheet, /\$E\$3:\$E\$18,2025,\$G\$3:\$G\$18,"Confirmado – a receber"/);
+      if (index === 4 + offset) assert.ok(/<f(?: [^>]+)?>SUM\(F2:F17\)<\/f>/.test(sheet));
     }
     assert.equal(formulas, 86);
     const strings = await result.file('xl/sharedStrings.xml').async('string');

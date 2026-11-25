@@ -1,6 +1,6 @@
 import { questions } from '@/app/pages/public/Accountability/questions';
 import type { PublicReport, PublicRow } from '@/app/pages/public/Accountability/model';
-import { calculateFajFinancials, type FajFinancialData } from './fajFinancialCalculations';
+import { budgetLabels, calculateFajFinancials, type FajFinancialData } from './fajFinancialCalculations';
 
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value : null;
 const amount = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
@@ -18,7 +18,7 @@ export function accountabilityPublicContent(
     other: total !== null && faj !== null && faj <= total ? (Math.round(total * 100) - Math.round(faj * 100)) / 100 : null,
   });
   // Keep personnel aggregated as one rubrica. Never project individual rows.
-  const teamTotal = budgetRow('Equipe e estrutura', totals.teamTotal, totals.teamFaj);
+  const teamTotal = budgetRow('Pessoal/equipe', totals.teamTotal, totals.teamFaj);
   const hasTeam = team.length > 0 && (teamTotal.total !== null || teamTotal.faj !== null);
   const other = totals.share === null ? null : totals.other;
   const institution = (narrative.institution || {}) as Record<string, unknown>;
@@ -44,7 +44,7 @@ export function accountabilityPublicContent(
     const prior = text(item.year_2025) ?? amount(item.year_2025);
     const current = text(item.year_2026) ?? amount(item.year_2026);
     if (prior !== null || current !== null || text(item.notes)) {
-      impact.push({ channel, label: 'Dados gerais do canal', prior, current, variation: text(item.variation), notes: text(item.notes) });
+      impact.push({ channel, label: text(item.indicators) || 'Dados gerais do canal', prior, current, variation: text(item.variation), notes: text(item.notes) });
     }
   }
   const answers = questions.flatMap(question => {
@@ -66,7 +66,10 @@ export function accountabilityPublicContent(
   const legacyPlan = text(financial.workPlan);
   return {
     overview: totals.total === null && totals.faj === null ? [] : [{ total: totals.total, faj: totals.faj, other, share: totals.share }],
-    budget: [...(hasTeam ? [teamTotal] : []), ...budget.map(row => budgetRow(text(row.label), amount(row.total), amount(row.faj))).filter(row => row.label)],
+    budget: [...(hasTeam ? [teamTotal] : []), ...budget.map((row, index) => ({
+      ...budgetRow(text(row.label) || budgetLabels[index] || 'Rubrica adicional', amount(row.total), amount(row.faj)),
+      description: text(row.description),
+    }))],
     team: hasTeam ? [teamTotal] : [],
     funding: funding.map(row => ({
       label: text(row.source), type: text(row.sourceType), year: amount(row.year), status: text(row.status), total: amount(row.amount),

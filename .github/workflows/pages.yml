@@ -3,6 +3,15 @@ name: Deploy Vite to GitHub Pages
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/pages.yml"
+      - "src/app/pages/public/Accountability/**"
+      - "src/app/pages/admin/Financeiro/**"
+      - "src/app/routes.tsx"
+      - "supabase/migrations/*finance_accountability*"
+      - "tests/*accountability*.test.mjs"
   workflow_dispatch:
 
 permissions:
@@ -11,7 +20,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -25,15 +34,19 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
+      - run: npx tsc -p tsconfig.financeiro.json --noEmit
+      - run: node --test tests/finance-accountability-workflow.test.mjs tests/finance-accountability-sheet-sync.test.mjs tests/faj-accountability-exports.test.mjs
       - run: npm run build
       - name: Generate search metadata, structured data and sitemap
+        if: github.event_name != 'pull_request'
         run: node scripts/generate-article-seo.mjs
 
       - name: Prepare SPA entry points
+        if: github.event_name != 'pull_request'
         run: |
           cp dist/index.html dist/404.html
           install -D -m 644 dist/index.html dist/admin/financeiro/prestacoes/index.html
@@ -42,10 +55,12 @@ jobs:
           done
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: build
     environment:

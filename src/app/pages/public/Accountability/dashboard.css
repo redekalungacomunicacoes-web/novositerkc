@@ -33,6 +33,7 @@
 .rkc-account-reading { display:grid; grid-template-columns:minmax(12rem, 1fr) minmax(0, 3fr); gap:1rem; }
 .rkc-account-reading ol { font-size:.9rem; list-style:decimal; padding-left:1.5rem; display:grid; gap:.7rem; }
 .rkc-account-reading a { text-decoration:underline; text-underline-offset:.2em; }
+.rkc-account-value { white-space:pre-wrap; }
 .rkc-account-body { white-space:pre-wrap; line-height:1.75; margin-top:.9rem; max-width:76ch; }
 .rkc-account-section details { scroll-margin-top:1rem; }
 .rkc-account-section summary { cursor:pointer; }
