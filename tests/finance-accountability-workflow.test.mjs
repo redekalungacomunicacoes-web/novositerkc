@@ -165,3 +165,49 @@ test('enforces the FAJ draft, review, approval, delivery and archive workflow an
   assert.equal(audit.rows[7].snapshot.after.delivery_reference, 'Protocolo de teste');
   assert.deepEqual(audit.rows[8].snapshot.after.narrative_data, narrative);
 });
+
+
+test('only empty finance drafts can be safely removed from the dashboard', async t => {
+  const db = new PGlite();
+  t.after(() => db.close());
+  await setup(db);
+  for (const file of [
+    '20261124201000_finance_accountability_sheet_sync.sql',
+    '20261125004500_finance_accountability_discard_empty_drafts.sql',
+  ]) {
+    await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'));
+  }
+  const create = title => asRole(db, 'authenticated', ids.operator, () => db.query(`
+    insert into public.finance_accountability_reports(template_id,title)
+    select id,$1 from public.finance_reporting_templates where slug='faj-ii-ciclo'
+    returning id, updated_at::text
+  `, [title]));
+
+  const first = (await create('Rascunho vazio')).rows[0];
+  const discard = (role, actor, report, version = report.updated_at) =>
+    asRole(db, role, actor, () => db.query(
+      'select public.discard_finance_accountability_draft($1,$2::timestamptz) as discarded',
+      [report.id, version],
+    ));
+
+  await assert.rejects(discard('anon', null, first), { code: '42501' });
+  await assert.rejects(discard('authenticated', ids.outsider, first), { code: '42501' });
+  await assert.rejects(discard('authenticated', ids.operator, first, '2000-01-01T00:00:00Z'), { code: '40001' });
+  assert.equal((await discard('authenticated', ids.operator, first)).rows[0].discarded, true);
+  assert.equal((await db.query('select status from public.finance_accountability_reports where id = $1', [first.id])).rows[0].status, 'archived');
+  assert.deepEqual((await db.query(
+    'select action from public.finance_accountability_history where report_id=$1 order by id',
+    [first.id],
+  )).rows.map(row => row.action), ['created', 'archived']);
+  const archivedVersion = (await db.query('select updated_at::text from public.finance_accountability_reports where id=$1', [first.id])).rows[0].updated_at;
+  await assert.rejects(discard('authenticated', ids.operator, first, archivedVersion), { code: '22023' });
+
+  const second = (await create('Rascunho com conteúdo real')).rows[0];
+  await asRole(db, 'authenticated', ids.operator, () => db.query(
+    'update public.finance_accountability_reports set financial_data=$1::jsonb where id=$2',
+    [JSON.stringify({ finance: 'preserve' }), second.id],
+  ));
+  const updated = (await db.query('select updated_at::text from public.finance_accountability_reports where id=$1', [second.id])).rows[0];
+  await assert.rejects(discard('authenticated', ids.operator, second, updated.updated_at), { code: '22023' });
+  assert.equal((await db.query('select status from public.finance_accountability_reports where id=$1', [second.id])).rows[0].status, 'draft');
+});

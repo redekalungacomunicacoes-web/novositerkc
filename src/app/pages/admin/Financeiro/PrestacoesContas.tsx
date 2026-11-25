@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, ClipboardList, FilePlus2, FolderOpen, Plus, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ClipboardList, FilePlus2, FolderOpen, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useFinanceSupabase } from './hooks/useFinanceSupabase';
 import { formatDate } from './data/financeiro.repo';
@@ -98,7 +98,7 @@ export function PrestacoesContas() {
     ['fund', 'Fundo', funds.map(fund => [fund.id, fund.nome])],
     ['project', 'Projeto', projects.map(project => [project.id, project.nome])],
     ['funder', 'Financiador', funders.map(funder => [funder, funder])],
-    ['status', 'Situação', Object.entries(STATUS)],
+    ['status', 'Situação', Object.entries(STATUS).filter(([id]) => id !== 'archived')],
   ] as const;
   const inputClass = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-normal';
 
@@ -107,7 +107,7 @@ export function PrestacoesContas() {
     setLoadError('');
     const [templateResult, reportResult] = await Promise.all([
       supabase.from('finance_reporting_templates').select('id,slug,name,institution_name,funding_program,cycle_name,version,status,description').order('name'),
-      supabase.from('finance_accountability_reports').select('id,title,reference_code,status,period_start,period_end,due_date,updated_at,delivered_at,drive_folder_id,template_id,fund_id,project_id').order('updated_at', { ascending: false }),
+      supabase.from('finance_accountability_reports').select('id,title,reference_code,status,period_start,period_end,due_date,updated_at,delivered_at,drive_folder_id,template_id,fund_id,project_id').neq('status', 'archived').order('updated_at', { ascending: false }),
     ]);
     const issue = templateResult.error || reportResult.error;
     if (issue) {
@@ -199,6 +199,26 @@ export function PrestacoesContas() {
     else await loadData();
   };
 
+  const discardEmptyDraft = async (report: Report) => {
+    if (report.status !== 'draft' || busy) return;
+    const confirmed = window.confirm(
+      `Remover o rascunho "${report.title}" da lista?\n\nEsta ação só funciona para rascunhos vazios, sem documentos ou planilhas vinculadas. O histórico e a pasta privada serão preservados para auditoria.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc('discard_finance_accountability_draft', {
+      p_report_id: report.id,
+      p_expected_updated_at: report.updated_at,
+    });
+    setBusy(false);
+    if (error || data !== true) {
+      toast.error(error?.message || 'Não foi possível remover este rascunho.');
+      return;
+    }
+    toast.success('Rascunho removido da lista e arquivado com segurança.');
+    await loadData();
+  };
+
   return (
     <div className="min-h-screen space-y-6 bg-[#f6f7f3] p-4 text-[#17251f] sm:p-6 lg:p-8">
       <header className="rounded-[26px] bg-[#103d2e] p-6 text-white shadow-[0_18px_50px_rgba(16,61,46,0.12)] sm:p-8">
@@ -264,7 +284,7 @@ export function PrestacoesContas() {
           const template = templates.find((item) => item.id === report.template_id);
           const fund = funds.find((item) => item.id === report.fund_id);
           const project = projects.find((item) => item.id === report.project_id);
-          return <article key={report.id} className="flex flex-col justify-between gap-3 p-5 sm:flex-row sm:items-center"><div className="min-w-0"><div className="mb-1 flex flex-wrap items-center gap-2"><h3 className="font-semibold">{report.title}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusClass[report.status]}`}>{STATUS[report.status]}</span></div><p className="text-sm text-gray-500">{template?.name || 'Modelo não localizado'} · {report.reference_code || 'Sem código'}</p><p className="mt-1 text-xs text-gray-500">{fund?.nome || 'Sem fundo'}{project ? ` · ${project.nome}` : ''} · {report.period_start ? formatDate(report.period_start + 'T12:00:00') : 'Período não definido'} a {report.period_end ? formatDate(report.period_end + 'T12:00:00') : '—'}</p><p className="mt-1 text-sm text-gray-700">Prazo de entrega {report.due_date ? formatDate(report.due_date + 'T12:00:00') : '—'}</p></div><div className="flex shrink-0 items-center flex-wrap gap-3"><span className="text-xs text-gray-500">Atualizada em {formatDate(report.updated_at)}</span>{report.drive_folder_id && <a href={`https://drive.google.com/drive/folders/${encodeURIComponent(report.drive_folder_id)}`} target="_blank" rel="noopener noreferrer" className="rounded-lg border px-3 py-2 text-xs font-semibold text-[#315b47]">Pasta no Drive</a>}<Link to={`/admin/financeiro/prestacoes/${report.id}`} className="rounded-lg border border-[#dfe5dc] px-3 py-2 text-xs font-semibold text-[#315b47] hover:bg-[#f6f8f3]">Abrir prestação</Link></div></article>;
+          return <article key={report.id} className="flex flex-col justify-between gap-3 p-5 sm:flex-row sm:items-center"><div className="min-w-0"><div className="mb-1 flex flex-wrap items-center gap-2"><h3 className="font-semibold">{report.title}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusClass[report.status]}`}>{STATUS[report.status]}</span></div><p className="text-sm text-gray-500">{template?.name || 'Modelo não localizado'} · {report.reference_code || 'Sem código'}</p><p className="mt-1 text-xs text-gray-500">{fund?.nome || 'Sem fundo'}{project ? ` · ${project.nome}` : ''} · {report.period_start ? formatDate(report.period_start + 'T12:00:00') : 'Período não definido'} a {report.period_end ? formatDate(report.period_end + 'T12:00:00') : '—'}</p><p className="mt-1 text-sm text-gray-700">Prazo de entrega {report.due_date ? formatDate(report.due_date + 'T12:00:00') : '—'}</p></div><div className="flex shrink-0 items-center flex-wrap gap-3"><span className="text-xs text-gray-500">Atualizada em {formatDate(report.updated_at)}</span>{report.drive_folder_id && <a href={`https://drive.google.com/drive/folders/${encodeURIComponent(report.drive_folder_id)}`} target="_blank" rel="noopener noreferrer" className="rounded-lg border px-3 py-2 text-xs font-semibold text-[#315b47]">Pasta no Drive</a>}<Link to={`/admin/financeiro/prestacoes/${report.id}`} className="rounded-lg border border-[#dfe5dc] px-3 py-2 text-xs font-semibold text-[#315b47] hover:bg-[#f6f8f3]">Abrir prestação</Link>{report.status === 'draft' && <button type="button" onClick={() => void discardEmptyDraft(report)} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50" title="Remover apenas rascunhos vazios, mantendo histórico e Drive"><Trash2 className="h-3.5 w-3.5" /> Remover rascunho vazio</button>}</div></article>;
         })}</div> : reports.length ? <p className="p-8 text-center text-sm text-gray-500">Nenhuma prestação corresponde aos filtros.</p> : <div className="p-10 text-center"><span className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[#f4ebd8] text-[#315b47]"><FolderOpen className="h-6 w-6" /></span><h3 className="font-semibold">Nenhuma prestação cadastrada</h3><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-gray-500">Cadastre o modelo oficial FAJ II Ciclo e depois abra a primeira prestação como rascunho.</p></div>}
       </section>
 
