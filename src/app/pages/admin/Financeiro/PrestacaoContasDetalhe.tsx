@@ -48,7 +48,7 @@ const questions = [
   { key: 'question_4', label: 'Ao final de 2027, que mudanças concretas permitiriam reconhecer que a organização se desenvolveu institucionalmente?', guidance: "Explique os sinais ou evidências que vocês pretendem acompanhar e como essas mudanças poderão contribuir para a continuidade da organização, a qualidade e regularidade da produção jornalística e sua relação com a comunidade local." },
 ];
 
-const channels = ['Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'Site ou Portal', 'Podcast ou conteúdo audiovisual', 'Jornal impresso / conteúdos impressos', 'Newsletters', 'Outros canais'];
+const channels = ['Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'Site ou Portal', 'YouTube / audiovisual', 'Podcast ou conteúdo audiovisual', 'Jornal impresso / conteúdos impressos', 'Newsletters', 'Outros canais'];
 
 export function PrestacaoContasDetalhe() {
   const { id = '' } = useParams();
@@ -175,6 +175,7 @@ export function PrestacaoContasDetalhe() {
     if (channel === 'Instagram') return ['Seguidores','Interações','Visualizações','Contas alcançadas','Visualizadores','Crescimento líquido'];
     if (['Facebook','TikTok','LinkedIn'].includes(channel)) return ['Seguidores','Interações','Alcance','Visualizações'];
     if (channel === 'Site ou Portal') return ['Visitantes'];
+    if (channel === 'YouTube / audiovisual') return ['Inscritos','Visualizações'];
     if (channel === 'Podcast ou conteúdo audiovisual') return ['Reproduções','Ouvintes'];
     if (channel === 'Jornal impresso / conteúdos impressos') return ['Exemplares impressos','Exemplares distribuídos'];
     if (channel === 'Newsletters') return ['Assinantes'];
