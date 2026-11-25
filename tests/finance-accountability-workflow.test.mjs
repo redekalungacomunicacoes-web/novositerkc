@@ -43,6 +43,7 @@ async function setup(db) {
     '20261124200000_finance_accountability_workflow.sql',
     '20261124204000_finance_accountability_evidence.sql',
     '20261125005753_finance_accountability_public_dashboard.sql',
+    'undefined_finance_accountability_source_details.sql',
   ];
   for (const file of migrations) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'));
