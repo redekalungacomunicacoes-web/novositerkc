@@ -6,7 +6,9 @@
 .rkc-account-top .rkc-account-wrap { justify-content:space-between; padding-block:.9rem; }
 .rkc-account-brands { display:flex; align-items:center; gap:clamp(.65rem, 2vw, 1.25rem); }
 .rkc-account-logo { width:clamp(8rem, 19vw, 12rem); height:auto; }
-.rkc-account-faj { width:clamp(6rem, 15vw, 9.25rem); height:auto; padding-left:clamp(.65rem, 2vw, 1.25rem); border-left:1px solid var(--line); }
+.rkc-account-funder { padding-left:clamp(.65rem, 2vw, 1.25rem); border-left:1px solid var(--line); }
+.rkc-account-funder small { display:block; color:var(--mute); font-size:.7rem; font-weight:650; margin-bottom:.15rem; }
+.rkc-account-faj { width:clamp(6rem, 15vw, 9.25rem); height:auto; }
 .rkc-account button, .rkc-account-views a { display:inline-flex; gap:.5rem; align-items:center; padding:.65rem .85rem; border:1px solid var(--line); border-radius:.6rem; background:#fff; font-weight:650; color:var(--ink); }
 .rkc-account button:hover, .rkc-account-views a:hover { border-color:var(--green); }
 .rkc-account button[aria-pressed=true], .rkc-account-views a[aria-current] { background:var(--green); color:white; border-color:var(--green); }

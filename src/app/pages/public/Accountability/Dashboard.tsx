@@ -222,8 +222,11 @@ export default function Dashboard() {
         <Link to="/" aria-label="Página inicial da Rede Kalunga">
           <img className="rkc-account-logo" src="/prestacao-de-contas/marcas/rede-kalunga.png" alt="Rede Kalunga de Comunicações" width="1610" height="402" />
         </Link>
-        {slug === 'faj-ii-ciclo' && report && <img className="rkc-account-faj" src="/prestacao-de-contas/marcas/faj-azul.png"
-          alt="Fundo de Apoio ao Jornalismo" width="349" height="111" />}
+        {slug === 'faj-ii-ciclo' && report && <div className="rkc-account-funder">
+          <small>Financiamento via edital</small>
+          <img className="rkc-account-faj" src="/prestacao-de-contas/marcas/faj-azul.png"
+            alt="Fundo de Apoio ao Jornalismo" width="349" height="111" />
+        </div>}
       </div>
       <div className="rkc-account-actions">{report && <>
         <button type="button" onClick={() => void share()}><Share2 size={16} /> Compartilhar</button>
