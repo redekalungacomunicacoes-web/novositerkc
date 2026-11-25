@@ -1,13 +1,14 @@
 export const sections = {
-  overview: 'Visão geral',
-  budget: 'Orçamento e rubricas',
-  team: 'Equipe e estrutura',
-  funding: 'Sustentabilidade financeira',
+  overview: 'Dados de identificação',
+  budget: 'Orçamento por rubricas',
+  team: 'Equipe',
+  funding: 'Sustentabilidade',
   plan: 'Plano de trabalho',
-  institution: 'Visão institucional',
-  narrative: 'Relatório narrativo',
+  institution: 'Apresentação institucional',
+  narrative: 'Desenvolvimento institucional',
+  records: 'Ações, fotografias e registros',
   impact: 'Impacto e engajamento',
-  results: 'Desenvolvimento institucional',
+  results: 'Resultados e perspectivas',
 } as const;
 
 export type Section = keyof typeof sections;

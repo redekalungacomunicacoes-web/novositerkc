@@ -10,14 +10,15 @@ const amountField = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm'
 const section = 'rounded-2xl border border-[#e7e9e2] bg-white p-5 sm:p-6';
 const money = (value: number | null) => value == null ? '—' : value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-function AmountInput({ label, value, onChange, months = false }: {
+function AmountInput({ label, value, onChange, months = false, hideLabel = false }: {
   label: string;
   value?: number | null;
   onChange: (value: number | null) => void;
   months?: boolean;
+  hideLabel?: boolean;
 }) {
   return <label className="block space-y-1 text-sm font-medium">
-    <span>{label}</span>
+    <span className={hideLabel ? 'sr-only' : undefined}>{label}</span>
     <input className={amountField} type="number" min={months ? 1 : 0} step={months ? 1 : 0.01}
       value={value ?? ''} onChange={event => onChange(event.target.value === '' ? null : event.target.valueAsNumber)} />
   </label>;
@@ -65,24 +66,30 @@ export function FajFinancialForm({ value, onChange }: {
     <section id="equipe" className={section}>
       <h2 className="mb-3 font-semibold">Equipe</h2>
       <p className="mb-3 text-sm text-gray-600">{calculated.teamCount} integrantes identificados • Custo previsto {money(calculated.teamTotal)}</p>
-      <div className="space-y-3">
-        {team.map((row, index) => {
-          const update = (patch: Partial<typeof row>) => onChange({ ...value, team: team.map((item, position) => position === index ? { ...item, ...patch } : item) });
-          return <fieldset className="rounded-xl border p-3" key={index}>
-            <legend className="px-1 text-sm font-medium">Integrante {index + 1}</legend>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <label className="block space-y-1 text-sm font-medium">Nome ou função<input className={amountField} value={row.name ?? ''} onChange={event => update({ name: event.target.value })} /></label>
-              <label className="block space-y-1 text-sm font-medium">Tipo de vínculo<input className={amountField} value={row.relationship ?? ''} onChange={event => update({ relationship: event.target.value })} /></label>
-              <AmountInput label="Remuneração mensal" value={row.monthly} onChange={monthly => update({ monthly })} />
-              <AmountInput label="Encargos mensais" value={row.charges} onChange={charges => update({ charges })} />
-              <AmountInput label="Meses previstos" months value={row.months} onChange={months => update({ months })} />
-              <AmountInput label="Valor FAJ" value={row.faj} onChange={faj => update({ faj })} />
-              <label className="block space-y-1 text-sm font-medium">Observações<input className={amountField} value={row.notes ?? ''} onChange={event => update({ notes: event.target.value })} /></label>
-            </div>
-            <p className="mt-3 text-sm text-gray-600">Custo calculado {money(calculated.teamRows[index].total)}</p>
-          </fieldset>;
-        })}
-      </div>
+      {team.length > 0 && <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Demonstrativo individual da equipe">
+        <table className="w-full min-w-[86rem] text-left text-sm">
+          <thead><tr>{[
+            'Nome ou função', 'Tipo de vínculo', 'Remuneração mensal bruta', 'Encargos mensais',
+            'Número de meses previsto', 'Custo anual calculado', 'Valor financiado pelo FAJ',
+            '% financiado pelo FAJ (calculado)', 'Observações',
+          ].map(label => <th className="p-2 align-bottom" scope="col" key={label}>{label}</th>)}</tr></thead>
+          <tbody>{team.map((row, index) => {
+            const update = (patch: Partial<typeof row>) => onChange({ ...value, team: team.map((item, position) => position === index ? { ...item, ...patch } : item) });
+            const calculatedRow = calculated.teamRows[index];
+            return <tr key={index} className="border-t align-top">
+              <td className="p-2"><input className={amountField} aria-label={`Nome ou função, linha ${index + 1}`} value={row.name ?? ''} onChange={event => update({ name: event.target.value })} /></td>
+              <td className="p-2"><input className={amountField} aria-label={`Tipo de vínculo, linha ${index + 1}`} value={row.relationship ?? ''} onChange={event => update({ relationship: event.target.value })} /></td>
+              <td className="p-2"><AmountInput label={`Remuneração mensal bruta, linha ${index + 1}`} hideLabel value={row.monthly} onChange={monthly => update({ monthly })} /></td>
+              <td className="p-2"><AmountInput label={`Encargos mensais, linha ${index + 1}`} hideLabel value={row.charges} onChange={charges => update({ charges })} /></td>
+              <td className="p-2"><AmountInput label={`Número de meses previsto, linha ${index + 1}`} hideLabel months value={row.months} onChange={months => update({ months })} /></td>
+              <td className="whitespace-nowrap p-2">{money(calculatedRow.total)}</td>
+              <td className="p-2"><AmountInput label={`Valor financiado pelo FAJ, linha ${index + 1}`} hideLabel value={row.faj} onChange={faj => update({ faj })} /></td>
+              <td className="p-2">{calculatedRow.share == null ? '—' : calculatedRow.share.toLocaleString('pt-BR', { style: 'percent', maximumFractionDigits: 2 })}</td>
+              <td className="p-2"><input className={amountField} aria-label={`Observações, linha ${index + 1}`} value={row.notes ?? ''} onChange={event => update({ notes: event.target.value })} /></td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>}
       {team.length < 16 && <button type="button" className="mt-3 rounded-lg border px-3 py-2 text-sm" onClick={() => onChange({ ...value, team: [...team, {}] })}>Adicionar integrante</button>}
     </section>
     <section id="rubricas" className={section}>

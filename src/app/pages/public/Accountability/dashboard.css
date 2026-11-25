@@ -1,82 +1,221 @@
-.rkc-account { --ink:#17271d; --mute:#4c6255; --paper:#f3f6ef; --line:#d9e3d8; --green:#194934; --lime:#ceeb91; color:var(--ink); background:var(--paper); min-height:100vh; }
-.rkc-account:fullscreen { overflow:auto; }
-.rkc-account-wrap { width:min(1180px, 100% - 2.5rem); margin-inline:auto; }
-.rkc-account-top { background:#fff; }
-.rkc-account-top .rkc-account-wrap, .rkc-account-actions, .rkc-account-views, .rkc-account-tabs, .rkc-account-legend { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; }
-.rkc-account-top .rkc-account-wrap { justify-content:space-between; padding-block:.9rem; }
-.rkc-account-brands { display:flex; align-items:center; gap:clamp(.65rem, 2vw, 1.25rem); }
-.rkc-account-logo { width:clamp(8rem, 19vw, 12rem); height:auto; }
-.rkc-account-funder { padding-left:clamp(.65rem, 2vw, 1.25rem); border-left:1px solid var(--line); }
-.rkc-account-funder small { display:block; color:var(--mute); font-size:.7rem; font-weight:650; margin-bottom:.15rem; }
-.rkc-account-faj { width:clamp(6rem, 15vw, 9.25rem); height:auto; }
-.rkc-account button, .rkc-account-views a { display:inline-flex; gap:.5rem; align-items:center; padding:.65rem .85rem; border:1px solid var(--line); border-radius:.6rem; background:#fff; font-weight:650; color:var(--ink); }
-.rkc-account button:hover, .rkc-account-views a:hover { border-color:var(--green); }
-.rkc-account button[aria-pressed=true], .rkc-account-views a[aria-current] { background:var(--green); color:white; border-color:var(--green); }
-.rkc-account :focus-visible { outline:3px solid #a26218; outline-offset:3px; }
-.rkc-account-skip { position:absolute; left:1rem; top:1rem; background:white; padding:.5rem; z-index:2; }
-.rkc-account-skip:not(:focus) { clip-path:inset(50%); }
-.rkc-account-hero { background:#123625; color:#fff; padding:clamp(2.2rem, 6vw, 5rem) 0; border-bottom:5px solid var(--lime); }
-.rkc-account-hero p, .rkc-account-hero dt { color:#deedc3; }
-.rkc-account-hero h1 { font-size:clamp(2.1rem, 6vw, 4.8rem); font-weight:750; line-height:1.06; letter-spacing:-.045em; max-width:19ch; margin:.5rem 0 1.5rem; overflow-wrap:anywhere; }
-.rkc-account-hero dl, .rkc-account-status, .rkc-account-periods { display:flex; flex-wrap:wrap; gap:1rem 2rem; }
-.rkc-account dt { font-size:.85rem; font-weight:650; }
-.rkc-account dd { margin:0; }
-.rkc-account-views { margin-block:1.5rem 1rem; }
-.rkc-account-tabs { padding-bottom:1rem; border-bottom:1px solid var(--line); }
-.rkc-account-section { padding-block:1.5rem; min-width:0; }
-.rkc-account-section h2 { font-size:clamp(1.5rem, 3vw, 2.15rem); font-weight:730; margin-bottom:1rem; }
-.rkc-account-panel { background:#fff; border:1px solid var(--line); border-radius:1rem; padding:clamp(1rem, 3vw, 1.55rem); min-width:0; overflow-wrap:anywhere; }
-.rkc-account-section > .rkc-account-panel, .rkc-account-reading { margin-top:1rem; }
-.rkc-account-panel h3, .rkc-account-panel figcaption, .rkc-account-panel summary { font-weight:700; }
-.rkc-account-panel strong { display:block; font-size:clamp(1.25rem, 2.7vw, 1.9rem); margin-top:.55rem; font-variant-numeric:tabular-nums; }
-.rkc-account-panel small, .rkc-account-panel dt { color:var(--mute); }
-.rkc-account-panel summary small { display:block; margin-top:.45rem; }
-.rkc-account-panel dl { margin-top:.85rem; }
-.rkc-account-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%, 15rem),1fr)); gap:1rem; }
-.rkc-account-stack { display:grid; gap:.75rem; }
-.rkc-account-reading { display:grid; grid-template-columns:minmax(12rem, 1fr) minmax(0, 3fr); gap:1rem; }
-.rkc-account-reading ol { font-size:.9rem; list-style:decimal; padding-left:1.5rem; display:grid; gap:.7rem; }
-.rkc-account-reading a { text-decoration:underline; text-underline-offset:.2em; }
-.rkc-account-value { white-space:pre-wrap; }
-.rkc-account-body { white-space:pre-wrap; line-height:1.75; margin-top:.9rem; max-width:76ch; }
-.rkc-account-section details { scroll-margin-top:1rem; }
-.rkc-account-section summary { cursor:pointer; }
-.rkc-account-tools { display:flex; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem; }
-.rkc-account-tools label { display:grid; flex:1 1 12rem; max-width:100%; gap:.35rem; font-size:.875rem; font-weight:650; }
-.rkc-account-tools input, .rkc-account-tools select { background:#fff; color:var(--ink); border:1px solid #819687; border-radius:.45rem; min-width:0; max-width:100%; padding:.6rem; }
-.rkc-account-bar { display:flex; height:.75rem; background:#adca80; border-radius:1rem; overflow:hidden; }
-.rkc-account-bar span { background:var(--green); }
-.rkc-account-panel > .rkc-account-bar, .rkc-account-legend, .rkc-account-budget-bar { margin-top:.9rem; }
-.rkc-account-legend span:first-child { font-weight:700; }
-.rkc-account-impact-bars { margin-block:.8rem; }
-.rkc-account-impact-bars .rkc-account-track:first-child .rkc-account-bar { background:var(--green); }
-.rkc-account-track { background:var(--paper); border-radius:1rem; margin-top:.3rem; }
-.rkc-account-table { overflow:auto; margin-block:1rem; background:white; border:1px solid var(--line); border-radius:1rem; }
-.rkc-account-table table { width:100%; border-collapse:collapse; text-align:left; }
-.rkc-account-table th, .rkc-account-table td { padding:.75rem; border-bottom:1px solid var(--line); }
-.rkc-account-table td { font-variant-numeric:tabular-nums; }
-.rkc-account-footer { border-top:1px solid var(--line); padding-block:1.5rem; }
-.rkc-account-footer a { display:inline-flex; align-items:center; gap:.5rem; }
-@media(max-width:640px) { .rkc-account-reading { grid-template-columns:1fr; } .rkc-account-wrap { width:calc(100% - 1.5rem); } }
-@media print { .rkc-account { background:#fff; color:#000; } .rkc-account-hero { color:#000; background:#fff; padding:.5rem 0; } .rkc-account-hero p, .rkc-account-hero dt { color:#000; } .rkc-account-actions, .rkc-account nav, .rkc-account-tools, .rkc-account-section button, .rkc-account-skip { display:none; } .rkc-account-panel { break-inside:avoid; } }
+.rkc-account {
+  --ink: #14291e;
+  --mute: #4c6255;
+  --paper: #f1f6f1;
+  --line: #d7e3d9;
+  --green: #165433;
+  --other: #a9c8b4;
+  --white: #fff;
+  --deep: #0d3827;
+  --chart-faj: #c2ee8c;
+  --chart-other: #46765e;
+  color: var(--ink);
+  background: var(--white);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+.rkc-account:fullscreen { overflow: auto; }
+.rkc-account-wrap { width: min(1120px, calc(100% - 3rem)); margin-inline: auto; }
+.rkc-account-top { border-bottom: 1px solid var(--line); }
+.rkc-account-top .rkc-account-wrap,
+.rkc-account-brands, .rkc-account-actions, .rkc-account-views, .rkc-account-tabs,
+.rkc-account-legend, .rkc-account-switch { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; }
+.rkc-account-top .rkc-account-wrap { justify-content: space-between; padding-block: 1rem; }
+.rkc-account-logo { width: clamp(8rem, 19vw, 12rem); height: auto; }
+.rkc-account-funder { padding-left: .85rem; border-left: 1px solid var(--line); }
+.rkc-account-funder small { display: block; color: var(--mute); font-size: .7rem; }
+.rkc-account-faj { width: clamp(5rem, 15vw, 8.75rem); height: auto; }
+.rkc-account button, .rkc-account-views a {
+  display: inline-flex; align-items: center; gap: .45rem; min-height: 2.75rem;
+  padding: .45rem .85rem; border: 1px solid var(--line); border-radius: .55rem;
+  background: var(--white); color: var(--green); font-weight: 650; cursor: pointer;
+}
+.rkc-account button:hover, .rkc-account-views a:hover { border-color: var(--green); }
+.rkc-account button[aria-pressed=true], .rkc-account-views a[aria-current] { background: var(--green); color: var(--white); border-color: var(--green); }
+.rkc-account :focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+.rkc-account-skip { position: absolute; left: 1rem; top: 1rem; padding: .65rem; background: var(--white); z-index: 3; }
+.rkc-account-skip:not(:focus) { clip-path: inset(50%); }
+.rkc-account-hero { background: var(--paper); padding-block: clamp(1.5rem, 4vw, 3rem); }
+.rkc-account-hero .rkc-account-wrap { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 1.25rem 3rem; }
+.rkc-account-hero h1, .rkc-account-section h2, .rkc-account-editorial h3, .rkc-account-entry h2 {
+  font-family: Georgia, serif; font-weight: 600; line-height: 1.13; letter-spacing: -.03em;
+}
+.rkc-account-hero h1 { font-size: clamp(2rem, 5vw, 3.7rem); margin-block: .2rem .5rem; }
+.rkc-account-cover {
+  position: relative;
+  padding-block: clamp(2.75rem, 8vw, 6.5rem);
+  color: var(--white);
+  background: radial-gradient(ellipse at 100% 0%, #21583d, var(--deep) 65%);
+}
+.rkc-account-cover .rkc-account-kicker, .rkc-account-cover dt { color: var(--chart-faj); }
+.rkc-account-cover .rkc-account-wrap > dl { padding-block-start: .8rem; border-block-start: 1px solid var(--chart-other); }
+.rkc-account-cover h1 { font-size: clamp(2.6rem, 7.6vw, 6rem); max-width: 14ch; }
+.rkc-account-cover p { max-width: 52ch; }
+.rkc-account-kicker { color: var(--green); font-weight: 700; }
+.rkc-account-organization { margin-block: .9rem .45rem; font-weight: 700; }
+.rkc-account-hero dl, .rkc-account-periods { display: flex; flex-wrap: wrap; gap: .8rem 1.5rem; }
+.rkc-account dt { font-size: .85rem; font-weight: 700; color: var(--mute); }
+.rkc-account dd { margin: 0; }
+.rkc-account-entry { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; padding-block: 2rem 3rem; }
+.rkc-account-entry a { position: relative; padding: clamp(1.2rem, 4vw, 2.25rem); border: 1px solid var(--line); border-radius: .8rem; color: var(--green); }
+.rkc-account-entry a:first-child { background: var(--paper); }
+.rkc-account-entry a:hover { background: var(--paper); border-color: var(--green); }
+.rkc-account-entry a h2 { max-width: 21ch; }
+.rkc-account-entry h2 { font-size: clamp(1.55rem, 3vw, 2.3rem); margin-block: .8rem .4rem; }
+.rkc-account-entry a > svg:last-child { position: absolute; top: 1.2rem; right: 1.2rem; }
+.rkc-account-views { margin-block: 1.25rem .75rem; }
+.rkc-account-tabs { border-bottom: 1px solid var(--line); gap: .15rem 1.1rem; }
+.rkc-account-tabs a { padding: .7rem .1rem; border-bottom: 3px solid transparent; font-weight: 650; color: var(--mute); }
+.rkc-account-tabs a:hover, .rkc-account-tabs a[aria-current] { color: var(--green); border-color: var(--green); }
+.rkc-account-section { padding-block: 1.6rem 2.5rem; min-width: 0; }
+.rkc-account-section h2 { font-size: clamp(1.85rem, 4vw, 3rem); margin-bottom: 1.2rem; }
+.rkc-account-panel, .rkc-account-editorial { min-width: 0; overflow-wrap: anywhere; }
+.rkc-account-panel { padding: clamp(.9rem, 2.5vw, 1.5rem); border: 1px solid var(--line); border-radius: .75rem; background: var(--white); }
+.rkc-account-section > .rkc-account-panel { margin-top: 1rem; }
+.rkc-account-panel h3, .rkc-account-panel figcaption, .rkc-account-panel summary { font-weight: 700; }
+.rkc-account-panel dl { margin-top: .8rem; }
+.rkc-account-panel strong { display: block; color: var(--green); font-size: clamp(1.4rem, 3vw, 2.35rem); font-variant-numeric: tabular-nums; }
+.rkc-account-panel small { color: var(--mute); }
+.rkc-account-panel summary small { display: block; white-space: pre-wrap; margin-block: .35rem; }
+.rkc-account-cards { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 16rem),1fr)); gap: .85rem; }
+.rkc-account-stack { display: grid; gap: .7rem; }
+.rkc-account-reading { display: grid; grid-template-columns: minmax(11rem, 1fr) minmax(0, 3fr); gap: clamp(1rem, 4vw, 3rem); }
+.rkc-account-reading ol { list-style: decimal; padding-left: 1.5rem; display: grid; gap: .8rem; font-size: .9rem; }
+.rkc-account-reading a, .rkc-account-text-link { color: var(--green); text-decoration: underline; text-underline-offset: .18em; }
+.rkc-account-editorial { padding: 0 0 1.75rem; margin: 0 0 1.75rem; border-bottom: 1px solid var(--line); scroll-margin-top: 1rem; }
+.rkc-account-editorial h3 { font-size: clamp(1.45rem, 3vw, 2.1rem); }
+.rkc-account-guidance { color: var(--mute); font-style: italic; margin-top: .8rem; }
+.rkc-account-body, .rkc-account-value { white-space: pre-wrap; }
+.rkc-account-body { line-height: 1.8; margin-top: .85rem; max-width: 72ch; }
+.rkc-account-section summary { cursor: pointer; }
+.rkc-account-tools { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+.rkc-account-tools label { display: grid; flex: 1 1 10rem; min-width: 0; gap: .25rem; font-size: .875rem; font-weight: 650; }
+.rkc-account-tools input, .rkc-account-tools select { background: var(--white); color: var(--ink); border: 1px solid #819687; border-radius: .45rem; min-width: 0; padding: .6rem; }
+.rkc-account-switch { margin-block: .75rem; }
+.rkc-account-bar { display: flex; height: .65rem; background: var(--other); border-radius: 1rem; overflow: hidden; }
+.rkc-account-bar span { background: var(--green); }
+.rkc-account-panel > .rkc-account-bar, .rkc-account-legend { margin-top: .75rem; }
+.rkc-account-legend { gap: .5rem 1.1rem; margin-bottom: .3rem; color: var(--mute); font-size: .875rem; }
+.rkc-account-legend span::before { content: ''; display: inline-block; width: .65rem; height: .65rem; margin-right: .4rem; background: var(--other); border-radius: .2rem; }
+.rkc-account-legend span:first-child::before { background: var(--green); }
+.rkc-account-track { background: var(--paper); border-radius: 1rem; grid-column: 1 / -1; margin-top: .35rem; }
+.rkc-account-impact-bars { margin-block: .75rem; }
+.rkc-account-impact-bars .rkc-account-track:first-child .rkc-account-bar { background: var(--green); }
+.rkc-account-table { overflow: auto; margin-block: 1rem; border: 1px solid var(--line); border-radius: .6rem; }
+.rkc-account-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.rkc-account-table th, .rkc-account-table td { padding: .75rem; border-bottom: 1px solid var(--line); vertical-align: top; min-width: 7rem; }
+.rkc-account-table thead { background: var(--paper); }
+.rkc-account-table td { font-variant-numeric: tabular-nums; }
+.rkc-account-team-link, .rkc-account-team-count { margin-block: .7rem; }
+.rkc-account-source-fields { display: grid; gap: .75rem; margin-block: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.rkc-account-source-fields dd { max-width: 72ch; }
+.rkc-account-note { margin-top: .45rem; font-size: .9rem; color: var(--green); white-space: normal; }
+.rkc-account-note summary { display: inline-flex; gap: .4rem; align-items: center; min-height: 2.75rem; }
+.rkc-account-note p { padding: .7rem; background: var(--paper); }
+.rkc-account-linked { list-style: disc; padding-inline-start: 1.2rem; }
+.rkc-account-timeline { border-inline-start: 2px solid var(--other); padding-inline-start: 1rem; }
+.rkc-account-gallery { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 16rem),1fr)); gap: .85rem; }
+.rkc-account-gallery:empty { display: none; }
+.rkc-account-figure { margin-block: 1rem; }
+.rkc-account-figure figcaption { margin-top: .45rem; font-size: .875rem; color: var(--mute); }
+.rkc-account button.rkc-account-image-button { display: grid; position: relative; padding: 0; width: 100%; overflow: hidden; }
+.rkc-account-image-button img { width: 100%; max-height: 26rem; object-fit: contain; background: var(--paper); }
+.rkc-account-image-button svg { position: absolute; right: .5rem; bottom: .5rem; background: var(--white); border-radius: .25rem; }
+.rkc-account-lightbox { margin: auto; max-width: min(95vw, 70rem); max-height: 94vh; padding: 1rem; border-radius: .65rem; }
+.rkc-account-lightbox::backdrop { background: rgb(20 41 30 / 82%); }
+.rkc-account-lightbox img { max-height: 73vh; object-fit: contain; margin-block: .7rem; }
+.rkc-account-footer { border-top: 1px solid var(--line); padding-block: 1.4rem; }
+.rkc-account-footer a { display: inline-flex; align-items: center; gap: .5rem; }
+@media (max-width: 640px) {
+  .rkc-account-wrap { width: calc(100% - 1.5rem); }
+  .rkc-account-reading, .rkc-account-entry { grid-template-columns: 1fr; }
+  .rkc-account-tabs { gap: .1rem .8rem; }
+}
+@media print {
+  .rkc-account-hero { background: var(--white); color: var(--ink); padding: .5rem 0; }
+  .rkc-account-actions, .rkc-account nav, .rkc-account-tools, .rkc-account-section button, .rkc-account-skip { display: none; }
+  .rkc-account-panel { break-inside: avoid; }
+}
 
-.rkc-account { --green:#078236; --blue:#438ecc; --yellow:#f9b216; --paper:#f6f8f6; }
-.rkc-account-hero { background:white; color:var(--ink); border-bottom:1px solid var(--line); padding:.6rem 0 1rem; }
-.rkc-account-hero .rkc-account-wrap { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.8rem 2rem; }
-.rkc-account-hero h1 { font-size:clamp(1.35rem,3vw,2rem); max-width:none; line-height:1.2; margin:0; }
-.rkc-account-hero dt { color:var(--mute); }
-.rkc-account-hero dl { font-size:.83rem; gap:.5rem 1.3rem; }
-.rkc-account-views { margin-block:.85rem .65rem; }
-.rkc-account-tabs { padding-bottom:.65rem; }
-.rkc-account-section { padding-top:1rem; }
-.rkc-account-metrics .rkc-account-panel { border-top:3px solid var(--green); }
-.rkc-account-metrics .rkc-account-panel:nth-child(2) { border-top-color:var(--blue); }
-.rkc-account-metrics .rkc-account-panel:nth-child(3) { border-top-color:var(--yellow); }
-.rkc-account-bar { background:var(--yellow); }
-.rkc-account-bar span { background:var(--blue); }
-.rkc-account-rank { display:grid; gap:.4rem; margin-block:.75rem; }
-.rkc-account-rank button { display:grid; width:100%; grid-template-columns:minmax(0,1fr) auto; gap:.35rem .75rem; text-align:left; }
-.rkc-account-rank .rkc-account-bar { grid-column:1 / -1; background:var(--green); height:.3rem; }
-.rkc-account-team-link { margin-top:1rem; }
-.rkc-account-source-fields { display:grid; gap:.75rem; margin-block:1rem; min-width:0; overflow-wrap:anywhere; }
-.rkc-account-source-fields dd { max-width:72ch; }
+.rkc-account-text-link svg { display: inline; vertical-align: text-bottom; }
+.rkc-account-cards + .rkc-account-panel { margin-block: 1rem; }
+
+.rkc-account-composition {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) auto minmax(0, .95fr);
+  align-items: center;
+  gap: clamp(1rem, 3.5vw, 3rem);
+  padding: clamp(1.35rem, 4vw, 2.75rem);
+  border-radius: 1.1rem;
+  background: var(--deep);
+  color: var(--white);
+}
+.rkc-account-composition figcaption span { color: var(--chart-faj); font-weight: 650; }
+.rkc-account-composition figcaption strong {
+  display: block;
+  font-weight: 700;
+  font-size: clamp(1.9rem, 4.4vw, 4rem);
+  letter-spacing: -.055em;
+  line-height: 1.15;
+}
+.rkc-account-donut { display: grid; place-items: center; width: clamp(6rem, 13vw, 10rem); aspect-ratio: 1; border-radius: 50%; }
+.rkc-account-donut > span {
+  display: grid; align-content: center; justify-items: center;
+  width: 74%; aspect-ratio: 1; border-radius: 50%;
+  background: var(--deep); font-weight: 750; font-size: clamp(1.15rem, 2.55vw, 2.25rem); line-height: 1;
+}
+.rkc-account-donut small { margin-top: .3rem; font-size: .65rem; color: var(--chart-faj); }
+.rkc-account-composition-key { display: grid; gap: .85rem; margin: 0; }
+.rkc-account-composition-key div { border-left: 3px solid var(--chart-other); padding-left: .75rem; }
+.rkc-account-composition-key div:first-child { border-color: var(--chart-faj); }
+.rkc-account-composition-key dt { color: var(--white); }
+.rkc-account-composition-key dd { display: flex; align-items: baseline; gap: .55rem; flex-wrap: wrap; font-size: 1.15rem; font-weight: 700; }
+.rkc-account-composition-key dd small { font-weight: 500; color: var(--chart-faj); }
+.rkc-account-explore { margin-block: 2rem; }
+.rkc-account-explore-title { display: flex; justify-content: space-between; align-items: end; flex-wrap: wrap; gap: .75rem; margin-bottom: .9rem; }
+.rkc-account-explore-title h3 { font-family: Georgia, serif; font-size: clamp(1.5rem, 3vw, 2.35rem); line-height: 1.15; }
+.rkc-account-explore-title p { color: var(--mute); margin-top: .25rem; }
+.rkc-account-explorer {
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  border: 1px solid var(--line); border-radius: 1rem; overflow: hidden;
+}
+.rkc-account-explorer-list { padding: .85rem; min-width: 0; }
+.rkc-account-explorer-list .rkc-account-legend { padding-inline: .4rem; margin-block: .15rem .75rem; }
+.rkc-account-explorer-list [role=group] { display: grid; gap: .25rem; }
+.rkc-account-explorer-list button {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  text-align: left; padding: .55rem .7rem;
+}
+.rkc-account-explorer-list button[aria-pressed=true] { background: var(--paper); color: var(--green); }
+.rkc-account-explorer-list button:focus-visible { outline-offset: 0; }
+.rkc-account-explorer-list button strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rkc-account-explorer-list .rkc-account-track { margin-top: 0; background: var(--line); }
+.rkc-account-explorer-list .rkc-account-bar { height: .4rem; }
+.rkc-account-inspector { min-width: 0; padding: clamp(1rem, 2.7vw, 2rem); background: var(--paper); border-left: 1px solid var(--line); overflow-wrap: anywhere; }
+.rkc-account-inspector h4 { font-size: 1.2rem; font-weight: 680; }
+.rkc-account-inspector-value { color: var(--green); font-size: clamp(1.6rem, 3vw, 2.7rem); letter-spacing: -.04em; }
+.rkc-account-inspector p, .rkc-account-inspector dt { color: var(--mute); }
+.rkc-account-inspector-breakdown { margin-block: 1rem; }
+.rkc-account-inspector-breakdown > div { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: .2rem .65rem; border-bottom: 1px solid var(--line); padding-block: .45rem; }
+.rkc-account-inspector-breakdown dd { font-weight: 700; }
+.rkc-account-inspector .rkc-account-note p { background: var(--white); }
+.rkc-account-linked-activities { margin-block-start: .75rem; }
+.rkc-account-linked-activities summary { color: var(--green); font-weight: 650; }
+.rkc-account-linked-activities li { margin-top: .35rem; }
+@media (max-width: 720px) {
+  .rkc-account-composition { grid-template-columns: minmax(0, 1fr) auto; }
+  .rkc-account-composition-key { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .rkc-account-explorer { grid-template-columns: minmax(0, 1fr); }
+  .rkc-account-explorer-list [role=group] { max-height: 15rem; overflow-y: auto; }
+  .rkc-account-inspector { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+.rkc-account-identity { display: grid; gap: 1.1rem; justify-items: start; padding: clamp(1.2rem, 4vw, 2.5rem); background: var(--paper); border: 1px solid var(--line); border-radius: 1rem; }
+.rkc-account-identity h3 { font-size: clamp(1.5rem, 3vw, 2.2rem); color: var(--deep); font-weight: 700; }
+.rkc-account-identity dl { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .85rem; }
+.rkc-account-identity dl div { border-top: 1px solid var(--other); padding-block-start: .65rem; }
+.rkc-account-subheading { margin-block: 1.35rem .4rem; font-weight: 700; color: var(--deep); font-size: 1.2rem; }
+.rkc-account-source-table th, .rkc-account-source-table td { white-space: pre-wrap; }
+.rkc-account-source-table th:first-child { min-width: 12rem; }
+.rkc-account-source-table tr:nth-child(even) { background: #f7faf7; }
+.rkc-account-composition + .rkc-account-explorer, .rkc-account-composition + .rkc-account-table { margin-top: 1rem; }

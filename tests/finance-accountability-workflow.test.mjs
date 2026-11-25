@@ -15,6 +15,12 @@ async function setup(db) {
     create role anon;
     create role service_role bypassrls;
     create schema auth;
+    create schema storage;
+    create table storage.buckets (id text primary key, name text, public boolean, file_size_limit integer, allowed_mime_types text[]);
+    create table storage.objects (bucket_id text, name text);
+    alter table storage.objects enable row level security;
+    grant usage on schema storage to anon, authenticated;
+    grant select, insert on storage.objects to anon, authenticated;
     create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql stable as $$
       select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
@@ -44,6 +50,7 @@ async function setup(db) {
     '20261124204000_finance_accountability_evidence.sql',
     '20261125005753_finance_accountability_public_dashboard.sql',
     'undefined_finance_accountability_source_details.sql',
+    '20261125020000_finance_accountability_editorial.sql',
   ];
   for (const file of migrations) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'));
@@ -256,4 +263,38 @@ test('serves only reviewed accountability content and revokes anonymous access a
   assert.equal(await get(), null);
   const { rows } = await db.query("select action from public.finance_accountability_history where report_id = $1 and action in ('published','unpublished') order by id", [id]);
   assert.deepEqual(rows.map(row => row.action), ['published', 'unpublished']);
+});
+
+test('editorial images become anonymous only for the reviewed release and disappear when withdrawn', async t => {
+  const db = new PGlite();
+  t.after(() => db.close());
+  await setup(db);
+  const { id, revision } = (await db.query(`
+    insert into public.finance_accountability_reports(template_id, title)
+    select id, 'Editorial' from public.finance_reporting_templates
+    returning id, updated_at::text as revision
+  `)).rows[0];
+  const path = id + '/11111111-1111-1111-1111-111111111111.jpg';
+  const other = '11111111-1111-1111-1111-111111111111/' + path.split('/')[1];
+  const narrative = Array.from({ length: 4 }, (_, index) => ({ label: 'Pergunta ' + index, body: 'Resposta' }));
+  const media = { path, question: 2, afterParagraph: 1, caption: 'Legenda', alt: 'Descrição' };
+  const operator = action => asRole(db, 'authenticated', ids.operator, action);
+  const insert = name => db.query("insert into storage.objects values ('accountability-editorial', $1)", [name]);
+  const visible = () => asRole(db, 'anon', null, async () => (await db.query('select name from storage.objects')).rows);
+  const publish = (content, expected = null) => operator(async () => (await db.query(
+    "select public.set_finance_accountability_publication($1,$2,$3,'editorial',$4) as release",
+    [id, revision, expected, content === null ? null : JSON.stringify(content)]
+  )).rows[0].release);
+  await assert.rejects(asRole(db, 'anon', null, () => insert(path)), { code: '42501' });
+  await assert.rejects(asRole(db, 'authenticated', ids.outsider, () => insert(path)), { code: '42501' });
+  await assert.rejects(publish({ narrative, records: [media] }), /arquivo/);
+  await operator(() => insert(path));
+  await operator(() => insert(other));
+  assert.deepEqual(await visible(), []);
+  await assert.rejects(publish({ records: [media] }), /relatório narrativo/);
+  await assert.rejects(publish({ narrative, records: [{ ...media, path: other }] }), /arquivo/);
+  const release = await publish({ narrative, records: [media] });
+  assert.deepEqual(await visible(), [{ name: path }]);
+  await publish(null, release.published_at);
+  assert.deepEqual(await visible(), []);
 });
